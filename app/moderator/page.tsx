@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import LiveGamePanel from './live-game-panel';
 
 const sampleRoster = [
   'display_name,email',
@@ -333,6 +334,7 @@ export default function ModeratorPage() {
                   {latestBatch.releasedAt ? <p className="notice success">Released {new Date(latestBatch.releasedAt).toLocaleString()}</p> : <button className="danger-button" type="button" onClick={() => releaseAssignments(latestBatch.id)}>Release roles to players</button>}
                 </section>
               )}
+              {latestBatch?.releasedAt && <LiveGamePanel gameId={gameId} gameStatus={selectedGame?.status ?? ''} />}
             </>
           )}
         </section>

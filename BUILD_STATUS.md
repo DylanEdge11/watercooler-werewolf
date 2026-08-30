@@ -7,8 +7,8 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Phase 0 — Sites scaffold and first meaningful player preview: **complete**
 - Phase 1 — Domain model, game engine, persistence schema, and engine tests: **complete**
 - Phase 2 — Authentication, roster, setup wizard, and role assignment: **complete**
-- Phase 3 — Live player actions and moderator resolution workflow: **next**
-- Phase 4 — Private rooms, recap, backups, and operational controls: pending
+- Phase 3 - Live player actions and moderator resolution workflow: **complete**
+- Phase 4 - Private rooms, recap, backups, and operational controls: **next**
 - Phase 5 — Full verification, rehearsal fixtures, and hosting: pending
 
 ## Verified at this checkpoint
@@ -30,7 +30,13 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Assignment evidence hashes, immutable revisions, release locks, and game events provide an audit trail without exposing player roles in invite files.
 - A complete local rehearsal created 20 seats, claimed all 20, assigned all 20 roles, and released the batch successfully through the real API.
 - The setup, moderator sign-in, and player sign-in screens were browser-verified.
-- Twenty-three unit tests and strict TypeScript checks pass.
+- Live day, night, final-ballot, and Hunter response windows enforce role-specific actions and target rules on the server.
+- Player responses are revisable until lock; only the latest immutable revision is counted.
+- The moderator can open phases, lock responses, review deterministic tallies, inspect protected targets and recorded tie draws, approve results, or publish a reasoned override.
+- Published outcomes eliminate seats, reveal eliminated roles, send private Seer results, update the public timeline, and evaluate Village/Werewolf victory.
+- The real player dashboard now shows only the signed-in player's role, legal candidates, teammates when applicable, participation, private results, and published events.
+- A live-cycle rehearsal saved two ballot revisions, counted only the latest, proposed and published one elimination, and moved the living count from 20 to 19.
+- Twenty-six unit tests and strict TypeScript checks pass.
 - Production build succeeds.
 
 ## Resume instructions
