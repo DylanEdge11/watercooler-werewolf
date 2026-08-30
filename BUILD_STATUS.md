@@ -4,7 +4,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 
 ## Current checkpoint
 
-- Current source checkpoint: `8b3dd478c625fe08d4bd417fc8a65ec3fcd76f26` (`docs: mark private pilot deployment live`)
+- Current source checkpoint: `31bb77e5fa9b0bbd8727a53b1c1946c030bd0514` (`docs: align pilot checkpoint identity`)
 - Phase 0 - Sites scaffold and first meaningful player preview: **complete**
 - Phase 1 — Domain model, game engine, persistence schema, and engine tests: **complete**
 - Phase 2 — Authentication, roster, setup wizard, and role assignment: **complete**
@@ -54,7 +54,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Sites version 3 packages the atomic rate-limit hardening from commit `b3dfad2b06865c65415098f655bdd967a2dada17`.
 - Sites version 4 packages the authenticated player-feedback flow from commit `2c4e94c26f4f837212374388b374d3652f500f88`.
 - Sites version 5 packages the player polling, in-flight submission guard, `.test` sample roster, and show-and-play runbook from commit `06ac11e628fc4e8f4770e125c2c269dddc01bec3`.
-- Sites version 7 packages the pilot setup helper, owner-only backup restore, cron-compatible deadline sweep, concurrent claim/action hardening, and recovery runbook from commit `8b3dd478c625fe08d4bd417fc8a65ec3fcd76f26`; deployment `appgdep_6a949eb3e6308191ba818329f493a6bc` succeeded at the private live URL.
+- Sites version 8 packages the pilot setup helper, owner-only backup restore, cron-compatible deadline sweep, concurrent claim/action hardening, and recovery runbook from commit `31bb77e5fa9b0bbd8727a53b1c1946c030bd0514`; deployment `appgdep_6a949f1a4b7881918ca9fbeb93b336a8` succeeded at the private live URL.
 - The current private MVP is deployed at `https://watercooler-werewolf.dylan-d-edgar.chatgpt.site` with owner-only access and the hosted origin applied to social metadata.
 - The canonical protective role is now `BODYGUARD`; the migration rewrites legacy `DOCTOR` rows and new API/UI output never exposes Doctor as a separate role.
 - Stop and owner-confirmed Reset controls are transactional, audited, backup-first, session-invalidating, game-isolated, and repeat-safe.
