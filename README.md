@@ -19,7 +19,13 @@ npm audit --omit=dev
 
 `npm run dev` starts the local Vinext/Cloudflare preview. The app creates its local D1 schema on the first request. Do not put passwords, invite codes, tokens, or production values in this repository.
 
-`npm run pilot:setup` creates a disposable local game from the fictional 20-player fixture and writes a one-time invite CSV under `outputs/`. It is deliberately mutation-gated: set `PILOT_ALLOW_MUTATION=yes` and provide a fictional `PILOT_MODERATOR_PASSWORD` (at least 12 characters). Use `PILOT_BASE_URL` to point at a local or explicitly approved private environment. Never run it against production data.
+`npm run pilot:setup` creates a disposable local game from the fictional 20-player fixture and writes a one-time invite CSV under `outputs/`. It is deliberately mutation-gated: set `PILOT_ALLOW_MUTATION=yes` and provide a fictional `PILOT_MODERATOR_PASSWORD` (at least 12 characters). Use `PILOT_BASE_URL` to point at a local or explicitly approved private environment. Never run it against production data. In PowerShell:
+
+```powershell
+$env:PILOT_ALLOW_MUTATION = 'yes'
+$env:PILOT_MODERATOR_PASSWORD = 'a-fictional-12-character-password'
+npm run pilot:setup
+```
 
 ## Local D1 and fictional data
 
@@ -35,7 +41,7 @@ The hosted MVP is currently owner-only. It is safe to demonstrate while signed i
 
 Use a disposable game and keep the moderator console in one browser profile and each test player in a separate profile (or private window):
 
-1. Run `PILOT_ALLOW_MUTATION=yes PILOT_MODERATOR_PASSWORD="a-fictional-12-character-password" npm run pilot:setup` against a disposable local preview, or bootstrap a fictional moderator manually. Set the game's IANA timezone to the timezone used by the facilitator.
+1. Run the mutation-gated `pilot:setup` helper (PowerShell example above; POSIX shells can prefix `PILOT_ALLOW_MUTATION=yes PILOT_MODERATOR_PASSWORD="a-fictional-12-character-password"`) against a disposable local preview, or bootstrap a fictional moderator manually. Set the game's IANA timezone to the timezone used by the facilitator.
 2. Import [fixtures/roster-20.csv](fixtures/roster-20.csv), download the one-time invite CSV, and claim every seat with unique six-digit test PINs. Keep the invite CSV private; it contains the only claim links.
 3. Review the default 20-player composition (12 Villagers, 3 Werewolves, 1 Seer, 1 Bodyguard, 1 Hunter, and 2 Masons), randomize, inspect the assignment evidence, and release roles. Verify that each player can see only their own role and permitted teammates/room.
 4. Open a Day ballot. Have a player submit, revise, and submit again; verify that the latest revision is the one counted. Lock and propose, then publish the reviewed outcome. Confirm the timeline, living count, eliminated-role reveal, and Hunter follow-up when a Hunter is eliminated.
