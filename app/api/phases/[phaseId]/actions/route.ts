@@ -108,38 +108,38 @@ export async function POST(request: Request, context: RouteContext) {
     });
     if (errors.length) return Response.json({ ok: false, errors }, { status: 400 });
 
-    const revisionRow = await db
-      .prepare(
-        `SELECT COALESCE(MAX(version), 0) AS version FROM action_submissions
-         WHERE phase_id = ? AND actor_seat_id = ? AND kind = ?`,
-      )
-      .bind(phase.id, actor.id, permission.actionKind)
-      .first<{ version: number }>();
-    const version = Number(revisionRow?.version ?? 0) + 1;
     const now = new Date().toISOString();
     const actionId = crypto.randomUUID();
     await db.batch([
       db
         .prepare(
-          `UPDATE action_submissions SET superseded_at = ?
-           WHERE phase_id = ? AND actor_seat_id = ? AND kind = ? AND superseded_at IS NULL`,
-        )
-        .bind(now, phase.id, actor.id, permission.actionKind),
-      db
-        .prepare(
           `INSERT INTO action_submissions
            (id, phase_id, actor_seat_id, kind, target_ids_json, version, submitted_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           SELECT ?, ?, ?, ?, ?, COALESCE(MAX(version), 0) + 1, ?
+           FROM action_submissions
+           WHERE phase_id = ? AND actor_seat_id = ? AND kind = ?`,
         )
-        .bind(actionId, phase.id, actor.id, permission.actionKind, JSON.stringify(targetIds), version, now),
+        .bind(actionId, phase.id, actor.id, permission.actionKind, JSON.stringify(targetIds), now, phase.id, actor.id, permission.actionKind),
       db
         .prepare(
-          `INSERT INTO game_events
-           (id, game_id, phase_id, event_type, actor_seat_id, payload_json, created_at)
-           VALUES (?, ?, ?, 'ACTION_SUBMITTED', ?, ?, ?)`,
+          `UPDATE action_submissions SET superseded_at = ?
+           WHERE phase_id = ? AND actor_seat_id = ? AND kind = ? AND superseded_at IS NULL AND id != ?`,
         )
-        .bind(crypto.randomUUID(), identity.gameId, phase.id, actor.id, JSON.stringify({ kind: permission.actionKind, version }), now),
+        .bind(now, phase.id, actor.id, permission.actionKind, actionId),
     ]);
+    const revision = await db
+      .prepare('SELECT version FROM action_submissions WHERE id = ? LIMIT 1')
+      .bind(actionId)
+      .first<{ version: number }>();
+    const version = Number(revision?.version ?? 1);
+    await db
+      .prepare(
+        `INSERT INTO game_events
+         (id, game_id, phase_id, event_type, actor_seat_id, payload_json, created_at)
+         VALUES (?, ?, ?, 'ACTION_SUBMITTED', ?, ?, ?)`,
+      )
+      .bind(crypto.randomUUID(), identity.gameId, phase.id, actor.id, JSON.stringify({ kind: permission.actionKind, version }), now)
+      .run();
     return Response.json({ ok: true, actionId, version, targetIds, submittedAt: now });
   } catch (error) {
     return error instanceof RateLimitError

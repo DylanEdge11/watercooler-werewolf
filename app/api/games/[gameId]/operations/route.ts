@@ -1,11 +1,12 @@
 import { getD1 } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator, requireGameOwner } from '../../../../../lib/auth/authorization';
-import { createBackupRecord } from '../../../../../lib/backup/snapshot';
+import { createBackupRecord, restoreGameBackup } from '../../../../../lib/backup/snapshot';
 import { canResetGame, canStopGame } from '../../../../../lib/game/lifecycle';
 import { reconcileDuePhases } from '../../../../../lib/game/scheduling';
 import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { restoreConfirmation } from '../../../../../lib/backup/restore';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -19,7 +20,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const db = getD1();
     const reconciledPhaseIds = await reconcileDuePhases(db, gameId, moderator.id);
     const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
-    const [game, membership, counts, overdue, sessions, backup, events, activity] = await Promise.all([
+    const [game, membership, counts, overdue, sessions, backup, backups, events, activity] = await Promise.all([
       db
         .prepare(
       `SELECT status, name, chat_retention_days AS chatRetentionDays, final_cutoff_at AS finalCutoffAt,
@@ -63,6 +64,13 @@ export async function GET(_request: Request, context: RouteContext) {
         .first(),
       db
         .prepare(
+          `SELECT id, schema_version AS schemaVersion, exported_at AS exportedAt, checksum
+           FROM backup_exports WHERE game_id = ? ORDER BY exported_at DESC LIMIT 12`,
+        )
+        .bind(gameId)
+        .all(),
+      db
+        .prepare(
           `SELECT id, severity, source, message, details_json AS detailsJson, created_at AS createdAt
            FROM operational_events WHERE game_id = ? ORDER BY created_at DESC LIMIT 20`,
         )
@@ -78,7 +86,7 @@ export async function GET(_request: Request, context: RouteContext) {
         .bind(gameId, since, gameId, since, gameId)
         .first<{ submittedActions: number; lateRejections: number; lastActionAt: string | null }>(),
     ]);
-    return Response.json({ ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, lastBackup: backup, events: events.results });
+    return Response.json({ ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, lastBackup: backup, backups: backups.results, events: events.results });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unable to load operational health.', 401);
   }
@@ -91,12 +99,13 @@ export async function POST(request: Request, context: RouteContext) {
     const { gameId } = await context.params;
     const moderator = await requireGameModerator(gameId);
     const body = (await request.json()) as {
-      action?: 'SET_CHAT_RETENTION' | 'REVOKE_SEAT_SESSIONS' | 'STOP' | 'RESET' | 'RECONCILE_DEADLINES';
+      action?: 'SET_CHAT_RETENTION' | 'REVOKE_SEAT_SESSIONS' | 'STOP' | 'RESET' | 'RESTORE_BACKUP' | 'RECONCILE_DEADLINES';
       days?: number;
       seatId?: string;
       reason?: string;
       confirmed?: boolean;
       confirmationName?: string;
+      backupId?: string;
     };
     const db = getD1();
     const now = new Date().toISOString();
@@ -201,6 +210,23 @@ export async function POST(request: Request, context: RouteContext) {
       }
       await db.batch(statements);
       return Response.json({ ok: true, status: 'DRAFT', backupId: backup.backupId, checksum: backup.checksum, resetAt: now });
+    }
+    if (body.action === 'RESTORE_BACKUP') {
+      await requireGameOwner(gameId);
+      const confirmationError = restoreConfirmation(game.name, body.confirmationName?.trim() ?? '', body.confirmed === true);
+      if (confirmationError) throw new Error(confirmationError);
+      if (!body.backupId) throw new Error('Choose a stored backup to restore.');
+      const sourceBackup = await db
+        .prepare(
+          `SELECT id, game_id AS gameId, schema_version AS schemaVersion, checksum,
+                  payload_json AS payloadJson FROM backup_exports
+           WHERE id = ? AND game_id = ? LIMIT 1`,
+        )
+        .bind(body.backupId, gameId)
+        .first<{ id: string; gameId: string; schemaVersion: number; checksum: string; payloadJson: string | null }>();
+      if (!sourceBackup) throw new Error('The selected backup was not found for this game.');
+      const restored = await restoreGameBackup(gameId, sourceBackup, moderator.id, new URL(request.url).origin);
+      return Response.json({ ok: true, status: 'DRAFT', ...restored });
     }
     if (body.action === 'SET_CHAT_RETENTION') {
       if (!Number.isInteger(body.days) || Number(body.days) < 1 || Number(body.days) > 30) throw new Error('Chat retention must be 1–30 days.');

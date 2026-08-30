@@ -11,6 +11,7 @@ interface Operations {
   activePlayerSessions: number;
   activity: { submittedActions: number; lateRejections: number; lastActionAt: string | null };
   lastBackup: null | { exportedAt: string; checksum: string };
+  backups: Array<{ id: string; schemaVersion: number; exportedAt: string; checksum: string }>;
   events: Array<{ id: string; severity: string; source: string; message: string; createdAt: string }>;
 }
 
@@ -48,6 +49,9 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [moderators, setModerators] = useState<Moderator[]>([]);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [restoreBackupId, setRestoreBackupId] = useState('');
+  const [restoreInviteCsv, setRestoreInviteCsv] = useState('');
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -61,6 +65,7 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     setRooms(roomData.rooms);
     setMessages(roomData.recentMessages);
     setModerators(moderatorData.moderators);
+    setRestoreBackupId((current) => current && ops.backups?.some((backup) => backup.id === current) ? current : ops.backups?.[0]?.id ?? '');
   }, [gameId]);
 
   useEffect(() => {
@@ -117,7 +122,9 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
   }
 
   async function exportBackup() {
+    if (busyAction) return;
     setError('');
+    setBusyAction('export');
     try {
       const response = await fetch(`/api/games/${gameId}/export`, { method: 'POST' });
       if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? 'Unable to create backup.');
@@ -131,6 +138,8 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to create backup.');
+    } finally {
+      setBusyAction(null);
     }
   }
 
@@ -173,6 +182,8 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     if (!reason) return;
     if (!window.confirm('Stop the game now? Active phases will close, player actions will be blocked, and rooms will become read-only.')) return;
     setError('');
+    if (busyAction) return;
+    setBusyAction('stop');
     try {
       await post(`/api/games/${gameId}/operations`, { action: 'STOP', confirmed: true, reason });
       setMessage('Game stopped. Player actions are blocked and rooms are read-only.');
@@ -180,6 +191,8 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
       onGameChanged?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to stop the game.');
+    } finally {
+      setBusyAction(null);
     }
   }
 
@@ -188,6 +201,8 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     if (confirmationName === null) return;
     if (!window.confirm('Reset this game to setup? A recoverable backup will be created first, player sessions will be revoked, and active roles/phases/notifications will be removed.')) return;
     setError('');
+    if (busyAction) return;
+    setBusyAction('reset');
     try {
       await post(`/api/games/${gameId}/operations`, { action: 'RESET', confirmed: true, confirmationName });
       setMessage('Game reset to setup state. Re-import the roster before configuring roles.');
@@ -195,7 +210,47 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
       onGameChanged?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to reset the game.');
+    } finally {
+      setBusyAction(null);
     }
+  }
+
+  async function restoreBackup() {
+    if (!operations || !restoreBackupId || busyAction) return;
+    const confirmationName = window.prompt(`Type the exact game name to restore into: ${operations.game.name}`);
+    if (confirmationName === null) return;
+    if (!window.confirm('Restore this backup to setup state? A safety backup will be created first, all player sessions and old invite links will be invalidated, and active roles/phases/messages will be removed.')) return;
+    setError('');
+    setBusyAction('restore');
+    try {
+      const result = await parse<{ inviteRows?: Array<{ displayName: string; email: string; claimUrl: string; inviteCode: string }>; restoredSeatCount: number }>(await fetch(`/api/games/${gameId}/operations`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'RESTORE_BACKUP', backupId: restoreBackupId, confirmed: true, confirmationName }),
+      }));
+      const rows = result.inviteRows ?? [];
+      setRestoreInviteCsv(rows.length ? [
+        ['display_name', 'email', 'claim_url', 'invite_code'].join(','),
+        ...rows.map((row) => [row.displayName, row.email, row.claimUrl, row.inviteCode].map((value) => `"${value.replaceAll('"', '""')}"`).join(',')),
+      ].join('\r\n') : '');
+      setMessage(`Backup restored to setup with ${result.restoredSeatCount} fresh private seat links. Download the invite CSV now; codes are not shown again.`);
+      await refresh();
+      onGameChanged?.();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to restore the backup.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  function downloadRestoredInvites() {
+    if (!restoreInviteCsv) return;
+    const url = URL.createObjectURL(new Blob([restoreInviteCsv], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `watercooler-werewolf-restored-invites-${gameId}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   async function reconcileDeadlines() {
@@ -245,8 +300,8 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
       <div className="ops-block game-controls">
         <div><p className="eyebrow accent">Fail-safe controls</p><p className="field-help">Stop freezes a campaign. Reset is an owner-only recovery action that preserves a backup and audit history.</p></div>
         <div className="button-row">
-          <button className="danger-button" type="button" onClick={() => void stopGame()} disabled={['STOPPED', 'COMPLETED', 'CANCELLED'].includes(operations.game.status)}>Stop game</button>
-          {operations.viewerRole === 'OWNER' && <button className="secondary-button" type="button" onClick={() => void resetGame()}>Reset to setup</button>}
+          <button className="danger-button" type="button" onClick={() => void stopGame()} disabled={busyAction !== null || ['STOPPED', 'COMPLETED', 'CANCELLED'].includes(operations.game.status)}>{busyAction === 'stop' ? 'Stopping…' : 'Stop game'}</button>
+          {operations.viewerRole === 'OWNER' && <button className="secondary-button" type="button" onClick={() => void resetGame()} disabled={busyAction !== null}>{busyAction === 'reset' ? 'Resetting…' : 'Reset to setup'}</button>}
         </div>
         {operations.game.status === 'STOPPED' && <p className="notice warning">Stopped {operations.game.stoppedAt ? new Date(operations.game.stoppedAt).toLocaleString() : ''}: {operations.game.stopReason ?? 'No reason recorded.'}</p>}
       </div>
@@ -269,7 +324,8 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
 
       <form className="ops-block pilot-feedback" onSubmit={submitFeedback}><p className="eyebrow accent">Pilot feedback</p><p className="field-help">Capture a quick moderator signal while the pilot is running.</p><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve before the next game?" /></label><button className="secondary-button" type="submit">Save feedback</button></form>
 
-      <div className="backup-row"><div><p className="eyebrow accent">Verified backup</p><strong>{operations.lastBackup ? `Last export ${new Date(operations.lastBackup.exportedAt).toLocaleString()}` : 'No backup exported yet'}</strong><small>{operations.lastBackup?.checksum ? `Checksum ${operations.lastBackup.checksum.slice(0, 18)}…` : 'Includes game state, audit history, and private rooms.'}</small></div><button className="primary-button" type="button" onClick={exportBackup}>Download JSON backup</button></div>
+      <div className="backup-row"><div><p className="eyebrow accent">Verified backup</p><strong>{operations.lastBackup ? `Last export ${new Date(operations.lastBackup.exportedAt).toLocaleString()}` : 'No backup exported yet'}</strong><small>{operations.lastBackup?.checksum ? `Checksum ${operations.lastBackup.checksum.slice(0, 18)}…` : 'Includes game state, audit history, and private rooms.'}</small></div><button className="primary-button" type="button" onClick={exportBackup} disabled={busyAction !== null}>{busyAction === 'export' ? 'Creating…' : 'Download JSON backup'}</button></div>
+      {operations.viewerRole === 'OWNER' && operations.backups.length > 0 && <div className="ops-block restore-backup-block"><p className="eyebrow accent">Recovery restore</p><p className="field-help">Restore a verified snapshot into this game’s setup state. Secrets are never restored; fresh seat links are generated.</p><div className="button-row"><label className="restore-select">Snapshot<select value={restoreBackupId} onChange={(event) => setRestoreBackupId(event.target.value)} disabled={busyAction !== null}>{operations.backups.map((backup) => <option key={backup.id} value={backup.id}>{new Date(backup.exportedAt).toLocaleString()} · {backup.checksum.slice(0, 12)}…</option>)}</select></label><button className="secondary-button" type="button" onClick={() => void restoreBackup()} disabled={busyAction !== null}>{busyAction === 'restore' ? 'Restoring…' : 'Restore to setup'}</button>{restoreInviteCsv && <button className="secondary-button" type="button" onClick={downloadRestoredInvites}>Download fresh invites</button>}</div></div>}
     </section>
   );
 }

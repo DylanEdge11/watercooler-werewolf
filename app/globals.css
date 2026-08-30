@@ -346,6 +346,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .backup-row strong { font-size: 10px; }
 .backup-row small { color: #9fb8ae; font-size: 8px; margin-top: 4px; }
 .backup-row .eyebrow { color: var(--mint); }
+.restore-backup-block { margin-top: 12px; }
+.restore-select { display: grid; flex: 1; gap: 6px; min-width: 240px; }
+.restore-select select { width: 100%; }
 .pilot-feedback { margin-top: 12px; }
 @media (max-width: 650px) {
   .health-grid { grid-template-columns: 1fr 1fr; }

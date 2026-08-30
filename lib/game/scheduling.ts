@@ -58,7 +58,7 @@ export function validateSchedule(schedule: ScheduleDefinition): string[] {
   return errors;
 }
 
-export async function reconcileDuePhases(db: D1Database, gameId: string, moderatorId: string, now = new Date()): Promise<string[]> {
+export async function reconcileDuePhases(db: D1Database, gameId: string, moderatorId: string | null, now = new Date()): Promise<string[]> {
   const nowIso = now.toISOString();
   const due = await db
     .prepare("SELECT p.id, p.kind, p.closes_at AS closesAt FROM phases p JOIN games g ON g.id = p.game_id WHERE p.game_id = ? AND p.status = 'OPEN' AND p.closes_at <= ? AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN') ORDER BY p.sequence")
@@ -76,4 +76,28 @@ export async function reconcileDuePhases(db: D1Database, gameId: string, moderat
   }
   await db.batch(statements);
   return due.results.map((phase) => phase.id);
+}
+
+/**
+ * Sweep every active game for expired open phases. The sweep is safe to run
+ * repeatedly: each phase update is conditional and its audit/operational event
+ * uses a stable id. A scheduler invocation has no moderator actor, so the
+ * nullable audit field is intentionally left empty and the source is recorded
+ * as SCHEDULER.
+ */
+export async function sweepDuePhases(db: D1Database, now = new Date()): Promise<Array<{ gameId: string; phaseIds: string[] }>> {
+  const dueGames = await db
+    .prepare(
+      `SELECT DISTINCT p.game_id AS gameId
+       FROM phases p JOIN games g ON g.id = p.game_id
+       WHERE p.status = 'OPEN' AND p.closes_at <= ? AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN')`,
+    )
+    .bind(now.toISOString())
+    .all<{ gameId: string }>();
+  const results: Array<{ gameId: string; phaseIds: string[] }> = [];
+  for (const game of dueGames.results) {
+    const phaseIds = await reconcileDuePhases(db, game.gameId, null, now);
+    if (phaseIds.length) results.push({ gameId: game.gameId, phaseIds });
+  }
+  return results;
 }

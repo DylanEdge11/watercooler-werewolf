@@ -58,22 +58,27 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const now = new Date().toISOString();
-    await db.batch([
-      db
-        .prepare(
-          `UPDATE seats SET status = 'CLAIMED', pin_hash = ?, claimed_at = ?, updated_at = ?
-           WHERE id = ? AND status = 'INVITED'`,
-        )
-        .bind(await hashSecret(pin), now, now, seat.id),
-      db
-        .prepare(
-          `INSERT INTO game_events
-           (id, game_id, event_type, actor_seat_id, payload_json, created_at)
-           VALUES (?, ?, 'SEAT_CLAIMED', ?, ?, ?)`,
-        )
-        .bind(crypto.randomUUID(), seat.gameId, seat.id, JSON.stringify({ displayName: seat.displayName }), now),
-    ]);
-    await createPlayerSession(seat.id, seat.sessionVersion);
+    // The conditional UPDATE is performed as a single-row mutation before the
+    // event/session work. This closes the double-claim race where two requests
+    // both observed INVITED and each created a player session.
+    const claimed = await db
+      .prepare(
+        `UPDATE seats SET status = 'CLAIMED', pin_hash = ?, claimed_at = ?, updated_at = ?
+         WHERE id = ? AND status = 'INVITED'
+         RETURNING id, game_id AS gameId, display_name AS displayName, session_version AS sessionVersion`,
+      )
+      .bind(await hashSecret(pin), now, now, seat.id)
+      .first<{ id: string; gameId: string; displayName: string; sessionVersion: number }>();
+    if (!claimed) return jsonError('This seat was claimed by another request. Use seat sign-in instead.', 409);
+    await db
+      .prepare(
+        `INSERT INTO game_events
+         (id, game_id, event_type, actor_seat_id, payload_json, created_at)
+         VALUES (?, ?, 'SEAT_CLAIMED', ?, ?, ?)`,
+      )
+      .bind(crypto.randomUUID(), claimed.gameId, claimed.id, JSON.stringify({ displayName: claimed.displayName }), now)
+      .run();
+    await createPlayerSession(claimed.id, claimed.sessionVersion);
     return Response.json({ ok: true, seat: { displayName: seat.displayName, gameId: seat.gameId } });
   } catch (error) {
     return error instanceof RateLimitError
