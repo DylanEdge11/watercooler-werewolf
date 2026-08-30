@@ -26,6 +26,24 @@ Game deadlines are entered as local `datetime-local` values and converted on the
 
 Use [fixtures/roster-20.csv](fixtures/roster-20.csv) only with disposable `.test` accounts. A safe rehearsal is documented in [fixtures/README.md](fixtures/README.md). Never mix the fictional fixture with a real roster.
 
+## Pilot show-and-play checklist
+
+The hosted MVP is currently owner-only. It is safe to demonstrate while signed in, but outside players need an explicitly approved shared/private access change before they can reach the hosted URL. Do not make the site public or send real invitations as part of a rehearsal. For a local group review, use the local preview and fictional `.test` accounts.
+
+Use a disposable game and keep the moderator console in one browser profile and each test player in a separate profile (or private window):
+
+1. Bootstrap a fictional moderator locally, create a game with a short test schedule, and set the game's IANA timezone to the timezone used by the facilitator.
+2. Import [fixtures/roster-20.csv](fixtures/roster-20.csv), download the one-time invite CSV, and claim every seat with unique six-digit test PINs. Keep the invite CSV private; it contains the only claim links.
+3. Review the default 20-player composition (12 Villagers, 3 Werewolves, 1 Seer, 1 Bodyguard, 1 Hunter, and 2 Masons), randomize, inspect the assignment evidence, and release roles. Verify that each player can see only their own role and permitted teammates/room.
+4. Open a Day ballot. Have a player submit, revise, and submit again; verify that the latest revision is the one counted. Lock and propose, then publish the reviewed outcome. Confirm the timeline, living count, eliminated-role reveal, and Hunter follow-up when a Hunter is eliminated.
+5. Open the next legal Night phase. Exercise the Werewolf attack, Bodyguard protection, and Seer investigation with known fixture seats. Publish and verify that a protected target survives and the Seer receives a private exact-role notification.
+6. Exercise a no-vote or tie, a reasoned moderator override, private-room messaging, message moderation, and an in-app announcement. Check the Operations panel after each mutation and use **Check deadlines** for an expired test phase.
+7. After an ordinary published phase and a test final cutoff in the past, enter **Final Showdown** and run a **Final Ballot**. Confirm that invalid phase kinds are rejected, a no-vote keeps the showdown open, and a winning publication completes the game and freezes rooms.
+8. Export a verified JSON backup. Before teardown, test **Stop** with a reason and confirmation, verify the player stopped message/read-only rooms, then test owner-only **Reset** by typing the exact game name. Confirm the backup/audit record remains, sessions and old claim links no longer work, and the game returns to setup.
+9. Ask players to submit the private pilot feedback form. Record defects and rule questions before using any real roster.
+
+The player dashboard polls for phase, result, notification, and stopped-state changes every ten seconds while preserving an unsaved ballot selection. A manual **Check for updates** action remains available. Visual desktop and 390x844 checks still require a connected browser; do not treat this checklist as a substitute for that QA gate.
+
 ## User types and pilot scope
 
 - **Game owner/moderator:** creates games, imports the roster, chooses the composition, previews and releases roles, opens and resolves phases, publishes announcements, manages rooms, exports backups, and can Stop or Reset a game.

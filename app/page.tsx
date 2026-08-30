@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import PrivateRoomChat from './private-room-chat';
 
@@ -91,8 +91,12 @@ export default function Home() {
   const [error, setError] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackError, setFeedbackError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [sendingFeedback, setSendingFeedback] = useState(false);
+  const selectionDirty = useRef(false);
+  const selectionPhaseId = useRef<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (preserveLocalSelection = false) => {
     const response = await fetch('/api/player');
     if (response.status === 401) {
       setUnauthenticated(true);
@@ -101,8 +105,16 @@ export default function Home() {
     }
     const result = await response.json() as DashboardData & { error?: string };
     if (!response.ok) throw new Error(result.error ?? 'Unable to load the game.');
+    const incomingPhaseId = result.phase?.id ?? null;
+    const keepLocalSelection = preserveLocalSelection
+      && selectionDirty.current
+      && selectionPhaseId.current === incomingPhaseId;
     setData(result);
-    setSelected(result.currentAction?.targetIds ?? []);
+    if (!keepLocalSelection) {
+      setSelected(result.currentAction?.targetIds ?? []);
+      selectionDirty.current = false;
+    }
+    selectionPhaseId.current = incomingPhaseId;
     setUnauthenticated(false);
     setLoading(false);
   }, []);
@@ -114,11 +126,20 @@ export default function Home() {
         setLoading(false);
       });
     }, 0);
-    return () => window.clearTimeout(timer);
+    const poll = window.setInterval(() => {
+      void refresh(true).catch((caught) => {
+        setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.');
+      });
+    }, 10_000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(poll);
+    };
   }, [refresh]);
 
   function toggleCandidate(id: string) {
     if (!data) return;
+    selectionDirty.current = true;
     setSelected((current) => {
       if (current.includes(id)) return current.filter((item) => item !== id);
       if (current.length >= data.permission.maxTargets) return current;
@@ -127,17 +148,28 @@ export default function Home() {
   }
 
   async function submitAction() {
-    if (!data?.phase || !data.permission.actionKind) return;
+    if (!data?.phase || !data.permission.actionKind || submitting) return;
     setError('');
-    const response = await fetch(`/api/phases/${data.phase.id}/actions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ actionKind: data.permission.actionKind, targetIds: selected }),
-    });
-    const result = await response.json() as { error?: string; errors?: string[]; version?: number };
-    if (!response.ok) return setError(result.error ?? result.errors?.join(' ') ?? 'Unable to submit your action.');
-    setMessage(`Response saved as revision ${result.version}. You can change it until the phase locks.`);
-    await refresh();
+    setSubmitting(true);
+    try {
+      const response = await fetch(`/api/phases/${data.phase.id}/actions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ actionKind: data.permission.actionKind, targetIds: selected }),
+      });
+      const result = await response.json() as { error?: string; errors?: string[]; version?: number };
+      if (!response.ok) {
+        setError(result.error ?? result.errors?.join(' ') ?? 'Unable to submit your action.');
+        return;
+      }
+      selectionDirty.current = false;
+      setMessage(`Response saved as revision ${result.version}. You can change it until the phase locks.`);
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to submit your action.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function signOut() {
@@ -147,22 +179,30 @@ export default function Home() {
 
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (sendingFeedback) return;
     setFeedbackError('');
     setFeedbackMessage('');
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const response = await fetch(`/api/games/${data?.game.id}/feedback`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ rating: Number(formData.get('rating')), comment: formData.get('comment') }),
-    });
-    const result = await response.json() as { error?: string };
-    if (!response.ok) {
-      setFeedbackError(result.error ?? 'Unable to save feedback.');
-      return;
+    setSendingFeedback(true);
+    try {
+      const response = await fetch(`/api/games/${data?.game.id}/feedback`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ rating: Number(formData.get('rating')), comment: formData.get('comment') }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) {
+        setFeedbackError(result.error ?? 'Unable to save feedback.');
+        return;
+      }
+      form.reset();
+      setFeedbackMessage('Thanks — your feedback is recorded privately for the pilot review.');
+    } catch (caught) {
+      setFeedbackError(caught instanceof Error ? caught.message : 'Unable to save feedback.');
+    } finally {
+      setSendingFeedback(false);
     }
-    form.reset();
-    setFeedbackMessage('Thanks — your feedback is recorded privately for the pilot review.');
   }
 
   const selectedNames = useMemo(
@@ -248,12 +288,12 @@ export default function Home() {
               <div className="candidate-grid">
                 {data.candidates.map((candidate) => {
                   const isSelected = selected.includes(candidate.id);
-                  return <button className={`candidate ${isSelected ? 'selected' : ''}`} key={candidate.id} onClick={() => toggleCandidate(candidate.id)} aria-pressed={isSelected}><span className="candidate-avatar">{initials(candidate.displayName)}</span><span><strong>{candidate.displayName}</strong><small>Living player</small></span><span className="check">{isSelected ? '✓' : ''}</span></button>;
+                  return <button className={`candidate ${isSelected ? 'selected' : ''}`} key={candidate.id} type="button" onClick={() => toggleCandidate(candidate.id)} aria-pressed={isSelected} disabled={submitting}><span className="candidate-avatar">{initials(candidate.displayName)}</span><span><strong>{candidate.displayName}</strong><small>Living player</small></span><span className="check">{isSelected ? '✓' : ''}</span></button>;
                 })}
               </div>
               {error && <p className="form-error" role="alert">{error}</p>}
               {message && <p className="action-success" role="status">{message}</p>}
-              <div className="ballot-footer"><p><span>●</span> Your latest revision counts when the phase locks.</p><button className="primary-button" type="button" onClick={submitAction} disabled={selected.length === 0}>Save response</button></div>
+              <div className="ballot-footer"><p><span>●</span> Your latest revision counts when the phase locks.</p><button className="primary-button" type="button" onClick={submitAction} disabled={submitting || selected.length === 0}>{submitting ? 'Saving…' : 'Save response'}</button></div>
             </section>
           ) : (
             <section className="ballot-card waiting-card"><span className="waiting-icon" aria-hidden="true">◐</span><div><h2>{data.permission.label}</h2><p>{data.player.alive ? 'You can step away. This page will show the next official action when it opens.' : 'Published outcomes and game announcements will continue to appear here.'}</p></div><button className="secondary-button" onClick={() => void refresh()}>Check for updates</button></section>
@@ -265,7 +305,7 @@ export default function Home() {
           {data.player.teammates.length > 0 && <section className="rail-card" id="team"><div className="rail-heading"><h2>{data.player.role === 'WEREWOLF' ? 'Your pack' : 'Fellow Masons'}</h2><span>{data.player.teammates.length}</span></div><div className="player-stack">{data.player.teammates.map((teammate) => <div className="player-row" key={teammate.id}><span className="candidate-avatar small">{initials(teammate.displayName)}</span><span><strong>{teammate.displayName}</strong><small>{teammate.alive ? 'Living' : 'Eliminated'}</small></span><span className={`ready-dot ${teammate.alive ? 'ready' : ''}`} /></div>)}</div></section>}
           {data.rooms.length > 0 && <PrivateRoomChat rooms={data.rooms} />}
           <section className="rail-card" id="timeline"><div className="rail-heading"><h2>Official timeline</h2><span>{data.timeline.length}</span></div>{data.timeline.length ? <div className="timeline-mini">{data.timeline.map((event) => <article key={event.id}><strong>{event.eventType === 'GAME_COMPLETED' ? `${event.payload.winner} wins` : event.eventType === 'GAME_STOPPED' ? 'Campaign stopped' : event.eventType === 'FINAL_SHOWDOWN_ENTERED' ? 'Final showdown entered' : event.eventType === 'ANNOUNCEMENT' ? event.payload.title : `${event.payload.kind} resolved`}</strong><p>{event.eventType === 'ANNOUNCEMENT' ? event.payload.body : event.eventType === 'GAME_STOPPED' ? 'Player actions are blocked and rooms are read-only.' : event.eventType === 'FINAL_SHOWDOWN_ENTERED' ? 'The final ballot is now the only legal phase.' : event.payload.eliminations?.length ? event.payload.eliminations.map((item) => `${item.displayName} · ${item.role}`).join(', ') : 'No elimination published.'}</p><small>{new Date(event.createdAt).toLocaleString()}</small></article>)}</div> : <p>No published outcomes yet.</p>}</section>
-          <section className="rail-card pilot-feedback-card" id="feedback"><div className="rail-heading"><h2>Pilot feedback</h2><span aria-hidden="true">?</span></div><p>Share a quick signal with the moderator team. This is private to the pilot operators.</p><form className="chat-compose" onSubmit={submitFeedback}><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve?" /></label>{feedbackError && <p className="form-error" role="alert">{feedbackError}</p>}{feedbackMessage && <p className="action-success" role="status">{feedbackMessage}</p>}<button className="secondary-button" type="submit">Send feedback</button></form></section>
+          <section className="rail-card pilot-feedback-card" id="feedback"><div className="rail-heading"><h2>Pilot feedback</h2><span aria-hidden="true">?</span></div><p>Share a quick signal with the moderator team. This is private to the pilot operators.</p><form className="chat-compose" onSubmit={submitFeedback}><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve?" /></label>{feedbackError && <p className="form-error" role="alert">{feedbackError}</p>}{feedbackMessage && <p className="action-success" role="status">{feedbackMessage}</p>}<button className="secondary-button" type="submit" disabled={sendingFeedback}>{sendingFeedback ? 'Sending…' : 'Send feedback'}</button></form></section>
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>
       </div>

@@ -11,7 +11,7 @@ const sampleRoster = [
   'display_name,email',
   ...Array.from({ length: 20 }, (_, index) => {
     const number = String(index + 1).padStart(2, '0');
-    return `Player ${number},player${number}@example.com`;
+    return `Player ${number},player${number}@example.test`;
   }),
 ].join('\n');
 
