@@ -5,8 +5,8 @@ This file is the restart point for future Codex sessions. Each completed phase i
 ## Current checkpoint
 
 - Phase 0 — Sites scaffold and first meaningful player preview: **complete**
-- Phase 1 — Domain model, game engine, persistence schema, and engine tests: **next**
-- Phase 2 — Authentication, roster, setup wizard, and role assignment: pending
+- Phase 1 — Domain model, game engine, persistence schema, and engine tests: **complete**
+- Phase 2 — Authentication, roster, setup wizard, and role assignment: **next**
 - Phase 3 — Live player actions and moderator resolution workflow: pending
 - Phase 4 — Private rooms, recap, backups, and operational controls: pending
 - Phase 5 — Full verification, rehearsal fixtures, and hosting: pending
@@ -18,6 +18,12 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Werewolf role, phase deadline, participation status, and two-slot ballot are represented.
 - Ballot candidate selection is keyboard-accessible and capped at two choices.
 - Local route responds successfully.
+- Six-role catalog and agreed signed balance score are implemented.
+- Default composition, unique-role constraints, Mason pairing, and one-in-six wolf baseline are tested.
+- Day/night slot scaling is tested at 20, 30, 31, 40, 60, 61, and 80 living players.
+- Day, night, Doctor, Seer, Hunter, random tie, and faction victory rules pass 16 unit tests.
+- D1 schema and initial migration cover identities, games, seats, assignments, phases, actions, resolutions, events, rooms, notifications, and backups.
+- Production build succeeds.
 
 ## Resume instructions
 
