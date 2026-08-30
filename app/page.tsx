@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import PrivateRoomChat from './private-room-chat';
 
@@ -89,6 +89,8 @@ export default function Home() {
   const [selected, setSelected] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackError, setFeedbackError] = useState('');
 
   const refresh = useCallback(async () => {
     const response = await fetch('/api/player');
@@ -143,6 +145,26 @@ export default function Home() {
     window.location.href = '/';
   }
 
+  async function submitFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFeedbackError('');
+    setFeedbackMessage('');
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const response = await fetch(`/api/games/${data?.game.id}/feedback`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rating: Number(formData.get('rating')), comment: formData.get('comment') }),
+    });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) {
+      setFeedbackError(result.error ?? 'Unable to save feedback.');
+      return;
+    }
+    form.reset();
+    setFeedbackMessage('Thanks — your feedback is recorded privately for the pilot review.');
+  }
+
   const selectedNames = useMemo(
     () => selected.map((id) => data?.candidates.find((candidate) => candidate.id === id)?.displayName).filter(Boolean),
     [data?.candidates, selected],
@@ -189,6 +211,7 @@ export default function Home() {
           {data.rooms.length > 0 && <a href="#private-room">Private room</a>}
           <a href="#timeline">Timeline</a>
           {data.notifications.length > 0 && <a href="#notifications">Updates</a>}
+          <a href="#feedback">Feedback</a>
         </nav>
         <aside className="sidebar" aria-label="Game navigation">
           <p className="eyebrow">Game room</p>
@@ -242,6 +265,7 @@ export default function Home() {
           {data.player.teammates.length > 0 && <section className="rail-card" id="team"><div className="rail-heading"><h2>{data.player.role === 'WEREWOLF' ? 'Your pack' : 'Fellow Masons'}</h2><span>{data.player.teammates.length}</span></div><div className="player-stack">{data.player.teammates.map((teammate) => <div className="player-row" key={teammate.id}><span className="candidate-avatar small">{initials(teammate.displayName)}</span><span><strong>{teammate.displayName}</strong><small>{teammate.alive ? 'Living' : 'Eliminated'}</small></span><span className={`ready-dot ${teammate.alive ? 'ready' : ''}`} /></div>)}</div></section>}
           {data.rooms.length > 0 && <PrivateRoomChat rooms={data.rooms} />}
           <section className="rail-card" id="timeline"><div className="rail-heading"><h2>Official timeline</h2><span>{data.timeline.length}</span></div>{data.timeline.length ? <div className="timeline-mini">{data.timeline.map((event) => <article key={event.id}><strong>{event.eventType === 'GAME_COMPLETED' ? `${event.payload.winner} wins` : event.eventType === 'GAME_STOPPED' ? 'Campaign stopped' : event.eventType === 'FINAL_SHOWDOWN_ENTERED' ? 'Final showdown entered' : event.eventType === 'ANNOUNCEMENT' ? event.payload.title : `${event.payload.kind} resolved`}</strong><p>{event.eventType === 'ANNOUNCEMENT' ? event.payload.body : event.eventType === 'GAME_STOPPED' ? 'Player actions are blocked and rooms are read-only.' : event.eventType === 'FINAL_SHOWDOWN_ENTERED' ? 'The final ballot is now the only legal phase.' : event.payload.eliminations?.length ? event.payload.eliminations.map((item) => `${item.displayName} · ${item.role}`).join(', ') : 'No elimination published.'}</p><small>{new Date(event.createdAt).toLocaleString()}</small></article>)}</div> : <p>No published outcomes yet.</p>}</section>
+          <section className="rail-card pilot-feedback-card" id="feedback"><div className="rail-heading"><h2>Pilot feedback</h2><span aria-hidden="true">?</span></div><p>Share a quick signal with the moderator team. This is private to the pilot operators.</p><form className="chat-compose" onSubmit={submitFeedback}><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve?" /></label>{feedbackError && <p className="form-error" role="alert">{feedbackError}</p>}{feedbackMessage && <p className="action-success" role="status">{feedbackMessage}</p>}<button className="secondary-button" type="submit">Send feedback</button></form></section>
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>
       </div>

@@ -55,7 +55,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - The canonical protective role is now `BODYGUARD`; the migration rewrites legacy `DOCTOR` rows and new API/UI output never exposes Doctor as a separate role.
 - Stop and owner-confirmed Reset controls are transactional, audited, backup-first, session-invalidating, game-isolated, and repeat-safe.
 - Server-side phase policy requires Day first, Day/Night alternation, explicit post-cutoff Final Showdown, and Final Ballot-only play during showdown.
-- Phase 6 pilot hardening now includes timezone-aware deadline conversion, D1-backed authentication/action/chat rate limits, due-phase reconciliation, late-attempt operational events, activity health metrics, and moderator feedback capture.
+- Phase 6 pilot hardening now includes timezone-aware deadline conversion, D1-backed authentication/action/chat/feedback rate limits, due-phase reconciliation, late-attempt operational events, activity health metrics, and moderator/player feedback capture.
 - Rate-limit bucket increments/reset windows now execute atomically in a D1 batch, so simultaneous requests cannot overwrite the attempt count.
 - Operations refreshes automatically after live mutations and by polling; the player mobile layout provides alternate section navigation while preserving the right rail content.
 - Local API rehearsal verified fictional roster claim/release, phase rejection/idempotence, Stop/Reset/audit/backup/session invalidation, feedback capture, cross-game isolation, rate-limit behavior, and service-restart persistence. Browser automation was unavailable in this environment, so visual desktop/mobile checks remain pending.

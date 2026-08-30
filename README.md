@@ -84,7 +84,7 @@ Moderator sessions and player seat sessions are opaque, HTTP-only cookies stored
 
 Players receive only their own role, legal candidates, private results, permitted teammates, permitted rooms, and published events. Werewolf, Mason, and Afterlife rooms enforce membership on the server. Eliminated faction members become read-only in their former room and receive the Afterlife room. No role, PIN hash, claim hash, session token, or password is included in a moderator JSON backup.
 
-Pilot abuse controls return HTTP 429 with `Retry-After`: moderator login is limited to 5 attempts per 15 minutes, bootstrap to 3 per 15 minutes, player sign-in to 8 per 15 minutes, seat claiming to 3 per hour, and player actions/private chat to 30 per 10 minutes. Buckets are stored in D1 and updated atomically so a worker restart or simultaneous requests do not silently remove or overwrite the limit.
+Pilot abuse controls return HTTP 429 with `Retry-After`: moderator login is limited to 5 attempts per 15 minutes, bootstrap to 3 per 15 minutes, player sign-in to 8 per 15 minutes, seat claiming to 3 per hour, player actions/private chat to 30 per 10 minutes, and player feedback to 3 per hour (moderator feedback to 10 per hour). Buckets are stored in D1 and updated atomically so a worker restart or simultaneous requests do not silently remove or overwrite the limit.
 
 ## Rooms, announcements, backups, and audit
 
@@ -100,7 +100,7 @@ JSON backups include the recoverable game state, roles, phases, actions, proposa
 
 ## Phase 6 scope
 
-Phase 6 is intentionally resumable. The current preparation build already includes timezone/DST conversion, atomic D1-backed auth/action/chat rate limits, due-phase reconciliation, late-attempt logging, activity health metrics, and moderator feedback capture. Remaining pilot work is:
+Phase 6 is intentionally resumable. The current preparation build already includes timezone/DST conversion, atomic D1-backed auth/action/chat/feedback rate limits, due-phase reconciliation, late-attempt logging, activity health metrics, and moderator/player feedback capture. Remaining pilot work is:
 
 - scheduling automation, timezone/DST handling, reminders, missed-deadline recovery, and idempotent jobs;
 - rate limits and abuse resistance for moderator/player authentication, claiming, actions, and chat;
