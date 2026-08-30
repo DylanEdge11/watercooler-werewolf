@@ -8,8 +8,8 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Phase 1 — Domain model, game engine, persistence schema, and engine tests: **complete**
 - Phase 2 — Authentication, roster, setup wizard, and role assignment: **complete**
 - Phase 3 - Live player actions and moderator resolution workflow: **complete**
-- Phase 4 - Private rooms, recap, backups, and operational controls: **next**
-- Phase 5 — Full verification, rehearsal fixtures, and hosting: pending
+- Phase 4 - Private rooms, recap, backups, and operational controls: **complete**
+- Phase 5 - Full verification, rehearsal fixtures, and hosting: **next**
 
 ## Verified at this checkpoint
 
@@ -36,7 +36,13 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Published outcomes eliminate seats, reveal eliminated roles, send private Seer results, update the public timeline, and evaluate Village/Werewolf victory.
 - The real player dashboard now shows only the signed-in player's role, legal candidates, teammates when applicable, participation, private results, and published events.
 - A live-cycle rehearsal saved two ballot revisions, counted only the latest, proposed and published one elimination, and moved the living count from 20 to 19.
-- Twenty-six unit tests and strict TypeScript checks pass.
+- Werewolf, Mason, and eliminated-player rooms enforce server-side membership, write/read-only access, 1,000-character messages, and polling updates.
+- Eliminated faction members become read-only in their former room and gain the dead-player room; every private room freezes when the game ends.
+- Moderators can publish in-app announcements with email-ready copy, add co-moderators, lock rooms, remove messages with an audit reason, and apply chat retention.
+- The operational console reports roster, living count, sessions, stale deadlines, recent warnings, room health, and last-backup state.
+- Moderator-only JSON backups include the recoverable game and audit record while excluding passwords, claim/PIN hashes, and session tokens; each export has a SHA-256 checksum.
+- A Phase 4 rehearsal verified pack-room access and posting, message moderation, 20 announcement notifications, co-moderator access, three room types, an operational warning, and a logged checksum backup.
+- Twenty-eight unit tests and strict TypeScript checks pass.
 - Production build succeeds.
 
 ## Resume instructions

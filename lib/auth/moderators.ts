@@ -21,6 +21,11 @@ export async function hasModeratorAccount(): Promise<boolean> {
 export async function createPrimaryModerator(email: string, password: string): Promise<CreatedModerator> {
   await ensureDatabase();
   if (await hasModeratorAccount()) throw new Error('The primary moderator already exists.');
+  return createModeratorAccount(email, password);
+}
+
+export async function createModeratorAccount(email: string, password: string): Promise<CreatedModerator> {
+  await ensureDatabase();
   const normalizedEmail = normalizeEmail(email);
   if (!/^\S+@\S+\.\S+$/u.test(normalizedEmail)) throw new Error('Enter a valid email address.');
   if (password.length < 12) throw new Error('Moderator passwords must be at least 12 characters.');
@@ -52,4 +57,3 @@ export async function authenticateModerator(
   if (!row || !(await verifySecret(password, row.passwordHash))) return null;
   return { id: row.id, email: row.email };
 }
-

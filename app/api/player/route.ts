@@ -5,6 +5,7 @@ import { permissionForRole } from '../../../lib/game/actions';
 import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import type { ActionKind, PhaseKind, PhaseResolution, RoleKey } from '../../../lib/game/types';
 import { jsonError } from '../../../lib/http/security';
+import { ensureGameRooms } from '../../../lib/chat/rooms';
 
 export async function GET() {
   try {
@@ -32,6 +33,7 @@ export async function GET() {
         role: RoleKey | null;
       }>();
     if (!player) return jsonError('Player seat not found.', 404);
+    if (player.role) await ensureGameRooms(player.gameId);
 
     const phase = await db
       .prepare(
@@ -111,7 +113,7 @@ export async function GET() {
     const timelineRows = await db
       .prepare(
         `SELECT id, event_type AS eventType, payload_json AS payloadJson, created_at AS createdAt
-         FROM game_events WHERE game_id = ? AND event_type IN ('PHASE_PUBLISHED', 'GAME_COMPLETED')
+         FROM game_events WHERE game_id = ? AND event_type IN ('PHASE_PUBLISHED', 'GAME_COMPLETED', 'ANNOUNCEMENT')
          ORDER BY created_at DESC LIMIT 12`,
       )
       .bind(player.gameId)
@@ -122,6 +124,15 @@ export async function GET() {
          FROM notifications WHERE seat_id = ? ORDER BY created_at DESC LIMIT 10`,
       )
       .bind(player.id)
+      .all();
+    const roomRows = await db
+      .prepare(
+        `SELECT cr.id, cr.type, cr.status, crm.access
+         FROM chat_rooms cr JOIN chat_room_members crm ON crm.room_id = cr.id
+         WHERE cr.game_id = ? AND crm.seat_id = ? AND crm.access != 'REVOKED' AND cr.status != 'PURGED'
+         ORDER BY cr.type`,
+      )
+      .bind(player.gameId, player.id)
       .all();
 
     let participation = { submitted: 0, eligible: 0 };
@@ -167,6 +178,7 @@ export async function GET() {
       participation,
       timeline: timelineRows.results.map((event) => ({ ...event, payload: JSON.parse(event.payloadJson), payloadJson: undefined })),
       notifications: notificationRows.results,
+      rooms: roomRows.results,
     });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unable to load the player dashboard.', 400);

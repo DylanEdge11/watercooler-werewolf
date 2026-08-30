@@ -6,6 +6,7 @@ import { createAssignmentPreview } from '../../../../../lib/game/assignment';
 import { ROLE_CATALOG } from '../../../../../lib/game/catalog';
 import { ROLE_KEYS, type RoleComposition, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { ensureGameRooms } from '../../../../../lib/chat/rooms';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -213,6 +214,7 @@ export async function POST(request: Request, context: RouteContext) {
             now,
           ),
       ]);
+      await ensureGameRooms(gameId);
       return Response.json({ ok: true, releasedAt: now });
     }
 

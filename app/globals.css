@@ -15,6 +15,7 @@
 }
 
 * { box-sizing: border-box; }
+.sr-only { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif; }
 button, a { font: inherit; }
@@ -297,4 +298,51 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .phase-status-row > div:not(:first-child) { border-left: 0; border-top: 1px solid #dcded8; padding: 8px 0 0; text-align: left; }
   .hunter-callout { grid-template-columns: 28px 1fr; }
   .hunter-callout button { grid-column: 1 / -1; }
+}
+.room-tabs { display: flex; gap: 5px; margin: 12px 0; overflow-x: auto; }
+.room-tabs button { background: transparent; border: 1px solid #d9ddd8; border-radius: 999px; color: var(--muted); cursor: pointer; font-size: 8px; padding: 5px 8px; white-space: nowrap; }
+.room-tabs button.active { background: #e2eee7; border-color: #b9d2c5; color: var(--mint-strong); }
+.chat-scroll { display: grid; gap: 9px; margin: 13px 0; max-height: 260px; overflow-y: auto; padding-right: 3px; }
+.chat-line { background: #f4f4ee; border-radius: 9px; padding: 8px 9px; }
+.chat-line > div { align-items: center; display: flex; justify-content: space-between; }
+.chat-line strong { font-size: 9px; }
+.chat-line small { color: #98a19c; font-size: 7px; }
+.chat-line p { color: #4f5d56; font-size: 9px; line-height: 1.45; margin: 4px 0 0; overflow-wrap: anywhere; }
+.chat-compose { display: grid; gap: 7px; }
+.chat-compose textarea { font-size: 9px; padding: 8px; }
+.chat-compose button { justify-self: end; padding: 8px 12px; }
+.setup-loading.compact { margin: 35px auto; }
+.health-grid { display: grid; gap: 8px; grid-template-columns: repeat(4, 1fr); margin-bottom: 18px; }
+.health-grid > div { background: #f3f3ed; border: 1px solid #e2e3dc; border-radius: 10px; padding: 11px; }
+.health-grid > div.warning { background: #fff1e6; border-color: #efd0bc; }
+.health-grid span, .health-grid strong, .health-grid small { display: block; }
+.health-grid span { color: var(--muted); font-size: 8px; text-transform: uppercase; }
+.health-grid strong { font-family: Georgia, serif; font-size: 18px; margin: 5px 0 2px; }
+.health-grid small { color: #8d9791; font-size: 8px; }
+.operations-columns { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+.ops-block { background: #f8f7f2; border: 1px solid #e2e3dc; border-radius: 12px; display: grid; gap: 10px; padding: 15px; }
+.ops-block label { color: #485950; display: grid; font-size: 9px; font-weight: 800; gap: 5px; }
+.ops-block .primary-button, .ops-block .secondary-button { justify-self: start; }
+.recovery-list { background: #fff4dd; border-radius: 7px; color: #72551f; font-size: 8px; overflow-wrap: anywhere; padding: 8px; }
+.room-operations { margin-top: 12px; }
+.ops-heading, .backup-row { align-items: center; display: flex; justify-content: space-between; }
+.room-health-list { display: grid; gap: 5px; grid-template-columns: repeat(3, 1fr); }
+.room-health-list > div { background: white; border-radius: 8px; display: grid; gap: 4px; padding: 9px; }
+.room-health-list span { color: var(--mint-strong); font-size: 8px; font-weight: 850; }
+.room-health-list strong { font-size: 8px; }
+.room-health-list button, .moderation-line button { background: transparent; border: 0; color: var(--coral); cursor: pointer; font-size: 8px; font-weight: 800; padding: 0; text-align: left; }
+.moderation-line { align-items: start; border-top: 1px solid #e3e3dd; display: grid; gap: 7px; grid-template-columns: 130px 1fr auto; padding-top: 8px; }
+.moderation-line span { color: var(--muted); font-size: 8px; }
+.moderation-line p { font-size: 9px; margin: 0; overflow-wrap: anywhere; }
+.backup-row { background: var(--night); border-radius: 12px; color: white; margin-top: 12px; padding: 16px; }
+.backup-row strong, .backup-row small { display: block; }
+.backup-row strong { font-size: 10px; }
+.backup-row small { color: #9fb8ae; font-size: 8px; margin-top: 4px; }
+.backup-row .eyebrow { color: var(--mint); }
+@media (max-width: 650px) {
+  .health-grid { grid-template-columns: 1fr 1fr; }
+  .operations-columns, .room-health-list { grid-template-columns: 1fr; }
+  .moderation-line { grid-template-columns: 1fr auto; }
+  .moderation-line p { grid-column: 1 / -1; }
+  .backup-row { align-items: flex-start; display: grid; gap: 12px; }
 }

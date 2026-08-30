@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import LiveGamePanel from './live-game-panel';
+import OperationsPanel from './operations-panel';
 
 const sampleRoster = [
   'display_name,email',
@@ -335,6 +336,7 @@ export default function ModeratorPage() {
                 </section>
               )}
               {latestBatch?.releasedAt && <LiveGamePanel gameId={gameId} gameStatus={selectedGame?.status ?? ''} />}
+              {latestBatch?.releasedAt && <OperationsPanel gameId={gameId} />}
             </>
           )}
         </section>

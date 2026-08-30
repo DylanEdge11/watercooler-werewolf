@@ -7,6 +7,7 @@ import { evaluateWinner, resolveHunterShot, resolvePhase } from '../../../../../
 import { createSecureRandomRolls } from '../../../../../lib/game/random';
 import type { ActionSubmission, PhaseKind, PhaseResolution, PlayerState, RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { ensureGameRooms } from '../../../../../lib/chat/rooms';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -367,6 +368,7 @@ export async function POST(request: Request, context: RouteContext) {
       if (win.winner) {
         statements.push(
           db.prepare("UPDATE games SET status = 'COMPLETED', updated_at = ? WHERE id = ?").bind(now, gameId),
+          db.prepare("UPDATE chat_rooms SET status = 'READ_ONLY' WHERE game_id = ? AND status = 'OPEN'").bind(gameId),
           db
             .prepare(
               `INSERT INTO game_events
@@ -377,6 +379,7 @@ export async function POST(request: Request, context: RouteContext) {
         );
       }
       await db.batch(statements);
+      await ensureGameRooms(gameId);
       return Response.json({ ok: true, outcome, eliminated, winner: win.winner });
     }
 

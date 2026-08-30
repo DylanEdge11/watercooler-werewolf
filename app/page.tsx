@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import PrivateRoomChat from './private-room-chat';
 
 type RoleKey = 'VILLAGER' | 'WEREWOLF' | 'SEER' | 'DOCTOR' | 'HUNTER' | 'MASON';
 type ActionKind = 'DAY_VOTE' | 'WOLF_VOTE' | 'INVESTIGATE' | 'PROTECT' | 'HUNTER_SHOT';
@@ -33,11 +34,14 @@ interface DashboardData {
     createdAt: string;
     payload: {
       kind?: string;
+      title?: string;
+      body?: string;
       winner?: string | null;
       eliminations?: Array<{ displayName: string; role: string; cause: string }>;
     };
   }>;
   notifications: Array<{ id: string; title: string; body: string; createdAt: string }>;
+  rooms: Array<{ id: string; type: 'WEREWOLF' | 'MASON' | 'DEAD'; status: string; access: string }>;
 }
 
 function initials(name: string): string {
@@ -178,7 +182,7 @@ export default function Home() {
           <nav>
             <a className="nav-item active" href="#today"><span>◐</span>Today</a>
             <a className="nav-item" href="#timeline"><span>≋</span>Timeline</a>
-            {data.player.teammates.length > 0 && <a className="nav-item" href="#team"><span>◆</span>{data.player.role === 'WEREWOLF' ? 'Pack' : 'Masons'}</a>}
+            {data.rooms.length > 0 && <a className="nav-item" href="#private-room"><span>◆</span>Private room</a>}
           </nav>
           <div className="sidebar-rule" />
           <p className="eyebrow">Your game</p>
@@ -222,7 +226,8 @@ export default function Home() {
         <aside className="right-rail">
           {data.notifications[0] && <section className="rail-card announcement"><p className="eyebrow">Private result</p><h2>{data.notifications[0].title}</h2><p>{data.notifications[0].body}</p><small>{new Date(data.notifications[0].createdAt).toLocaleString()}</small></section>}
           {data.player.teammates.length > 0 && <section className="rail-card" id="team"><div className="rail-heading"><h2>{data.player.role === 'WEREWOLF' ? 'Your pack' : 'Fellow Masons'}</h2><span>{data.player.teammates.length}</span></div><div className="player-stack">{data.player.teammates.map((teammate) => <div className="player-row" key={teammate.id}><span className="candidate-avatar small">{initials(teammate.displayName)}</span><span><strong>{teammate.displayName}</strong><small>{teammate.alive ? 'Living' : 'Eliminated'}</small></span><span className={`ready-dot ${teammate.alive ? 'ready' : ''}`} /></div>)}</div></section>}
-          <section className="rail-card" id="timeline"><div className="rail-heading"><h2>Official timeline</h2><span>{data.timeline.length}</span></div>{data.timeline.length ? <div className="timeline-mini">{data.timeline.map((event) => <article key={event.id}><strong>{event.eventType === 'GAME_COMPLETED' ? `${event.payload.winner} wins` : `${event.payload.kind} resolved`}</strong><p>{event.payload.eliminations?.length ? event.payload.eliminations.map((item) => `${item.displayName} · ${item.role}`).join(', ') : 'No elimination published.'}</p><small>{new Date(event.createdAt).toLocaleString()}</small></article>)}</div> : <p>No published outcomes yet.</p>}</section>
+          {data.rooms.length > 0 && <PrivateRoomChat rooms={data.rooms} />}
+          <section className="rail-card" id="timeline"><div className="rail-heading"><h2>Official timeline</h2><span>{data.timeline.length}</span></div>{data.timeline.length ? <div className="timeline-mini">{data.timeline.map((event) => <article key={event.id}><strong>{event.eventType === 'GAME_COMPLETED' ? `${event.payload.winner} wins` : event.eventType === 'ANNOUNCEMENT' ? event.payload.title : `${event.payload.kind} resolved`}</strong><p>{event.eventType === 'ANNOUNCEMENT' ? event.payload.body : event.payload.eliminations?.length ? event.payload.eliminations.map((item) => `${item.displayName} · ${item.role}`).join(', ') : 'No elimination published.'}</p><small>{new Date(event.createdAt).toLocaleString()}</small></article>)}</div> : <p>No published outcomes yet.</p>}</section>
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>
       </div>
