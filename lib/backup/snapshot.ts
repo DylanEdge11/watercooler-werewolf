@@ -203,8 +203,9 @@ export async function restoreGameBackup(
     db.prepare("UPDATE chat_rooms SET status = 'OPEN' WHERE game_id = ?").bind(gameId),
     db.prepare('DELETE FROM seat_sessions WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?)').bind(gameId),
     db.prepare(
-      `UPDATE seats SET status = 'REMOVED', pin_hash = NULL, session_version = session_version + 1,
-                        alive = 0, predecessor_seat_id = NULL, claimed_at = NULL, updated_at = ?
+      `UPDATE seats SET status = 'REMOVED', email = 'archived+' || id || '@invalid.test', pin_hash = NULL,
+                        session_version = session_version + 1, alive = 0, predecessor_seat_id = NULL,
+                        claimed_at = NULL, updated_at = ?
        WHERE game_id = ?`,
     ).bind(now, gameId),
     db.prepare(
