@@ -1,6 +1,6 @@
 # Watercooler Werewolf
 
-Watercooler Werewolf is a slow-burn, moderator-reviewed Werewolf game for an office or other trusted group. The current source is the Phase 6 preparation build. The exact source checkpoint is always available with `git log -1 --oneline`; the current private MVP deployment is Sites version 5 from commit `06ac11e628fc4e8f4770e125c2c269dddc01bec3` and is recorded in [BUILD_STATUS.md](BUILD_STATUS.md).
+Watercooler Werewolf is a slow-burn, moderator-reviewed Werewolf game for an office or other trusted group. The current source is the Phase 6 pilot-hardening build. The exact source checkpoint is always available with `git log -1 --oneline`; the current private deployment version and commit are recorded in [BUILD_STATUS.md](BUILD_STATUS.md).
 
 ## Run and verify
 
@@ -9,6 +9,7 @@ Use Node.js 22.13 or newer. The project uses npm and Vinext.
 ```text
 npm install
 npm run dev
+npm run pilot:setup
 npm test
 npm run lint
 npx tsc --noEmit --incremental false
@@ -17,6 +18,8 @@ npm audit --omit=dev
 ```
 
 `npm run dev` starts the local Vinext/Cloudflare preview. The app creates its local D1 schema on the first request. Do not put passwords, invite codes, tokens, or production values in this repository.
+
+`npm run pilot:setup` creates a disposable local game from the fictional 20-player fixture and writes a one-time invite CSV under `outputs/`. It is deliberately mutation-gated: set `PILOT_ALLOW_MUTATION=yes` and provide a fictional `PILOT_MODERATOR_PASSWORD` (at least 12 characters). Use `PILOT_BASE_URL` to point at a local or explicitly approved private environment. Never run it against production data.
 
 ## Local D1 and fictional data
 
@@ -32,7 +35,7 @@ The hosted MVP is currently owner-only. It is safe to demonstrate while signed i
 
 Use a disposable game and keep the moderator console in one browser profile and each test player in a separate profile (or private window):
 
-1. Bootstrap a fictional moderator locally, create a game with a short test schedule, and set the game's IANA timezone to the timezone used by the facilitator.
+1. Run `PILOT_ALLOW_MUTATION=yes PILOT_MODERATOR_PASSWORD="a-fictional-12-character-password" npm run pilot:setup` against a disposable local preview, or bootstrap a fictional moderator manually. Set the game's IANA timezone to the timezone used by the facilitator.
 2. Import [fixtures/roster-20.csv](fixtures/roster-20.csv), download the one-time invite CSV, and claim every seat with unique six-digit test PINs. Keep the invite CSV private; it contains the only claim links.
 3. Review the default 20-player composition (12 Villagers, 3 Werewolves, 1 Seer, 1 Bodyguard, 1 Hunter, and 2 Masons), randomize, inspect the assignment evidence, and release roles. Verify that each player can see only their own role and permitted teammates/room.
 4. Open a Day ballot. Have a player submit, revise, and submit again; verify that the latest revision is the one counted. Lock and propose, then publish the reviewed outcome. Confirm the timeline, living count, eliminated-role reveal, and Hunter follow-up when a Hunter is eliminated.
@@ -110,22 +113,25 @@ Moderators can lock/reopen rooms, remove a message with a reason, purge messages
 
 JSON backups include the recoverable game state, roles, phases, actions, proposals, events, rooms, announcements, notifications, pilot feedback, and operational events. Each backup has a SHA-256 checksum and is stored as a moderator-only backup record. Stop/Reset operations also create operational and game audit events. A local service restart rehydrates the same D1 state; the moderator can export a backup before any recovery operation.
 
+The owner-only **Recovery restore** control lists stored snapshots. Restoring requires explicit confirmation and the exact game name, verifies the checksum and game id, creates a safety backup first, and restores only the selected game’s configuration, roster, and composition to `DRAFT`. Active phases, role assignments, submissions, proposals, notifications, announcements, room memberships, messages, and player sessions are cleared. Existing audit/operational history and both backup records remain. Every restored seat gets a new one-time claim link; PINs, old claim links, role secrets, and sessions are never restored. Download the fresh invite CSV immediately—the codes are not shown again.
+
 ## Stop and Reset
 
 **Stop** is available to an authorized game moderator. It requires an explicit confirmation and a reason of at least five characters. Stop changes the game to `STOPPED`, marks scheduled/open/review phases superseded, makes every room read-only, and blocks player actions and further gameplay. Players see a clear stopped message. Repeating Stop on an already stopped game is idempotent and does not add conflicting state. Completed and cancelled games cannot be stopped.
 
-**Reset** is an owner-only recovery action. It requires explicit confirmation and typing the exact game name. A recoverable backup is created before destructive changes. Reset is isolated to the selected game, invalidates all player sessions and old claim codes, restores seats to invited/living setup state, removes role assignments, role counts, assignment batches, phases, submissions, proposals, notifications, room memberships, and chat messages, reopens the empty rooms, and changes the game to `DRAFT`. The game’s existing event/audit history and the pre-reset backup remain. Repeating Reset on a clean draft is harmless; cancelled games cannot be reset. Re-import the roster before configuring roles again.
+**Reset** is an owner-only recovery action. It requires explicit confirmation and typing the exact game name. A recoverable backup is created before destructive changes. Reset is isolated to the selected game, invalidates all player sessions and old claim codes, restores seats to invited/living setup state, removes role assignments, role counts, assignment batches, phases, submissions, proposals, notifications, room memberships, and chat messages, reopens the empty rooms, and changes the game to `DRAFT`. The game's existing event/audit history and the pre-reset backup remain. Repeating Reset on a clean draft is harmless; cancelled games cannot be reset. Re-import the roster before configuring roles again.
+
+**Recovery restore** is the complementary owner-only action for a stored snapshot. It is intentionally a setup restore rather than a secret/session restore: it gives the moderator a clean roster and configuration from the snapshot, then requires players to claim newly generated links and roles to be randomized/released again. This makes a recovery safe after a test, a stale invite, or a local restart without reusing private credentials.
 
 ## Phase 6 scope
 
-Phase 6 is intentionally resumable. The current preparation build already includes timezone/DST conversion, atomic D1-backed auth/action/chat/feedback rate limits, due-phase reconciliation, late-attempt logging, activity health metrics, and moderator/player feedback capture. Remaining pilot work is:
+Phase 6 is intentionally resumable. The current pilot-hardening build includes timezone/DST conversion, D1-backed auth/action/chat/feedback rate limits, due-phase reconciliation, late-attempt logging, activity health metrics, moderator/player feedback capture, a cron-compatible deadline sweep, checksum-verified setup restore, and the fictional pilot setup helper. The Operations panel also polls and reconciles deadlines as a safe fallback when a host scheduler is not configured.
 
-- scheduling automation, timezone/DST handling, reminders, missed-deadline recovery, and idempotent jobs;
-- rate limits and abuse resistance for moderator/player authentication, claiming, actions, and chat;
-- feedback and operational instrumentation for participation, missed actions, errors, overrides, and pilot surveys;
-- late-submission and deadline monitoring;
+For unattended deadline monitoring, configure a private `WATERCOOLER_SCHEDULER_TOKEN` secret and invoke `POST /api/scheduler/deadlines` once per minute with `Authorization: Bearer <token>`. The endpoint is intentionally disabled with HTTP 503 until the secret exists. It is safe to retry: due phases, audit events, and operational events use conditional writes/stable ids. The owner-only Operations panel’s **Check deadlines** action and ten-second polling remain the supported pilot fallback.
+
+The remaining pilot gate is human verification and operating the first fictional group game:
+
 - hosted end-to-end, authorization, concurrency, recovery, and accessibility regression coverage;
-- backup restoration tooling and a moderator recovery runbook;
 - a fictional 20-player pilot followed by a feedback-driven backlog.
 
 ## Explicitly out of scope for this build

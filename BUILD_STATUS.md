@@ -4,7 +4,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 
 ## Current checkpoint
 
-- Current source checkpoint: `06ac11e628fc4e8f4770e125c2c269dddc01bec3` (`feat: prepare player flow for pilot rehearsal`)
+- Current source checkpoint: `5fa65b2ef16219e507a6c448c08118cfe198d4cf` (`feat: harden pilot recovery and deadline automation`)
 - Phase 0 - Sites scaffold and first meaningful player preview: **complete**
 - Phase 1 — Domain model, game engine, persistence schema, and engine tests: **complete**
 - Phase 2 — Authentication, roster, setup wizard, and role assignment: **complete**
@@ -44,7 +44,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - The operational console reports roster, living count, sessions, stale deadlines, recent warnings, room health, and last-backup state.
 - Moderator-only JSON backups include the recoverable game and audit record while excluding passwords, claim/PIN hashes, and session tokens; each export has a SHA-256 checksum.
 - A Phase 4 rehearsal verified pack-room access and posting, message moderation, 20 announcement notifications, co-moderator access, three room types, an operational warning, and a logged checksum backup.
-- Forty-six unit tests across sixteen files, the full lint suite, and strict TypeScript checks pass.
+- Fifty-one unit tests across seventeen files, the full lint suite, and strict TypeScript checks pass after the pilot-hardening changes.
 - Production build succeeds.
 - Default campaign dates are calculated relative to the next Monday; dates shown in planning documents are not treated as release constraints.
 - A 20-player rehearsal roster, branded social preview, and favicon are included for the MVP handoff.
@@ -54,6 +54,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Sites version 3 packages the atomic rate-limit hardening from commit `b3dfad2b06865c65415098f655bdd967a2dada17`.
 - Sites version 4 packages the authenticated player-feedback flow from commit `2c4e94c26f4f837212374388b374d3652f500f88`.
 - Sites version 5 packages the player polling, in-flight submission guard, `.test` sample roster, and show-and-play runbook from commit `06ac11e628fc4e8f4770e125c2c269dddc01bec3`.
+- The next private package will include the pilot setup helper, owner-only backup restore, cron-compatible deadline sweep, and concurrent claim/action hardening from commit `5fa65b2ef16219e507a6c448c08118cfe198d4cf`.
 - The current private MVP is deployed at `https://watercooler-werewolf.dylan-d-edgar.chatgpt.site` with owner-only access and the hosted origin applied to social metadata.
 - The canonical protective role is now `BODYGUARD`; the migration rewrites legacy `DOCTOR` rows and new API/UI output never exposes Doctor as a separate role.
 - Stop and owner-confirmed Reset controls are transactional, audited, backup-first, session-invalidating, game-isolated, and repeat-safe.
@@ -64,6 +65,10 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - The player dashboard polls every ten seconds for phase, result, notification, and stopped-state changes while preserving an unsaved ballot; action and feedback buttons guard against duplicate in-flight clicks.
 - The README now includes a complete pilot show-and-play checklist for a disposable 20-player `.test` rehearsal, privacy checks, phase exercises, Stop/Reset recovery, and teardown.
 - Local API rehearsal verified fictional roster claim/release, phase rejection/idempotence, Stop/Reset/audit/backup/session invalidation, feedback capture, cross-game isolation, rate-limit behavior, and service-restart persistence. Browser automation was unavailable in this environment, so visual desktop/mobile checks remain pending.
+- The owner-only Recovery restore path verifies a stored backup checksum and game id, creates a safety backup, restores only configuration/roster/composition to `DRAFT`, clears active gameplay/secrets/sessions, preserves audit history, and returns fresh one-time invite links. Repeated restore attempts are isolated to the selected game.
+- A cron-compatible `POST /api/scheduler/deadlines` endpoint and all-game D1 sweep now complement the Operations panel heartbeat. The endpoint requires a private `WATERCOOLER_SCHEDULER_TOKEN`; when unset it fails closed with HTTP 503, so private pilots can use the panel fallback safely.
+- Player claim uses a conditional `UPDATE ... RETURNING` and action revisions allocate their version inside a serialized D1 batch, preventing double claims and unique-version collisions during simultaneous submissions.
+- `npm run pilot:setup` creates a disposable 20-player `.test` game and writes a one-time invite CSV only when `PILOT_ALLOW_MUTATION=yes` is explicitly set.
 
 ## Resume instructions
 
