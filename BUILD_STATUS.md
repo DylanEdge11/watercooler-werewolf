@@ -4,7 +4,8 @@ This file is the restart point for future Codex sessions. Each completed phase i
 
 ## Current checkpoint
 
-- Phase 0 — Sites scaffold and first meaningful player preview: **complete**
+- Current source checkpoint: `06ac11e628fc4e8f4770e125c2c269dddc01bec3` (`feat: prepare player flow for pilot rehearsal`)
+- Phase 0 - Sites scaffold and first meaningful player preview: **complete**
 - Phase 1 — Domain model, game engine, persistence schema, and engine tests: **complete**
 - Phase 2 — Authentication, roster, setup wizard, and role assignment: **complete**
 - Phase 3 - Live player actions and moderator resolution workflow: **complete**
@@ -52,6 +53,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Sites version 2 packages the first verified Phase 6 preparation build from commit `9141753a0845fbf9a26c4419ab12807ca8fce5de`.
 - Sites version 3 packages the atomic rate-limit hardening from commit `b3dfad2b06865c65415098f655bdd967a2dada17`.
 - Sites version 4 packages the authenticated player-feedback flow from commit `2c4e94c26f4f837212374388b374d3652f500f88`.
+- Sites version 5 packages the player polling, in-flight submission guard, `.test` sample roster, and show-and-play runbook from commit `06ac11e628fc4e8f4770e125c2c269dddc01bec3`.
 - The current private MVP is deployed at `https://watercooler-werewolf.dylan-d-edgar.chatgpt.site` with owner-only access and the hosted origin applied to social metadata.
 - The canonical protective role is now `BODYGUARD`; the migration rewrites legacy `DOCTOR` rows and new API/UI output never exposes Doctor as a separate role.
 - Stop and owner-confirmed Reset controls are transactional, audited, backup-first, session-invalidating, game-isolated, and repeat-safe.
@@ -59,6 +61,8 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Phase 6 pilot hardening now includes timezone-aware deadline conversion, D1-backed authentication/action/chat/feedback rate limits, due-phase reconciliation, late-attempt operational events, activity health metrics, and moderator/player feedback capture.
 - Rate-limit bucket increments/reset windows now execute atomically in a D1 batch, so simultaneous requests cannot overwrite the attempt count.
 - Operations refreshes automatically after live mutations and by polling; the player mobile layout provides alternate section navigation while preserving the right rail content.
+- The player dashboard polls every ten seconds for phase, result, notification, and stopped-state changes while preserving an unsaved ballot; action and feedback buttons guard against duplicate in-flight clicks.
+- The README now includes a complete pilot show-and-play checklist for a disposable 20-player `.test` rehearsal, privacy checks, phase exercises, Stop/Reset recovery, and teardown.
 - Local API rehearsal verified fictional roster claim/release, phase rejection/idempotence, Stop/Reset/audit/backup/session invalidation, feedback capture, cross-game isolation, rate-limit behavior, and service-restart persistence. Browser automation was unavailable in this environment, so visual desktop/mobile checks remain pending.
 
 ## Resume instructions
