@@ -1,6 +1,6 @@
 # Watercooler Werewolf
 
-Watercooler Werewolf is a slow-burn, moderator-reviewed Werewolf game for an office or other trusted group. The current source is the Phase 6 preparation build. The exact source checkpoint is always available with `git log -1 --oneline`; the last published MVP was Sites version 1 from commit `b0546ec98464700a3fc0454e6743284869f1754e` and is recorded in [BUILD_STATUS.md](BUILD_STATUS.md).
+Watercooler Werewolf is a slow-burn, moderator-reviewed Werewolf game for an office or other trusted group. The current source is the Phase 6 preparation build. The exact source checkpoint is always available with `git log -1 --oneline`; the current private MVP deployment is Sites version 2 from commit `9141753a0845fbf9a26c4419ab12807ca8fce5de` and is recorded in [BUILD_STATUS.md](BUILD_STATUS.md).
 
 ## Run and verify
 

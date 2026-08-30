@@ -48,8 +48,9 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Default campaign dates are calculated relative to the next Monday; dates shown in planning documents are not treated as release constraints.
 - A 20-player rehearsal roster, branded social preview, and favicon are included for the MVP handoff.
 - The production dependency audit reports zero known vulnerabilities after upgrading Next.js to 16.3.3.
-- Sites version 1 packages the verified build and D1 migration from commit `b0546ec98464700a3fc0454e6743284869f1754e`.
-- The private MVP is deployed at `https://watercooler-werewolf.dylan-d-edgar.chatgpt.site` with owner-only access and the hosted origin applied to social metadata.
+- Sites version 1 was the original private MVP package from commit `b0546ec98464700a3fc0454e6743284869f1754e`.
+- Sites version 2 packages the verified Phase 6 preparation build from commit `9141753a0845fbf9a26c4419ab12807ca8fce5de`.
+- The current private MVP is deployed at `https://watercooler-werewolf.dylan-d-edgar.chatgpt.site` with owner-only access and the hosted origin applied to social metadata.
 - The canonical protective role is now `BODYGUARD`; the migration rewrites legacy `DOCTOR` rows and new API/UI output never exposes Doctor as a separate role.
 - Stop and owner-confirmed Reset controls are transactional, audited, backup-first, session-invalidating, game-isolated, and repeat-safe.
 - Server-side phase policy requires Day first, Day/Night alternation, explicit post-cutoff Final Showdown, and Final Ballot-only play during showdown.
