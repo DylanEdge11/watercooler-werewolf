@@ -83,6 +83,14 @@ export async function POST(request: Request, context: RouteContext) {
     }
     if (body.action === 'SET_ROOM_STATUS') {
       if (!body.roomId || !body.status) throw new Error('Choose a room and status.');
+      const game = await db
+        .prepare('SELECT status FROM games WHERE id = ? LIMIT 1')
+        .bind(gameId)
+        .first<{ status: string }>();
+      if (!game) throw new Error('Game not found.');
+      if (body.status === 'OPEN' && ['STOPPED', 'COMPLETED', 'CANCELLED'].includes(game.status)) {
+        throw new Error('Rooms remain read-only after the game has stopped or completed.');
+      }
       await db
         .prepare("UPDATE chat_rooms SET status = ? WHERE id = ? AND game_id = ? AND status != 'PURGED'")
         .bind(body.status, body.roomId, gameId)

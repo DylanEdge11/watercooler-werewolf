@@ -15,7 +15,7 @@ describe('role balance', () => {
       VILLAGER: 12,
       WEREWOLF: 3,
       SEER: 1,
-      DOCTOR: 1,
+      BODYGUARD: 1,
       HUNTER: 1,
       MASON: 2,
     });
@@ -35,7 +35,7 @@ describe('role balance', () => {
 
   it('rejects duplicate unique roles, a lone Mason, and the wrong total', () => {
     const result = validateComposition(
-      { VILLAGER: 13, WEREWOLF: 3, SEER: 2, DOCTOR: 0, HUNTER: 0, MASON: 1 },
+      { VILLAGER: 13, WEREWOLF: 3, SEER: 2, BODYGUARD: 0, HUNTER: 0, MASON: 1 },
       20,
     );
     expect(result.valid).toBe(false);

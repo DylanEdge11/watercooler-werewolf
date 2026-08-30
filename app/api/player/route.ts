@@ -3,7 +3,7 @@ import { ensureDatabase } from '../../../db/migrate';
 import { getCurrentPlayer } from '../../../lib/auth/session';
 import { permissionForRole } from '../../../lib/game/actions';
 import { ROLE_CATALOG } from '../../../lib/game/catalog';
-import type { ActionKind, PhaseKind, PhaseResolution, RoleKey } from '../../../lib/game/types';
+import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type RoleKey } from '../../../lib/game/types';
 import { jsonError } from '../../../lib/http/security';
 import { ensureGameRooms } from '../../../lib/chat/rooms';
 
@@ -16,7 +16,7 @@ export async function GET() {
     const player = await db
       .prepare(
         `SELECT s.id, s.display_name AS displayName, s.alive, g.id AS gameId, g.name AS gameName,
-                g.status AS gameStatus, g.timezone, ra.role_key AS role
+                g.status AS gameStatus, g.timezone, g.stop_reason AS stopReason, ra.role_key AS role
          FROM seats s JOIN games g ON g.id = s.game_id
          LEFT JOIN role_assignments ra ON ra.game_id = s.game_id AND ra.seat_id = s.id
          WHERE s.id = ? LIMIT 1`,
@@ -30,9 +30,11 @@ export async function GET() {
         gameName: string;
         gameStatus: string;
         timezone: string;
+        stopReason: string | null;
         role: RoleKey | null;
       }>();
     if (!player) return jsonError('Player seat not found.', 404);
+    if (player.role) player.role = canonicalRoleKey(player.role);
     if (player.role) await ensureGameRooms(player.gameId);
 
     const phase = await db
@@ -76,6 +78,9 @@ export async function GET() {
     if (!Boolean(player.alive) || phase?.status === 'PENDING_APPROVAL') {
       permission = { actionKind: null, maxTargets: 0, label: Boolean(player.alive) ? 'Waiting for moderator review' : 'Spectating the village' };
     }
+    if (player.gameStatus === 'STOPPED') {
+      permission = { actionKind: null, maxTargets: 0, label: 'This game has been stopped by a moderator.' };
+    }
 
     const rosterRows = await db
       .prepare(
@@ -85,7 +90,7 @@ export async function GET() {
       )
       .bind(player.gameId)
       .all<{ id: string; displayName: string; alive: number; role: RoleKey | null }>();
-    const roster = rosterRows.results.map((seat) => ({ ...seat, alive: Boolean(seat.alive) }));
+    const roster = rosterRows.results.map((seat) => ({ ...seat, role: seat.role ? canonicalRoleKey(seat.role) : null, alive: Boolean(seat.alive) }));
     const candidates = permission.actionKind
       ? roster
           .filter((seat) => seat.alive && seat.id !== player.id)
@@ -113,7 +118,7 @@ export async function GET() {
     const timelineRows = await db
       .prepare(
         `SELECT id, event_type AS eventType, payload_json AS payloadJson, created_at AS createdAt
-         FROM game_events WHERE game_id = ? AND event_type IN ('PHASE_PUBLISHED', 'GAME_COMPLETED', 'ANNOUNCEMENT')
+         FROM game_events WHERE game_id = ? AND event_type IN ('PHASE_PUBLISHED', 'GAME_COMPLETED', 'ANNOUNCEMENT', 'GAME_STOPPED', 'FINAL_SHOWDOWN_ENTERED')
          ORDER BY created_at DESC LIMIT 12`,
       )
       .bind(player.gameId)
@@ -167,6 +172,7 @@ export async function GET() {
         name: player.gameName,
         status: player.gameStatus,
         timezone: player.timezone,
+        stopReason: player.stopReason,
         counts: { total: roster.length, living: roster.filter((seat) => seat.alive).length },
       },
       phase: phase ? { ...phase, deadline: phase.status === 'PENDING_HUNTER' ? phase.hunterDeadlineAt : phase.closesAt } : null,

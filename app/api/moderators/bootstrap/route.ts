@@ -1,6 +1,8 @@
 import { createPrimaryModerator, hasModeratorAccount } from '../../../../lib/auth/moderators';
+import { ensureDatabase } from '../../../../db/migrate';
 import { createModeratorSession } from '../../../../lib/auth/session';
 import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
+import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../lib/http/rate-limit';
 
 export async function GET() {
   return Response.json({ ok: true, needsBootstrap: !(await hasModeratorAccount()) });
@@ -9,12 +11,15 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
+    await ensureDatabase();
     const body = (await request.json()) as { email?: string; password?: string };
+    await enforceRateLimit(requestRateLimitKey(request, `moderator-bootstrap:${body.email?.trim().toLowerCase() ?? ''}`), 3, 15 * 60_000);
     const moderator = await createPrimaryModerator(body.email ?? '', body.password ?? '');
     await createModeratorSession(moderator.id);
     return Response.json({ ok: true, moderator });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to create moderator.', 400);
+    return error instanceof RateLimitError
+      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
+      : jsonError(error instanceof Error ? error.message : 'Unable to create moderator.', 400);
   }
 }
-

@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 interface Operations {
-  game: { status: string; chatRetentionDays: number; finalCutoffAt: string };
+  viewerRole: string | null;
+  game: { name: string; status: string; chatRetentionDays: number; finalCutoffAt: string; stoppedAt?: string | null; stopReason?: string | null };
   counts: { total: number; claimed: number; living: number };
   overduePhase: null | { id: string; kind: string; closesAt: string };
+  reconciledPhaseIds?: string[];
   activePlayerSessions: number;
+  activity: { submittedActions: number; lateRejections: number; lastActionAt: string | null };
   lastBackup: null | { exportedAt: string; checksum: string };
   events: Array<{ id: string; severity: string; source: string; message: string; createdAt: string }>;
 }
@@ -39,7 +42,7 @@ async function parse<T>(response: Response): Promise<T> {
   return data;
 }
 
-export default function OperationsPanel({ gameId }: { gameId: string }) {
+export default function OperationsPanel({ gameId, refreshToken = 0, onGameChanged }: { gameId: string; refreshToken?: number; onGameChanged?: () => void }) {
   const [operations, setOperations] = useState<Operations | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
@@ -64,8 +67,14 @@ export default function OperationsPanel({ gameId }: { gameId: string }) {
     const timer = window.setTimeout(() => {
       void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load operations.'));
     }, 0);
-    return () => window.clearTimeout(timer);
-  }, [refresh]);
+    const poll = window.setInterval(() => {
+      void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh operations.'));
+    }, 10_000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(poll);
+    };
+  }, [refresh, refreshToken]);
 
   async function post(path: string, body: Record<string, unknown>) {
     const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -81,6 +90,7 @@ export default function OperationsPanel({ gameId }: { gameId: string }) {
       await post(`/api/games/${gameId}/announcements`, { title: data.get('title'), body: data.get('body') });
       form.reset();
       setMessage('Announcement published in-app. Email-ready copy was generated with it.');
+      await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to publish announcement.');
     }
@@ -158,20 +168,97 @@ export default function OperationsPanel({ gameId }: { gameId: string }) {
     }
   }
 
+  async function stopGame() {
+    const reason = window.prompt('Why are you stopping this game?');
+    if (!reason) return;
+    if (!window.confirm('Stop the game now? Active phases will close, player actions will be blocked, and rooms will become read-only.')) return;
+    setError('');
+    try {
+      await post(`/api/games/${gameId}/operations`, { action: 'STOP', confirmed: true, reason });
+      setMessage('Game stopped. Player actions are blocked and rooms are read-only.');
+      await refresh();
+      onGameChanged?.();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to stop the game.');
+    }
+  }
+
+  async function resetGame() {
+    const confirmationName = window.prompt(`Type the exact game name to reset: ${operations?.game.name ?? ''}`);
+    if (confirmationName === null) return;
+    if (!window.confirm('Reset this game to setup? A recoverable backup will be created first, player sessions will be revoked, and active roles/phases/notifications will be removed.')) return;
+    setError('');
+    try {
+      await post(`/api/games/${gameId}/operations`, { action: 'RESET', confirmed: true, confirmationName });
+      setMessage('Game reset to setup state. Re-import the roster before configuring roles.');
+      await refresh();
+      onGameChanged?.();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to reset the game.');
+    }
+  }
+
+  async function reconcileDeadlines() {
+    setError('');
+    try {
+      const result = await parse<{ lockedPhaseIds: string[] }>(await fetch(`/api/games/${gameId}/operations`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'RECONCILE_DEADLINES' }),
+      }));
+      setMessage(result.lockedPhaseIds.length ? `${result.lockedPhaseIds.length} deadline${result.lockedPhaseIds.length === 1 ? '' : 's'} locked.` : 'No due deadlines found.');
+      await refresh();
+      onGameChanged?.();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to reconcile deadlines.');
+    }
+  }
+
+  async function submitFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    try {
+      await post(`/api/games/${gameId}/feedback`, { rating: Number(data.get('rating')), comment: data.get('comment') });
+      form.reset();
+      setMessage('Pilot feedback recorded for the operational review.');
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to record pilot feedback.');
+    }
+  }
+
+  async function signOut() {
+    await fetch('/api/moderators/logout', { method: 'POST' });
+    window.location.href = '/moderator';
+  }
+
   if (!operations) return <section className="setup-card"><p className="setup-loading compact">Loading operational controls…</p></section>;
 
   return (
     <section className="setup-card operations-panel">
-      <div className="setup-card-heading"><span>06</span><div><h2>Communications & operations</h2><p>Run private rooms, share official notices, and keep recoverable records.</p></div></div>
+      <div className="setup-card-heading"><span>06</span><div><h2>Communications & operations</h2><p>Run private rooms, share official notices, and keep recoverable records.</p></div><button className="text-button" type="button" onClick={signOut}>Sign out</button></div>
       {error && <p className="notice error" role="alert">{error}</p>}
       {message && <p className="notice success" role="status">{message}</p>}
+
+      <div className="ops-block game-controls">
+        <div><p className="eyebrow accent">Fail-safe controls</p><p className="field-help">Stop freezes a campaign. Reset is an owner-only recovery action that preserves a backup and audit history.</p></div>
+        <div className="button-row">
+          <button className="danger-button" type="button" onClick={() => void stopGame()} disabled={['STOPPED', 'COMPLETED', 'CANCELLED'].includes(operations.game.status)}>Stop game</button>
+          {operations.viewerRole === 'OWNER' && <button className="secondary-button" type="button" onClick={() => void resetGame()}>Reset to setup</button>}
+        </div>
+        {operations.game.status === 'STOPPED' && <p className="notice warning">Stopped {operations.game.stoppedAt ? new Date(operations.game.stoppedAt).toLocaleString() : ''}: {operations.game.stopReason ?? 'No reason recorded.'}</p>}
+      </div>
 
       <div className="health-grid">
         <div><span>Roster</span><strong>{operations.counts.claimed}/{operations.counts.total}</strong><small>claimed</small></div>
         <div><span>Living</span><strong>{operations.counts.living}</strong><small>players</small></div>
         <div><span>Sessions</span><strong>{operations.activePlayerSessions}</strong><small>active</small></div>
         <div className={operations.overduePhase ? 'warning' : ''}><span>Deadlines</span><strong>{operations.overduePhase ? 'Overdue' : 'Healthy'}</strong><small>{operations.overduePhase?.kind ?? 'no stale phase'}</small></div>
+        <div><span>Activity (24h)</span><strong>{operations.activity.submittedActions}</strong><small>{operations.activity.lateRejections} late rejected</small></div>
       </div>
+      <div className="ops-inline-note"><span>Deadline monitor checks due phases and locks player submissions safely.</span><button className="secondary-button" type="button" onClick={() => void reconcileDeadlines()}>Check deadlines</button></div>
 
       <div className="operations-columns">
         <form className="ops-block" onSubmit={announce}><p className="eyebrow accent">Official announcement</p><label>Title<input name="title" required /></label><label>Message<textarea name="body" rows={4} required /></label><button className="primary-button" type="submit">Publish notice</button></form>
@@ -179,6 +266,8 @@ export default function OperationsPanel({ gameId }: { gameId: string }) {
       </div>
 
       <div className="ops-block room-operations"><div className="ops-heading"><div><p className="eyebrow accent">Private rooms</p><p className="field-help">Messages expire after {operations.game.chatRetentionDays} days.</p></div><button className="secondary-button" type="button" onClick={purgeRetention}>Purge expired</button></div><div className="room-health-list">{rooms.map((room) => <div key={room.id}><span>{room.type}</span><strong>{room.memberCount} members · {room.messageCount} messages</strong><button type="button" onClick={() => void toggleRoom(room)}>{room.status === 'OPEN' ? 'Make read-only' : 'Reopen'}</button></div>)}</div>{messages.slice(0, 8).map((chat) => <div className="moderation-line" key={chat.id}><span><strong>{chat.authorName}</strong> in {chat.roomType}</span><p>{chat.body ?? 'Removed message'}</p>{chat.body && <button type="button" onClick={() => void removeMessage(chat.id)}>Remove</button>}</div>)}</div>
+
+      <form className="ops-block pilot-feedback" onSubmit={submitFeedback}><p className="eyebrow accent">Pilot feedback</p><p className="field-help">Capture a quick moderator signal while the pilot is running.</p><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve before the next game?" /></label><button className="secondary-button" type="submit">Save feedback</button></form>
 
       <div className="backup-row"><div><p className="eyebrow accent">Verified backup</p><strong>{operations.lastBackup ? `Last export ${new Date(operations.lastBackup.exportedAt).toLocaleString()}` : 'No backup exported yet'}</strong><small>{operations.lastBackup?.checksum ? `Checksum ${operations.lastBackup.checksum.slice(0, 18)}…` : 'Includes game state, audit history, and private rooms.'}</small></div><button className="primary-button" type="button" onClick={exportBackup}>Download JSON backup</button></div>
     </section>

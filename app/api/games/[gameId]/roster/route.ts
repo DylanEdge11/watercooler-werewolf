@@ -4,7 +4,7 @@ import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
 import { defaultComposition } from '../../../../../lib/game/balance';
 import { ROLE_CATALOG } from '../../../../../lib/game/catalog';
-import { ROLE_KEYS } from '../../../../../lib/game/types';
+import { canonicalRoleKey, ROLE_KEYS } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { createInviteExport, parseRosterCsv } from '../../../../../lib/roster/csv';
 
@@ -33,7 +33,7 @@ export async function GET(_request: Request, context: RouteContext) {
       )
       .bind(gameId)
       .all();
-    return Response.json({ ok: true, roster: roster.results, composition: composition.results });
+    return Response.json({ ok: true, roster: roster.results, composition: composition.results.map((row) => ({ ...row, roleKey: canonicalRoleKey(String(row.roleKey)) })) });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unable to load the roster.', 401);
   }

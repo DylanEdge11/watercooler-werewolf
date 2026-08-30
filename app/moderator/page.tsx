@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import Link from 'next/link';
 import LiveGamePanel from './live-game-panel';
 import OperationsPanel from './operations-panel';
+import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
+import { ROLE_CATALOG } from '../../lib/game/catalog';
 
 const sampleRoster = [
   'display_name,email',
@@ -13,7 +15,7 @@ const sampleRoster = [
   }),
 ].join('\n');
 
-const roleOrder = ['VILLAGER', 'WEREWOLF', 'SEER', 'DOCTOR', 'HUNTER', 'MASON'] as const;
+const roleOrder = ['VILLAGER', 'WEREWOLF', 'SEER', 'BODYGUARD', 'HUNTER', 'MASON'] as const;
 type RoleKey = (typeof roleOrder)[number];
 type Composition = Record<RoleKey, number>;
 
@@ -95,6 +97,7 @@ export default function ModeratorPage() {
   const [inviteCsv, setInviteCsv] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [liveRefreshToken, setLiveRefreshToken] = useState(0);
 
   const loadGame = useCallback(async (selectedGameId: string) => {
     const [rosterData, assignmentData] = await Promise.all([
@@ -115,6 +118,11 @@ export default function ModeratorPage() {
       await loadGame(data.games[0].id);
     }
   }, [loadGame]);
+
+  const handleLiveChange = useCallback((action?: string) => {
+    if (shouldRefreshOperations(action)) setLiveRefreshToken((token) => token + 1);
+    void loadGames().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.'));
+  }, [loadGames]);
 
   useEffect(() => {
     void (async () => {
@@ -153,7 +161,6 @@ export default function ModeratorPage() {
     setError('');
     const form = new FormData(event.currentTarget);
     try {
-      const finalCutoff = new Date(String(form.get('finalCutoffAt'))).toISOString();
       const data = await requestJson<{ gameId: string }>('/api/games', {
         method: 'POST',
         body: JSON.stringify({
@@ -161,7 +168,7 @@ export default function ModeratorPage() {
           timezone: form.get('timezone'),
           startDate: form.get('startDate'),
           endDate: form.get('endDate'),
-          finalCutoffAt: finalCutoff,
+          finalCutoffAt: form.get('finalCutoffAt'),
           activeWeekdays: [1, 2, 3, 4, 5],
           schedule: { dayCloses: '16:00', nightCloses: '09:00' },
         }),
@@ -235,6 +242,11 @@ export default function ModeratorPage() {
     }
   }
 
+  async function signOut() {
+    await fetch('/api/moderators/logout', { method: 'POST' });
+    window.location.href = '/moderator';
+  }
+
   function downloadInvites() {
     const url = URL.createObjectURL(new Blob([inviteCsv], { type: 'text/csv;charset=utf-8' }));
     const anchor = document.createElement('a');
@@ -250,7 +262,7 @@ export default function ModeratorPage() {
   const rosterById = useMemo(() => new Map(roster.map((seat) => [seat.id, seat])), [roster]);
   const gameDates = useMemo(() => defaultGameDates(), []);
   const balanceScore = composition
-    ? composition.VILLAGER - composition.WEREWOLF * 5 + composition.SEER * 3 + composition.DOCTOR * 2 + composition.HUNTER + composition.MASON
+    ? composition.VILLAGER - composition.WEREWOLF * 5 + composition.SEER * 3 + composition.BODYGUARD * 2 + composition.HUNTER + composition.MASON
     : 0;
 
   if (loading) return <main className="setup-shell"><BrandHeader /><p className="setup-loading">Opening the moderator console…</p></main>;
@@ -292,7 +304,7 @@ export default function ModeratorPage() {
         <section className="console-main">
           <div className="console-title">
             <div><p className="eyebrow accent">Office campaign</p><h1>{selectedGame?.name ?? 'Set up a new game'}</h1></div>
-            {selectedGame && <span className="status-pill">{selectedGame.status.replaceAll('_', ' ')}</span>}
+            <div className="console-title-actions">{selectedGame && <span className="status-pill">{selectedGame.status.replaceAll('_', ' ')}</span>}<button className="text-button" type="button" onClick={signOut}>Sign out</button></div>
           </div>
           {error && <p className="notice error" role="alert">{error}</p>}
           {message && <p className="notice success" role="status">{message}</p>}
@@ -333,7 +345,7 @@ export default function ModeratorPage() {
                   <div className="role-composer">
                     {roleOrder.map((role) => (
                       <label key={role}>{role.toLowerCase().replace(/^./u, (letter) => letter.toUpperCase())}
-                        <input type="number" min="0" max={role === 'SEER' || role === 'DOCTOR' || role === 'HUNTER' ? 1 : roster.length} value={composition[role]} onChange={(event) => setComposition({ ...composition, [role]: Number(event.target.value) })} />
+                        <input type="number" min="0" max={role === 'SEER' || role === 'BODYGUARD' || role === 'HUNTER' ? 1 : roster.length} value={composition[role]} onChange={(event) => setComposition({ ...composition, [role]: Number(event.target.value) })} />
                       </label>
                     ))}
                   </div>
@@ -350,13 +362,13 @@ export default function ModeratorPage() {
                 <section className="setup-card assignment-review">
                   <div className="setup-card-heading"><span>04</span><div><h2>Review assignment batch {latestBatch.revision}</h2><p>Random evidence <code>{latestBatch.randomEvidenceHash.slice(0, 16)}…</code></p></div></div>
                   <div className="assignment-grid">
-                    {latestBatch.assignments.map((assignment) => <div key={assignment.seatId}><span>{rosterById.get(assignment.seatId)?.displayName ?? 'Player'}</span><strong>{assignment.role}</strong></div>)}
+                    {latestBatch.assignments.map((assignment) => <div key={assignment.seatId}><span>{rosterById.get(assignment.seatId)?.displayName ?? 'Player'}</span><strong>{ROLE_CATALOG[assignment.role].name}</strong></div>)}
                   </div>
                   {latestBatch.releasedAt ? <p className="notice success">Released {new Date(latestBatch.releasedAt).toLocaleString()}</p> : <button className="danger-button" type="button" onClick={() => releaseAssignments(latestBatch.id)}>Release roles to players</button>}
                 </section>
               )}
-              {latestBatch?.releasedAt && <LiveGamePanel gameId={gameId} gameStatus={selectedGame?.status ?? ''} />}
-              {latestBatch?.releasedAt && <OperationsPanel gameId={gameId} />}
+              {latestBatch?.releasedAt && <LiveGamePanel gameId={gameId} gameStatus={selectedGame?.status ?? ''} onChanged={handleLiveChange} />}
+              <OperationsPanel gameId={gameId} refreshToken={liveRefreshToken} onGameChanged={handleLiveChange} />
             </>
           )}
         </section>

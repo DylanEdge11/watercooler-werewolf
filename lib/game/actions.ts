@@ -22,7 +22,7 @@ export function permissionForRole(
   }
   if (role === 'WEREWOLF') return { actionKind: 'WOLF_VOTE', maxTargets: slots, label: 'Choose the pack targets' };
   if (role === 'SEER') return { actionKind: 'INVESTIGATE', maxTargets: 1, label: 'Choose a player to investigate' };
-  if (role === 'DOCTOR') return { actionKind: 'PROTECT', maxTargets: 1, label: 'Choose a player to protect' };
+  if (role === 'BODYGUARD') return { actionKind: 'PROTECT', maxTargets: 1, label: 'Choose a player to protect' };
   return { actionKind: null, maxTargets: 0, label: 'No private action this night' };
 }
 

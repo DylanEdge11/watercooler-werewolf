@@ -34,7 +34,7 @@ export function defaultComposition(playerCount: number): RoleComposition {
     VILLAGER: 0,
     WEREWOLF: recommendedWerewolves(playerCount),
     SEER: 1,
-    DOCTOR: 1,
+    BODYGUARD: 1,
     HUNTER: 1,
     MASON: 2,
   };
@@ -91,7 +91,7 @@ export function validateComposition(
   if (countComposition(composition) !== playerCount) {
     errors.push('Role counts must equal the claimed roster size.');
   }
-  for (const role of ['SEER', 'DOCTOR', 'HUNTER'] as RoleKey[]) {
+  for (const role of ['SEER', 'BODYGUARD', 'HUNTER'] as RoleKey[]) {
     if (composition[role] > 1) errors.push(`${ROLE_CATALOG[role].name} is unique.`);
   }
   if (composition.MASON === 1) errors.push('Masons require either zero or at least two seats.');
@@ -107,4 +107,3 @@ export function calculateEliminationSlots(livingPlayers: number, divisor: number
   }
   return Math.max(1, Math.ceil(livingPlayers / divisor));
 }
-

@@ -3,6 +3,7 @@ import { ensureDatabase } from '../../../../../db/migrate';
 import { createPlayerSession } from '../../../../../lib/auth/session';
 import { hashSecret, sha256 } from '../../../../../lib/auth/crypto';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../../lib/http/rate-limit';
 
 interface RouteContext {
   params: Promise<{ code: string }>;
@@ -35,6 +36,7 @@ export async function POST(request: Request, context: RouteContext) {
     const body = (await request.json()) as { pin?: string };
     const pin = body.pin?.trim() ?? '';
     if (!/^\d{6}$/u.test(pin)) throw new Error('Choose a six-digit PIN.');
+    await enforceRateLimit(requestRateLimitKey(request, `seat-claim:${code.slice(0, 80)}`), 3, 60 * 60_000);
 
     const db = getD1();
     const seat = await db
@@ -74,6 +76,8 @@ export async function POST(request: Request, context: RouteContext) {
     await createPlayerSession(seat.id, seat.sessionVersion);
     return Response.json({ ok: true, seat: { displayName: seat.displayName, gameId: seat.gameId } });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to claim this seat.', 400);
+    return error instanceof RateLimitError
+      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
+      : jsonError(error instanceof Error ? error.message : 'Unable to claim this seat.', 400);
   }
 }

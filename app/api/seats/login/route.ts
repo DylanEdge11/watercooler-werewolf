@@ -3,6 +3,7 @@ import { ensureDatabase } from '../../../../db/migrate';
 import { sha256, verifySecret } from '../../../../lib/auth/crypto';
 import { createPlayerSession } from '../../../../lib/auth/session';
 import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
+import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../lib/http/rate-limit';
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +13,7 @@ export async function POST(request: Request) {
     const seatCode = body.seatCode?.trim() ?? '';
     const pin = body.pin?.trim() ?? '';
     if (!seatCode || !pin) throw new Error('Seat code and PIN are required.');
+    await enforceRateLimit(requestRateLimitKey(request, `seat-login:${seatCode.slice(0, 80)}`), 8, 15 * 60_000);
 
     const seat = await getD1()
       .prepare(
@@ -33,6 +35,8 @@ export async function POST(request: Request) {
     await createPlayerSession(seat.id, seat.sessionVersion);
     return Response.json({ ok: true, seat: { displayName: seat.displayName, gameId: seat.gameId } });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to sign in.', 400);
+    return error instanceof RateLimitError
+      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
+      : jsonError(error instanceof Error ? error.message : 'Unable to sign in.', 400);
   }
 }

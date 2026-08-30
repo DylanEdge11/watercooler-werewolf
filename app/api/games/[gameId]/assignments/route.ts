@@ -4,7 +4,7 @@ import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { validateComposition, scoreComposition } from '../../../../../lib/game/balance';
 import { createAssignmentPreview } from '../../../../../lib/game/assignment';
 import { ROLE_CATALOG } from '../../../../../lib/game/catalog';
-import { ROLE_KEYS, type RoleComposition, type RoleKey } from '../../../../../lib/game/types';
+import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { ensureGameRooms } from '../../../../../lib/chat/rooms';
 
@@ -29,7 +29,7 @@ async function loadComposition(gameId: string): Promise<RoleComposition> {
     .bind(gameId)
     .all<{ roleKey: RoleKey; count: number }>();
   const composition = Object.fromEntries(ROLE_KEYS.map((role) => [role, 0])) as RoleComposition;
-  for (const row of rows.results) composition[row.roleKey] = Number(row.count);
+  for (const row of rows.results) composition[canonicalRoleKey(row.roleKey)] = Number(row.count);
   return composition;
 }
 
@@ -63,7 +63,10 @@ export async function GET(_request: Request, context: RouteContext) {
       roster: roster.results,
       batches: batches.results.map((batch) => ({
         ...batch,
-        assignments: JSON.parse(String(batch.assignmentsJson)) as AssignmentRow[],
+        assignments: (JSON.parse(String(batch.assignmentsJson)) as AssignmentRow[]).map((assignment) => ({
+          ...assignment,
+          role: canonicalRoleKey(assignment.role),
+        })),
         assignmentsJson: undefined,
       })),
     });
@@ -99,8 +102,9 @@ export async function POST(request: Request, context: RouteContext) {
 
     if (body.action === 'SAVE_COMPOSITION') {
       if (rolesAreReleased) throw new Error('Role composition is locked after roles are released.');
+      const rawComposition = body.composition as (Partial<Record<RoleKey | 'DOCTOR', unknown>> | undefined);
       const composition = Object.fromEntries(
-        ROLE_KEYS.map((role) => [role, Number(body.composition?.[role] ?? 0)]),
+        ROLE_KEYS.map((role) => [role, Number(rawComposition?.[role] ?? (role === 'BODYGUARD' ? rawComposition?.DOCTOR : 0) ?? 0)]),
       ) as RoleComposition;
       const validation = validateComposition(composition, roster.results.length);
       if (!validation.valid) return Response.json({ ok: false, errors: validation.errors }, { status: 400 });

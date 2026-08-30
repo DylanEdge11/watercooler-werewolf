@@ -1,5 +1,5 @@
 import { getD1 } from '../../db';
-import type { RoleKey } from '../game/types';
+import { canonicalRoleKey, type RoleKey } from '../game/types';
 import { allowedRoomTypes, type PrivateRoomType } from './policy';
 
 export { allowedRoomTypes, normalizeChatBody } from './policy';
@@ -33,7 +33,8 @@ export async function ensureGameRooms(gameId: string): Promise<void> {
   const statements: D1PreparedStatement[] = [];
   for (const seat of seats.results) {
     const alive = Boolean(seat.alive);
-    for (const type of allowedRoomTypes(seat.role, alive)) {
+    const role = canonicalRoleKey(seat.role);
+    for (const type of allowedRoomTypes(role, alive)) {
       const roomId = roomByType.get(type);
       if (!roomId) continue;
       statements.push(
@@ -46,8 +47,8 @@ export async function ensureGameRooms(gameId: string): Promise<void> {
           .bind(roomId, seat.id, now),
       );
     }
-    if (!alive && (seat.role === 'WEREWOLF' || seat.role === 'MASON')) {
-      const formerRoomId = roomByType.get(seat.role);
+    if (!alive && (role === 'WEREWOLF' || role === 'MASON')) {
+      const formerRoomId = roomByType.get(role);
       if (formerRoomId) {
         statements.push(
           db

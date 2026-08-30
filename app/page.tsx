@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import PrivateRoomChat from './private-room-chat';
 
-type RoleKey = 'VILLAGER' | 'WEREWOLF' | 'SEER' | 'DOCTOR' | 'HUNTER' | 'MASON';
+type RoleKey = 'VILLAGER' | 'WEREWOLF' | 'SEER' | 'BODYGUARD' | 'HUNTER' | 'MASON';
 type ActionKind = 'DAY_VOTE' | 'WOLF_VOTE' | 'INVESTIGATE' | 'PROTECT' | 'HUNTER_SHOT';
 
 interface DashboardData {
@@ -16,7 +16,7 @@ interface DashboardData {
     roleDefinition: { name: string; faction: string; summary: string } | null;
     teammates: Array<{ id: string; displayName: string; alive: boolean }>;
   };
-  game: { id: string; name: string; status: string; timezone: string; counts: { total: number; living: number } };
+  game: { id: string; name: string; status: string; timezone: string; counts: { total: number; living: number }; stopReason?: string | null };
   phase: null | {
     id: string;
     sequence: number;
@@ -153,7 +153,9 @@ export default function Home() {
   if (!data) return <main className="setup-shell centered"><section className="auth-card"><h1>The village is out of reach.</h1><p>{error}</p><Link className="primary-link" href="/player-login">Try signing in</Link></section></main>;
 
   const role = data.player.roleDefinition;
-  const phaseTitle = data.phase
+  const phaseTitle = data.game.status === 'STOPPED'
+    ? 'The moderator has stopped this campaign.'
+    : data.phase
     ? data.phase.status === 'PENDING_HUNTER'
       ? 'The village is holding its breath.'
       : data.phase.status === 'PENDING_APPROVAL'
@@ -181,6 +183,13 @@ export default function Home() {
       </header>
 
       <div className="workspace" id="top">
+        <nav className="mobile-nav" aria-label="Game sections">
+          <a href="#today">Today</a>
+          {data.player.teammates.length > 0 && <a href="#team">Teammates</a>}
+          {data.rooms.length > 0 && <a href="#private-room">Private room</a>}
+          <a href="#timeline">Timeline</a>
+          {data.notifications.length > 0 && <a href="#notifications">Updates</a>}
+        </nav>
         <aside className="sidebar" aria-label="Game navigation">
           <p className="eyebrow">Game room</p>
           <nav>
@@ -201,9 +210,10 @@ export default function Home() {
             <div><p className="eyebrow accent">{data.phase ? `${data.phase.kind.replaceAll('_', ' ')} · Cycle ${data.phase.sequence}` : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{data.permission.label}</p></div>
             <div className="deadline-card"><span>Response window</span><strong>{deadlineLabel(data.phase?.deadline ?? null)}</strong><small>{data.phase?.status.replaceAll('_', ' ') ?? 'No open phase'}</small></div>
           </div>
+          {data.game.status === 'STOPPED' && <p className="notice warning" role="status">{data.game.stopReason ?? 'This game is stopped. Player actions and rooms are read-only.'}</p>}
 
           <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`}>
-            <div className="role-orbit"><span aria-hidden="true">{data.player.role === 'WEREWOLF' ? '☾' : data.player.role === 'SEER' ? '◉' : data.player.role === 'DOCTOR' ? '✚' : '◆'}</span></div>
+            <div className="role-orbit"><span aria-hidden="true">{data.player.role === 'WEREWOLF' ? '☾' : data.player.role === 'SEER' ? '◉' : data.player.role === 'BODYGUARD' ? '✚' : '◆'}</span></div>
             <div className="role-copy"><p className="eyebrow">Your private role</p><h2>{role?.name ?? 'Not released'}</h2><p>{data.player.alive ? role?.summary ?? 'The moderator is preparing assignments.' : 'You have been eliminated. Your role is now public and you may spectate.'}</p></div>
             <div className="role-faction"><span>Faction</span><strong>{role?.faction ?? 'Hidden'}</strong><small>{data.player.alive ? 'You are alive' : 'Eliminated'}</small></div>
           </section>
@@ -228,10 +238,10 @@ export default function Home() {
         </section>
 
         <aside className="right-rail">
-          {data.notifications[0] && <section className="rail-card announcement"><p className="eyebrow">Private result</p><h2>{data.notifications[0].title}</h2><p>{data.notifications[0].body}</p><small>{new Date(data.notifications[0].createdAt).toLocaleString()}</small></section>}
+          {data.notifications[0] && <section className="rail-card announcement" id="notifications"><p className="eyebrow">Private result</p><h2>{data.notifications[0].title}</h2><p>{data.notifications[0].body}</p><small>{new Date(data.notifications[0].createdAt).toLocaleString()}</small></section>}
           {data.player.teammates.length > 0 && <section className="rail-card" id="team"><div className="rail-heading"><h2>{data.player.role === 'WEREWOLF' ? 'Your pack' : 'Fellow Masons'}</h2><span>{data.player.teammates.length}</span></div><div className="player-stack">{data.player.teammates.map((teammate) => <div className="player-row" key={teammate.id}><span className="candidate-avatar small">{initials(teammate.displayName)}</span><span><strong>{teammate.displayName}</strong><small>{teammate.alive ? 'Living' : 'Eliminated'}</small></span><span className={`ready-dot ${teammate.alive ? 'ready' : ''}`} /></div>)}</div></section>}
           {data.rooms.length > 0 && <PrivateRoomChat rooms={data.rooms} />}
-          <section className="rail-card" id="timeline"><div className="rail-heading"><h2>Official timeline</h2><span>{data.timeline.length}</span></div>{data.timeline.length ? <div className="timeline-mini">{data.timeline.map((event) => <article key={event.id}><strong>{event.eventType === 'GAME_COMPLETED' ? `${event.payload.winner} wins` : event.eventType === 'ANNOUNCEMENT' ? event.payload.title : `${event.payload.kind} resolved`}</strong><p>{event.eventType === 'ANNOUNCEMENT' ? event.payload.body : event.payload.eliminations?.length ? event.payload.eliminations.map((item) => `${item.displayName} · ${item.role}`).join(', ') : 'No elimination published.'}</p><small>{new Date(event.createdAt).toLocaleString()}</small></article>)}</div> : <p>No published outcomes yet.</p>}</section>
+          <section className="rail-card" id="timeline"><div className="rail-heading"><h2>Official timeline</h2><span>{data.timeline.length}</span></div>{data.timeline.length ? <div className="timeline-mini">{data.timeline.map((event) => <article key={event.id}><strong>{event.eventType === 'GAME_COMPLETED' ? `${event.payload.winner} wins` : event.eventType === 'GAME_STOPPED' ? 'Campaign stopped' : event.eventType === 'FINAL_SHOWDOWN_ENTERED' ? 'Final showdown entered' : event.eventType === 'ANNOUNCEMENT' ? event.payload.title : `${event.payload.kind} resolved`}</strong><p>{event.eventType === 'ANNOUNCEMENT' ? event.payload.body : event.eventType === 'GAME_STOPPED' ? 'Player actions are blocked and rooms are read-only.' : event.eventType === 'FINAL_SHOWDOWN_ENTERED' ? 'The final ballot is now the only legal phase.' : event.payload.eliminations?.length ? event.payload.eliminations.map((item) => `${item.displayName} · ${item.role}`).join(', ') : 'No elimination published.'}</p><small>{new Date(event.createdAt).toLocaleString()}</small></article>)}</div> : <p>No published outcomes yet.</p>}</section>
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>
       </div>

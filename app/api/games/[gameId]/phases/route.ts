@@ -4,8 +4,10 @@ import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { sha256 } from '../../../../../lib/auth/crypto';
 import { calculateEliminationSlots } from '../../../../../lib/game/balance';
 import { evaluateWinner, resolveHunterShot, resolvePhase } from '../../../../../lib/game/engine';
+import { validateFinalShowdownEntry, validatePhaseOpen } from '../../../../../lib/game/phase-policy';
 import { createSecureRandomRolls } from '../../../../../lib/game/random';
-import type { ActionSubmission, PhaseKind, PhaseResolution, PlayerState, RoleKey } from '../../../../../lib/game/types';
+import { parseScheduledDate } from '../../../../../lib/game/scheduling';
+import { canonicalRoleKey, type ActionSubmission, type PhaseKind, type PhaseResolution, type PlayerState, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { ensureGameRooms } from '../../../../../lib/chat/rooms';
 
@@ -45,7 +47,7 @@ async function loadPlayers(gameId: string): Promise<PlayerState[]> {
     )
     .bind(gameId)
     .all<{ id: string; displayName: string; role: RoleKey; alive: number }>();
-  return rows.results.map((row) => ({ ...row, alive: Boolean(row.alive) }));
+  return rows.results.map((row) => ({ ...row, role: canonicalRoleKey(row.role), alive: Boolean(row.alive) }));
 }
 
 async function loadActions(phaseId: string): Promise<ActionSubmission[]> {
@@ -73,7 +75,8 @@ export async function GET(_request: Request, context: RouteContext) {
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
     const db = getD1();
-    const [phaseRows, proposalRows, rosterRows] = await Promise.all([
+    const [gameRow, phaseRows, proposalRows, rosterRows] = await Promise.all([
+      db.prepare('SELECT status, final_cutoff_at AS finalCutoffAt, timezone FROM games WHERE id = ? LIMIT 1').bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string }>(),
       db
         .prepare(
           `SELECT p.id, p.sequence, p.kind, p.status, p.opens_at AS opensAt, p.closes_at AS closesAt,
@@ -110,7 +113,8 @@ export async function GET(_request: Request, context: RouteContext) {
     }
     return Response.json({
       ok: true,
-      roster: rosterRows.results,
+      game: gameRow,
+      roster: rosterRows.results.map((row) => ({ ...row, role: canonicalRoleKey(String(row.role)) })),
       phases: phaseRows.results.map((phase) => {
         const proposal = proposalByPhase.get(phase.id);
         return {
@@ -134,7 +138,7 @@ export async function POST(request: Request, context: RouteContext) {
     const { gameId } = await context.params;
     const moderator = await requireGameModerator(gameId);
     const body = (await request.json()) as {
-      action?: 'OPEN' | 'LOCK_AND_PROPOSE' | 'FINALIZE_HUNTER' | 'PUBLISH';
+      action?: 'OPEN' | 'ENTER_FINAL_SHOWDOWN' | 'LOCK_AND_PROPOSE' | 'FINALIZE_HUNTER' | 'PUBLISH';
       phaseId?: string;
       kind?: PhaseKind;
       closesAt?: string;
@@ -146,28 +150,86 @@ export async function POST(request: Request, context: RouteContext) {
     const game = await db
       .prepare(
         `SELECT status, day_divisor AS dayDivisor, night_divisor AS nightDivisor,
-                hunter_window_minutes AS hunterWindowMinutes
+                hunter_window_minutes AS hunterWindowMinutes,
+                final_cutoff_at AS finalCutoffAt, timezone
          FROM games WHERE id = ? LIMIT 1`,
       )
       .bind(gameId)
-      .first<{ status: string; dayDivisor: number; nightDivisor: number; hunterWindowMinutes: number }>();
+      .first<{ status: string; dayDivisor: number; nightDivisor: number; hunterWindowMinutes: number; finalCutoffAt: string; timezone: string }>();
     if (!game) throw new Error('Game not found.');
 
+    if (body.action === 'ENTER_FINAL_SHOWDOWN') {
+      if (game.status === 'FINAL_SHOWDOWN') return Response.json({ ok: true, idempotent: true, status: game.status });
+      const latest = await db
+        .prepare(
+          `SELECT p.kind, p.status, rp.outcome_json AS outcomeJson
+           FROM phases p LEFT JOIN resolution_proposals rp ON rp.phase_id = p.id
+           WHERE p.game_id = ? ORDER BY p.sequence DESC, rp.created_at DESC LIMIT 1`,
+        )
+        .bind(gameId)
+        .first<{ kind: PhaseKind; status: string; outcomeJson: string | null }>();
+      const latestEntry = latest
+        ? {
+            kind: latest.kind,
+            status: latest.status,
+            winner: null,
+          }
+        : null;
+      const policyError = validateFinalShowdownEntry({
+        gameStatus: game.status,
+        latestPhase: latestEntry,
+        finalCutoffAt: game.finalCutoffAt,
+        now: new Date(),
+      });
+      if (policyError) throw new Error(policyError);
+      const now = new Date().toISOString();
+      await db.batch([
+        db.prepare("UPDATE games SET status = 'FINAL_SHOWDOWN', updated_at = ? WHERE id = ? AND status = 'ACTIVE'").bind(now, gameId),
+        db
+          .prepare(
+            `INSERT INTO game_events
+             (id, game_id, event_type, actor_moderator_id, payload_json, created_at)
+             VALUES (?, ?, 'FINAL_SHOWDOWN_ENTERED', ?, ?, ?)`,
+          )
+          .bind(crypto.randomUUID(), gameId, moderator.id, JSON.stringify({ finalCutoffAt: game.finalCutoffAt }), now),
+      ]);
+      return Response.json({ ok: true, status: 'FINAL_SHOWDOWN' });
+    }
+
     if (body.action === 'OPEN') {
-      if (game.status !== 'ACTIVE' && game.status !== 'FINAL_SHOWDOWN') {
-        throw new Error('Release roles before opening the first phase.');
-      }
       if (!body.kind || !['DAY', 'NIGHT', 'FINAL_BALLOT'].includes(body.kind)) throw new Error('Choose a valid phase kind.');
-      const closesAt = new Date(body.closesAt ?? '');
+      const closesAt = parseScheduledDate(body.closesAt ?? '', game.timezone);
       if (Number.isNaN(closesAt.valueOf()) || closesAt <= new Date()) throw new Error('The phase deadline must be in the future.');
       const blocking = await db
         .prepare(
-          `SELECT id FROM phases WHERE game_id = ?
+          `SELECT id, kind, status, closes_at AS closesAt FROM phases WHERE game_id = ?
            AND status IN ('OPEN', 'LOCKED', 'PENDING_HUNTER', 'PENDING_APPROVAL') LIMIT 1`,
         )
         .bind(gameId)
-        .first();
-      if (blocking) throw new Error('Finish the current phase before opening another.');
+        .first<{ id: string; kind: PhaseKind; status: string; closesAt: string }>();
+      if (blocking) {
+        if (blocking.status === 'OPEN' && blocking.kind === body.kind) {
+          return Response.json({ ok: true, idempotent: true, phaseId: blocking.id });
+        }
+        throw new Error('Finish the current phase before opening another.');
+      }
+      const latest = await db
+        .prepare(
+          `SELECT p.kind, p.status, rp.outcome_json AS outcomeJson
+           FROM phases p LEFT JOIN resolution_proposals rp ON rp.phase_id = p.id
+           WHERE p.game_id = ? ORDER BY p.sequence DESC, rp.created_at DESC LIMIT 1`,
+        )
+        .bind(gameId)
+        .first<{ kind: PhaseKind; status: string; outcomeJson: string | null }>();
+      const latestEntry = latest
+        ? {
+            kind: latest.kind,
+            status: latest.status,
+            winner: null,
+          }
+        : null;
+      const policyError = validatePhaseOpen({ gameStatus: game.status, latestPhase: latestEntry, requestedKind: body.kind });
+      if (policyError) throw new Error(policyError);
       const living = await db
         .prepare("SELECT COUNT(*) AS count FROM seats WHERE game_id = ? AND status = 'CLAIMED' AND alive = 1")
         .bind(gameId)
@@ -209,8 +271,28 @@ export async function POST(request: Request, context: RouteContext) {
       .first<{ id: string; kind: PhaseKind; status: string; slots: number; version: number; hunterDeadlineAt: string | null }>();
     if (!phase) throw new Error('Phase not found.');
 
+    if (body.action === 'LOCK_AND_PROPOSE' && !['OPEN', 'LOCKED'].includes(phase.status)) {
+      if (phase.status === 'PENDING_HUNTER' || phase.status === 'PENDING_APPROVAL' || phase.status === 'PUBLISHED') {
+        const existing = await db
+          .prepare("SELECT id, outcome_json AS outcomeJson FROM resolution_proposals WHERE phase_id = ? ORDER BY created_at DESC LIMIT 1")
+          .bind(phase.id)
+          .first<{ id: string; outcomeJson: string }>();
+        if (existing) return Response.json({ ok: true, idempotent: true, proposalId: existing.id, outcome: JSON.parse(existing.outcomeJson) as PhaseResolution });
+      }
+      throw new Error('Only an open phase can be locked.');
+    }
+    if (body.action === 'FINALIZE_HUNTER' && (phase.status === 'PENDING_APPROVAL' || phase.status === 'PUBLISHED')) {
+      const existing = await db
+        .prepare("SELECT outcome_json AS outcomeJson FROM resolution_proposals WHERE phase_id = ? ORDER BY created_at DESC LIMIT 1")
+        .bind(phase.id)
+        .first<{ outcomeJson: string }>();
+      if (existing) return Response.json({ ok: true, idempotent: true, outcome: JSON.parse(existing.outcomeJson) as PhaseResolution });
+    }
+    if (body.action === 'PUBLISH' && phase.status === 'PUBLISHED') {
+      return Response.json({ ok: true, idempotent: true });
+    }
+
     if (body.action === 'LOCK_AND_PROPOSE') {
-      if (phase.status !== 'OPEN') throw new Error('Only an open phase can be locked.');
       const players = await loadPlayers(gameId);
       const actions = await loadActions(phase.id);
       const randomRolls = createSecureRandomRolls(Number(phase.slots));
@@ -239,7 +321,7 @@ export async function POST(request: Request, context: RouteContext) {
         db
           .prepare(
             `UPDATE phases SET status = ?, hunter_deadline_at = ?, updated_at = ?
-             WHERE id = ? AND status = 'OPEN'`,
+             WHERE id = ? AND status IN ('OPEN', 'LOCKED')`,
           )
           .bind(outcome.hunterRequiredIds.length ? 'PENDING_HUNTER' : 'PENDING_APPROVAL', hunterDeadline, now.toISOString(), phase.id),
         db

@@ -6,7 +6,7 @@ const players: PlayerState[] = [
   { id: 'wolf-1', displayName: 'Wolf One', role: 'WEREWOLF', alive: true },
   { id: 'wolf-2', displayName: 'Wolf Two', role: 'WEREWOLF', alive: true },
   { id: 'seer', displayName: 'Seer', role: 'SEER', alive: true },
-  { id: 'doctor', displayName: 'Doctor', role: 'DOCTOR', alive: true },
+  { id: 'bodyguard', displayName: 'Bodyguard', role: 'BODYGUARD', alive: true },
   { id: 'hunter', displayName: 'Hunter', role: 'HUNTER', alive: true },
   { id: 'villager-1', displayName: 'Villager One', role: 'VILLAGER', alive: true },
   { id: 'villager-2', displayName: 'Villager Two', role: 'VILLAGER', alive: true },
@@ -57,7 +57,7 @@ describe('day resolution', () => {
       actions: [
         action('old', 'seer', 'DAY_VOTE', ['wolf-1'], 1),
         action('new', 'seer', 'DAY_VOTE', ['wolf-2', 'hunter'], 2),
-        action('v2', 'doctor', 'DAY_VOTE', ['wolf-2', 'doctor']),
+        action('v2', 'bodyguard', 'DAY_VOTE', ['wolf-2', 'bodyguard']),
         action('v3', 'villager-1', 'DAY_VOTE', ['hunter', 'wolf-2']),
       ],
     });
@@ -82,7 +82,7 @@ describe('night resolution', () => {
       actions: [
         action('w1', 'wolf-1', 'WOLF_VOTE', ['seer', 'villager-1']),
         action('w2', 'wolf-2', 'WOLF_VOTE', ['seer', 'villager-1']),
-        action('protect', 'doctor', 'PROTECT', ['seer']),
+        action('protect', 'bodyguard', 'PROTECT', ['seer']),
         action('inspect', 'seer', 'INVESTIGATE', ['wolf-1']),
       ],
     });
@@ -135,9 +135,8 @@ describe('Hunter and victory', () => {
 
     const parityPlayers = players.map((player) => ({
       ...player,
-      alive: ['wolf-1', 'wolf-2', 'seer', 'doctor'].includes(player.id),
+      alive: ['wolf-1', 'wolf-2', 'seer', 'bodyguard'].includes(player.id),
     }));
     expect(evaluateWinner(parityPlayers).winner).toBe('WEREWOLF');
   });
 });
-

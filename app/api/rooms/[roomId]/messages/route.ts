@@ -3,6 +3,7 @@ import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentPlayer } from '../../../../../lib/auth/session';
 import { ensureGameRooms, normalizeChatBody } from '../../../../../lib/chat/rooms';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../../lib/http/rate-limit';
 
 interface RouteContext {
   params: Promise<{ roomId: string }>;
@@ -53,6 +54,7 @@ export async function POST(request: Request, context: RouteContext) {
     const { roomId } = await context.params;
     const { identity, room } = await requireRoomAccess(roomId);
     if (room.status !== 'OPEN' || room.access !== 'WRITE') throw new Error('This room is read-only.');
+    await enforceRateLimit(requestRateLimitKey(request, `chat:${identity.seatId}:${roomId}`), 30, 10 * 60_000);
     const body = (await request.json()) as { body?: string };
     const message = normalizeChatBody(body.body ?? '');
     const id = crypto.randomUUID();
@@ -75,6 +77,8 @@ export async function POST(request: Request, context: RouteContext) {
     ]);
     return Response.json({ ok: true, message: { id, body: message, authorName: identity.displayName, createdAt: now } }, { status: 201 });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to send this message.', 400);
+    return error instanceof RateLimitError
+      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
+      : jsonError(error instanceof Error ? error.message : 'Unable to send this message.', 400);
   }
 }

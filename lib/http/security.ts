@@ -7,7 +7,6 @@ export function assertSameOrigin(request: Request): void {
   }
 }
 
-export function jsonError(message: string, status = 400): Response {
-  return Response.json({ ok: false, error: message }, { status });
+export function jsonError(message: string, status = 400, headers?: HeadersInit): Response {
+  return Response.json({ ok: false, error: message }, { status, headers });
 }
-

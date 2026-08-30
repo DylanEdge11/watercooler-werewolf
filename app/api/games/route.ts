@@ -1,6 +1,7 @@
 import { getD1 } from '../../../db';
 import { ensureDatabase } from '../../../db/migrate';
 import { requireModerator } from '../../../lib/auth/authorization';
+import { parseScheduledDate, validateSchedule } from '../../../lib/game/scheduling';
 import { assertSameOrigin, jsonError } from '../../../lib/http/security';
 
 interface CreateGameBody {
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
       throw new Error('Start and end dates must use YYYY-MM-DD.');
     }
     if (body.startDate > body.endDate) throw new Error('The end date must be on or after the start date.');
-    if (Number.isNaN(Date.parse(body.finalCutoffAt))) throw new Error('The final cutoff is not a valid date and time.');
+    const finalCutoffAt = parseScheduledDate(body.finalCutoffAt, body.timezone);
     if (
       !body.activeWeekdays?.length ||
       body.activeWeekdays.some((weekday) => !Number.isInteger(weekday) || weekday < 0 || weekday > 6)
@@ -55,6 +56,12 @@ export async function POST(request: Request) {
       throw new Error('Choose at least one valid active weekday.');
     }
     if (!body.schedule || Object.keys(body.schedule).length === 0) throw new Error('Enter the phase schedule.');
+    const scheduleErrors = validateSchedule({
+      dayCloses: body.schedule.dayCloses ?? '',
+      nightCloses: body.schedule.nightCloses ?? '',
+      activeWeekdays: body.activeWeekdays,
+    });
+    if (scheduleErrors.length) throw new Error(scheduleErrors.join(' '));
 
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -77,7 +84,7 @@ export async function POST(request: Request) {
           body.endDate,
           JSON.stringify(body.activeWeekdays),
           JSON.stringify(body.schedule),
-          body.finalCutoffAt,
+          finalCutoffAt.toISOString(),
           moderator.id,
           now,
           now,

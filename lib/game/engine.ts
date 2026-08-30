@@ -165,7 +165,7 @@ export function resolvePhase(input: PhaseResolutionInput): PhaseResolution {
   const investigations: PhaseResolution['investigations'] = [];
 
   if (!isDay) {
-    const protection = firstValidSingleTargetAction(actions, 'PROTECT', players, 'DOCTOR');
+    const protection = firstValidSingleTargetAction(actions, 'PROTECT', players, 'BODYGUARD');
     if (protection) protectedPlayerIds.push(protection.target.id);
 
     const investigation = firstValidSingleTargetAction(actions, 'INVESTIGATE', players, 'SEER');
@@ -260,4 +260,3 @@ export function evaluateWinner(
     livingVillage,
   };
 }
-

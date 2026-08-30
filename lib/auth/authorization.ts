@@ -17,3 +17,12 @@ export async function requireGameModerator(gameId: string): Promise<ModeratorIde
   return moderator;
 }
 
+export async function requireGameOwner(gameId: string): Promise<ModeratorIdentity> {
+  const moderator = await requireModerator();
+  const membership = await getD1()
+    .prepare('SELECT role FROM game_moderators WHERE game_id = ? AND moderator_id = ? LIMIT 1')
+    .bind(gameId, moderator.id)
+    .first<{ role: string }>();
+  if (membership?.role !== 'OWNER') throw new Error('Only the game owner can perform this recovery action.');
+  return moderator;
+}

@@ -2,8 +2,9 @@ import { getD1 } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentPlayer } from '../../../../../lib/auth/session';
 import { permissionForRole, validateActionTargets } from '../../../../../lib/game/actions';
-import type { ActionKind, PhaseKind, PhaseResolution, PlayerState, RoleKey } from '../../../../../lib/game/types';
+import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type PlayerState, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../../lib/http/rate-limit';
 
 interface RouteContext {
   params: Promise<{ phaseId: string }>;
@@ -15,14 +16,15 @@ export async function POST(request: Request, context: RouteContext) {
     await ensureDatabase();
     const identity = await getCurrentPlayer();
     if (!identity) return jsonError('Player authentication required.', 401);
+    const playerIdentity = identity;
     const { phaseId } = await context.params;
     const body = (await request.json()) as { actionKind?: ActionKind; targetIds?: string[] };
     const db = getD1();
     const phase = await db
       .prepare(
-        `SELECT id, game_id AS gameId, kind, status, slots, closes_at AS closesAt,
-                hunter_deadline_at AS hunterDeadlineAt
-         FROM phases WHERE id = ? LIMIT 1`,
+        `SELECT p.id, p.game_id AS gameId, p.kind, p.status, p.slots, p.closes_at AS closesAt,
+                p.hunter_deadline_at AS hunterDeadlineAt, g.status AS gameStatus
+         FROM phases p JOIN games g ON g.id = p.game_id WHERE p.id = ? LIMIT 1`,
       )
       .bind(phaseId)
       .first<{
@@ -33,12 +35,37 @@ export async function POST(request: Request, context: RouteContext) {
         slots: number;
         closesAt: string;
         hunterDeadlineAt: string | null;
+        gameStatus: string;
       }>();
     if (!phase || phase.gameId !== identity.gameId) return jsonError('Phase not found.', 404);
+    if (phase.gameStatus === 'STOPPED') throw new Error('This game has been stopped by a moderator.');
     const pendingHunter = phase.status === 'PENDING_HUNTER';
-    if (phase.status !== 'OPEN' && !pendingHunter) throw new Error('This phase is not accepting actions.');
+    const nowForDeadline = new Date();
     const deadline = pendingHunter ? phase.hunterDeadlineAt : phase.closesAt;
-    if (deadline && new Date(deadline) <= new Date()) throw new Error('The response window has closed.');
+    async function recordLateAttempt() {
+      const createdAt = nowForDeadline.toISOString();
+      await db
+        .prepare(
+          `INSERT INTO operational_events
+           (id, game_id, severity, source, message, details_json, created_at)
+           VALUES (?, ?, 'WARNING', 'DEADLINE_MONITOR', 'A late player action was rejected.', ?, ?)`,
+        )
+        .bind(
+          crypto.randomUUID(),
+          playerIdentity.gameId,
+          JSON.stringify({ phaseId, seatId: playerIdentity.seatId, actionKind: body.actionKind ?? null, deadline }),
+          createdAt,
+        )
+        .run();
+    }
+    if (phase.status !== 'OPEN' && !pendingHunter) {
+      if (deadline && new Date(deadline) <= nowForDeadline) await recordLateAttempt();
+      throw new Error('This phase is not accepting actions.');
+    }
+    if (deadline && new Date(deadline) <= nowForDeadline) {
+      await recordLateAttempt();
+      throw new Error('The response window has closed.');
+    }
 
     const playerRows = await db
       .prepare(
@@ -48,9 +75,10 @@ export async function POST(request: Request, context: RouteContext) {
       )
       .bind(identity.gameId)
       .all<{ id: string; displayName: string; role: RoleKey; alive: number }>();
-    const players: PlayerState[] = playerRows.results.map((row) => ({ ...row, alive: Boolean(row.alive) }));
+    const players: PlayerState[] = playerRows.results.map((row) => ({ ...row, role: canonicalRoleKey(row.role), alive: Boolean(row.alive) }));
     const actor = players.find((player) => player.id === identity.seatId);
     if (!actor?.alive) throw new Error('Eliminated players cannot submit this action.');
+    await enforceRateLimit(requestRateLimitKey(request, `player-action:${identity.seatId}:${phaseId}`), 30, 10 * 60_000);
     const permission = permissionForRole(actor.role, phase.kind, Number(phase.slots), pendingHunter);
     if (!permission.actionKind || body.actionKind !== permission.actionKind) throw new Error('This action is not available to your role.');
 
@@ -114,6 +142,8 @@ export async function POST(request: Request, context: RouteContext) {
     ]);
     return Response.json({ ok: true, actionId, version, targetIds, submittedAt: now });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to submit this action.', 400);
+    return error instanceof RateLimitError
+      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
+      : jsonError(error instanceof Error ? error.message : 'Unable to submit this action.', 400);
   }
 }

@@ -34,6 +34,6 @@ describe('roster CSV', () => {
     ]);
     expect(csv).toContain('Maya Chen');
     expect(csv).toContain('ABC123');
-    expect(csv).not.toMatch(/"role"|"WEREWOLF"|"SEER"|"DOCTOR"|"HUNTER"|"MASON"/u);
+    expect(csv).not.toMatch(/"role"|"WEREWOLF"|"SEER"|"BODYGUARD"|"DOCTOR"|"HUNTER"|"MASON"/u);
   });
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 
 interface Outcome {
   tally: Array<{ playerId: string; votes: number }>;
@@ -38,9 +39,15 @@ function localDeadline(minutes = 60): string {
   return local.toISOString().slice(0, 16);
 }
 
-export default function LiveGamePanel({ gameId, gameStatus }: { gameId: string; gameStatus: string }) {
+interface GameState {
+  status: string;
+  finalCutoffAt: string;
+}
+
+export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameId: string; gameStatus: string; onChanged?: (action?: string) => void }) {
   const [phases, setPhases] = useState<Phase[]>([]);
   const [roster, setRoster] = useState<RosterMember[]>([]);
+  const [game, setGame] = useState<GameState | null>(null);
   const [overrideIds, setOverrideIds] = useState<string[]>([]);
   const [overrideReason, setOverrideReason] = useState('');
   const [message, setMessage] = useState('');
@@ -48,10 +55,11 @@ export default function LiveGamePanel({ gameId, gameStatus }: { gameId: string; 
 
   const refresh = useCallback(async () => {
     const response = await fetch(`/api/games/${gameId}/phases`);
-    const data = await response.json() as { phases?: Phase[]; roster?: RosterMember[]; error?: string };
+    const data = await response.json() as { game?: GameState; phases?: Phase[]; roster?: RosterMember[]; error?: string };
     if (!response.ok) throw new Error(data.error ?? 'Unable to load the live game.');
     setPhases(data.phases ?? []);
     setRoster(data.roster ?? []);
+    setGame(data.game ?? null);
   }, [gameId]);
 
   useEffect(() => {
@@ -71,16 +79,28 @@ export default function LiveGamePanel({ gameId, gameStatus }: { gameId: string; 
     const data = await response.json() as { error?: string };
     if (!response.ok) throw new Error(data.error ?? 'Unable to update the phase.');
     await refresh();
+    const action = typeof payload.action === 'string' ? payload.action : undefined;
+    if (shouldRefreshOperations(action)) onChanged?.(action);
   }
 
   async function openPhase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     try {
-      await mutate({ action: 'OPEN', kind: form.get('kind'), closesAt: new Date(String(form.get('closesAt'))).toISOString() });
+      // The server interprets datetime-local in the game's configured timezone.
+      await mutate({ action: 'OPEN', kind: form.get('kind'), closesAt: String(form.get('closesAt')) });
       setMessage('Phase opened. Eligible players can submit and revise responses.');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to open the phase.');
+    }
+  }
+
+  async function enterFinalShowdown() {
+    try {
+      await mutate({ action: 'ENTER_FINAL_SHOWDOWN' });
+      setMessage('Final showdown entered. The final ballot is now the only legal phase.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to enter final showdown.');
     }
   }
 
@@ -92,6 +112,8 @@ export default function LiveGamePanel({ gameId, gameStatus }: { gameId: string; 
           ? 'Responses locked. The deterministic outcome is ready for review.'
           : action === 'PUBLISH'
             ? 'Outcome published to the official timeline.'
+          : action === 'ENTER_FINAL_SHOWDOWN'
+            ? 'Final showdown entered. The final ballot is now available.'
             : 'Hunter follow-up added to the review.',
       );
     } catch (caught) {
@@ -101,6 +123,13 @@ export default function LiveGamePanel({ gameId, gameStatus }: { gameId: string; 
 
   const current = phases.find((phase) => !['PUBLISHED', 'SUPERSEDED'].includes(phase.status));
   const latest = current ?? phases[0];
+  const effectiveStatus = game?.status ?? gameStatus;
+  const latestPublished = phases.find((phase) => phase.status === 'PUBLISHED');
+  const nextKind = effectiveStatus === 'FINAL_SHOWDOWN'
+    ? 'FINAL_BALLOT'
+    : latestPublished?.kind === 'DAY'
+      ? 'NIGHT'
+      : 'DAY';
   const byId = useMemo(() => new Map(roster.map((player) => [player.id, player])), [roster]);
 
   function toggleOverride(id: string, limit: number) {
@@ -113,18 +142,20 @@ export default function LiveGamePanel({ gameId, gameStatus }: { gameId: string; 
       {error && <p className="notice error" role="alert">{error}</p>}
       {message && <p className="notice success" role="status">{message}</p>}
 
-      {!current && gameStatus !== 'COMPLETED' && (
+      {!current && !['COMPLETED', 'STOPPED'].includes(effectiveStatus) && (
         <form className="phase-open-row" onSubmit={openPhase}>
-          <label>Phase<select name="kind" defaultValue="DAY"><option value="DAY">Day ballot</option><option value="NIGHT">Night actions</option><option value="FINAL_BALLOT">Final ballot</option></select></label>
+          <label>Phase<select name="kind" defaultValue={nextKind}><option value={nextKind}>{nextKind === 'DAY' ? 'Day ballot' : nextKind === 'NIGHT' ? 'Night actions' : 'Final ballot'}</option></select></label>
           <label>Deadline<input name="closesAt" type="datetime-local" defaultValue={localDeadline()} required /></label>
           <button className="primary-button" type="submit">Open phase</button>
         </form>
       )}
 
+      {!current && effectiveStatus === 'ACTIVE' && latestPublished && <div className="final-showdown-callout"><div><p className="eyebrow accent">Final cutoff</p><strong>{game?.finalCutoffAt ? new Date(game.finalCutoffAt).toLocaleString() : 'Configured in the game schedule'}</strong><p>When the cutoff has passed, enter final showdown to unlock the final ballot.</p></div><button className="secondary-button" type="button" onClick={() => void enterFinalShowdown()}>Enter final showdown</button></div>}
+
       {latest && (
         <div className="phase-review">
           <div className="phase-status-row"><div><p className="eyebrow accent">Cycle {latest.sequence} · {latest.kind.replaceAll('_', ' ')}</p><h3>{latest.status.replaceAll('_', ' ')}</h3></div><div><strong>{latest.currentSubmissions}</strong><small>current responses</small></div><div><strong>{latest.slots}</strong><small>elimination slots</small></div></div>
-          {latest.status === 'OPEN' && <button className="danger-button" type="button" onClick={() => void run('LOCK_AND_PROPOSE', latest.id)}>Lock responses & calculate</button>}
+          {['OPEN', 'LOCKED'].includes(latest.status) && <button className="danger-button" type="button" onClick={() => void run('LOCK_AND_PROPOSE', latest.id)}>{latest.status === 'LOCKED' ? 'Calculate locked responses' : 'Lock responses & calculate'}</button>}
           {latest.status === 'PENDING_HUNTER' && (
             <div className="hunter-callout"><span aria-hidden="true">➶</span><div><strong>Hunter follow-up required</strong><p>Deadline {latest.hunterDeadlineAt ? new Date(latest.hunterDeadlineAt).toLocaleString() : 'pending'}.</p></div><button className="primary-button" type="button" onClick={() => void run('FINALIZE_HUNTER', latest.id, { skipHunter: latest.hunterDeadlineAt ? new Date(latest.hunterDeadlineAt) <= new Date() : false })}>Finalize Hunter</button></div>
           )}

@@ -25,12 +25,12 @@ export const ROLE_CATALOG: Record<RoleKey, RoleDefinition> = {
     actionKind: 'INVESTIGATE',
     unique: true,
   },
-  DOCTOR: {
-    key: 'DOCTOR',
-    name: 'Doctor',
+  BODYGUARD: {
+    key: 'BODYGUARD',
+    name: 'Bodyguard',
     faction: 'VILLAGE',
     power: 2,
-    summary: 'Protect one other living player from the pack each night.',
+    summary: 'Protect one other living player from one pack attack each night.',
     actionKind: 'PROTECT',
     unique: true,
   },
@@ -52,4 +52,3 @@ export const ROLE_CATALOG: Record<RoleKey, RoleDefinition> = {
     minimumCount: 2,
   },
 };
-

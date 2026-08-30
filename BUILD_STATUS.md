@@ -10,7 +10,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Phase 3 - Live player actions and moderator resolution workflow: **complete**
 - Phase 4 - Private rooms, recap, backups, and operational controls: **complete**
 - Phase 5 - Full verification, rehearsal fixtures, and private MVP hosting: **complete**
-- Phase 6 - Pilot hardening, scheduling automation, rate limits, and feedback instrumentation: **next**
+- Phase 6 - Pilot hardening, scheduling automation, rate limits, and feedback instrumentation: **in progress**
 
 ## Verified at this checkpoint
 
@@ -22,7 +22,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Six-role catalog and agreed signed balance score are implemented.
 - Default composition, unique-role constraints, Mason pairing, and one-in-six wolf baseline are tested.
 - Day/night slot scaling is tested at 20, 30, 31, 40, 60, 61, and 80 living players.
-- Day, night, Doctor, Seer, Hunter, random tie, and faction victory rules pass 16 unit tests.
+- Day, night, Bodyguard, Seer, Hunter, random tie, and faction victory rules pass the engine regression tests.
 - D1 schema and initial migration cover identities, games, seats, assignments, phases, actions, resolutions, events, rooms, notifications, and backups.
 - Moderator bootstrap/sign-in uses durable opaque sessions and PBKDF2-SHA256 password hashing compatible with the Worker runtime.
 - CSV roster import validates 20–80 unique players and creates private hashed seat codes plus a one-time invite export.
@@ -43,13 +43,19 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - The operational console reports roster, living count, sessions, stale deadlines, recent warnings, room health, and last-backup state.
 - Moderator-only JSON backups include the recoverable game and audit record while excluding passwords, claim/PIN hashes, and session tokens; each export has a SHA-256 checksum.
 - A Phase 4 rehearsal verified pack-room access and posting, message moderation, 20 announcement notifications, co-moderator access, three room types, an operational warning, and a logged checksum backup.
-- Thirty unit tests, the full lint suite, and strict TypeScript checks pass.
+- Forty-five unit tests across sixteen files, the full lint suite, and strict TypeScript checks pass.
 - Production build succeeds.
 - Default campaign dates are calculated relative to the next Monday; dates shown in planning documents are not treated as release constraints.
 - A 20-player rehearsal roster, branded social preview, and favicon are included for the MVP handoff.
 - The production dependency audit reports zero known vulnerabilities after upgrading Next.js to 16.3.3.
 - Sites version 1 packages the verified build and D1 migration from commit `b0546ec98464700a3fc0454e6743284869f1754e`.
 - The private MVP is deployed at `https://watercooler-werewolf.dylan-d-edgar.chatgpt.site` with owner-only access and the hosted origin applied to social metadata.
+- The canonical protective role is now `BODYGUARD`; the migration rewrites legacy `DOCTOR` rows and new API/UI output never exposes Doctor as a separate role.
+- Stop and owner-confirmed Reset controls are transactional, audited, backup-first, session-invalidating, game-isolated, and repeat-safe.
+- Server-side phase policy requires Day first, Day/Night alternation, explicit post-cutoff Final Showdown, and Final Ballot-only play during showdown.
+- Phase 6 pilot hardening now includes timezone-aware deadline conversion, D1-backed authentication/action/chat rate limits, due-phase reconciliation, late-attempt operational events, activity health metrics, and moderator feedback capture.
+- Operations refreshes automatically after live mutations and by polling; the player mobile layout provides alternate section navigation while preserving the right rail content.
+- Local API rehearsal verified fictional roster claim/release, phase rejection/idempotence, Stop/Reset/audit/backup/session invalidation, feedback capture, cross-game isolation, rate-limit behavior, and service-restart persistence. Browser automation was unavailable in this environment, so visual desktop/mobile checks remain pending.
 
 ## Resume instructions
 

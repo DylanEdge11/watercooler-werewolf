@@ -1,6 +1,10 @@
 import { getD1 } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
+import { requireGameModerator, requireGameOwner } from '../../../../../lib/auth/authorization';
+import { createBackupRecord } from '../../../../../lib/backup/snapshot';
+import { canResetGame, canStopGame } from '../../../../../lib/game/lifecycle';
+import { reconcileDuePhases } from '../../../../../lib/game/scheduling';
+import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 
 interface RouteContext {
@@ -11,16 +15,22 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { gameId } = await context.params;
-    await requireGameModerator(gameId);
+    const moderator = await requireGameModerator(gameId);
     const db = getD1();
-    const [game, counts, overdue, sessions, backup, events] = await Promise.all([
+    const reconciledPhaseIds = await reconcileDuePhases(db, gameId, moderator.id);
+    const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    const [game, membership, counts, overdue, sessions, backup, events, activity] = await Promise.all([
       db
         .prepare(
-          `SELECT status, chat_retention_days AS chatRetentionDays, final_cutoff_at AS finalCutoffAt,
-                  updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1`,
-        )
+      `SELECT status, name, chat_retention_days AS chatRetentionDays, final_cutoff_at AS finalCutoffAt,
+                  stopped_at AS stoppedAt, stop_reason AS stopReason, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1`,
+      )
         .bind(gameId)
         .first(),
+      db
+        .prepare('SELECT role FROM game_moderators WHERE game_id = ? AND moderator_id = ? LIMIT 1')
+        .bind(gameId, moderator.id)
+        .first<{ role: string }>(),
       db
         .prepare(
           `SELECT COUNT(*) AS total,
@@ -33,7 +43,7 @@ export async function GET(_request: Request, context: RouteContext) {
       db
         .prepare(
           `SELECT id, kind, closes_at AS closesAt FROM phases
-           WHERE game_id = ? AND status = 'OPEN' AND closes_at < ? ORDER BY sequence DESC LIMIT 1`,
+           WHERE game_id = ? AND status IN ('OPEN', 'LOCKED') AND closes_at < ? ORDER BY sequence DESC LIMIT 1`,
         )
         .bind(gameId, new Date().toISOString())
         .first(),
@@ -58,8 +68,17 @@ export async function GET(_request: Request, context: RouteContext) {
         )
         .bind(gameId)
         .all(),
+      db
+        .prepare(
+          `SELECT
+             (SELECT COUNT(*) FROM game_events WHERE game_id = ? AND event_type = 'ACTION_SUBMITTED' AND created_at >= ?) AS submittedActions,
+             (SELECT COUNT(*) FROM operational_events WHERE game_id = ? AND source = 'DEADLINE_MONITOR' AND created_at >= ?) AS lateRejections,
+             (SELECT MAX(created_at) FROM game_events WHERE game_id = ? AND event_type = 'ACTION_SUBMITTED') AS lastActionAt`,
+        )
+        .bind(gameId, since, gameId, since, gameId)
+        .first<{ submittedActions: number; lateRejections: number; lastActionAt: string | null }>(),
     ]);
-    return Response.json({ ok: true, game, counts, overduePhase: overdue, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), lastBackup: backup, events: events.results });
+    return Response.json({ ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, lastBackup: backup, events: events.results });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unable to load operational health.', 401);
   }
@@ -72,13 +91,117 @@ export async function POST(request: Request, context: RouteContext) {
     const { gameId } = await context.params;
     const moderator = await requireGameModerator(gameId);
     const body = (await request.json()) as {
-      action?: 'SET_CHAT_RETENTION' | 'REVOKE_SEAT_SESSIONS';
+      action?: 'SET_CHAT_RETENTION' | 'REVOKE_SEAT_SESSIONS' | 'STOP' | 'RESET' | 'RECONCILE_DEADLINES';
       days?: number;
       seatId?: string;
       reason?: string;
+      confirmed?: boolean;
+      confirmationName?: string;
     };
     const db = getD1();
     const now = new Date().toISOString();
+    const game = await db
+      .prepare('SELECT id, name, status FROM games WHERE id = ? LIMIT 1')
+      .bind(gameId)
+      .first<{ id: string; name: string; status: string }>();
+    if (!game) throw new Error('Game not found.');
+    if (body.action === 'RECONCILE_DEADLINES') {
+      const lockedPhaseIds = await reconcileDuePhases(db, gameId, moderator.id);
+      return Response.json({ ok: true, lockedPhaseIds });
+    }
+    if (body.action === 'STOP') {
+      const reason = body.reason?.trim() ?? '';
+      const decision = canStopGame(game.status, reason, body.confirmed === true);
+      if (!decision.allowed) throw new Error(decision.error);
+      if (decision.idempotent) return Response.json({ ok: true, idempotent: true, status: 'STOPPED' });
+      await db.batch([
+        db
+          .prepare(
+            `UPDATE games SET status = 'STOPPED', stopped_at = ?, stopped_by_moderator_id = ?, stop_reason = ?, updated_at = ?
+             WHERE id = ? AND status NOT IN ('COMPLETED', 'CANCELLED', 'STOPPED')`,
+          )
+          .bind(now, moderator.id, reason, now, gameId),
+        db
+          .prepare(
+            `UPDATE phases SET status = 'SUPERSEDED', updated_at = ?
+             WHERE game_id = ? AND status IN ('SCHEDULED', 'OPEN', 'LOCKED', 'PENDING_HUNTER', 'PENDING_APPROVAL')`,
+          )
+          .bind(now, gameId),
+        db.prepare("UPDATE chat_rooms SET status = 'READ_ONLY' WHERE game_id = ? AND status = 'OPEN'").bind(gameId),
+        db
+          .prepare(
+            `INSERT INTO game_events
+             (id, game_id, event_type, actor_moderator_id, payload_json, created_at)
+             VALUES (?, ?, 'GAME_STOPPED', ?, ?, ?)`,
+          )
+          .bind(crypto.randomUUID(), gameId, moderator.id, JSON.stringify({ reason, status: 'STOPPED' }), now),
+        db
+          .prepare(
+            `INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at)
+             VALUES (?, ?, 'WARNING', 'GAME_CONTROL', 'The game was stopped by a moderator.', ?, ?)`,
+          )
+          .bind(crypto.randomUUID(), gameId, JSON.stringify({ moderatorId: moderator.id, reason }), now),
+      ]);
+      return Response.json({ ok: true, status: 'STOPPED', stoppedAt: now });
+    }
+    if (body.action === 'RESET') {
+      await requireGameOwner(gameId);
+      const decision = canResetGame(game.status, game.name, body.confirmationName?.trim() ?? '', 'OWNER', body.confirmed === true);
+      if (!decision.allowed) throw new Error(decision.error);
+      if (decision.idempotent) return Response.json({ ok: true, idempotent: true, status: 'DRAFT' });
+      const backup = await createBackupRecord(gameId, moderator.id);
+      const seats = await db
+        .prepare('SELECT id FROM seats WHERE game_id = ?')
+        .bind(gameId)
+        .all<{ id: string }>();
+      const replacementHashes = await Promise.all(
+        seats.results.map(async (seat) => ({ id: seat.id, hash: await sha256(randomToken(18)) })),
+      );
+      const statements: D1PreparedStatement[] = [
+        db.prepare('DELETE FROM action_submissions WHERE phase_id IN (SELECT id FROM phases WHERE game_id = ?)').bind(gameId),
+        db.prepare('DELETE FROM resolution_proposals WHERE phase_id IN (SELECT id FROM phases WHERE game_id = ?)').bind(gameId),
+        db.prepare('UPDATE game_events SET phase_id = NULL WHERE phase_id IN (SELECT id FROM phases WHERE game_id = ?)').bind(gameId),
+        db.prepare('DELETE FROM phases WHERE game_id = ?').bind(gameId),
+        db.prepare('DELETE FROM role_assignments WHERE game_id = ?').bind(gameId),
+        db.prepare('DELETE FROM assignment_batches WHERE game_id = ?').bind(gameId),
+        db.prepare('DELETE FROM game_role_counts WHERE game_id = ?').bind(gameId),
+        db.prepare('DELETE FROM notifications WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?)').bind(gameId),
+        db.prepare('DELETE FROM chat_room_members WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?)').bind(gameId),
+        db.prepare('DELETE FROM chat_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?)').bind(gameId),
+        db.prepare("UPDATE chat_rooms SET status = 'OPEN' WHERE game_id = ?").bind(gameId),
+        db.prepare('DELETE FROM seat_sessions WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?)').bind(gameId),
+        db
+          .prepare(
+            `UPDATE seats SET status = 'INVITED', pin_hash = NULL, session_version = session_version + 1,
+                              alive = 1, predecessor_seat_id = NULL, claimed_at = NULL, updated_at = ? WHERE game_id = ?`,
+          )
+          .bind(now, gameId),
+        db
+          .prepare(
+            `UPDATE games SET status = 'DRAFT', stopped_at = NULL, stopped_by_moderator_id = NULL, stop_reason = NULL,
+                              reset_at = ?, reset_by_moderator_id = ?, updated_at = ? WHERE id = ?`,
+          )
+          .bind(now, moderator.id, now, gameId),
+        db
+          .prepare(
+            `INSERT INTO game_events
+             (id, game_id, event_type, actor_moderator_id, payload_json, created_at)
+             VALUES (?, ?, 'GAME_RESET', ?, ?, ?)`,
+          )
+          .bind(crypto.randomUUID(), gameId, moderator.id, JSON.stringify({ backupId: backup.backupId, checksum: backup.checksum, status: 'DRAFT' }), now),
+        db
+          .prepare(
+            `INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at)
+             VALUES (?, ?, 'WARNING', 'GAME_CONTROL', 'The game was reset to setup state.', ?, ?)`,
+          )
+          .bind(crypto.randomUUID(), gameId, JSON.stringify({ moderatorId: moderator.id, backupId: backup.backupId }), now),
+      ];
+      for (const replacement of replacementHashes) {
+        statements.push(db.prepare('UPDATE seats SET claim_code_hash = ? WHERE id = ? AND game_id = ?').bind(replacement.hash, replacement.id, gameId));
+      }
+      await db.batch(statements);
+      return Response.json({ ok: true, status: 'DRAFT', backupId: backup.backupId, checksum: backup.checksum, resetAt: now });
+    }
     if (body.action === 'SET_CHAT_RETENTION') {
       if (!Number.isInteger(body.days) || Number(body.days) < 1 || Number(body.days) > 30) throw new Error('Chat retention must be 1–30 days.');
       await db.prepare('UPDATE games SET chat_retention_days = ?, updated_at = ? WHERE id = ?').bind(body.days, now, gameId).run();

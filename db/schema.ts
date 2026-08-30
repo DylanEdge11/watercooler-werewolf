@@ -8,6 +8,7 @@ export type GameStatus =
   | 'ACTIVE'
   | 'FINAL_SHOWDOWN'
   | 'COMPLETED'
+  | 'STOPPED'
   | 'CANCELLED';
 export type PhaseStatus =
   | 'SCHEDULED'
@@ -66,6 +67,11 @@ export const games = sqliteTable(
     chatRetentionDays: integer('chat_retention_days').notNull().default(7),
     finalCutoffAt: text('final_cutoff_at').notNull(),
     publicationMode: text('publication_mode').$type<'REVIEW' | 'AUTOMATIC'>().notNull().default('REVIEW'),
+    stoppedAt: text('stopped_at'),
+    stoppedByModeratorId: text('stopped_by_moderator_id').references(() => moderatorAccounts.id),
+    stopReason: text('stop_reason'),
+    resetAt: text('reset_at'),
+    resetByModeratorId: text('reset_by_moderator_id').references(() => moderatorAccounts.id),
     createdByModeratorId: text('created_by_moderator_id')
       .notNull()
       .references(() => moderatorAccounts.id),
@@ -394,6 +400,7 @@ export const backupExports = sqliteTable(
       .references(() => moderatorAccounts.id),
     schemaVersion: integer('schema_version').notNull(),
     checksum: text('checksum').notNull(),
+    payloadJson: text('payload_json'),
     exportedAt: text('exported_at').notNull(),
   },
   (table) => [index('idx_backup_exports_game_time').on(table.gameId, table.exportedAt)],
@@ -413,3 +420,17 @@ export const operationalEvents = sqliteTable(
   (table) => [index('idx_operational_events_recent').on(table.severity, table.createdAt)],
 );
 
+export const pilotFeedback = sqliteTable(
+  'pilot_feedback',
+  {
+    id: text('id').primaryKey(),
+    gameId: text('game_id')
+      .notNull()
+      .references(() => games.id, { onDelete: 'cascade' }),
+    respondentType: text('respondent_type').$type<'MODERATOR' | 'PLAYER'>().notNull(),
+    rating: integer('rating').notNull(),
+    comment: text('comment'),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [index('idx_pilot_feedback_game_time').on(table.gameId, table.createdAt)],
+);
