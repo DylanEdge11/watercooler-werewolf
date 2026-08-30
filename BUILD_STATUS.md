@@ -9,7 +9,8 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Phase 2 — Authentication, roster, setup wizard, and role assignment: **complete**
 - Phase 3 - Live player actions and moderator resolution workflow: **complete**
 - Phase 4 - Private rooms, recap, backups, and operational controls: **complete**
-- Phase 5 - Full verification, rehearsal fixtures, and hosting: **in progress (release candidate validated)**
+- Phase 5 - Full verification, rehearsal fixtures, and private MVP hosting: **complete**
+- Phase 6 - Pilot hardening, scheduling automation, rate limits, and feedback instrumentation: **next**
 
 ## Verified at this checkpoint
 
@@ -47,6 +48,8 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Default campaign dates are calculated relative to the next Monday; dates shown in planning documents are not treated as release constraints.
 - A 20-player rehearsal roster, branded social preview, and favicon are included for the MVP handoff.
 - The production dependency audit reports zero known vulnerabilities after upgrading Next.js to 16.3.3.
+- Sites version 1 packages the verified build and D1 migration from commit `b0546ec98464700a3fc0454e6743284869f1754e`.
+- The private MVP is deployed at `https://watercooler-werewolf.dylan-d-edgar.chatgpt.site` with owner-only access and the hosted origin applied to social metadata.
 
 ## Resume instructions
 
