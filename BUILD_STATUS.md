@@ -43,7 +43,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - The operational console reports roster, living count, sessions, stale deadlines, recent warnings, room health, and last-backup state.
 - Moderator-only JSON backups include the recoverable game and audit record while excluding passwords, claim/PIN hashes, and session tokens; each export has a SHA-256 checksum.
 - A Phase 4 rehearsal verified pack-room access and posting, message moderation, 20 announcement notifications, co-moderator access, three room types, an operational warning, and a logged checksum backup.
-- Forty-five unit tests across sixteen files, the full lint suite, and strict TypeScript checks pass.
+- Forty-six unit tests across sixteen files, the full lint suite, and strict TypeScript checks pass.
 - Production build succeeds.
 - Default campaign dates are calculated relative to the next Monday; dates shown in planning documents are not treated as release constraints.
 - A 20-player rehearsal roster, branded social preview, and favicon are included for the MVP handoff.
@@ -55,6 +55,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Stop and owner-confirmed Reset controls are transactional, audited, backup-first, session-invalidating, game-isolated, and repeat-safe.
 - Server-side phase policy requires Day first, Day/Night alternation, explicit post-cutoff Final Showdown, and Final Ballot-only play during showdown.
 - Phase 6 pilot hardening now includes timezone-aware deadline conversion, D1-backed authentication/action/chat rate limits, due-phase reconciliation, late-attempt operational events, activity health metrics, and moderator feedback capture.
+- Rate-limit bucket increments/reset windows now execute atomically in a D1 batch, so simultaneous requests cannot overwrite the attempt count.
 - Operations refreshes automatically after live mutations and by polling; the player mobile layout provides alternate section navigation while preserving the right rail content.
 - Local API rehearsal verified fictional roster claim/release, phase rejection/idempotence, Stop/Reset/audit/backup/session invalidation, feedback capture, cross-game isolation, rate-limit behavior, and service-restart persistence. Browser automation was unavailable in this environment, so visual desktop/mobile checks remain pending.
 

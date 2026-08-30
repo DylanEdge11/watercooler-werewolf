@@ -42,26 +42,38 @@ export async function enforceRateLimit(
   const { getD1 } = await import('../../db');
   const db = getD1();
   const now = new Date();
-  const row = await db
-    .prepare('SELECT window_started_at AS windowStartedAt, attempts FROM rate_limit_buckets WHERE bucket_key = ? LIMIT 1')
-    .bind(bucketKey)
-    .first<{ windowStartedAt: string; attempts: number }>();
-  const decision = decideRateLimit({
-    attempts: Number(row?.attempts ?? 0),
-    windowStartedAt: row ? new Date(row.windowStartedAt) : new Date(0),
-    now,
-    limit,
-    windowMs,
-  });
-  await db
-    .prepare(
-      `INSERT INTO rate_limit_buckets (bucket_key, window_started_at, attempts)
-       VALUES (?, ?, ?)
-       ON CONFLICT(bucket_key) DO UPDATE SET window_started_at = excluded.window_started_at, attempts = excluded.attempts`,
-    )
-    .bind(bucketKey, (decision.attempts === 1 ? now : row ? new Date(row.windowStartedAt) : now).toISOString(), decision.attempts)
-    .run();
-  if (!decision.allowed) {
-    throw new RateLimitError(Math.max(1, Math.ceil((decision.resetAt.valueOf() - now.valueOf()) / 1_000)));
+  const nowIso = now.toISOString();
+  // The insert, increment/reset, and read execute in one D1 batch. This keeps
+  // simultaneous requests from overwriting each other's attempt count.
+  const results = await db.batch([
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO rate_limit_buckets (bucket_key, window_started_at, attempts)
+         VALUES (?, ?, 0)`,
+      )
+      .bind(bucketKey, nowIso),
+    db
+      .prepare(
+        `UPDATE rate_limit_buckets
+         SET window_started_at = CASE
+               WHEN (julianday(?) - julianday(window_started_at)) * 86400000 >= ? THEN ?
+               ELSE window_started_at
+             END,
+             attempts = CASE
+               WHEN (julianday(?) - julianday(window_started_at)) * 86400000 >= ? THEN 1
+               ELSE attempts + 1
+             END
+         WHERE bucket_key = ?`,
+      )
+      .bind(nowIso, windowMs, nowIso, nowIso, windowMs, bucketKey),
+    db
+      .prepare('SELECT window_started_at AS windowStartedAt, attempts FROM rate_limit_buckets WHERE bucket_key = ? LIMIT 1')
+      .bind(bucketKey),
+  ]);
+  const row = (results[2] as D1Result<{ windowStartedAt: string; attempts: number }>).results[0];
+  if (!row) throw new Error('Rate-limit bucket could not be updated.');
+  const resetAt = new Date(new Date(row.windowStartedAt).valueOf() + windowMs);
+  if (Number(row.attempts) > limit) {
+    throw new RateLimitError(Math.max(1, Math.ceil((resetAt.valueOf() - now.valueOf()) / 1_000)));
   }
 }

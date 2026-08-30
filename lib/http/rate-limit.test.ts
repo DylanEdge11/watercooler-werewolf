@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideRateLimit, requestRateLimitKey } from './rate-limit';
+import { decideRateLimit, RateLimitError, requestRateLimitKey } from './rate-limit';
 
 describe('request rate-limit policy', () => {
   it('allows the configured burst, then reports a retry window', () => {
@@ -15,5 +15,11 @@ describe('request rate-limit policy', () => {
     expect(decideRateLimit({ attempts: 99, windowStartedAt: new Date('2026-10-01T12:00:00Z'), now, limit: 3, windowMs: 60_000 }).attempts).toBe(1);
     const request = new Request('https://game.test/api', { headers: { 'cf-connecting-ip': '203.0.113.10' } });
     expect(requestRateLimitKey(request, 'moderator-login')).toBe('moderator-login:203.0.113.10');
+  });
+
+  it('exposes a retry duration for a blocked request', () => {
+    const error = new RateLimitError(37);
+    expect(error.message).toContain('Too many attempts');
+    expect(error.retryAfterSeconds).toBe(37);
   });
 });
