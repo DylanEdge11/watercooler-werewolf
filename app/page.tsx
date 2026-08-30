@@ -1,7 +1,8 @@
 'use client';
 
+/* eslint-disable @next/next/no-html-link-for-pages -- vinext's production Link runtime currently fails before navigation. */
+
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import Link from 'next/link';
 import PrivateRoomChat from './private-room-chat';
 
 type RoleKey = 'VILLAGER' | 'WEREWOLF' | 'SEER' | 'BODYGUARD' | 'HUNTER' | 'MASON';
@@ -65,16 +66,16 @@ function PublicWelcome() {
     <main className="welcome-shell">
       <div className="welcome-moon" aria-hidden="true">☾</div>
       <section className="welcome-card">
-        <Link className="brand" href="/" aria-label="Watercooler Werewolf home">
+        <a className="brand" href="/" aria-label="Watercooler Werewolf home">
           <span className="brand-mark" aria-hidden="true"><span className="brand-moon" /><span className="brand-cup" /></span>
           <span><strong>Watercooler</strong><small>Werewolf</small></span>
-        </Link>
+        </a>
         <p className="eyebrow accent">A slow-burn social deduction game</p>
         <h1>Suspicion fits neatly between meetings.</h1>
         <p>Private roles, official ballots, and moderator-reviewed outcomes—designed for a month of office intrigue.</p>
         <div className="button-row">
-          <Link className="primary-link" href="/player-login">Player sign-in</Link>
-          <Link className="secondary-link" href="/moderator">Moderator console</Link>
+          <a className="primary-link" href="/player-login">Player sign-in</a>
+          <a className="secondary-link" href="/moderator">Moderator console</a>
         </div>
         <small>Have an invite link? Open it directly to claim your private seat.</small>
       </section>
@@ -212,7 +213,7 @@ export default function Home() {
 
   if (loading) return <main className="setup-shell"><p className="setup-loading">Opening the village…</p></main>;
   if (unauthenticated) return <PublicWelcome />;
-  if (!data) return <main className="setup-shell centered"><section className="auth-card"><h1>The village is out of reach.</h1><p>{error}</p><Link className="primary-link" href="/player-login">Try signing in</Link></section></main>;
+  if (!data) return <main className="setup-shell centered"><section className="auth-card"><h1>The village is out of reach.</h1><p>{error}</p><a className="primary-link" href="/player-login">Try signing in</a></section></main>;
 
   const role = data.player.roleDefinition;
   const phaseTitle = data.game.status === 'STOPPED'

@@ -1,6 +1,6 @@
 # Watercooler Werewolf
 
-Watercooler Werewolf is a slow-burn, moderator-reviewed Werewolf game for an office or other trusted group. The current source is the Phase 6 pilot-hardening build. The exact source checkpoint is always available with `git log -1 --oneline`; the current private deployment version and commit are recorded in [BUILD_STATUS.md](BUILD_STATUS.md).
+Watercooler Werewolf is a slow-burn, moderator-reviewed Werewolf game for an office or other trusted group. The current source is the Phase 6 pilot-hardening build. The exact source checkpoint is always available with `git log -1 --oneline`; the current deployment version and commit are recorded in [BUILD_STATUS.md](BUILD_STATUS.md).
 
 ## Run and verify
 
@@ -19,7 +19,7 @@ npm audit --omit=dev
 
 `npm run dev` starts the local Vinext/Cloudflare preview. The app creates its local D1 schema on the first request. Do not put passwords, invite codes, tokens, or production values in this repository.
 
-`npm run pilot:setup` creates a disposable local game from the fictional 20-player fixture and writes a one-time invite CSV under `outputs/`. It is deliberately mutation-gated: set `PILOT_ALLOW_MUTATION=yes` and provide a fictional `PILOT_MODERATOR_PASSWORD` (at least 12 characters). Use `PILOT_BASE_URL` to point at a local or explicitly approved private environment. Never run it against production data. In PowerShell:
+`npm run pilot:setup` creates a disposable local game from the fictional 20-player fixture and writes a one-time invite CSV under `outputs/`. It is deliberately mutation-gated: set `PILOT_ALLOW_MUTATION=yes` and provide a fictional `PILOT_MODERATOR_PASSWORD` (at least 12 characters). Use `PILOT_BASE_URL` to point at a local or explicitly approved environment. Never run it against production data. In PowerShell:
 
 ```powershell
 $env:PILOT_ALLOW_MUTATION = 'yes'
@@ -29,7 +29,7 @@ npm run pilot:setup
 
 ## Local D1 and fictional data
 
-The logical D1 binding is `DB`, configured in `.openai/hosting.json`. Wrangler/Miniflare keeps local state under the project `.wrangler` directory. `ensureDatabase()` applies the checked-in migrations, including the Bodyguard compatibility migration, before application queries run. The schema source is `db/schema.ts`; after schema changes, generate and inspect a Drizzle migration with `npm run db:generate` and keep the resulting SQL under `drizzle/`.
+The logical D1 binding is `DB`, configured in `.openai/hosting.json`. Wrangler/Miniflare keeps local state under the project `.wrangler` directory. `ensureDatabase()` applies the checked-in migrations, including the Bodyguard compatibility migration, before application queries run. Hosted deployments may provision those same checked-in migrations before the Worker starts; the bootstrap recognizes a complete pre-provisioned schema, records it in the application ledger, and only applies missing additive columns. It refuses to guess at or overwrite a partial initial schema. The schema source is `db/schema.ts`; after schema changes, generate and inspect a Drizzle migration with `npm run db:generate` and keep the resulting SQL under `drizzle/`.
 
 Game deadlines are entered as local `datetime-local` values and converted on the server using the game's IANA timezone (including daylight-saving transitions). The stored `*_at` values are UTC ISO timestamps; displayed times use the viewer's locale.
 
@@ -37,7 +37,7 @@ Use [fixtures/roster-20.csv](fixtures/roster-20.csv) only with disposable `.test
 
 ## Pilot show-and-play checklist
 
-The hosted MVP is currently owner-only. It is safe to demonstrate while signed in, but outside players need an explicitly approved shared/private access change before they can reach the hosted URL. Do not make the site public or send real invitations as part of a rehearsal. For a local group review, use the local preview and fictional `.test` accounts.
+The hosted MVP has a public landing and credential screens so pilot participants do not need ChatGPT accounts. Gameplay remains closed: moderators use an app password, and each invited player must claim a private seat and choose a six-digit PIN before signing in with their seat code. The public surface does not list games, rosters, roles, rooms, or audit data. Keep claim links private and use fictional `.test` accounts for rehearsals.
 
 Use a disposable game and keep the moderator console in one browser profile and each test player in a separate profile (or private window):
 
@@ -142,4 +142,4 @@ The remaining pilot gate is human verification and operating the first fictional
 
 ## Explicitly out of scope for this build
 
-Do not claim performance readiness. Dedicated performance/load testing is intentionally deferred until the MVP is complete and the functional/security pilot gates pass. Real email delivery, external SSO, public/open access, native mobile clients, and production invitations are also outside this local verification scope unless separately approved and implemented.
+Do not claim performance readiness. Dedicated performance/load testing is intentionally deferred until the MVP is complete and the functional/security pilot gates pass. Real email delivery, external SSO, anonymous gameplay, native mobile clients, and production invitations are also outside this local verification scope unless separately approved and implemented.

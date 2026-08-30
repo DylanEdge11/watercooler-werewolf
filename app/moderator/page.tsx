@@ -1,7 +1,8 @@
 'use client';
 
+/* eslint-disable @next/next/no-html-link-for-pages -- vinext's production Link runtime currently fails before navigation. */
+
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import Link from 'next/link';
 import LiveGamePanel from './live-game-panel';
 import OperationsPanel from './operations-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
@@ -72,13 +73,13 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 function BrandHeader() {
   return (
     <header className="setup-header">
-      <Link className="brand" href="/" aria-label="Watercooler Werewolf home">
+      <a className="brand" href="/" aria-label="Watercooler Werewolf home">
         <span className="brand-mark" aria-hidden="true">
           <span className="brand-moon" />
           <span className="brand-cup" />
         </span>
         <span><strong>Watercooler</strong><small>Werewolf</small></span>
-      </Link>
+      </a>
       <span className="mode-chip">Moderator console</span>
     </header>
   );
@@ -298,7 +299,7 @@ export default function ModeratorPage() {
             <li className={latestBatch ? 'done' : roster.length ? 'active' : ''}><span>3</span><div><strong>Role balance</strong><small>Compose and randomize</small></div></li>
             <li className={latestBatch?.releasedAt ? 'done' : latestBatch ? 'active' : ''}><span>4</span><div><strong>Release roles</strong><small>Irreversible launch</small></div></li>
           </ol>
-          <Link className="quiet-link" href="/">View player preview →</Link>
+          <a className="quiet-link" href="/">View player preview →</a>
         </aside>
 
         <section className="console-main">

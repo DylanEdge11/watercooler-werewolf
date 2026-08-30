@@ -1,7 +1,8 @@
 'use client';
 
+/* eslint-disable @next/next/no-html-link-for-pages -- use a reliable full-page transition after seat claim. */
+
 import { useEffect, useState, type FormEvent } from 'react';
-import Link from 'next/link';
 
 export default function ClaimForm({ code }: { code: string }) {
   const [seat, setSeat] = useState<{ displayName: string; gameName: string; status: string } | null>(null);
@@ -38,7 +39,7 @@ export default function ClaimForm({ code }: { code: string }) {
       <p className="eyebrow accent">Private invitation</p>
       <h1>{claimed ? 'Your seat is ready.' : seat ? `Welcome, ${seat.displayName}.` : 'Checking your invitation…'}</h1>
       {claimed ? (
-        <><p>You are signed in. Your role will appear after the moderator releases assignments.</p><Link className="primary-link" href="/">Enter the game</Link></>
+        <><p>You are signed in. Your role will appear after the moderator releases assignments.</p><a className="primary-link" href="/">Enter the game</a></>
       ) : seat ? (
         <>
           <p>You’ve been invited to <strong>{seat.gameName}</strong>. Choose a six-digit PIN you’ll remember.</p>
