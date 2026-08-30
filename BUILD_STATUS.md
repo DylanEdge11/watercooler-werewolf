@@ -9,7 +9,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Phase 2 — Authentication, roster, setup wizard, and role assignment: **complete**
 - Phase 3 - Live player actions and moderator resolution workflow: **complete**
 - Phase 4 - Private rooms, recap, backups, and operational controls: **complete**
-- Phase 5 - Full verification, rehearsal fixtures, and hosting: **next**
+- Phase 5 - Full verification, rehearsal fixtures, and hosting: **in progress (release candidate validated)**
 
 ## Verified at this checkpoint
 
@@ -42,8 +42,11 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - The operational console reports roster, living count, sessions, stale deadlines, recent warnings, room health, and last-backup state.
 - Moderator-only JSON backups include the recoverable game and audit record while excluding passwords, claim/PIN hashes, and session tokens; each export has a SHA-256 checksum.
 - A Phase 4 rehearsal verified pack-room access and posting, message moderation, 20 announcement notifications, co-moderator access, three room types, an operational warning, and a logged checksum backup.
-- Twenty-eight unit tests and strict TypeScript checks pass.
+- Thirty unit tests, the full lint suite, and strict TypeScript checks pass.
 - Production build succeeds.
+- Default campaign dates are calculated relative to the next Monday; dates shown in planning documents are not treated as release constraints.
+- A 20-player rehearsal roster, branded social preview, and favicon are included for the MVP handoff.
+- The production dependency audit reports zero known vulnerabilities after upgrading Next.js to 16.3.3.
 
 ## Resume instructions
 

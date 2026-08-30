@@ -61,7 +61,10 @@ export default function OperationsPanel({ gameId }: { gameId: string }) {
   }, [gameId]);
 
   useEffect(() => {
-    void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load operations.'));
+    const timer = window.setTimeout(() => {
+      void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load operations.'));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [refresh]);
 
   async function post(path: string, body: Record<string, unknown>) {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import LiveGamePanel from './live-game-panel';
 import OperationsPanel from './operations-panel';
 
@@ -15,6 +16,24 @@ const sampleRoster = [
 const roleOrder = ['VILLAGER', 'WEREWOLF', 'SEER', 'DOCTOR', 'HUNTER', 'MASON'] as const;
 type RoleKey = (typeof roleOrder)[number];
 type Composition = Record<RoleKey, number>;
+
+function dateInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function defaultGameDates() {
+  const start = new Date();
+  start.setHours(12, 0, 0, 0);
+  const daysUntilNextMonday = ((8 - start.getDay()) % 7) || 7;
+  start.setDate(start.getDate() + daysUntilNextMonday);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 25);
+  const cutoffDate = dateInput(end);
+  return { start: dateInput(start), end: cutoffDate, cutoff: `${cutoffDate}T16:00` };
+}
 
 interface GameSummary {
   id: string;
@@ -51,13 +70,13 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 function BrandHeader() {
   return (
     <header className="setup-header">
-      <a className="brand" href="/" aria-label="Watercooler Werewolf home">
+      <Link className="brand" href="/" aria-label="Watercooler Werewolf home">
         <span className="brand-mark" aria-hidden="true">
           <span className="brand-moon" />
           <span className="brand-cup" />
         </span>
         <span><strong>Watercooler</strong><small>Werewolf</small></span>
-      </a>
+      </Link>
       <span className="mode-chip">Moderator console</span>
     </header>
   );
@@ -229,6 +248,7 @@ export default function ModeratorPage() {
   const claimed = roster.filter((seat) => seat.status === 'CLAIMED').length;
   const latestBatch = batches[0];
   const rosterById = useMemo(() => new Map(roster.map((seat) => [seat.id, seat])), [roster]);
+  const gameDates = useMemo(() => defaultGameDates(), []);
   const balanceScore = composition
     ? composition.VILLAGER - composition.WEREWOLF * 5 + composition.SEER * 3 + composition.DOCTOR * 2 + composition.HUNTER + composition.MASON
     : 0;
@@ -266,12 +286,12 @@ export default function ModeratorPage() {
             <li className={latestBatch ? 'done' : roster.length ? 'active' : ''}><span>3</span><div><strong>Role balance</strong><small>Compose and randomize</small></div></li>
             <li className={latestBatch?.releasedAt ? 'done' : latestBatch ? 'active' : ''}><span>4</span><div><strong>Release roles</strong><small>Irreversible launch</small></div></li>
           </ol>
-          <a className="quiet-link" href="/">View player preview →</a>
+          <Link className="quiet-link" href="/">View player preview →</Link>
         </aside>
 
         <section className="console-main">
           <div className="console-title">
-            <div><p className="eyebrow accent">October campaign</p><h1>{selectedGame?.name ?? 'Set up a new game'}</h1></div>
+            <div><p className="eyebrow accent">Office campaign</p><h1>{selectedGame?.name ?? 'Set up a new game'}</h1></div>
             {selectedGame && <span className="status-pill">{selectedGame.status.replaceAll('_', ' ')}</span>}
           </div>
           {error && <p className="notice error" role="alert">{error}</p>}
@@ -284,11 +304,11 @@ export default function ModeratorPage() {
             <section className="setup-card">
               <div className="setup-card-heading"><span>01</span><div><h2>Schedule the campaign</h2><p>Weekday phases keep the game lively without disrupting work.</p></div></div>
               <form className="setup-grid" onSubmit={createGame}>
-                <label className="wide">Game name<input name="name" defaultValue="October Office Game" required /></label>
+                <label className="wide">Game name<input name="name" defaultValue="Office Werewolf Campaign" required /></label>
                 <label>Timezone<input name="timezone" defaultValue="America/Regina" required /></label>
-                <label>Start date<input name="startDate" type="date" defaultValue="2026-10-01" required /></label>
-                <label>End date<input name="endDate" type="date" defaultValue="2026-10-30" required /></label>
-                <label>Final cutoff<input name="finalCutoffAt" type="datetime-local" defaultValue="2026-10-30T16:00" required /></label>
+                <label>Start date<input name="startDate" type="date" defaultValue={gameDates.start} required /></label>
+                <label>End date<input name="endDate" type="date" defaultValue={gameDates.end} required /></label>
+                <label>Final cutoff<input name="finalCutoffAt" type="datetime-local" defaultValue={gameDates.cutoff} required /></label>
                 <div className="schedule-note wide"><strong>Default cadence</strong><span>Day ballot closes 4:00 PM · Night actions close 9:00 AM · Monday–Friday</span></div>
                 <button className="primary-button" type="submit">Create game</button>
               </form>

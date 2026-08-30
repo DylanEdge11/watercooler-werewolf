@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
 
 export default function PlayerLoginPage() {
   const [error, setError] = useState('');
@@ -32,7 +33,7 @@ export default function PlayerLoginPage() {
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="primary-button" type="submit">Enter the game</button>
         </form>
-        <a className="quiet-link" href="/moderator">Moderator console →</a>
+        <Link className="quiet-link" href="/moderator">Moderator console →</Link>
       </section>
     </main>
   );

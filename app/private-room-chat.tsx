@@ -35,9 +35,14 @@ export default function PrivateRoomChat({ rooms }: { rooms: Room[] }) {
   }, [roomId]);
 
   useEffect(() => {
-    void load().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load messages.'));
+    const initial = window.setTimeout(() => {
+      void load().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load messages.'));
+    }, 0);
     const timer = window.setInterval(() => void load(), 10_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
   }, [load]);
 
   if (!room) return null;

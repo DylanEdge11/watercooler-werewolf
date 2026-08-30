@@ -55,7 +55,10 @@ export default function LiveGamePanel({ gameId, gameStatus }: { gameId: string; 
   }, [gameId]);
 
   useEffect(() => {
-    void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load phases.'));
+    const timer = window.setTimeout(() => {
+      void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load phases.'));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [refresh]);
 
   async function mutate(payload: Record<string, unknown>) {
