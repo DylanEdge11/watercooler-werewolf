@@ -1,5 +1,7 @@
 const encoder = new TextEncoder();
-const ITERATIONS = 310_000;
+// Cloudflare Workers currently caps WebCrypto PBKDF2 at 100,000 iterations.
+// Keep the encoded count explicit so stored hashes remain self-describing.
+const ITERATIONS = 100_000;
 
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = '';

@@ -107,7 +107,7 @@ After each published resolution, living players are recalculated. Village wins w
 
 ## Privacy and permissions
 
-Moderator sessions and player seat sessions are opaque, HTTP-only cookies stored as hashes in D1. Passwords and six-digit PINs are hashed; invite exports contain only the one-time claim URL/code needed for delivery. Every mutation checks same-origin policy and performs server-side authorization and role/phase validation.
+Moderator sessions and player seat sessions are opaque, HTTP-only cookies stored as hashes in D1. Passwords and six-digit PINs use salted PBKDF2-SHA256 at the Worker-supported 100,000-iteration maximum; invite exports contain only the one-time claim URL/code needed for delivery. Every mutation checks same-origin policy and performs server-side authorization and role/phase validation.
 
 Players receive only their own role, legal candidates, private results, permitted teammates, permitted rooms, and published events. Werewolf, Mason, and Afterlife rooms enforce membership on the server. Eliminated faction members become read-only in their former room and receive the Afterlife room. No role, PIN hash, claim hash, session token, or password is included in a moderator JSON backup.
 

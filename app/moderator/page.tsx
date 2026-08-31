@@ -284,6 +284,7 @@ export default function ModeratorPage() {
               <a className="primary-link" href="/signin-with-chatgpt?return_to=%2Fmoderator" target="_top">Verify site owner</a>
             </div>
           ) : <form className="form-stack" onSubmit={handleAuth}>
+            {needsBootstrap && canBootstrap && <p className="notice success" role="status">Site owner verified. Create your app moderator credentials below.</p>}
             <label>Email<input name="email" type="email" autoComplete="email" required /></label>
             <label>Password<input name="password" type="password" minLength={needsBootstrap ? 12 : undefined} autoComplete={needsBootstrap ? 'new-password' : 'current-password'} required /></label>
             {error && <p className="form-error" role="alert">{error}</p>}
