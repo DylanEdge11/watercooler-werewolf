@@ -4,7 +4,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 
 ## Current checkpoint
 
-- Current source checkpoint: `5785bf80a85ef3f7bd025471701caca5653b4bc4` (`fix: protect public moderator bootstrap`)
+- Current source checkpoint: `ddd51bcec8c26060b546bb8896a7b4c3d9d38640` (`fix: use Worker-supported PBKDF2 cost`)
 - Phase 0 - Sites scaffold and first meaningful player preview: **complete**
 - Phase 1 — Domain model, game engine, persistence schema, and engine tests: **complete**
 - Phase 2 — Authentication, roster, setup wizard, and role assignment: **complete**
@@ -58,6 +58,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Sites version 10 fixes the production login-blocking D1 migration collision by safely adopting a complete platform-provisioned schema, applying additive lifecycle changes idempotently, and refusing unsafe partial-schema repair. It packages commit `b7e778a42e3356f88441a39ead70aafe71ff8d3b`; deployment `appgdep_6a94b0f8abb08191a76e6d8020bb3b50` succeeded at the private live URL without deleting or resetting production data.
 - Sites version 11 packages reliable full-page credential navigation for the public pilot from commit `290b6fa70403f58ff017f2c03cd57a10eefdcbea`; deployment `appgdep_6a94bf05ce1c81918c6d3684bc70c407` succeeded at the live URL.
 - Sites version 12 protects first-moderator creation with one-time configured-owner verification while leaving all normal player/moderator use on app-owned credentials. It packages commit `5785bf80a85ef3f7bd025471701caca5653b4bc4`; deployment `appgdep_6a94d313b5588191b241d4db7d527e1b` succeeded with environment revision 2.
+- Sites version 13 lowers new password/PIN hashes to the Cloudflare Worker-supported PBKDF2-SHA256 maximum of 100,000 iterations and shows a clear verified-owner status above the primary moderator form. It packages commit `ddd51bcec8c26060b546bb8896a7b4c3d9d38640`; deployment `appgdep_6a94d6b888b081919e377e0a0c15db95` succeeded at the live URL.
 - The current MVP is deployed at `https://watercooler-werewolf.dylan-d-edgar.chatgpt.site`. Its public landing and credential screens allow pilot participants without ChatGPT accounts; moderator and gameplay data remain protected by app-owned moderator sessions and private player seat-code/PIN sessions.
 - Hosted browser verification confirmed the public landing, player seat-code/PIN form, successful pre-provisioned D1 adoption, and a direct unauthenticated moderator API rejection with HTTP 401. Fresh Worker logs show expected unauthenticated 401 responses and no D1 migration error.
 - Public-bootstrap verification confirmed that anonymous visitors receive only the site-owner verification path and that an anonymous direct first-moderator creation attempt is rejected with HTTP 403.
