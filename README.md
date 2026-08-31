@@ -37,7 +37,7 @@ Use [fixtures/roster-20.csv](fixtures/roster-20.csv) only with disposable `.test
 
 ## Pilot show-and-play checklist
 
-The hosted MVP has a public landing and credential screens so pilot participants do not need ChatGPT accounts. The designated site owner verifies with ChatGPT only once, before creating the first app-owned moderator account; after that, moderators use their app password. Each invited player claims a private seat and chooses a six-digit PIN before signing in with their seat code. The public surface does not list games, rosters, roles, rooms, or audit data. Keep claim links private and use fictional `.test` accounts for rehearsals.
+The hosted MVP has a public landing and credential screens so pilot participants do not need ChatGPT accounts. The designated site owner verifies with ChatGPT only once, before creating the first app-owned moderator account; after that, moderators use their app password. The host stores the designated email as the secret `WATERCOOLER_OWNER_EMAIL` environment value—it is not committed to source—and bootstrap fails closed when the setting or matching authenticated owner identity is absent. Each invited player claims a private seat and chooses a six-digit PIN before signing in with their seat code. The public surface does not list games, rosters, roles, rooms, or audit data. Keep claim links private and use fictional `.test` accounts for rehearsals.
 
 Use a disposable game and keep the moderator console in one browser profile and each test player in a separate profile (or private window):
 

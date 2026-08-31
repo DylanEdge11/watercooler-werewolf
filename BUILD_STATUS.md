@@ -4,7 +4,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 
 ## Current checkpoint
 
-- Current source checkpoint: `290b6fa70403f58ff017f2c03cd57a10eefdcbea` (`fix: harden public pilot navigation`)
+- Current source checkpoint: `5785bf80a85ef3f7bd025471701caca5653b4bc4` (`fix: protect public moderator bootstrap`)
 - Phase 0 - Sites scaffold and first meaningful player preview: **complete**
 - Phase 1 — Domain model, game engine, persistence schema, and engine tests: **complete**
 - Phase 2 — Authentication, roster, setup wizard, and role assignment: **complete**
@@ -44,7 +44,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - The operational console reports roster, living count, sessions, stale deadlines, recent warnings, room health, and last-backup state.
 - Moderator-only JSON backups include the recoverable game and audit record while excluding passwords, claim/PIN hashes, and session tokens; each export has a SHA-256 checksum.
 - A Phase 4 rehearsal verified pack-room access and posting, message moderation, 20 announcement notifications, co-moderator access, three room types, an operational warning, and a logged checksum backup.
-- Fifty-five unit tests across eighteen files, the full lint suite, and strict TypeScript checks pass after the hosted-schema bootstrap fix.
+- Fifty-seven unit tests across nineteen files, the full lint suite, and strict TypeScript checks pass after the hosted-schema and public-bootstrap fixes.
 - Production build succeeds.
 - Default campaign dates are calculated relative to the next Monday; dates shown in planning documents are not treated as release constraints.
 - A 20-player rehearsal roster, branded social preview, and favicon are included for the MVP handoff.
@@ -57,8 +57,10 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Sites version 9 packages the pilot setup helper, owner-only backup restore, cron-compatible deadline sweep, concurrent claim/action hardening, and recovery runbook from commit `9b956c030ed5e70ed24baa55e3e016d8cce75f3f`; deployment `appgdep_6a94a04ecac48191a0c3fa7ac821c280` succeeded at the private live URL.
 - Sites version 10 fixes the production login-blocking D1 migration collision by safely adopting a complete platform-provisioned schema, applying additive lifecycle changes idempotently, and refusing unsafe partial-schema repair. It packages commit `b7e778a42e3356f88441a39ead70aafe71ff8d3b`; deployment `appgdep_6a94b0f8abb08191a76e6d8020bb3b50` succeeded at the private live URL without deleting or resetting production data.
 - Sites version 11 packages reliable full-page credential navigation for the public pilot from commit `290b6fa70403f58ff017f2c03cd57a10eefdcbea`; deployment `appgdep_6a94bf05ce1c81918c6d3684bc70c407` succeeded at the live URL.
+- Sites version 12 protects first-moderator creation with one-time configured-owner verification while leaving all normal player/moderator use on app-owned credentials. It packages commit `5785bf80a85ef3f7bd025471701caca5653b4bc4`; deployment `appgdep_6a94d313b5588191b241d4db7d527e1b` succeeded with environment revision 2.
 - The current MVP is deployed at `https://watercooler-werewolf.dylan-d-edgar.chatgpt.site`. Its public landing and credential screens allow pilot participants without ChatGPT accounts; moderator and gameplay data remain protected by app-owned moderator sessions and private player seat-code/PIN sessions.
-- Hosted browser verification confirmed the public landing, first-moderator credential form, player seat-code/PIN form, successful pre-provisioned D1 adoption, and a direct unauthenticated moderator API rejection with HTTP 401. Fresh Worker logs show expected unauthenticated 401 responses and no D1 migration error.
+- Hosted browser verification confirmed the public landing, player seat-code/PIN form, successful pre-provisioned D1 adoption, and a direct unauthenticated moderator API rejection with HTTP 401. Fresh Worker logs show expected unauthenticated 401 responses and no D1 migration error.
+- Public-bootstrap verification confirmed that anonymous visitors receive only the site-owner verification path and that an anonymous direct first-moderator creation attempt is rejected with HTTP 403.
 - The canonical protective role is now `BODYGUARD`; the migration rewrites legacy `DOCTOR` rows and new API/UI output never exposes Doctor as a separate role.
 - Stop and owner-confirmed Reset controls are transactional, audited, backup-first, session-invalidating, game-isolated, and repeat-safe.
 - Server-side phase policy requires Day first, Day/Night alternation, explicit post-cutoff Final Showdown, and Final Ballot-only play during showdown.
