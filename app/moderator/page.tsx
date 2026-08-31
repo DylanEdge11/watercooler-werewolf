@@ -88,6 +88,7 @@ function BrandHeader() {
 export default function ModeratorPage() {
   const [loading, setLoading] = useState(true);
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
+  const [canBootstrap, setCanBootstrap] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [games, setGames] = useState<GameSummary[]>([]);
@@ -128,8 +129,9 @@ export default function ModeratorPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const bootstrap = await requestJson<{ needsBootstrap: boolean }>('/api/moderators/bootstrap');
+        const bootstrap = await requestJson<{ needsBootstrap: boolean; canBootstrap: boolean }>('/api/moderators/bootstrap');
         setNeedsBootstrap(bootstrap.needsBootstrap);
+        setCanBootstrap(bootstrap.canBootstrap);
         if (!bootstrap.needsBootstrap) await loadGames();
       } catch {
         setAuthenticated(false);
@@ -276,12 +278,17 @@ export default function ModeratorPage() {
           <p className="eyebrow accent">Private game control</p>
           <h1>{needsBootstrap ? 'Create the primary moderator' : 'Moderator sign-in'}</h1>
           <p>{needsBootstrap ? 'This first account owns the game and can add co-moderators later.' : 'Sign in to resume setup or run an active game.'}</p>
-          <form className="form-stack" onSubmit={handleAuth}>
+          {needsBootstrap && !canBootstrap ? (
+            <div className="form-stack">
+              <p className="notice warning">The designated site owner must verify once before creating the primary moderator. Players will not need ChatGPT accounts.</p>
+              <a className="primary-link" href="/signin-with-chatgpt?return_to=%2Fmoderator" target="_top">Verify site owner</a>
+            </div>
+          ) : <form className="form-stack" onSubmit={handleAuth}>
             <label>Email<input name="email" type="email" autoComplete="email" required /></label>
             <label>Password<input name="password" type="password" minLength={needsBootstrap ? 12 : undefined} autoComplete={needsBootstrap ? 'new-password' : 'current-password'} required /></label>
             {error && <p className="form-error" role="alert">{error}</p>}
             <button className="primary-button" type="submit">{needsBootstrap ? 'Create moderator' : 'Sign in'}</button>
-          </form>
+          </form>}
         </section>
       </main>
     );
