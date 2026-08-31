@@ -4,7 +4,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 
 ## Current checkpoint
 
-- Current source checkpoint: `b7e778a42e3356f88441a39ead70aafe71ff8d3b` (`fix: adopt pre-provisioned D1 schema`)
+- Current source checkpoint: `290b6fa70403f58ff017f2c03cd57a10eefdcbea` (`fix: harden public pilot navigation`)
 - Phase 0 - Sites scaffold and first meaningful player preview: **complete**
 - Phase 1 — Domain model, game engine, persistence schema, and engine tests: **complete**
 - Phase 2 — Authentication, roster, setup wizard, and role assignment: **complete**
@@ -56,7 +56,9 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Sites version 5 packages the player polling, in-flight submission guard, `.test` sample roster, and show-and-play runbook from commit `06ac11e628fc4e8f4770e125c2c269dddc01bec3`.
 - Sites version 9 packages the pilot setup helper, owner-only backup restore, cron-compatible deadline sweep, concurrent claim/action hardening, and recovery runbook from commit `9b956c030ed5e70ed24baa55e3e016d8cce75f3f`; deployment `appgdep_6a94a04ecac48191a0c3fa7ac821c280` succeeded at the private live URL.
 - Sites version 10 fixes the production login-blocking D1 migration collision by safely adopting a complete platform-provisioned schema, applying additive lifecycle changes idempotently, and refusing unsafe partial-schema repair. It packages commit `b7e778a42e3356f88441a39ead70aafe71ff8d3b`; deployment `appgdep_6a94b0f8abb08191a76e6d8020bb3b50` succeeded at the private live URL without deleting or resetting production data.
+- Sites version 11 packages reliable full-page credential navigation for the public pilot from commit `290b6fa70403f58ff017f2c03cd57a10eefdcbea`; deployment `appgdep_6a94bf05ce1c81918c6d3684bc70c407` succeeded at the live URL.
 - The current MVP is deployed at `https://watercooler-werewolf.dylan-d-edgar.chatgpt.site`. Its public landing and credential screens allow pilot participants without ChatGPT accounts; moderator and gameplay data remain protected by app-owned moderator sessions and private player seat-code/PIN sessions.
+- Hosted browser verification confirmed the public landing, first-moderator credential form, player seat-code/PIN form, successful pre-provisioned D1 adoption, and a direct unauthenticated moderator API rejection with HTTP 401. Fresh Worker logs show expected unauthenticated 401 responses and no D1 migration error.
 - The canonical protective role is now `BODYGUARD`; the migration rewrites legacy `DOCTOR` rows and new API/UI output never exposes Doctor as a separate role.
 - Stop and owner-confirmed Reset controls are transactional, audited, backup-first, session-invalidating, game-isolated, and repeat-safe.
 - Server-side phase policy requires Day first, Day/Night alternation, explicit post-cutoff Final Showdown, and Final Ballot-only play during showdown.
@@ -65,7 +67,7 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - Operations refreshes automatically after live mutations and by polling; the player mobile layout provides alternate section navigation while preserving the right rail content.
 - The player dashboard polls every ten seconds for phase, result, notification, and stopped-state changes while preserving an unsaved ballot; action and feedback buttons guard against duplicate in-flight clicks.
 - The README now includes a complete pilot show-and-play checklist for a disposable 20-player `.test` rehearsal, privacy checks, phase exercises, Stop/Reset recovery, and teardown.
-- Local API rehearsal verified fictional roster claim/release, phase rejection/idempotence, Stop/Reset/audit/backup/session invalidation, feedback capture, cross-game isolation, rate-limit behavior, and service-restart persistence. Browser automation was unavailable in this environment, so visual desktop/mobile checks remain pending.
+- Local API rehearsal verified fictional roster claim/release, phase rejection/idempotence, Stop/Reset/audit/backup/session invalidation, feedback capture, cross-game isolation, rate-limit behavior, and service-restart persistence. Hosted desktop credential navigation is verified; the full authenticated game and 390x844 visual pass remain part of the first fictional pilot rehearsal.
 - The owner-only Recovery restore path verifies a stored backup checksum and game id, creates a safety backup, restores only configuration/roster/composition to `DRAFT`, clears active gameplay/secrets/sessions, preserves audit history, and returns fresh one-time invite links. Repeated restore attempts are isolated to the selected game.
 - A cron-compatible `POST /api/scheduler/deadlines` endpoint and all-game D1 sweep now complement the Operations panel heartbeat. The endpoint requires a private `WATERCOOLER_SCHEDULER_TOKEN`; when unset it fails closed with HTTP 503, so private pilots can use the panel fallback safely.
 - Player claim uses a conditional `UPDATE ... RETURNING` and action revisions allocate their version inside a serialized D1 batch, preventing double claims and unique-version collisions during simultaneous submissions.
