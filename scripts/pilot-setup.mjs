@@ -1,9 +1,18 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://127.0.0.1:3000').replace(/\/$/u, '');
+const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '');
 const moderatorEmail = (process.env.PILOT_MODERATOR_EMAIL ?? 'moderator@pilot.test').trim().toLowerCase();
 const moderatorPassword = process.env.PILOT_MODERATOR_PASSWORD ?? '';
+const parsedBaseUrl = new URL(baseUrl);
+
+if (!['http:', 'https:'].includes(parsedBaseUrl.protocol)) {
+  throw new Error('PILOT_BASE_URL must be an http:// or https:// preview URL.');
+}
+const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+if (!localHosts.has(parsedBaseUrl.hostname) && process.env.PILOT_ALLOW_REMOTE !== 'yes') {
+  throw new Error('PILOT_BASE_URL is not local. Set PILOT_ALLOW_REMOTE=yes only for an explicitly approved fictional staging environment; never point this helper at production.');
+}
 
 if (process.env.PILOT_ALLOW_MUTATION !== 'yes') {
   throw new Error('This setup creates a disposable game. Re-run with PILOT_ALLOW_MUTATION=yes and fictional .test credentials.');
@@ -39,6 +48,13 @@ async function request(path, options = {}) {
 
 const bootstrap = await request('/api/moderators/bootstrap');
 if (bootstrap.needsBootstrap) {
+  if (!bootstrap.canBootstrap) {
+    throw new Error([
+      'The local app has no moderator account, but the configured owner has not verified this origin.',
+      `Open ${baseUrl}/signin-with-chatgpt?return_to=%2Fmoderator once as the configured site owner, then rerun this command.`,
+      'Do not bypass owner verification or use this helper against a production URL.',
+    ].join(' '));
+  }
   await request('/api/moderators/bootstrap', {
     method: 'POST',
     body: JSON.stringify({ email: moderatorEmail, password: moderatorPassword }),

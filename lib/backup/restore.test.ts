@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameBackup } from './snapshot';
-import { backupComposition, backupGameFromRecord, restoreConfirmation, validateBackupForRestore } from './restore';
+import { backupComposition, backupGameFromRecord, backupSeats, restoreConfirmation, validateBackupForRestore } from './restore';
 
 function backup(overrides: Partial<GameBackup> = {}): GameBackup {
   const seats = Array.from({ length: 20 }, (_, index) => ({
@@ -75,5 +75,22 @@ describe('backup restore preparation', () => {
       hunter_window_minutes: 60, finalRoundMinutes: 60, chat_retention_days: 7,
       finalCutoffAt: '2026-01-02T00:00:00.000Z', publicationMode: 'REVIEW',
     })).toMatchObject({ name: 'Pilot Game', timezone: 'UTC', publicationMode: 'REVIEW' });
+  });
+
+  it('keeps archived seats in the backup for audit but excludes them from a restored roster', () => {
+    const data = backup({
+      seats: [
+        ...backup().seats,
+        { id: 'archived-seat', display_name: 'Prior Player', email: 'prior@example.test', status: 'REMOVED', created_at: '2026-01-01' },
+      ],
+    });
+    expect(validateBackupForRestore(data, 'game-1')).toEqual([]);
+    expect(backupSeats(data)).toHaveLength(20);
+    expect(backupSeats(data).some((seat) => seat.id === 'archived-seat')).toBe(false);
+  });
+
+  it('rejects an impossible backed-up calendar date', () => {
+    const data = backup({ game: { ...(backup().game as Record<string, unknown>), start_date: '2026-02-31' } });
+    expect(validateBackupForRestore(data, 'game-1')).toContain('The backup is missing valid game configuration.');
   });
 });

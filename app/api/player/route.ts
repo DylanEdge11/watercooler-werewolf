@@ -7,7 +7,7 @@ import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution
 import { jsonError } from '../../../lib/http/security';
 import { ensureGameRooms } from '../../../lib/chat/rooms';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await ensureDatabase();
     const identity = await getCurrentPlayer();
@@ -115,21 +115,54 @@ export async function GET() {
           .filter((seat) => seat.id !== player.id && seat.role === player.role)
           .map(({ id, displayName, alive }) => ({ id, displayName, alive }))
       : [];
+    // Reset and restore deliberately retain the audit trail, but a fresh run
+    // must not make the prior campaign look like the current player's story.
+    // The boundary event is written in the same transaction as the reset or
+    // restore, so every subsequent player-facing event has an unambiguous
+    // lower bound without deleting historical evidence.
+    const runBoundary = await db
+      .prepare(
+        `SELECT MAX(created_at) AS createdAt FROM game_events
+         WHERE game_id = ? AND event_type IN ('GAME_RESET', 'GAME_RESTORED')`,
+      )
+      .bind(player.gameId)
+      .first<{ createdAt: string | null }>();
+    const requestUrl = new URL(request.url);
+    const notificationBefore = requestUrl.searchParams.get('notificationBefore');
+    const notificationBeforeId = requestUrl.searchParams.get('notificationBeforeId');
+    if (
+      (notificationBefore && Number.isNaN(new Date(notificationBefore).valueOf()))
+      || (notificationBefore && !notificationBeforeId)
+      || (!notificationBefore && notificationBeforeId)
+    ) {
+      return jsonError('The notification history cursor is invalid.', 400);
+    }
     const timelineRows = await db
       .prepare(
         `SELECT id, event_type AS eventType, payload_json AS payloadJson, created_at AS createdAt
-         FROM game_events WHERE game_id = ? AND event_type IN ('PHASE_PUBLISHED', 'GAME_COMPLETED', 'ANNOUNCEMENT', 'GAME_STOPPED', 'FINAL_SHOWDOWN_ENTERED')
-         ORDER BY created_at DESC LIMIT 12`,
+         FROM game_events WHERE game_id = ?
+           AND (created_at > COALESCE(?, '') OR (created_at = ? AND event_type NOT IN ('GAME_RESET', 'GAME_RESTORED')))
+           AND event_type IN ('PHASE_PUBLISHED', 'GAME_COMPLETED', 'ANNOUNCEMENT', 'GAME_STOPPED', 'FINAL_SHOWDOWN_ENTERED')
+           ORDER BY created_at DESC LIMIT 12`,
       )
-      .bind(player.gameId)
+      .bind(player.gameId, runBoundary?.createdAt ?? null, runBoundary?.createdAt ?? null)
       .all<{ id: string; eventType: string; payloadJson: string; createdAt: string }>();
+    const notificationLimit = 25;
+    const notificationWhere = notificationBefore
+      ? ' AND (created_at < ? OR (created_at = ? AND id < ?))'
+      : '';
+    const notificationBindings = notificationBefore
+      ? [player.id, notificationBefore, notificationBefore, notificationBeforeId, notificationLimit]
+      : [player.id, notificationLimit];
     const notificationRows = await db
       .prepare(
         `SELECT id, type, title, body, created_at AS createdAt
-         FROM notifications WHERE seat_id = ? ORDER BY created_at DESC LIMIT 10`,
+         FROM notifications WHERE seat_id = ?${notificationWhere} ORDER BY created_at DESC, id DESC LIMIT ?`,
       )
-      .bind(player.id)
-      .all();
+      .bind(...notificationBindings)
+      .all<{ id: string; type: string; title: string; body: string; createdAt: string }>();
+    const notificationsHasMore = notificationRows.results.length === notificationLimit;
+    const lastNotification = notificationRows.results.at(-1);
     const roomRows = await db
       .prepare(
         `SELECT cr.id, cr.type, cr.status, crm.access
@@ -184,6 +217,8 @@ export async function GET() {
       participation,
       timeline: timelineRows.results.map((event) => ({ ...event, payload: JSON.parse(event.payloadJson), payloadJson: undefined })),
       notifications: notificationRows.results,
+      notificationsHasMore,
+      notificationsNextCursor: notificationsHasMore && lastNotification ? { createdAt: lastNotification.createdAt, id: lastNotification.id } : null,
       rooms: roomRows.results,
     });
   } catch (error) {

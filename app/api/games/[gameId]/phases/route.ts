@@ -35,7 +35,43 @@ interface ProposalRow {
   outcomeJson: string;
   randomRollsJson: string;
   overrideReason: string | null;
+  overrideJson: string | null;
+  reviewedByModeratorId: string | null;
+  reviewedAt: string | null;
+  reviewedOutcomeJson: string | null;
+  publishedOutcomeJson: string | null;
   createdAt: string;
+}
+
+function overrideIdsFromJson(value: string | null): string[] | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as { eliminationIds?: unknown };
+    return Array.isArray(parsed.eliminationIds)
+      ? parsed.eliminationIds.filter((id): id is string => typeof id === 'string')
+      : null;
+  } catch {
+    throw new Error('The stored moderation override is invalid.');
+  }
+}
+
+/** Apply a saved review override without replacing the original engine result. */
+function applyEliminationOverride(
+  proposedOutcome: PhaseResolution,
+  ids: string[],
+  players: PlayerState[],
+): PhaseResolution {
+  const cause = proposedOutcome.kind === 'NIGHT' ? 'WEREWOLF_ATTACK' : 'DAY_VOTE';
+  return {
+    ...proposedOutcome,
+    selectedTargets: ids,
+    eliminations: ids.map((playerId) => ({ playerId, cause })),
+    hunterRequiredIds: ids.filter((id) => players.find((player) => player.id === id)?.role === 'HUNTER'),
+  };
+}
+
+function changes(result: unknown): number {
+  return Number((result as { meta?: { changes?: number } } | null)?.meta?.changes ?? 0);
 }
 
 async function loadPlayers(gameId: string): Promise<PlayerState[]> {
@@ -76,7 +112,7 @@ export async function GET(_request: Request, context: RouteContext) {
     await requireGameModerator(gameId);
     const db = getD1();
     const [gameRow, phaseRows, proposalRows, rosterRows] = await Promise.all([
-      db.prepare('SELECT status, final_cutoff_at AS finalCutoffAt, timezone FROM games WHERE id = ? LIMIT 1').bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string }>(),
+      db.prepare('SELECT status, final_cutoff_at AS finalCutoffAt, timezone, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1').bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string; updatedAt: string }>(),
       db
         .prepare(
           `SELECT p.id, p.sequence, p.kind, p.status, p.opens_at AS opensAt, p.closes_at AS closesAt,
@@ -92,6 +128,10 @@ export async function GET(_request: Request, context: RouteContext) {
         .prepare(
           `SELECT rp.id, rp.phase_id AS phaseId, rp.status, rp.outcome_json AS outcomeJson,
                   rp.random_rolls_json AS randomRollsJson, rp.override_reason AS overrideReason,
+                  rp.override_json AS overrideJson,
+                  rp.reviewed_by_moderator_id AS reviewedByModeratorId, rp.reviewed_at AS reviewedAt,
+                  rp.reviewed_outcome_json AS reviewedOutcomeJson,
+                  rp.published_outcome_json AS publishedOutcomeJson,
                   rp.created_at AS createdAt
            FROM resolution_proposals rp JOIN phases p ON p.id = rp.phase_id
            WHERE p.game_id = ? ORDER BY rp.created_at DESC`,
@@ -117,11 +157,37 @@ export async function GET(_request: Request, context: RouteContext) {
       roster: rosterRows.results.map((row) => ({ ...row, role: canonicalRoleKey(String(row.role)) })),
       phases: phaseRows.results.map((phase) => {
         const proposal = proposalByPhase.get(phase.id);
+        const proposedOutcome = proposal ? JSON.parse(proposal.outcomeJson) as PhaseResolution : null;
+        const overrideIds = proposal ? overrideIdsFromJson(proposal.overrideJson) : null;
+        const rosterPlayers: PlayerState[] = rosterRows.results.map((row) => ({
+          id: String(row.id),
+          displayName: String(row.displayName),
+          role: canonicalRoleKey(String(row.role)),
+          alive: Boolean(row.alive),
+        }));
+        const reviewedOutcome = proposal?.reviewedOutcomeJson
+          ? JSON.parse(proposal.reviewedOutcomeJson) as PhaseResolution
+          : proposedOutcome && overrideIds
+            ? applyEliminationOverride(proposedOutcome, overrideIds, rosterPlayers)
+            : null;
+        const publishedOutcome = proposal?.publishedOutcomeJson
+          ? JSON.parse(proposal.publishedOutcomeJson) as PhaseResolution
+          : null;
         return {
           ...phase,
           currentSubmissions: Number(phase.currentSubmissions),
           proposal: proposal
-            ? { ...proposal, outcome: JSON.parse(proposal.outcomeJson) as PhaseResolution, outcomeJson: undefined }
+             ? {
+                 ...proposal,
+                 proposedOutcome,
+                 reviewedOutcome,
+                 publishedOutcome,
+                 outcome: publishedOutcome ?? reviewedOutcome ?? proposedOutcome,
+                 outcomeJson: undefined,
+                 overrideJson: undefined,
+                 reviewedOutcomeJson: undefined,
+                 publishedOutcomeJson: undefined,
+               }
             : null,
         };
       }),
@@ -183,16 +249,18 @@ export async function POST(request: Request, context: RouteContext) {
       });
       if (policyError) throw new Error(policyError);
       const now = new Date().toISOString();
-      await db.batch([
+      const result = await db.batch([
         db.prepare("UPDATE games SET status = 'FINAL_SHOWDOWN', updated_at = ? WHERE id = ? AND status = 'ACTIVE'").bind(now, gameId),
         db
           .prepare(
             `INSERT INTO game_events
              (id, game_id, event_type, actor_moderator_id, payload_json, created_at)
-             VALUES (?, ?, 'FINAL_SHOWDOWN_ENTERED', ?, ?, ?)`,
+             SELECT ?, ?, 'FINAL_SHOWDOWN_ENTERED', ?, ?, ?
+             WHERE EXISTS (SELECT 1 FROM games WHERE id = ? AND status = 'FINAL_SHOWDOWN' AND updated_at = ?)`,
           )
-          .bind(crypto.randomUUID(), gameId, moderator.id, JSON.stringify({ finalCutoffAt: game.finalCutoffAt }), now),
+          .bind(crypto.randomUUID(), gameId, moderator.id, JSON.stringify({ finalCutoffAt: game.finalCutoffAt }), now, gameId, now),
       ]);
+      if (changes(result[0]) !== 1) return jsonError('The game changed before final showdown could begin. Refresh and review its current state.', 409);
       return Response.json({ ok: true, status: 'FINAL_SHOWDOWN' });
     }
 
@@ -242,22 +310,30 @@ export async function POST(request: Request, context: RouteContext) {
         .first<{ sequence: number }>();
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
-      await db.batch([
+      const result = await db.batch([
         db
           .prepare(
             `INSERT INTO phases
              (id, game_id, sequence, kind, status, opens_at, closes_at, slots, divisor_snapshot, version, created_at, updated_at)
-             VALUES (?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, 1, ?, ?)`,
+             SELECT ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, 1, ?, ?
+             WHERE EXISTS (SELECT 1 FROM games WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN'))
+               AND NOT EXISTS (
+                 SELECT 1 FROM phases
+                 WHERE game_id = ? AND status IN ('OPEN', 'LOCKED', 'PENDING_HUNTER', 'PENDING_APPROVAL', 'HUNTER_FINALIZING', 'PUBLISHING')
+               )`,
           )
-          .bind(id, gameId, Number(sequenceRow?.sequence ?? 0) + 1, body.kind, now, closesAt.toISOString(), slots, divisor, now, now),
+          .bind(id, gameId, Number(sequenceRow?.sequence ?? 0) + 1, body.kind, now, closesAt.toISOString(), slots, divisor, now, now, gameId, gameId),
         db
           .prepare(
             `INSERT INTO game_events
              (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
-             VALUES (?, ?, ?, 'PHASE_OPENED', ?, ?, ?)`,
+             SELECT ?, ?, ?, 'PHASE_OPENED', ?, ?, ?
+             WHERE EXISTS (SELECT 1 FROM phases p JOIN games g ON g.id = p.game_id
+                           WHERE p.id = ? AND p.status = 'OPEN' AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN'))`,
           )
-          .bind(crypto.randomUUID(), gameId, id, moderator.id, JSON.stringify({ kind: body.kind, slots, closesAt: closesAt.toISOString() }), now),
+          .bind(crypto.randomUUID(), gameId, id, moderator.id, JSON.stringify({ kind: body.kind, slots, closesAt: closesAt.toISOString() }), now, id),
       ]);
+      if (changes(result[0]) !== 1) return jsonError('The game or current phase changed before this phase could open. Refresh and try again.', 409);
       return Response.json({ ok: true, phaseId: id, slots });
     }
 
@@ -289,12 +365,60 @@ export async function POST(request: Request, context: RouteContext) {
       if (existing) return Response.json({ ok: true, idempotent: true, outcome: JSON.parse(existing.outcomeJson) as PhaseResolution });
     }
     if (body.action === 'PUBLISH' && phase.status === 'PUBLISHED') {
-      return Response.json({ ok: true, idempotent: true });
+      const committed = await db
+        .prepare(
+          `SELECT id, outcome_json AS outcomeJson, published_outcome_json AS publishedOutcomeJson,
+                  override_reason AS overrideReason,
+                  reviewed_by_moderator_id AS reviewedByModeratorId, reviewed_at AS reviewedAt,
+                  reviewed_outcome_json AS reviewedOutcomeJson
+           FROM resolution_proposals WHERE phase_id = ? ORDER BY created_at DESC LIMIT 1`,
+        )
+        .bind(phase.id)
+        .first<{ id: string; outcomeJson: string; publishedOutcomeJson: string | null; overrideReason: string | null; reviewedByModeratorId: string | null; reviewedAt: string | null; reviewedOutcomeJson: string | null }>();
+      const publishedOutcome = committed?.publishedOutcomeJson
+        ? JSON.parse(committed.publishedOutcomeJson) as PhaseResolution
+        : committed ? JSON.parse(committed.outcomeJson) as PhaseResolution : null;
+      return Response.json({
+        ok: true,
+        idempotent: true,
+        proposalId: committed?.id,
+        proposedOutcome: committed ? JSON.parse(committed.outcomeJson) as PhaseResolution : null,
+        reviewedOutcome: committed?.reviewedOutcomeJson ? JSON.parse(committed.reviewedOutcomeJson) as PhaseResolution : null,
+        publishedOutcome,
+        outcome: publishedOutcome,
+        overrideReason: committed?.overrideReason ?? null,
+        reviewedByModeratorId: committed?.reviewedByModeratorId ?? null,
+        reviewedAt: committed?.reviewedAt ?? null,
+      });
     }
 
     if (body.action === 'LOCK_AND_PROPOSE') {
+      if (phase.status === 'OPEN') {
+        // Lock before reading the resolution input. D1 serializes this update
+        // with action submissions and Stop, so a successful late submission is
+        // either committed before this claim (and included below) or rejected
+        // after it.
+        const lockResult = await db
+          .prepare(
+            `UPDATE phases SET status = 'LOCKED', version = version + 1, updated_at = ?
+             WHERE id = ? AND game_id = ? AND status = 'OPEN'`,
+          )
+          .bind(new Date().toISOString(), phase.id, gameId)
+          .run();
+        if (changes(lockResult) !== 1) {
+          const current = await db.prepare('SELECT status FROM phases WHERE id = ? AND game_id = ? LIMIT 1').bind(phase.id, gameId).first<{ status: string }>();
+          if (!current || !['LOCKED'].includes(current.status)) {
+            return jsonError('The phase changed before responses could be locked. Refresh and try again.', 409);
+          }
+        }
+      }
       const players = await loadPlayers(gameId);
       const actions = await loadActions(phase.id);
+      const lockedPhase = await db
+        .prepare('SELECT version FROM phases WHERE id = ? AND game_id = ? AND status = \'LOCKED\' LIMIT 1')
+        .bind(phase.id, gameId)
+        .first<{ version: number }>();
+      if (!lockedPhase) return jsonError('The phase is no longer available for resolution. Refresh and try again.', 409);
       const randomRolls = createSecureRandomRolls(Number(phase.slots));
       const outcome = resolvePhase({
         phaseId: phase.id,
@@ -304,58 +428,106 @@ export async function POST(request: Request, context: RouteContext) {
         actions,
         randomRolls,
       });
-      const inputHash = await sha256(JSON.stringify({ phase, players, actions }));
+      const inputHash = await sha256(JSON.stringify({ phaseId: phase.id, version: Number(lockedPhase.version), kind: phase.kind, slots: phase.slots, players, actions }));
       const proposalId = crypto.randomUUID();
       const now = new Date();
       const hunterDeadline = outcome.hunterRequiredIds.length
         ? new Date(now.valueOf() + Number(game.hunterWindowMinutes) * 60_000).toISOString()
         : null;
-      await db.batch([
+      const result = await db.batch([
         db
           .prepare(
             `INSERT INTO resolution_proposals
              (id, phase_id, input_hash, engine_version, outcome_json, random_rolls_json, status, created_at)
-             VALUES (?, ?, ?, '1.0.0', ?, ?, 'PROPOSED', ?)`,
+             SELECT ?, ?, ?, '1.0.0', ?, ?, 'PROPOSED', ?
+             WHERE EXISTS (
+               SELECT 1 FROM phases p JOIN games g ON g.id = p.game_id
+               WHERE p.id = ? AND p.game_id = ? AND p.status = 'LOCKED'
+                 AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN')
+             )
+             AND NOT EXISTS (SELECT 1 FROM resolution_proposals existing WHERE existing.phase_id = ? AND existing.input_hash = ?)`,
           )
-          .bind(proposalId, phase.id, inputHash, JSON.stringify(outcome), JSON.stringify(randomRolls), now.toISOString()),
+          .bind(proposalId, phase.id, inputHash, JSON.stringify(outcome), JSON.stringify(randomRolls), now.toISOString(), phase.id, gameId, phase.id, inputHash),
         db
           .prepare(
             `UPDATE phases SET status = ?, hunter_deadline_at = ?, updated_at = ?
-             WHERE id = ? AND status IN ('OPEN', 'LOCKED')`,
+             WHERE id = ? AND game_id = ? AND status = 'LOCKED'
+               AND EXISTS (SELECT 1 FROM resolution_proposals WHERE id = ? AND phase_id = ?)
+               AND EXISTS (SELECT 1 FROM games WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN'))`,
           )
-          .bind(outcome.hunterRequiredIds.length ? 'PENDING_HUNTER' : 'PENDING_APPROVAL', hunterDeadline, now.toISOString(), phase.id),
+          .bind(outcome.hunterRequiredIds.length ? 'PENDING_HUNTER' : 'PENDING_APPROVAL', hunterDeadline, now.toISOString(), phase.id, gameId, proposalId, phase.id, gameId),
         db
           .prepare(
             `INSERT INTO game_events
              (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
-             VALUES (?, ?, ?, 'RESOLUTION_PROPOSED', ?, ?, ?)`,
+             SELECT ?, ?, ?, 'RESOLUTION_PROPOSED', ?, ?, ?
+             WHERE EXISTS (SELECT 1 FROM resolution_proposals WHERE id = ? AND phase_id = ?)
+               AND EXISTS (SELECT 1 FROM phases WHERE id = ? AND status IN ('PENDING_HUNTER', 'PENDING_APPROVAL'))`,
           )
-          .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ proposalId, inputHash }), now.toISOString()),
+          .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ proposalId, inputHash }), now.toISOString(), proposalId, phase.id, phase.id),
       ]);
+      if (changes(result[0]) !== 1) {
+        const existing = await db
+          .prepare("SELECT id, outcome_json AS outcomeJson FROM resolution_proposals WHERE phase_id = ? ORDER BY created_at DESC LIMIT 1")
+          .bind(phase.id)
+          .first<{ id: string; outcomeJson: string }>();
+        if (existing) return Response.json({ ok: true, idempotent: true, proposalId: existing.id, outcome: JSON.parse(existing.outcomeJson) as PhaseResolution });
+        return jsonError('The phase was stopped or changed before its resolution could be recorded. Refresh and try again.', 409);
+      }
       return Response.json({ ok: true, proposalId, outcome, hunterDeadline });
     }
 
     const proposal = await db
       .prepare(
-        `SELECT id, outcome_json AS outcomeJson FROM resolution_proposals
+          `SELECT id, outcome_json AS outcomeJson, override_reason AS overrideReason,
+                override_json AS overrideJson, status,
+                reviewed_by_moderator_id AS reviewedByModeratorId, reviewed_at AS reviewedAt,
+                reviewed_outcome_json AS reviewedOutcomeJson,
+                published_outcome_json AS publishedOutcomeJson
+         FROM resolution_proposals
          WHERE phase_id = ? AND status = 'PROPOSED' ORDER BY created_at DESC LIMIT 1`,
       )
       .bind(phase.id)
-      .first<{ id: string; outcomeJson: string }>();
+      .first<{ id: string; outcomeJson: string; overrideReason: string | null; overrideJson: string | null; status: string; reviewedByModeratorId: string | null; reviewedAt: string | null; reviewedOutcomeJson: string | null; publishedOutcomeJson: string | null }>();
     if (!proposal) throw new Error('No pending resolution exists for this phase.');
 
     if (body.action === 'FINALIZE_HUNTER') {
       if (phase.status !== 'PENDING_HUNTER') throw new Error('This phase is not waiting for a Hunter.');
+      const deadlinePassed = Boolean(phase.hunterDeadlineAt && new Date(phase.hunterDeadlineAt) <= new Date());
+      const initialActions = await loadActions(phase.id);
+      const initialHunterAction = initialActions.find((action) => action.kind === 'HUNTER_SHOT');
+      if (!initialHunterAction && (!body.skipHunter || !deadlinePassed)) {
+        throw new Error('The Hunter has not submitted and their response window is still open.');
+      }
+      const claimVersion = Number(phase.version) + 1;
+      const claim = await db
+        .prepare(
+          `UPDATE phases SET status = 'HUNTER_FINALIZING', version = version + 1, updated_at = ?
+           WHERE id = ? AND game_id = ? AND status = 'PENDING_HUNTER' AND version = ?
+             AND EXISTS (SELECT 1 FROM games WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN'))
+             AND EXISTS (SELECT 1 FROM resolution_proposals WHERE id = ? AND status = 'PROPOSED')`,
+        )
+        .bind(new Date().toISOString(), phase.id, gameId, phase.version, gameId, proposal.id)
+        .run();
+      if (changes(claim) !== 1) return jsonError('The Hunter follow-up or game changed before it could be finalized. Refresh and try again.', 409);
       const players = await loadPlayers(gameId);
-      const currentOutcome = JSON.parse(proposal.outcomeJson) as PhaseResolution;
+      const proposedOutcome = JSON.parse(proposal.outcomeJson) as PhaseResolution;
+      const storedOverrideIds = overrideIdsFromJson(proposal.overrideJson);
+      const currentOutcome = proposal.reviewedOutcomeJson
+        ? JSON.parse(proposal.reviewedOutcomeJson) as PhaseResolution
+        : storedOverrideIds
+          ? applyEliminationOverride(proposedOutcome, storedOverrideIds, players)
+          : proposedOutcome;
       const actions = await loadActions(phase.id);
       const hunterAction = actions.find((action) => action.kind === 'HUNTER_SHOT');
       let outcome: PhaseResolution;
       if (hunterAction) {
         outcome = resolveHunterShot({ players, resolution: currentOutcome, hunterAction });
       } else {
-        const deadlinePassed = phase.hunterDeadlineAt && new Date(phase.hunterDeadlineAt) <= new Date();
-        if (!body.skipHunter || !deadlinePassed) throw new Error('The Hunter has not submitted and their response window is still open.');
+        if (!body.skipHunter || !deadlinePassed) {
+          await db.prepare("UPDATE phases SET status = 'PENDING_HUNTER', updated_at = ? WHERE id = ? AND status = 'HUNTER_FINALIZING' AND version = ?").bind(new Date().toISOString(), phase.id, claimVersion).run();
+          throw new Error('The Hunter has not submitted and their response window is still open.');
+        }
         outcome = {
           ...currentOutcome,
           hunterRequiredIds: [],
@@ -363,77 +535,146 @@ export async function POST(request: Request, context: RouteContext) {
         };
       }
       const now = new Date().toISOString();
-      await db.batch([
-        db.prepare("UPDATE resolution_proposals SET outcome_json = ? WHERE id = ? AND status = 'PROPOSED'").bind(JSON.stringify(outcome), proposal.id),
-        db.prepare("UPDATE phases SET status = 'PENDING_APPROVAL', updated_at = ? WHERE id = ?").bind(now, phase.id),
+      const finalizeGuard = `EXISTS (
+        SELECT 1 FROM phases p JOIN games g ON g.id = p.game_id
+        WHERE p.id = ? AND p.game_id = ? AND p.status = 'HUNTER_FINALIZING' AND p.version = ?
+          AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN')
+      )`;
+      const result = await db.batch([
+        db.prepare(`UPDATE resolution_proposals SET reviewed_outcome_json = ? WHERE id = ? AND status = 'PROPOSED' AND ${finalizeGuard}`).bind(JSON.stringify(outcome), proposal.id, phase.id, gameId, claimVersion),
+        db.prepare(`UPDATE phases SET status = 'PENDING_APPROVAL', updated_at = ? WHERE id = ? AND game_id = ? AND status = 'HUNTER_FINALIZING' AND version = ? AND ${finalizeGuard}`).bind(now, phase.id, gameId, claimVersion, phase.id, gameId, claimVersion),
         db
           .prepare(
             `INSERT INTO game_events
              (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
-             VALUES (?, ?, ?, 'HUNTER_RESOLVED', ?, ?, ?)`,
+             SELECT ?, ?, ?, 'HUNTER_RESOLVED', ?, ?, ? WHERE ${finalizeGuard}`,
           )
-          .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ submitted: Boolean(hunterAction) }), now),
+          .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ submitted: Boolean(hunterAction) }), now, phase.id, gameId, claimVersion),
       ]);
+      if (changes(result[0]) !== 1) return jsonError('The Hunter follow-up changed before it could be recorded. Refresh and try again.', 409);
       return Response.json({ ok: true, outcome });
     }
 
     if (body.action === 'PUBLISH') {
       if (phase.status !== 'PENDING_APPROVAL') throw new Error('This phase is not ready for publication.');
       const players = await loadPlayers(gameId);
-      let outcome = JSON.parse(proposal.outcomeJson) as PhaseResolution;
+      const proposedOutcome = JSON.parse(proposal.outcomeJson) as PhaseResolution;
+      const storedOverrideIds = overrideIdsFromJson(proposal.overrideJson);
+      let outcome = proposal.reviewedOutcomeJson
+        ? JSON.parse(proposal.reviewedOutcomeJson) as PhaseResolution
+        : storedOverrideIds
+          ? applyEliminationOverride(proposedOutcome, storedOverrideIds, players)
+          : proposedOutcome;
       const isOverride = body.overrideEliminationIds !== undefined;
+      let overrideReason = proposal.overrideReason;
+      let overrideJson = proposal.overrideJson;
       if (isOverride) {
         const reason = body.overrideReason?.trim() ?? '';
         if (reason.length < 10) throw new Error('An override requires a reason of at least 10 characters.');
-        const ids = [...new Set(body.overrideEliminationIds)];
+        const ids = [...new Set((body.overrideEliminationIds ?? []).filter((id): id is string => typeof id === 'string'))];
         const livingIds = new Set(players.filter((player) => player.alive).map((player) => player.id));
         if (ids.length > Number(phase.slots) + 1 || ids.some((id) => !livingIds.has(id))) {
           throw new Error('Override eliminations must be living players within the phase limit.');
         }
-        outcome = {
-          ...outcome,
-          eliminations: ids.map((playerId) => ({
-            playerId,
-            cause: phase.kind === 'NIGHT' ? 'WEREWOLF_ATTACK' : 'DAY_VOTE',
-          })),
-          hunterRequiredIds: [],
-        };
+        outcome = applyEliminationOverride(proposedOutcome, ids, players);
+        overrideReason = reason;
+        overrideJson = JSON.stringify({ eliminationIds: ids });
       }
       const now = new Date().toISOString();
+      if (outcome.hunterRequiredIds.length > 0) {
+        const hunterDeadline = new Date(Date.now() + Number(game.hunterWindowMinutes) * 60_000).toISOString();
+        const handoffGuard = `EXISTS (
+          SELECT 1 FROM phases p JOIN games g ON g.id = p.game_id
+          WHERE p.id = ? AND p.game_id = ? AND p.status = 'PENDING_APPROVAL'
+            AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN')
+        )`;
+        const result = await db.batch([
+          db
+            .prepare(
+              `UPDATE resolution_proposals
+               SET override_reason = ?, override_json = ?,
+                   reviewed_by_moderator_id = ?, reviewed_at = ?, reviewed_outcome_json = ?
+               WHERE id = ? AND phase_id = ? AND status = 'PROPOSED' AND ${handoffGuard}`,
+            )
+            .bind(overrideReason, overrideJson, moderator.id, now, JSON.stringify(outcome), proposal.id, phase.id, phase.id, gameId),
+          db
+            .prepare(
+              `UPDATE phases SET status = 'PENDING_HUNTER', hunter_deadline_at = ?, updated_at = ?
+               WHERE id = ? AND game_id = ? AND status = 'PENDING_APPROVAL' AND ${handoffGuard}`,
+            )
+            .bind(hunterDeadline, now, phase.id, gameId, phase.id, gameId),
+          db
+            .prepare(
+              `INSERT INTO game_events
+               (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
+               SELECT ?, ?, ?, 'HUNTER_FOLLOWUP_REQUIRED', ?, ?, ?
+               WHERE ${handoffGuard}`,
+            )
+            .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ source: 'OVERRIDE', hunterIds: outcome.hunterRequiredIds, overrideReason }), now, phase.id, gameId),
+        ]);
+        if (changes(result[0]) !== 1) return jsonError('The phase changed before the override could be recorded. Refresh and try again.', 409);
+        return Response.json({ ok: true, pendingHunter: true, outcome, proposedOutcome, hunterDeadline, overrideReason, reviewedByModeratorId: moderator.id, reviewedAt: now });
+      }
       const eliminated = outcome.eliminations.map((elimination) => {
         const player = players.find((candidate) => candidate.id === elimination.playerId);
         if (!player) throw new Error('Resolution references a player outside this game.');
         return { ...elimination, displayName: player.displayName, role: player.role };
       });
       const win = evaluateWinner(players, outcome.eliminations);
+      const claimedVersion = Number(phase.version) + 1;
+      const publicationGuard = `EXISTS (
+        SELECT 1 FROM phases p
+        WHERE p.id = ? AND p.game_id = ? AND p.status = 'PUBLISHING' AND p.version = ?
+      )`;
       const statements: D1PreparedStatement[] = [
+        // The PUBLISHING status is the authoritative one-phase claim. Since
+        // this statement and all dependent statements are one D1 batch, Stop
+        // and a competing publication cannot interleave with the effects.
+        db
+          .prepare(
+            `UPDATE phases SET status = 'PUBLISHING', version = version + 1, updated_at = ?
+             WHERE id = ? AND game_id = ? AND status = 'PENDING_APPROVAL' AND version = ?
+               AND EXISTS (SELECT 1 FROM games WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN'))
+               AND EXISTS (SELECT 1 FROM resolution_proposals WHERE id = ? AND phase_id = ? AND status = 'PROPOSED')`,
+          )
+          .bind(now, phase.id, gameId, phase.version, gameId, proposal.id, phase.id),
         db
           .prepare(
             `UPDATE resolution_proposals
-             SET status = ?, override_reason = ?, override_json = ?, reviewed_by_moderator_id = ?, reviewed_at = ?
-             WHERE id = ? AND status = 'PROPOSED'`,
+             SET status = ?, override_reason = ?, override_json = ?, reviewed_by_moderator_id = ?, reviewed_at = ?,
+                 reviewed_outcome_json = ?, published_outcome_json = ?
+             WHERE id = ? AND phase_id = ? AND status = 'PROPOSED' AND ${publicationGuard}`,
           )
           .bind(
-            isOverride ? 'OVERRIDDEN' : 'APPROVED',
-            isOverride ? body.overrideReason?.trim() : null,
-            isOverride ? JSON.stringify({ eliminationIds: body.overrideEliminationIds }) : null,
+            overrideReason ? 'OVERRIDDEN' : 'APPROVED',
+            overrideReason,
+            overrideJson,
             moderator.id,
             now,
+            JSON.stringify(outcome),
+            JSON.stringify(outcome),
             proposal.id,
+            phase.id,
+            phase.id,
+            gameId,
+            claimedVersion,
           ),
-        db.prepare("UPDATE phases SET status = 'PUBLISHED', published_at = ?, updated_at = ? WHERE id = ?").bind(now, now, phase.id),
         db
           .prepare(
             `INSERT INTO game_events
              (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
-             VALUES (?, ?, ?, 'PHASE_PUBLISHED', ?, ?, ?)`,
+             SELECT ?, ?, ?, 'PHASE_PUBLISHED', ?, ?, ? WHERE ${publicationGuard}`,
           )
-          .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ kind: phase.kind, eliminations: eliminated, winner: win.winner }), now),
+          .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ kind: phase.kind, proposedOutcome, publishedOutcome: outcome, eliminations: eliminated, winner: win.winner, overrideReason }), now, phase.id, gameId, claimedVersion),
       ];
       for (const elimination of eliminated) {
         statements.push(
-          db.prepare('UPDATE seats SET alive = 0, updated_at = ? WHERE id = ?').bind(now, elimination.playerId),
-          db.prepare('UPDATE role_assignments SET revealed_at = ? WHERE game_id = ? AND seat_id = ?').bind(now, gameId, elimination.playerId),
+          db
+            .prepare(`UPDATE seats SET alive = 0, updated_at = ? WHERE id = ? AND game_id = ? AND ${publicationGuard}`)
+            .bind(now, elimination.playerId, gameId, phase.id, gameId, claimedVersion),
+          db
+            .prepare(`UPDATE role_assignments SET revealed_at = ? WHERE game_id = ? AND seat_id = ? AND ${publicationGuard}`)
+            .bind(now, gameId, elimination.playerId, phase.id, gameId, claimedVersion),
         );
       }
       for (const investigation of outcome.investigations) {
@@ -442,27 +683,60 @@ export async function POST(request: Request, context: RouteContext) {
           db
             .prepare(
               `INSERT INTO notifications (id, seat_id, type, title, body, created_at)
-               VALUES (?, ?, 'INVESTIGATION_RESULT', 'Your vision is clear', ?, ?)`,
+               SELECT ?, ?, 'INVESTIGATION_RESULT', 'Your vision is clear', ?, ? WHERE ${publicationGuard}`,
             )
-            .bind(crypto.randomUUID(), investigation.seerId, `${target?.displayName ?? 'That player'} is the ${investigation.role}.`, now),
+            .bind(crypto.randomUUID(), investigation.seerId, `${target?.displayName ?? 'That player'} is the ${investigation.role}.`, now, phase.id, gameId, claimedVersion),
         );
       }
       if (win.winner) {
         statements.push(
-          db.prepare("UPDATE games SET status = 'COMPLETED', updated_at = ? WHERE id = ?").bind(now, gameId),
-          db.prepare("UPDATE chat_rooms SET status = 'READ_ONLY' WHERE game_id = ? AND status = 'OPEN'").bind(gameId),
+          db
+            .prepare(`UPDATE games SET status = 'COMPLETED', updated_at = ? WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN') AND ${publicationGuard}`)
+            .bind(now, gameId, phase.id, gameId, claimedVersion),
+          db
+            .prepare(`UPDATE chat_rooms SET status = 'READ_ONLY' WHERE game_id = ? AND status = 'OPEN' AND ${publicationGuard}`)
+            .bind(gameId, phase.id, gameId, claimedVersion),
           db
             .prepare(
               `INSERT INTO game_events
                (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
-               VALUES (?, ?, ?, 'GAME_COMPLETED', ?, ?, ?)`,
+               SELECT ?, ?, ?, 'GAME_COMPLETED', ?, ?, ? WHERE ${publicationGuard}`,
             )
-            .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ winner: win.winner }), now),
+            .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ winner: win.winner }), now, phase.id, gameId, claimedVersion),
+        );
+      } else {
+        statements.push(
+          db
+            .prepare(`UPDATE games SET updated_at = ? WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN') AND ${publicationGuard}`)
+            .bind(now, gameId, phase.id, gameId, claimedVersion),
         );
       }
-      await db.batch(statements);
+      statements.push(
+        db
+          .prepare("UPDATE phases SET status = 'PUBLISHED', published_at = ?, updated_at = ? WHERE id = ? AND game_id = ? AND status = 'PUBLISHING' AND version = ?")
+          .bind(now, now, phase.id, gameId, claimedVersion),
+      );
+      const result = await db.batch(statements);
+      if (changes(result[0]) !== 1) {
+        const current = await db
+          .prepare(
+            `SELECT p.status, rp.published_outcome_json AS publishedOutcomeJson,
+                    rp.outcome_json AS outcomeJson, rp.override_reason AS overrideReason,
+                    rp.reviewed_by_moderator_id AS reviewedByModeratorId, rp.reviewed_at AS reviewedAt,
+                    rp.reviewed_outcome_json AS reviewedOutcomeJson
+             FROM phases p LEFT JOIN resolution_proposals rp ON rp.id = ?
+             WHERE p.id = ? AND p.game_id = ? LIMIT 1`,
+          )
+          .bind(proposal.id, phase.id, gameId)
+          .first<{ status: string; publishedOutcomeJson: string | null; outcomeJson: string; overrideReason: string | null; reviewedByModeratorId: string | null; reviewedAt: string | null; reviewedOutcomeJson: string | null }>();
+        if (current?.status === 'PUBLISHED' && current.publishedOutcomeJson) {
+          const publishedOutcome = JSON.parse(current.publishedOutcomeJson) as PhaseResolution;
+          return Response.json({ ok: true, idempotent: true, outcome: publishedOutcome, proposedOutcome: JSON.parse(current.outcomeJson) as PhaseResolution, reviewedOutcome: current.reviewedOutcomeJson ? JSON.parse(current.reviewedOutcomeJson) as PhaseResolution : null, publishedOutcome, overrideReason: current.overrideReason, reviewedByModeratorId: current.reviewedByModeratorId, reviewedAt: current.reviewedAt, winner: evaluateWinner(players, publishedOutcome.eliminations).winner });
+        }
+        return jsonError('The phase was changed before publication could commit. Refresh and review the authoritative result.', 409);
+      }
       await ensureGameRooms(gameId);
-      return Response.json({ ok: true, outcome, eliminated, winner: win.winner });
+      return Response.json({ ok: true, outcome, proposedOutcome, reviewedOutcome: outcome, publishedOutcome: outcome, eliminated, winner: win.winner, overrideReason, reviewedByModeratorId: moderator.id, reviewedAt: now });
     }
 
     throw new Error('Unknown phase action.');

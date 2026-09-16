@@ -173,6 +173,11 @@ export async function restoreGameBackup(
 
   const db = getD1();
   const safetyBackup = await createBackupRecord(gameId, moderatorId);
+  const currentGame = await db
+    .prepare('SELECT status, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1')
+    .bind(gameId)
+    .first<{ status: string; updatedAt: string }>();
+  if (!currentGame) throw new Error('Game not found while preparing restore.');
   const currentSeats = await db.prepare('SELECT id FROM seats WHERE game_id = ?').bind(gameId).all<{ id: string }>();
   const restoredSeats = backupSeats(data);
   const now = new Date().toISOString();
@@ -188,33 +193,27 @@ export async function restoreGameBackup(
     }),
   );
   const restoredIds = new Set(restoredSeats.map((seat) => seat.id));
+  const restoreGuard = "EXISTS (SELECT 1 FROM games g WHERE g.id = ? AND g.status = 'RESTORING' AND g.reset_at = ? AND g.reset_by_moderator_id = ?)";
   const statements: D1PreparedStatement[] = [
-    db.prepare('DELETE FROM action_submissions WHERE phase_id IN (SELECT id FROM phases WHERE game_id = ?)').bind(gameId),
-    db.prepare('DELETE FROM resolution_proposals WHERE phase_id IN (SELECT id FROM phases WHERE game_id = ?)').bind(gameId),
-    db.prepare('UPDATE game_events SET phase_id = NULL WHERE phase_id IN (SELECT id FROM phases WHERE game_id = ?)').bind(gameId),
-    db.prepare('DELETE FROM phases WHERE game_id = ?').bind(gameId),
-    db.prepare('DELETE FROM role_assignments WHERE game_id = ?').bind(gameId),
-    db.prepare('DELETE FROM assignment_batches WHERE game_id = ?').bind(gameId),
-    db.prepare('DELETE FROM game_role_counts WHERE game_id = ?').bind(gameId),
-    db.prepare('DELETE FROM notifications WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?)').bind(gameId),
-    db.prepare('DELETE FROM announcements WHERE game_id = ?').bind(gameId),
-    db.prepare('DELETE FROM chat_room_members WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?)').bind(gameId),
-    db.prepare('DELETE FROM chat_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?)').bind(gameId),
-    db.prepare("UPDATE chat_rooms SET status = 'OPEN' WHERE game_id = ?").bind(gameId),
-    db.prepare('DELETE FROM seat_sessions WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?)').bind(gameId),
+    db
+      .prepare("UPDATE games SET status = 'RESTORING', setup_revision = setup_revision + 1, reset_at = ?, reset_by_moderator_id = ?, updated_at = ? WHERE id = ? AND status = ? AND updated_at = ?")
+      .bind(now, moderatorId, now, gameId, currentGame.status, currentGame.updatedAt),
+    db.prepare('DELETE FROM action_submissions WHERE phase_id IN (SELECT id FROM phases WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('DELETE FROM resolution_proposals WHERE phase_id IN (SELECT id FROM phases WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('UPDATE game_events SET phase_id = NULL WHERE phase_id IN (SELECT id FROM phases WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('DELETE FROM phases WHERE game_id = ? AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('DELETE FROM role_assignments WHERE game_id = ? AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('DELETE FROM assignment_batches WHERE game_id = ? AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('DELETE FROM game_role_counts WHERE game_id = ? AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('DELETE FROM notifications WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('DELETE FROM announcements WHERE game_id = ? AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('DELETE FROM chat_room_members WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('DELETE FROM chat_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare("UPDATE chat_rooms SET status = 'OPEN' WHERE game_id = ? AND " + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('DELETE FROM seat_sessions WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare("UPDATE seats SET status = 'REMOVED', email = 'archived+' || id || '@invalid.test', pin_hash = NULL, session_version = session_version + 1, alive = 0, predecessor_seat_id = NULL, claimed_at = NULL, updated_at = ? WHERE game_id = ? AND " + restoreGuard).bind(now, gameId, gameId, now, moderatorId),
     db.prepare(
-      `UPDATE seats SET status = 'REMOVED', email = 'archived+' || id || '@invalid.test', pin_hash = NULL,
-                        session_version = session_version + 1, alive = 0, predecessor_seat_id = NULL,
-                        claimed_at = NULL, updated_at = ?
-       WHERE game_id = ?`,
-    ).bind(now, gameId),
-    db.prepare(
-      `UPDATE games SET name = ?, status = 'DRAFT', timezone = ?, start_date = ?, end_date = ?,
-                        active_weekdays_json = ?, schedule_json = ?, day_divisor = ?, night_divisor = ?,
-                        hunter_window_minutes = ?, final_round_minutes = ?, chat_retention_days = ?,
-                        final_cutoff_at = ?, publication_mode = ?, stopped_at = NULL,
-                        stopped_by_moderator_id = NULL, stop_reason = NULL, reset_at = ?,
-                        reset_by_moderator_id = ?, updated_at = ? WHERE id = ?`,
+      "UPDATE games SET name = ?, timezone = ?, start_date = ?, end_date = ?, active_weekdays_json = ?, schedule_json = ?, day_divisor = ?, night_divisor = ?, hunter_window_minutes = ?, final_round_minutes = ?, chat_retention_days = ?, final_cutoff_at = ?, publication_mode = ?, stopped_at = NULL, stopped_by_moderator_id = NULL, stop_reason = NULL, updated_at = ? WHERE id = ? AND status = 'RESTORING' AND reset_at = ? AND reset_by_moderator_id = ?",
     ).bind(
       backupGame.name,
       backupGame.timezone,
@@ -230,62 +229,66 @@ export async function restoreGameBackup(
       backupGame.finalCutoffAt,
       backupGame.publicationMode,
       now,
-      moderatorId,
-      now,
       gameId,
+      now,
+      moderatorId,
     ),
   ];
   for (const seat of currentSeats.results) {
     if (restoredIds.has(seat.id)) continue;
     // Old seat links are invalidated even when the source backup has a smaller roster.
     statements.push(
-      db.prepare('UPDATE seats SET claim_code_hash = ?, updated_at = ? WHERE id = ? AND game_id = ?').bind(await sha256(randomToken(18)), now, seat.id, gameId),
+      db.prepare('UPDATE seats SET claim_code_hash = ?, updated_at = ? WHERE id = ? AND game_id = ? AND ' + restoreGuard).bind(await sha256(randomToken(18)), now, seat.id, gameId, gameId, now, moderatorId),
     );
   }
   for (const seat of inviteRows) {
     statements.push(
       db.prepare(
-        `INSERT INTO seats
-         (id, game_id, display_name, email, status, claim_code_hash, pin_hash, session_version,
-          alive, predecessor_seat_id, claimed_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'INVITED', ?, NULL, 1, 1, NULL, NULL, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET game_id = excluded.game_id, display_name = excluded.display_name,
-           email = excluded.email, status = 'INVITED', claim_code_hash = excluded.claim_code_hash,
-           pin_hash = NULL, session_version = seats.session_version + 1, alive = 1,
-           predecessor_seat_id = NULL, claimed_at = NULL, updated_at = excluded.updated_at`,
-      ).bind(seat.id, gameId, seat.displayName, seat.email, seat.claimCodeHash, seat.createdAt, now),
+        "INSERT INTO seats (id, game_id, display_name, email, status, claim_code_hash, pin_hash, session_version, alive, predecessor_seat_id, claimed_at, created_at, updated_at) SELECT ?, ?, ?, ?, 'INVITED', ?, NULL, 1, 1, NULL, NULL, ?, ? WHERE " + restoreGuard + " ON CONFLICT(id) DO UPDATE SET game_id = excluded.game_id, display_name = excluded.display_name, email = excluded.email, status = 'INVITED', claim_code_hash = excluded.claim_code_hash, pin_hash = NULL, session_version = seats.session_version + 1, alive = 1, predecessor_seat_id = NULL, claimed_at = NULL, updated_at = excluded.updated_at",
+      ).bind(seat.id, gameId, seat.displayName, seat.email, seat.claimCodeHash, seat.createdAt, now, gameId, now, moderatorId),
     );
   }
   for (const composition of backupComposition(data)) {
     statements.push(
-      db.prepare(
-        `INSERT INTO game_role_counts (game_id, role_key, count, power_snapshot)
-         VALUES (?, ?, ?, ?)`,
-      ).bind(gameId, composition.roleKey, composition.count, composition.powerSnapshot),
+      db.prepare('INSERT INTO game_role_counts (game_id, role_key, count, power_snapshot) SELECT ?, ?, ?, ? WHERE ' + restoreGuard)
+        .bind(gameId, composition.roleKey, composition.count, composition.powerSnapshot, gameId, now, moderatorId),
     );
   }
   statements.push(
     db.prepare(
-      `INSERT INTO game_events (id, game_id, event_type, actor_moderator_id, payload_json, created_at)
-       VALUES (?, ?, 'GAME_RESTORED', ?, ?, ?)`,
+      "INSERT INTO game_events (id, game_id, event_type, actor_moderator_id, payload_json, created_at) SELECT ?, ?, 'GAME_RESTORED', ?, ?, ? WHERE " + restoreGuard,
     ).bind(
       crypto.randomUUID(),
       gameId,
       moderatorId,
       JSON.stringify({ sourceBackupId: sourceBackup.id, sourceChecksum: sourceBackup.checksum, safetyBackupId: safetyBackup.backupId, status: 'DRAFT', restoredSeatCount: inviteRows.length }),
       now,
+      gameId,
+      now,
+      moderatorId,
     ),
     db.prepare(
-      `INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at)
-       VALUES (?, ?, 'WARNING', 'GAME_CONTROL', 'A stored backup was restored to setup state.', ?, ?)`,
+      "INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at) SELECT ?, ?, 'WARNING', 'GAME_CONTROL', 'A stored backup was restored to setup state.', ?, ? WHERE " + restoreGuard,
     ).bind(
       crypto.randomUUID(),
       gameId,
       JSON.stringify({ moderatorId, sourceBackupId: sourceBackup.id, sourceChecksum: sourceBackup.checksum, safetyBackupId: safetyBackup.backupId, restoredSeatCount: inviteRows.length }),
       now,
+      gameId,
+      now,
+      moderatorId,
     ),
   );
-  await db.batch(statements);
+  statements.push(
+    db
+      .prepare("UPDATE games SET status = 'DRAFT', updated_at = ? WHERE id = ? AND status = 'RESTORING' AND reset_at = ? AND reset_by_moderator_id = ?")
+      .bind(now, gameId, now, moderatorId),
+  );
+  const result = await db.batch(statements);
+  if (Number((result[0] as { meta?: { changes?: number } })?.meta?.changes ?? 0) !== 1
+    || Number((result[result.length - 1] as { meta?: { changes?: number } })?.meta?.changes ?? 0) !== 1) {
+    throw new Error('The game changed while the backup was being restored. Refresh and try again.');
+  }
   return {
     safetyBackupId: safetyBackup.backupId,
     safetyBackupChecksum: safetyBackup.checksum,

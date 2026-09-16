@@ -1,17 +1,17 @@
 # Watercooler Werewolf Build Status
 
-This file is the restart point for future Codex sessions. Each completed phase is committed only after its build and tests pass.
+This file is the restart point for future Codex sessions. The entries below distinguish the current uncommitted pilot-hardening worktree from historical hosted checkpoints; historical deployment notes are not current release evidence.
 
 ## Current checkpoint
 
-- Current source checkpoint: `ddd51bcec8c26060b546bb8896a7b4c3d9d38640` (`fix: use Worker-supported PBKDF2 cost`)
+- Current source checkpoint: uncommitted pilot-hardening worktree based on reviewed commit `1db8eb87ba002fdc3468d62bb1f56ebe37ec2545`
 - Phase 0 - Sites scaffold and first meaningful player preview: **complete**
 - Phase 1 — Domain model, game engine, persistence schema, and engine tests: **complete**
 - Phase 2 — Authentication, roster, setup wizard, and role assignment: **complete**
 - Phase 3 - Live player actions and moderator resolution workflow: **complete**
 - Phase 4 - Private rooms, recap, backups, and operational controls: **complete**
 - Phase 5 - Full verification, rehearsal fixtures, and private MVP hosting: **complete**
-- Phase 6 - Pilot hardening, scheduling automation, rate limits, and feedback instrumentation: **in progress**
+- Phase 6 — Pilot hardening, scheduling automation, rate limits, and feedback instrumentation: **implementation complete; local release gates passed; hosted/browser gates pending**
 
 ## Verified at this checkpoint
 
@@ -44,11 +44,14 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - The operational console reports roster, living count, sessions, stale deadlines, recent warnings, room health, and last-backup state.
 - Moderator-only JSON backups include the recoverable game and audit record while excluding passwords, claim/PIN hashes, and session tokens; each export has a SHA-256 checksum.
 - A Phase 4 rehearsal verified pack-room access and posting, message moderation, 20 announcement notifications, co-moderator access, three room types, an operational warning, and a logged checksum backup.
-- Fifty-seven unit tests across nineteen files, the full lint suite, and strict TypeScript checks pass after the hosted-schema and public-bootstrap fixes.
-- Production build succeeds.
+- Seventy-three unit tests across twenty-three files, the full lint suite, and strict TypeScript checks pass in the current worktree.
+- Production build succeeds with Vinext, Vite 8.3.0, React/RSC 19.3.0, and the Cloudflare plugin set.
 - Default campaign dates are calculated relative to the next Monday; dates shown in planning documents are not treated as release constraints.
 - A 20-player rehearsal roster, branded social preview, and favicon are included for the MVP handoff.
-- The production dependency audit reports zero known vulnerabilities after upgrading Next.js to 16.3.3.
+- The current production-only dependency audit reports zero known vulnerabilities. The full audit reports four moderate development-tool advisories through Drizzle Kit's deprecated esbuild loader; the suggested Drizzle Kit downgrade was not applied.
+
+## Historical hosted checkpoints (reference only)
+
 - Sites version 1 was the original private MVP package from commit `b0546ec98464700a3fc0454e6743284869f1754e`.
 - Sites version 2 packages the first verified Phase 6 preparation build from commit `9141753a0845fbf9a26c4419ab12807ca8fce5de`.
 - Sites version 3 packages the atomic rate-limit hardening from commit `b3dfad2b06865c65415098f655bdd967a2dada17`.
@@ -75,6 +78,16 @@ This file is the restart point for future Codex sessions. Each completed phase i
 - A cron-compatible `POST /api/scheduler/deadlines` endpoint and all-game D1 sweep now complement the Operations panel heartbeat. The endpoint requires a private `WATERCOOLER_SCHEDULER_TOKEN`; when unset it fails closed with HTTP 503, so private pilots can use the panel fallback safely.
 - Player claim uses a conditional `UPDATE ... RETURNING` and action revisions allocate their version inside a serialized D1 batch, preventing double claims and unique-version collisions during simultaneous submissions.
 - `npm run pilot:setup` creates a disposable 20-player `.test` game and writes a one-time invite CSV only when `PILOT_ALLOW_MUTATION=yes` is explicitly set.
+
+## Current worktree verification
+
+- D1-compatible route tests cover accepted-submission/lock ordering, concurrent publication, Stop-versus-publication, stale assignment previews, stopped setup release, Hunter override handoff, and proposed-versus-published outcomes.
+- The checked-in `npm run pilot:rehearsal` completed 10/10 assertions against the real local HTTP/D1 preview, including the reviewed Hunter follow-up, Seer history, Stop, Reset/session invalidation, and reset-then-reimport path.
+- Migration tests cover fresh installation, rerun idempotence, existing initial-schema upgrade, the pilot-hardening columns, the reviewed-outcome column, and the `rate_limit_buckets` table. `drizzle-kit check` passes and unchanged generation reports no schema changes.
+- `npm run db:generate` now uses a local launcher for Drizzle Kit's Windows `os.userInfo()` bootstrap edge case. On this host it reaches the schema and reports `No schema changes, nothing to migrate`; `npx drizzle-kit check` also passes.
+- Local API rehearsal against fictional `.test` data passed 36 of 37 legacy checks; the sole non-pass was the intentionally configured scheduler-disabled check. The revised stopped-setup expectation is covered by the repository route tests, and no production data was touched.
+- Executed checks in this worktree: `npm test -- --run` (73 tests), `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build`, and full/production dependency audits. Desktop visual inspection passed locally; 390x844/mobile visual inspection, a fresh hosted migration, and an enabled hosted scheduler remain operator gates.
+- No deployment, real invitations, production mutation, or real credentials were used for this hardening pass.
 
 ## Resume instructions
 

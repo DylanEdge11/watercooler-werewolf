@@ -30,7 +30,11 @@ export async function POST(request: Request) {
     await enforceRateLimit(requestRateLimitKey(request, `moderator-bootstrap:${body.email?.trim().toLowerCase() ?? ''}`), 3, 15 * 60_000);
     const moderator = await createPrimaryModerator(body.email ?? '', body.password ?? '');
     await createModeratorSession(moderator.id);
-    return Response.json({ ok: true, moderator });
+    // Keep recovery codes at the response boundary. The account record never
+    // contains the plaintext values and the client should not depend on a
+    // nested shape that differs from co-moderator creation.
+    const { recoveryCodes, ...account } = moderator;
+    return Response.json({ ok: true, moderator: account, recoveryCodes });
   } catch (error) {
     return error instanceof RateLimitError
       ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })

@@ -8,6 +8,15 @@ export interface AssignmentPreview {
   evidenceHash: string;
 }
 
+/** Fingerprints bind a preview to the exact setup inputs used to create it. */
+export async function fingerprintRoster(seatIds: string[]): Promise<string> {
+  return sha256(JSON.stringify([...seatIds].sort()));
+}
+
+export async function fingerprintComposition(composition: RoleComposition): Promise<string> {
+  return sha256(JSON.stringify(ROLE_KEYS.map((role) => [role, composition[role]])));
+}
+
 export async function createAssignmentPreview(
   seatIds: string[],
   composition: RoleComposition,

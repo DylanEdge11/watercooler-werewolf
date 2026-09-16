@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-html-link-for-pages -- vinext's production Link runtime currently fails before navigation. */
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import LiveGamePanel from './live-game-panel';
 import OperationsPanel from './operations-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
@@ -89,6 +89,7 @@ export default function ModeratorPage() {
   const [loading, setLoading] = useState(true);
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
   const [canBootstrap, setCanBootstrap] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [games, setGames] = useState<GameSummary[]>([]);
@@ -100,31 +101,43 @@ export default function ModeratorPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [liveRefreshToken, setLiveRefreshToken] = useState(0);
+  const selectedGameRef = useRef('');
+  const gamesRequest = useRef(0);
+  const gameDetailRequest = useRef(0);
 
   const loadGame = useCallback(async (selectedGameId: string) => {
+    const requestId = ++gameDetailRequest.current;
     const [rosterData, assignmentData] = await Promise.all([
       requestJson<{ roster: RosterSeat[] }>(`/api/games/${selectedGameId}/roster`),
-      requestJson<{ composition: Composition; batches: Batch[] }>(`/api/games/${selectedGameId}/assignments`),
+      requestJson<{ composition: Composition; batches: Batch[]; game?: { status: string } }>(`/api/games/${selectedGameId}/assignments`),
     ]);
+    if (requestId !== gameDetailRequest.current || selectedGameRef.current !== selectedGameId) return;
     setRoster(rosterData.roster);
     setComposition(assignmentData.composition);
     setBatches(assignmentData.batches);
+    if (assignmentData.game?.status) {
+      setGames((current) => current.map((game) => game.id === selectedGameId ? { ...game, status: assignmentData.game?.status ?? game.status } : game));
+    }
   }, []);
 
-  const loadGames = useCallback(async () => {
+  const loadGames = useCallback(async (preferredGameId = selectedGameRef.current) => {
+    const requestId = ++gamesRequest.current;
     const data = await requestJson<{ games: GameSummary[] }>('/api/games');
+    if (requestId !== gamesRequest.current) return;
     setAuthenticated(true);
     setGames(data.games);
-    if (data.games[0]) {
-      setGameId(data.games[0].id);
-      await loadGame(data.games[0].id);
+    const selected = data.games.find((game) => game.id === preferredGameId) ?? data.games[0];
+    if (selected) {
+      selectedGameRef.current = selected.id;
+      setGameId(selected.id);
+      await loadGame(selected.id);
     }
   }, [loadGame]);
 
   const handleLiveChange = useCallback((action?: string) => {
     if (shouldRefreshOperations(action)) setLiveRefreshToken((token) => token + 1);
-    void loadGames().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.'));
-  }, [loadGames]);
+    void loadGames(gameId).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.'));
+  }, [gameId, loadGames]);
 
   useEffect(() => {
     void (async () => {
@@ -141,18 +154,30 @@ export default function ModeratorPage() {
     })();
   }, [loadGames]);
 
+  useEffect(() => {
+    if (!authenticated) return;
+    const poll = window.setInterval(() => {
+      void loadGames(gameId).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.'));
+    }, 10_000);
+    return () => window.clearInterval(poll);
+  }, [authenticated, gameId, loadGames]);
+
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
     const form = new FormData(event.currentTarget);
     try {
       const endpoint = needsBootstrap ? '/api/moderators/bootstrap' : '/api/moderators/login';
-      const data = await requestJson<{ recoveryCodes?: string[] }>(endpoint, {
+      const data = await requestJson<{ recoveryCodes?: string[] }>(recoveryMode ? '/api/moderators/recover' : endpoint, {
         method: 'POST',
-        body: JSON.stringify({ email: form.get('email'), password: form.get('password') }),
+        body: JSON.stringify(recoveryMode
+          ? { email: form.get('email'), recoveryCode: form.get('recoveryCode'), newPassword: form.get('newPassword') }
+          : { email: form.get('email'), password: form.get('password') }),
       });
       setRecoveryCodes(data.recoveryCodes ?? []);
       setNeedsBootstrap(false);
+      setRecoveryMode(false);
+      setMessage(recoveryMode ? 'Moderator password recovered. All previous moderator sessions were invalidated.' : '');
       await loadGames();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to sign in.');
@@ -178,6 +203,7 @@ export default function ModeratorPage() {
       });
       setMessage('Game created. Import the player roster next.');
       await loadGames();
+      selectedGameRef.current = data.gameId;
       setGameId(data.gameId);
       await loadGame(data.gameId);
     } catch (caught) {
@@ -276,8 +302,8 @@ export default function ModeratorPage() {
         <BrandHeader />
         <section className="auth-card">
           <p className="eyebrow accent">Private game control</p>
-          <h1>{needsBootstrap ? 'Create the primary moderator' : 'Moderator sign-in'}</h1>
-          <p>{needsBootstrap ? 'This first account owns the game and can add co-moderators later.' : 'Sign in to resume setup or run an active game.'}</p>
+          <h1>{needsBootstrap ? 'Create the primary moderator' : recoveryMode ? 'Recover moderator access' : 'Moderator sign-in'}</h1>
+          <p>{needsBootstrap ? 'This first account owns the game and can add co-moderators later.' : recoveryMode ? 'Use one unused recovery code to choose a new password. Previous moderator sessions will be signed out.' : 'Sign in to resume setup or run an active game.'}</p>
           {needsBootstrap && !canBootstrap ? (
             <div className="form-stack">
               <p className="notice warning">The designated site owner must verify once before creating the primary moderator. Players will not need ChatGPT accounts.</p>
@@ -286,9 +312,10 @@ export default function ModeratorPage() {
           ) : <form className="form-stack" onSubmit={handleAuth}>
             {needsBootstrap && canBootstrap && <p className="notice success" role="status">Site owner verified. Create your app moderator credentials below.</p>}
             <label>Email<input name="email" type="email" autoComplete="email" required /></label>
-            <label>Password<input name="password" type="password" minLength={needsBootstrap ? 12 : undefined} autoComplete={needsBootstrap ? 'new-password' : 'current-password'} required /></label>
+            {recoveryMode ? <><label>One-time recovery code<input name="recoveryCode" autoComplete="one-time-code" required /></label><label>New moderator password<input name="newPassword" type="password" minLength={12} autoComplete="new-password" required /></label></> : <label>Password<input name="password" type="password" minLength={needsBootstrap ? 12 : undefined} autoComplete={needsBootstrap ? 'new-password' : 'current-password'} required /></label>}
             {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="primary-button" type="submit">{needsBootstrap ? 'Create moderator' : 'Sign in'}</button>
+            <button className="primary-button" type="submit">{needsBootstrap ? 'Create moderator' : recoveryMode ? 'Recover access' : 'Sign in'}</button>
+            {!needsBootstrap && <button className="text-button" type="button" onClick={() => { setRecoveryMode((current) => !current); setError(''); }}>{recoveryMode ? 'Back to sign in' : 'Forgot password? Use a recovery code'}</button>}
           </form>}
         </section>
       </main>

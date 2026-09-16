@@ -1,6 +1,7 @@
 import type { GameBackup } from './snapshot';
 import { ROLE_CATALOG } from '../game/catalog';
 import { canonicalRoleKey, ROLE_KEYS, type RoleKey } from '../game/types';
+import { assertValidCalendarDate, assertValidTimeZone } from '../game/scheduling';
 
 export interface BackupRestoreSeat {
   id: string;
@@ -61,7 +62,10 @@ export function validateBackupForRestore(data: GameBackup, expectedGameId: strin
   if (data.schemaVersion !== 2) errors.push('This backup schema version is not supported by the current build.');
   const game = asRecord(data.game);
   if (!game || readString(game, 'id') !== expectedGameId) errors.push('The backup belongs to a different game.');
-  if (!Array.isArray(data.seats) || data.seats.length < 20 || data.seats.length > 80) {
+  const activeSeatRows = Array.isArray(data.seats)
+    ? data.seats.filter((rawSeat) => readString(asRecord(rawSeat) ?? {}, 'status') !== 'REMOVED')
+    : [];
+  if (!Array.isArray(data.seats) || activeSeatRows.length < 20 || activeSeatRows.length > 80) {
     errors.push('The backup must contain between 20 and 80 seats.');
   }
   const seatIds = new Set<string>();
@@ -87,7 +91,7 @@ export function validateBackupForRestore(data: GameBackup, expectedGameId: strin
       errors.push('The backup contains an invalid role composition.');
       continue;
     }
-    if (amount > data.seats.length) errors.push('A role count cannot exceed the backed-up roster size.');
+    if (amount > activeSeatRows.length) errors.push('A role count cannot exceed the backed-up roster size.');
   }
   const backupGame = game ? backupGameFromRecord(game) : null;
   if (!backupGame) errors.push('The backup is missing valid game configuration.');
@@ -116,11 +120,13 @@ export function backupGameFromRecord(game: Record<string, unknown>): BackupResto
   try {
     JSON.parse(activeWeekdaysJson);
     JSON.parse(scheduleJson);
-    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+    assertValidTimeZone(timezone);
+    assertValidCalendarDate(startDate, 'Start date');
+    assertValidCalendarDate(endDate, 'End date');
   } catch {
     return null;
   }
-  if (startDate.length !== 10 || endDate.length !== 10 || Number.isNaN(new Date(finalCutoffAt).valueOf())) return null;
+  if (startDate.length !== 10 || endDate.length !== 10 || startDate > endDate || Number.isNaN(new Date(finalCutoffAt).valueOf())) return null;
   if (dayDivisor < 1 || nightDivisor < 1 || hunterWindowMinutes < 1 || finalRoundMinutes < 1 || chatRetentionDays < 1) return null;
   return {
     name,
@@ -143,6 +149,9 @@ export function backupSeats(data: GameBackup): BackupRestoreSeat[] {
   return data.seats.flatMap((rawSeat) => {
     const seat = asRecord(rawSeat);
     if (!seat) return [];
+    // Removed rows are retained in backups for audit/reference integrity, but
+    // they are not part of the current player-facing roster to restore.
+    if (readString(seat, 'status') === 'REMOVED') return [];
     const id = readString(seat, 'id');
     const displayName = readString(seat, 'displayName', 'display_name');
     const email = readString(seat, 'email');
