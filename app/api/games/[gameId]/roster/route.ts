@@ -142,13 +142,7 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
     statements.push(
-      db
-        .prepare(
-          `UPDATE games SET status = 'REGISTRATION', updated_at = ?
-           WHERE id = ? AND setup_revision = ? AND status = 'ROSTER_IMPORTING'
-             AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.game_id = games.id)`,
-        )
-        .bind(now, gameId, nextRevision),
+      // Record the import while setupGuard still holds, before clearing the claim.
       db
         .prepare(
           `INSERT INTO game_events
@@ -164,6 +158,13 @@ export async function POST(request: Request, context: RouteContext) {
           gameId,
           nextRevision,
         ),
+      db
+        .prepare(
+          `UPDATE games SET status = 'REGISTRATION', updated_at = ?
+           WHERE id = ? AND setup_revision = ? AND status = 'ROSTER_IMPORTING'
+             AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.game_id = games.id)`,
+        )
+        .bind(now, gameId, nextRevision),
     );
     const result = await db.batch(statements);
     if (Number(result[0]?.meta?.changes ?? 0) !== 1) {

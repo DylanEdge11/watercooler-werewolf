@@ -542,7 +542,7 @@ export async function POST(request: Request, context: RouteContext) {
       )`;
       const result = await db.batch([
         db.prepare(`UPDATE resolution_proposals SET reviewed_outcome_json = ? WHERE id = ? AND status = 'PROPOSED' AND ${finalizeGuard}`).bind(JSON.stringify(outcome), proposal.id, phase.id, gameId, claimVersion),
-        db.prepare(`UPDATE phases SET status = 'PENDING_APPROVAL', updated_at = ? WHERE id = ? AND game_id = ? AND status = 'HUNTER_FINALIZING' AND version = ? AND ${finalizeGuard}`).bind(now, phase.id, gameId, claimVersion, phase.id, gameId, claimVersion),
+        // Record the resolution before the phase transition invalidates finalizeGuard.
         db
           .prepare(
             `INSERT INTO game_events
@@ -550,6 +550,7 @@ export async function POST(request: Request, context: RouteContext) {
              SELECT ?, ?, ?, 'HUNTER_RESOLVED', ?, ?, ? WHERE ${finalizeGuard}`,
           )
           .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ submitted: Boolean(hunterAction) }), now, phase.id, gameId, claimVersion),
+        db.prepare(`UPDATE phases SET status = 'PENDING_APPROVAL', updated_at = ? WHERE id = ? AND game_id = ? AND status = 'HUNTER_FINALIZING' AND version = ? AND ${finalizeGuard}`).bind(now, phase.id, gameId, claimVersion, phase.id, gameId, claimVersion),
       ]);
       if (changes(result[0]) !== 1) return jsonError('The Hunter follow-up changed before it could be recorded. Refresh and try again.', 409);
       return Response.json({ ok: true, outcome });
@@ -597,12 +598,7 @@ export async function POST(request: Request, context: RouteContext) {
                WHERE id = ? AND phase_id = ? AND status = 'PROPOSED' AND ${handoffGuard}`,
             )
             .bind(overrideReason, overrideJson, moderator.id, now, JSON.stringify(outcome), proposal.id, phase.id, phase.id, gameId),
-          db
-            .prepare(
-              `UPDATE phases SET status = 'PENDING_HUNTER', hunter_deadline_at = ?, updated_at = ?
-               WHERE id = ? AND game_id = ? AND status = 'PENDING_APPROVAL' AND ${handoffGuard}`,
-            )
-            .bind(hunterDeadline, now, phase.id, gameId, phase.id, gameId),
+          // Record the follow-up before the phase transition invalidates handoffGuard.
           db
             .prepare(
               `INSERT INTO game_events
@@ -611,6 +607,12 @@ export async function POST(request: Request, context: RouteContext) {
                WHERE ${handoffGuard}`,
             )
             .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ source: 'OVERRIDE', hunterIds: outcome.hunterRequiredIds, overrideReason }), now, phase.id, gameId),
+          db
+            .prepare(
+              `UPDATE phases SET status = 'PENDING_HUNTER', hunter_deadline_at = ?, updated_at = ?
+               WHERE id = ? AND game_id = ? AND status = 'PENDING_APPROVAL' AND ${handoffGuard}`,
+            )
+            .bind(hunterDeadline, now, phase.id, gameId, phase.id, gameId),
         ]);
         if (changes(result[0]) !== 1) return jsonError('The phase changed before the override could be recorded. Refresh and try again.', 409);
         return Response.json({ ok: true, pendingHunter: true, outcome, proposedOutcome, hunterDeadline, overrideReason, reviewedByModeratorId: moderator.id, reviewedAt: now });

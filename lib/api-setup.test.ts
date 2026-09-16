@@ -21,6 +21,7 @@ vi.mock('../lib/auth/authorization', () => ({ requireGameModerator: async () => 
 vi.mock('../lib/chat/rooms', () => ({ ensureGameRooms: async () => {} }));
 
 import { POST as assignmentPost } from '../app/api/games/[gameId]/assignments/route';
+import { POST as rosterPost } from '../app/api/games/[gameId]/roster/route';
 import { GET as phaseGet, POST as phasePost } from '../app/api/games/[gameId]/phases/route';
 
 let sqlite: DatabaseSync;
@@ -117,6 +118,18 @@ beforeEach(() => {
 afterEach(() => sqlite.close());
 
 describe('setup and publication invariants', () => {
+  test('a roster replacement records its audit event and returns to registration', async () => {
+    const csv = ['display_name,email', ...Array.from({ length: 20 }, (_, index) => `New Player ${index},new${index}@pilot.test`)].join('\n');
+    const response = await rosterPost(request({ csv }), { params: Promise.resolve({ gameId: 'game' }) });
+    expect(response.status).toBe(200);
+    expect(sqlite.prepare("SELECT status, setup_revision AS revision FROM games WHERE id = 'game'").get()).toMatchObject({ status: 'REGISTRATION', revision: 2 });
+    expect((sqlite.prepare("SELECT COUNT(*) AS count FROM seats WHERE game_id = 'game' AND status = 'INVITED'").get() as { count: number }).count).toBe(20);
+    const events = sqlite.prepare("SELECT game_id AS gameId, actor_moderator_id AS moderatorId, payload_json AS payloadJson FROM game_events WHERE event_type = 'ROSTER_IMPORTED'").all() as Array<{ gameId: string; moderatorId: string; payloadJson: string }>;
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ gameId: 'game', moderatorId: 'mod' });
+    expect(JSON.parse(events[0].payloadJson)).toEqual({ playerCount: 20 });
+  });
+
   test('a composition change invalidates an old preview before release', async () => {
     const original = await assignments({ action: 'PREVIEW' });
     expect(original.status).toBe(200);
@@ -167,9 +180,13 @@ describe('setup and publication invariants', () => {
     const proposal = sqlite.prepare('SELECT outcome_json AS outcomeJson, reviewed_outcome_json AS reviewedOutcomeJson FROM resolution_proposals WHERE phase_id = ?').get(openedData.phaseId) as { outcomeJson: string; reviewedOutcomeJson: string };
     expect((JSON.parse(proposal.outcomeJson) as { hunterRequiredIds: string[] }).hunterRequiredIds).toEqual([]);
     expect((JSON.parse(proposal.reviewedOutcomeJson) as { hunterRequiredIds: string[] }).hunterRequiredIds).toEqual([hunterId]);
+    const events = sqlite.prepare("SELECT actor_moderator_id AS moderatorId, payload_json AS payloadJson FROM game_events WHERE phase_id = ? AND event_type = 'HUNTER_FOLLOWUP_REQUIRED'").all(openedData.phaseId) as Array<{ moderatorId: string; payloadJson: string }>;
+    expect(events).toHaveLength(1);
+    expect(events[0].moderatorId).toBe('mod');
+    expect(JSON.parse(events[0].payloadJson)).toEqual({ source: 'OVERRIDE', hunterIds: [hunterId], overrideReason: 'Controlled Hunter follow-up test' });
   });
 
-  test('removing a previously resolved Hunter does not replay a stale shot', async () => {
+  test.each([true, false])('a finalized Hunter is audited and can be removed by review (submitted: %s)', async (submitted) => {
     const preview = await assignments({ action: 'PREVIEW' });
     const previewData = await preview.json() as { batchId: string; assignments: Array<{ seatId: string; role: string }> };
     expect((await assignments({ action: 'RELEASE', batchId: previewData.batchId })).status).toBe(200);
@@ -182,8 +199,21 @@ describe('setup and publication invariants', () => {
     const openedData = await opened.json() as { phaseId: string };
     await phases({ action: 'LOCK_AND_PROPOSE', phaseId: openedData.phaseId });
     expect((await phases({ action: 'PUBLISH', phaseId: openedData.phaseId, overrideEliminationIds: [hunterId], overrideReason: 'First Hunter outcome for replacement test' })).status).toBe(200);
-    sqlite.prepare("INSERT INTO action_submissions (id,phase_id,actor_seat_id,kind,target_ids_json,version,submitted_at) VALUES (?, ?, ?, 'HUNTER_SHOT', ?, 1, ?)").run('shot', openedData.phaseId, hunterId, JSON.stringify([villagerId]), '2026-01-01');
-    expect((await phases({ action: 'FINALIZE_HUNTER', phaseId: openedData.phaseId })).status).toBe(200);
+    if (submitted) {
+      sqlite.prepare("INSERT INTO action_submissions (id,phase_id,actor_seat_id,kind,target_ids_json,version,submitted_at) VALUES (?, ?, ?, 'HUNTER_SHOT', ?, 1, ?)").run('shot', openedData.phaseId, hunterId, JSON.stringify([villagerId]), '2026-01-01');
+    } else {
+      sqlite.prepare("UPDATE phases SET hunter_deadline_at = '2000-01-01T00:00:00.000Z' WHERE id = ?").run(openedData.phaseId);
+    }
+    const finalize = { action: 'FINALIZE_HUNTER', phaseId: openedData.phaseId, skipHunter: !submitted };
+    expect((await phases(finalize)).status).toBe(200);
+    expect(sqlite.prepare('SELECT status FROM phases WHERE id = ?').get(openedData.phaseId)).toMatchObject({ status: 'PENDING_APPROVAL' });
+    const retried = await phases(finalize);
+    expect(retried.status).toBe(200);
+    expect(await retried.json()).toMatchObject({ ok: true, idempotent: true });
+    const events = sqlite.prepare("SELECT actor_moderator_id AS moderatorId, payload_json AS payloadJson FROM game_events WHERE phase_id = ? AND event_type = 'HUNTER_RESOLVED'").all(openedData.phaseId) as Array<{ moderatorId: string; payloadJson: string }>;
+    expect(events).toHaveLength(1);
+    expect(events[0].moderatorId).toBe('mod');
+    expect(JSON.parse(events[0].payloadJson)).toEqual({ submitted });
     const replaced = await phases({ action: 'PUBLISH', phaseId: openedData.phaseId, overrideEliminationIds: [villagerId], overrideReason: 'Replace the Hunter outcome after review' });
     expect(replaced.status).toBe(200);
     const outcome = sqlite.prepare('SELECT outcome_json AS outcomeJson, reviewed_outcome_json AS reviewedOutcomeJson, published_outcome_json AS publishedOutcomeJson FROM resolution_proposals WHERE phase_id = ?').get(openedData.phaseId) as { outcomeJson: string; reviewedOutcomeJson: string; publishedOutcomeJson: string };
