@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
 interface Operations {
   viewerRole: string | null;
   game: { name: string; status: string; chatRetentionDays: number; finalCutoffAt: string; stoppedAt?: string | null; stopReason?: string | null };
   counts: { total: number; claimed: number; living: number };
+  seats: Array<{ id: string; displayName: string; status: string }>;
   overduePhase: null | { id: string; kind: string; closesAt: string };
   reconciledPhaseIds?: string[];
   activePlayerSessions: number;
@@ -49,18 +50,22 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [moderators, setModerators] = useState<Moderator[]>([]);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [pinSeatId, setPinSeatId] = useState('');
   const [restoreBackupId, setRestoreBackupId] = useState('');
   const [restoreInviteCsv, setRestoreInviteCsv] = useState('');
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const refreshSequence = useRef(0);
 
   const refresh = useCallback(async () => {
+    const sequence = ++refreshSequence.current;
     const [ops, roomData, moderatorData] = await Promise.all([
       parse<Operations>(await fetch(`/api/games/${gameId}/operations`)),
       parse<{ rooms: Room[]; recentMessages: RoomMessage[] }>(await fetch(`/api/games/${gameId}/rooms`)),
       parse<{ moderators: Moderator[] }>(await fetch(`/api/games/${gameId}/moderators`)),
     ]);
+    if (sequence !== refreshSequence.current) return;
     setOperations(ops);
     setRooms(roomData.rooms);
     setMessages(roomData.recentMessages);
@@ -118,6 +123,27 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to add co-moderator.');
+    }
+  }
+
+  async function resetPlayerPin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    try {
+      await post(`/api/games/${gameId}/operations`, {
+        action: 'RESET_PLAYER_PIN',
+        seatId: data.get('seatId'),
+        newPin: data.get('newPin'),
+        reason: data.get('reason'),
+      });
+      form.reset();
+      setPinSeatId('');
+      setMessage('Player PIN replaced and all prior player sessions were invalidated. Share the new PIN privately.');
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to reset the player PIN.');
     }
   }
 
@@ -317,7 +343,8 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
 
       <div className="operations-columns">
         <form className="ops-block" onSubmit={announce}><p className="eyebrow accent">Official announcement</p><label>Title<input name="title" required /></label><label>Message<textarea name="body" rows={4} required /></label><button className="primary-button" type="submit">Publish notice</button></form>
-        <form className="ops-block" onSubmit={addModerator}><p className="eyebrow accent">Co-moderator access</p><p className="field-help">Current: {moderators.map((moderator) => moderator.email).join(', ')}</p><label>Email<input name="email" type="email" required /></label><label>Temporary password<input name="password" type="password" minLength={12} required /></label><button className="secondary-button" type="submit">Add co-moderator</button>{recoveryCodes.length > 0 && <code className="recovery-list">{recoveryCodes.join(' · ')}</code>}</form>
+        <form className="ops-block" onSubmit={addModerator}><p className="eyebrow accent">Co-moderator access</p><p className="field-help">Current: {moderators.map((moderator) => moderator.email).join(', ')}</p><label>Email<input name="email" type="email" required /></label><label>Moderator password<input name="password" type="password" minLength={12} required /></label><p className="field-help">There is no forced expiry; the moderator can recover with a one-time code.</p><button className="secondary-button" type="submit">Add co-moderator</button>{recoveryCodes.length > 0 && <code className="recovery-list">{recoveryCodes.join(' · ')}</code>}</form>
+        <form className="ops-block" onSubmit={resetPlayerPin}><p className="eyebrow accent">Player access recovery</p><p className="field-help">Use when a claimed player forgets a PIN. The new PIN is shown only to you and prior sessions are revoked.</p><label>Player<select name="seatId" value={pinSeatId} onChange={(event) => setPinSeatId(event.target.value)} required><option value="">Choose a claimed seat</option>{operations.seats.filter((seat) => seat.status === 'CLAIMED').map((seat) => <option key={seat.id} value={seat.id}>{seat.displayName}</option>)}</select></label><label>New six-digit PIN<input name="newPin" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required /></label><label>Reason<textarea name="reason" rows={2} minLength={5} required placeholder="Player forgot the previous PIN" /></label><button className="secondary-button" type="submit">Reset player PIN</button></form>
       </div>
 
       <div className="ops-block room-operations"><div className="ops-heading"><div><p className="eyebrow accent">Private rooms</p><p className="field-help">Messages expire after {operations.game.chatRetentionDays} days.</p></div><button className="secondary-button" type="button" onClick={purgeRetention}>Purge expired</button></div><div className="room-health-list">{rooms.map((room) => <div key={room.id}><span>{room.type}</span><strong>{room.memberCount} members · {room.messageCount} messages</strong><button type="button" onClick={() => void toggleRoom(room)}>{room.status === 'OPEN' ? 'Make read-only' : 'Reopen'}</button></div>)}</div>{messages.slice(0, 8).map((chat) => <div className="moderation-line" key={chat.id}><span><strong>{chat.authorName}</strong> in {chat.roomType}</span><p>{chat.body ?? 'Removed message'}</p>{chat.body && <button type="button" onClick={() => void removeMessage(chat.id)}>Remove</button>}</div>)}</div>

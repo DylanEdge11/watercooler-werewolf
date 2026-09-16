@@ -4,47 +4,142 @@ export interface ScheduleDefinition {
   activeWeekdays?: number[];
 }
 
-function localParts(value: string): { year: number; month: number; day: number; hour: number; minute: number; second: number } {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/u.exec(value);
+interface LocalDateTimeParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function isValidParts(parts: LocalDateTimeParts): boolean {
+  return parts.month >= 1
+    && parts.month <= 12
+    && parts.day >= 1
+    && parts.day <= daysInMonth(parts.year, parts.month)
+    && parts.hour >= 0
+    && parts.hour <= 23
+    && parts.minute >= 0
+    && parts.minute <= 59
+    && parts.second >= 0
+    && parts.second <= 59;
+}
+
+function localParts(value: string): LocalDateTimeParts {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/u.exec(value);
   if (!match) throw new Error('Date and time must use YYYY-MM-DDTHH:mm.');
   const [, year, month, day, hour, minute, second = '0'] = match;
-  return { year: Number(year), month: Number(month), day: Number(day), hour: Number(hour), minute: Number(minute), second: Number(second) };
+  const parts = { year: Number(year), month: Number(month), day: Number(day), hour: Number(hour), minute: Number(minute), second: Number(second) };
+  if (!isValidParts(parts)) throw new Error('The date and time is not a real calendar value.');
+  return parts;
+}
+
+/** Return whether a date-only input is a real Gregorian calendar date. */
+export function isValidCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+  if (!match) return false;
+  return isValidParts({ year: Number(match[1]), month: Number(match[2]), day: Number(match[3]), hour: 0, minute: 0, second: 0 });
+}
+
+export function assertValidCalendarDate(value: string, label = 'Date'): void {
+  if (!isValidCalendarDate(value)) throw new Error(`${label} must be a real YYYY-MM-DD calendar date.`);
+}
+
+export function assertValidTimeZone(timeZone: string): void {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());
+  } catch {
+    throw new Error('The game timezone must be a valid IANA timezone.');
+  }
+}
+
+function formattedParts(instant: number, timeZone: string): LocalDateTimeParts {
+  const values = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
+      .formatToParts(new Date(instant))
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  ) as Record<string, string>;
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+    second: Number(values.second),
+  };
+}
+
+function sameParts(left: LocalDateTimeParts, right: LocalDateTimeParts): boolean {
+  return left.year === right.year
+    && left.month === right.month
+    && left.day === right.day
+    && left.hour === right.hour
+    && left.minute === right.minute
+    && left.second === right.second;
 }
 
 function offsetAt(instant: number, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).formatToParts(new Date(instant));
-  const values = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
-  const hour = Number(values.hour) === 24 ? 0 : Number(values.hour);
-  return Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day), hour, Number(values.minute), Number(values.second)) - instant;
+  const parts = formattedParts(instant, timeZone);
+  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) - instant;
 }
 
 /** Convert a datetime-local value in the game's IANA zone to an absolute UTC ISO. */
 export function zonedDateTimeToUtcIso(value: string, timeZone: string): string {
-  new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());
+  assertValidTimeZone(timeZone);
   const parts = localParts(value);
   const localAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
-  let instant = localAsUtc - offsetAt(localAsUtc, timeZone);
-  instant = localAsUtc - offsetAt(instant, timeZone);
-  return new Date(instant).toISOString();
+  // Sample the nearby offsets, then verify candidates by formatting them back
+  // in the zone. This makes DST gaps reject instead of normalizing to another
+  // wall-clock value, while a repeated fall-back time deterministically uses
+  // the earlier occurrence (the smaller UTC instant).
+  const offsets = new Set(
+    [-172_800_000, -86_400_000, -21_600_000, 0, 21_600_000, 86_400_000, 172_800_000]
+      .map((delta) => offsetAt(localAsUtc + delta, timeZone)),
+  );
+  const candidates = [...offsets]
+    .map((offset) => localAsUtc - offset)
+    .filter((instant, index, all) => all.indexOf(instant) === index)
+    .filter((instant) => sameParts(formattedParts(instant, timeZone), parts))
+    .sort((left, right) => left - right);
+  if (!candidates.length) {
+    throw new Error('The selected local time does not exist in the game timezone (usually a daylight-saving transition).');
+  }
+  return new Date(candidates[0]).toISOString();
 }
 
 export function parseScheduledDate(value: string, timeZone: string): Date {
   if (!value || typeof value !== 'string') throw new Error('The deadline is required.');
   if (/Z$|[+-]\d{2}:?\d{2}$/u.test(value)) {
+    const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?)(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/u.exec(value);
+    if (!match) throw new Error('The deadline is not a valid date and time.');
+    localParts(match[1]);
     const parsed = new Date(value);
     if (Number.isNaN(parsed.valueOf())) throw new Error('The deadline is not a valid date and time.');
     return parsed;
   }
   return new Date(zonedDateTimeToUtcIso(value, timeZone));
+}
+
+/** Format an instant as a datetime-local value in the game's timezone. */
+export function formatZonedDateTimeLocal(date: Date, timeZone: string): string {
+  assertValidTimeZone(timeZone);
+  const parts = formattedParts(date.valueOf(), timeZone);
+  return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}T${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`;
 }
 
 export function validateSchedule(schedule: ScheduleDefinition): string[] {
@@ -70,8 +165,16 @@ export async function reconcileDuePhases(db: D1Database, gameId: string, moderat
     statements.push(
       db.prepare("UPDATE phases SET status = 'LOCKED', version = version + 1, updated_at = ? WHERE id = ? AND status = 'OPEN'").bind(nowIso, phase.id),
       // Stable IDs make retries and concurrent moderator refreshes harmless.
-      db.prepare(`INSERT OR IGNORE INTO game_events (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at) VALUES (?, ?, ?, 'PHASE_DEADLINE_REACHED', ?, ?, ?)`).bind(`deadline-${phase.id}`, gameId, phase.id, moderatorId, JSON.stringify({ kind: phase.kind, closesAt: phase.closesAt }), nowIso),
-      db.prepare(`INSERT OR IGNORE INTO operational_events (id, game_id, severity, source, message, details_json, created_at) VALUES (?, ?, 'INFO', 'SCHEDULER', 'A phase deadline was reached and responses were locked.', ?, ?)`).bind(`deadline-${phase.id}`, gameId, JSON.stringify({ phaseId: phase.id, kind: phase.kind, closesAt: phase.closesAt }), nowIso),
+      db.prepare(`INSERT OR IGNORE INTO game_events (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
+                  SELECT ?, ?, ?, 'PHASE_DEADLINE_REACHED', ?, ?, ?
+                  WHERE EXISTS (SELECT 1 FROM phases p JOIN games g ON g.id = p.game_id
+                                WHERE p.id = ? AND p.status = 'LOCKED' AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN'))`)
+        .bind(`deadline-${phase.id}`, gameId, phase.id, moderatorId, JSON.stringify({ kind: phase.kind, closesAt: phase.closesAt }), nowIso, phase.id),
+      db.prepare(`INSERT OR IGNORE INTO operational_events (id, game_id, severity, source, message, details_json, created_at)
+                  SELECT ?, ?, 'INFO', 'SCHEDULER', 'A phase deadline was reached and responses were locked.', ?, ?
+                  WHERE EXISTS (SELECT 1 FROM phases p JOIN games g ON g.id = p.game_id
+                                WHERE p.id = ? AND p.status = 'LOCKED' AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN'))`)
+        .bind(`deadline-${phase.id}`, gameId, JSON.stringify({ phaseId: phase.id, kind: phase.kind, closesAt: phase.closesAt }), nowIso, phase.id),
     );
   }
   await db.batch(statements);

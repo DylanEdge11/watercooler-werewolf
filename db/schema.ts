@@ -9,13 +9,22 @@ export type GameStatus =
   | 'FINAL_SHOWDOWN'
   | 'COMPLETED'
   | 'STOPPED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  // These values are short-lived database claims. They are never a player-
+  // facing lifecycle state, but make setup transitions race-safe.
+  | 'COMPOSITION_SAVING'
+  | 'ASSIGNMENT_PREVIEWING'
+  | 'ROSTER_IMPORTING'
+  | 'RESETTING'
+  | 'RESTORING';
 export type PhaseStatus =
   | 'SCHEDULED'
   | 'OPEN'
   | 'LOCKED'
   | 'PENDING_HUNTER'
   | 'PENDING_APPROVAL'
+  | 'HUNTER_FINALIZING'
+  | 'PUBLISHING'
   | 'PUBLISHED'
   | 'SUPERSEDED';
 
@@ -67,6 +76,10 @@ export const games = sqliteTable(
     chatRetentionDays: integer('chat_retention_days').notNull().default(7),
     finalCutoffAt: text('final_cutoff_at').notNull(),
     publicationMode: text('publication_mode').$type<'REVIEW' | 'AUTOMATIC'>().notNull().default('REVIEW'),
+    // Incremented whenever setup inputs change. Assignment previews capture
+    // this value so an old preview cannot be released after a roster or
+    // composition change.
+    setupRevision: integer('setup_revision').notNull().default(1),
     stoppedAt: text('stopped_at'),
     stoppedByModeratorId: text('stopped_by_moderator_id').references(() => moderatorAccounts.id),
     stopReason: text('stop_reason'),
@@ -171,6 +184,9 @@ export const assignmentBatches = sqliteTable(
       .notNull()
       .references(() => games.id, { onDelete: 'cascade' }),
     revision: integer('revision').notNull(),
+    setupRevision: integer('setup_revision').notNull().default(1),
+    rosterFingerprint: text('roster_fingerprint').notNull().default(''),
+    compositionFingerprint: text('composition_fingerprint').notNull().default(''),
     assignmentsJson: text('assignments_json').notNull(),
     randomEvidenceHash: text('random_evidence_hash').notNull(),
     releasedAt: text('released_at'),
@@ -271,6 +287,8 @@ export const resolutionProposals = sqliteTable(
     overrideJson: text('override_json'),
     reviewedByModeratorId: text('reviewed_by_moderator_id').references(() => moderatorAccounts.id),
     reviewedAt: text('reviewed_at'),
+    reviewedOutcomeJson: text('reviewed_outcome_json'),
+    publishedOutcomeJson: text('published_outcome_json'),
     createdAt: text('created_at').notNull(),
   },
   (table) => [
@@ -434,3 +452,9 @@ export const pilotFeedback = sqliteTable(
   },
   (table) => [index('idx_pilot_feedback_game_time').on(table.gameId, table.createdAt)],
 );
+
+export const rateLimitBuckets = sqliteTable('rate_limit_buckets', {
+  bucketKey: text('bucket_key').primaryKey(),
+  windowStartedAt: text('window_started_at').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+});

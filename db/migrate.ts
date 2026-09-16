@@ -1,5 +1,7 @@
 import initialMigration from '../drizzle/0000_dashing_smiling_tiger.sql?raw';
 import bodyguardAndLifecycleMigration from '../drizzle/0001_bodyguard_and_lifecycle.sql?raw';
+import pilotHardeningMigration from '../drizzle/0002_pilot_hardening.sql?raw';
+import reviewedOutcomeMigration from '../drizzle/0003_reviewed_outcome.sql?raw';
 import {
   alteredColumn,
   classifyInitialSchema,
@@ -9,8 +11,12 @@ import {
 } from '../lib/db/migration-state';
 import { getD1 } from './index';
 
-const INITIAL_VERSION = '0000_dashing_smiling_tiger';
-const LIFECYCLE_VERSION = '0001_bodyguard_and_lifecycle';
+const migrations = [
+  { version: '0000_dashing_smiling_tiger', sql: initialMigration },
+  { version: '0001_bodyguard_and_lifecycle', sql: bodyguardAndLifecycleMigration },
+  { version: '0002_pilot_hardening', sql: pilotHardeningMigration },
+  { version: '0003_reviewed_outcome', sql: reviewedOutcomeMigration },
+] as const;
 let initialization: Promise<void> | undefined;
 
 export async function ensureDatabase(): Promise<void> {
@@ -22,7 +28,11 @@ export async function ensureDatabase(): Promise<void> {
 }
 
 async function initializeDatabase(): Promise<void> {
-  const db = getD1();
+  return applyMigrations(getD1());
+}
+
+/** Apply the checked-in migration chain to a D1-compatible database. */
+export async function applyMigrations(db: D1Database): Promise<void> {
   await db
     .prepare(
       `CREATE TABLE IF NOT EXISTS __app_migrations (
@@ -35,34 +45,37 @@ async function initializeDatabase(): Promise<void> {
   const appliedRows = await db.prepare('SELECT version FROM __app_migrations').all<{ version: string }>();
   const applied = new Set(appliedRows.results.map((row) => row.version));
 
-  if (!applied.has(INITIAL_VERSION)) {
-    const expectedTables = extractCreatedTableNames(initialMigration);
-    const existingRows = await db
-      .prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")
-      .all<{ name: string }>();
-    const schemaState = classifyInitialSchema(
-      expectedTables,
-      existingRows.results.map((row) => row.name),
-    );
-
-    if (schemaState.kind === 'PARTIAL') {
-      throw new Error(
-        `Database has a partial initial schema; refusing an unsafe repair. Missing tables: ${schemaState.missing.join(', ')}.`,
+  for (const migration of migrations) {
+    if (applied.has(migration.version)) continue;
+    if (migration.version === migrations[0].version) {
+      const expectedTables = extractCreatedTableNames(migration.sql);
+      const existingRows = await db
+        .prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")
+        .all<{ name: string }>();
+      const schemaState = classifyInitialSchema(
+        expectedTables,
+        existingRows.results.map((row) => row.name),
       );
+
+      if (schemaState.kind === 'PARTIAL') {
+        throw new Error(
+          `Database has a partial initial schema; refusing an unsafe repair. Missing tables: ${schemaState.missing.join(', ')}.`,
+        );
+      }
+
+      const initialStatements =
+        schemaState.kind === 'EMPTY'
+          ? splitMigrationStatements(migration.sql).map(makeCreateStatementIdempotent)
+          : [];
+      await db.batch([
+        ...initialStatements.map((statement) => db.prepare(statement)),
+        migrationRecord(db, migration.version),
+      ]);
+      applied.add(migration.version);
+      continue;
     }
 
-    const initialStatements =
-      schemaState.kind === 'EMPTY'
-        ? splitMigrationStatements(initialMigration).map(makeCreateStatementIdempotent)
-        : [];
-    await db.batch([
-      ...initialStatements.map((statement) => db.prepare(statement)),
-      migrationRecord(db, INITIAL_VERSION),
-    ]);
-  }
-
-  if (!applied.has(LIFECYCLE_VERSION)) {
-    const statements = splitMigrationStatements(bodyguardAndLifecycleMigration);
+    const statements = splitMigrationStatements(migration.sql);
     const columnsByTable = new Map<string, Set<string>>();
     for (const statement of statements) {
       const alteration = alteredColumn(statement);
@@ -81,8 +94,9 @@ async function initializeDatabase(): Promise<void> {
       .map(makeCreateStatementIdempotent);
     await db.batch([
       ...safeStatements.map((statement) => db.prepare(statement)),
-      migrationRecord(db, LIFECYCLE_VERSION),
+      migrationRecord(db, migration.version),
     ]);
+    applied.add(migration.version);
   }
 
   await db.prepare('PRAGMA optimize').run();

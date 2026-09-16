@@ -6,7 +6,12 @@ export type LifecycleGameStatus =
   | 'FINAL_SHOWDOWN'
   | 'COMPLETED'
   | 'STOPPED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'COMPOSITION_SAVING'
+  | 'ASSIGNMENT_PREVIEWING'
+  | 'ROSTER_IMPORTING'
+  | 'RESETTING'
+  | 'RESTORING';
 
 export interface LifecycleDecision {
   allowed: boolean;
@@ -36,5 +41,8 @@ export function canResetGame(
     return { allowed: false, error: 'Reset requires typing the exact game name.' };
   }
   if (status === 'CANCELLED') return { allowed: false, error: 'A cancelled game cannot be reset.' };
+  if (['COMPOSITION_SAVING', 'ASSIGNMENT_PREVIEWING', 'ROSTER_IMPORTING', 'RESETTING', 'RESTORING'].includes(status)) {
+    return { allowed: false, error: 'A setup or recovery operation is already in progress. Refresh and try again when it finishes.' };
+  }
   return { allowed: true, idempotent: status === 'DRAFT' };
 }

@@ -1,7 +1,7 @@
 import { getD1 } from '../../../db';
 import { ensureDatabase } from '../../../db/migrate';
 import { requireModerator } from '../../../lib/auth/authorization';
-import { parseScheduledDate, validateSchedule } from '../../../lib/game/scheduling';
+import { assertValidCalendarDate, assertValidTimeZone, parseScheduledDate, validateSchedule } from '../../../lib/game/scheduling';
 import { assertSameOrigin, jsonError } from '../../../lib/http/security';
 
 interface CreateGameBody {
@@ -42,11 +42,10 @@ export async function POST(request: Request) {
     const name = body.name?.trim() ?? '';
     if (name.length < 3 || name.length > 80) throw new Error('Game name must be 3–80 characters.');
     if (!body.timezone) throw new Error('A game timezone is required.');
-    new Intl.DateTimeFormat('en-CA', { timeZone: body.timezone }).format(new Date());
+    assertValidTimeZone(body.timezone);
     if (!body.startDate || !body.endDate || !body.finalCutoffAt) throw new Error('Start, end, and final cutoff are required.');
-    if (!/^\d{4}-\d{2}-\d{2}$/u.test(body.startDate) || !/^\d{4}-\d{2}-\d{2}$/u.test(body.endDate)) {
-      throw new Error('Start and end dates must use YYYY-MM-DD.');
-    }
+    assertValidCalendarDate(body.startDate, 'Start date');
+    assertValidCalendarDate(body.endDate, 'End date');
     if (body.startDate > body.endDate) throw new Error('The end date must be on or after the start date.');
     const finalCutoffAt = parseScheduledDate(body.finalCutoffAt, body.timezone);
     if (

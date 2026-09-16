@@ -86,7 +86,7 @@ export async function POST(request: Request, context: RouteContext) {
     if (pendingHunter) {
       const proposal = await db
         .prepare(
-          `SELECT outcome_json AS outcomeJson FROM resolution_proposals
+          `SELECT COALESCE(reviewed_outcome_json, outcome_json) AS outcomeJson FROM resolution_proposals
            WHERE phase_id = ? AND status = 'PROPOSED' ORDER BY created_at DESC LIMIT 1`,
         )
         .bind(phase.id)
@@ -110,23 +110,53 @@ export async function POST(request: Request, context: RouteContext) {
 
     const now = new Date().toISOString();
     const actionId = crypto.randomUUID();
-    await db.batch([
+    const acceptedWindow = pendingHunter
+      ? "p.status = 'PENDING_HUNTER' AND p.hunter_deadline_at > ?"
+      : "p.status = 'OPEN' AND p.closes_at > ?";
+    const result = await db.batch([
       db
         .prepare(
           `INSERT INTO action_submissions
            (id, phase_id, actor_seat_id, kind, target_ids_json, version, submitted_at)
-           SELECT ?, ?, ?, ?, ?, COALESCE(MAX(version), 0) + 1, ?
-           FROM action_submissions
-           WHERE phase_id = ? AND actor_seat_id = ? AND kind = ?`,
+           SELECT ?, ?, ?, ?, ?,
+                  COALESCE((SELECT MAX(version) FROM action_submissions
+                            WHERE phase_id = ? AND actor_seat_id = ? AND kind = ?), 0) + 1,
+                  ?
+           FROM phases p JOIN games g ON g.id = p.game_id
+           WHERE p.id = ? AND p.game_id = ? AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN')
+             AND ${acceptedWindow}
+             AND EXISTS (
+               SELECT 1 FROM seats s
+               WHERE s.id = ? AND s.game_id = p.game_id AND s.status = 'CLAIMED' AND s.alive = 1
+             )`,
         )
-        .bind(actionId, phase.id, actor.id, permission.actionKind, JSON.stringify(targetIds), now, phase.id, actor.id, permission.actionKind),
+        .bind(
+          actionId,
+          phase.id,
+          actor.id,
+          permission.actionKind,
+          JSON.stringify(targetIds),
+          phase.id,
+          actor.id,
+          permission.actionKind,
+          now,
+          phase.id,
+          identity.gameId,
+          now,
+          actor.id,
+        ),
       db
         .prepare(
           `UPDATE action_submissions SET superseded_at = ?
-           WHERE phase_id = ? AND actor_seat_id = ? AND kind = ? AND superseded_at IS NULL AND id != ?`,
+           WHERE phase_id = ? AND actor_seat_id = ? AND kind = ? AND superseded_at IS NULL AND id != ?
+             AND EXISTS (SELECT 1 FROM action_submissions WHERE id = ?)`,
         )
-        .bind(now, phase.id, actor.id, permission.actionKind, actionId),
+        .bind(now, phase.id, actor.id, permission.actionKind, actionId, actionId),
     ]);
+    if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
+      await recordLateAttempt();
+      return jsonError('The phase closed while your response was being saved. Refresh and try again if a response window is still open.', 409);
+    }
     const revision = await db
       .prepare('SELECT version FROM action_submissions WHERE id = ? LIMIT 1')
       .bind(actionId)

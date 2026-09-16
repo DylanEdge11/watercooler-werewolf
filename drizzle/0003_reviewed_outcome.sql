@@ -1,0 +1,1 @@
+ALTER TABLE `resolution_proposals` ADD `reviewed_outcome_json` text;

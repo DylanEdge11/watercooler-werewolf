@@ -8,6 +8,27 @@
       "when": 1788069584089,
       "tag": "0000_dashing_smiling_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789514678591,
+      "tag": "0001_bodyguard_and_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789514678592,
+      "tag": "0002_pilot_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789519799037,
+      "tag": "0003_reviewed_outcome",
+      "breakpoints": true
     }
   ]
 }

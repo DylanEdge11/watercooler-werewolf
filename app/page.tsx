@@ -42,7 +42,9 @@ interface DashboardData {
       eliminations?: Array<{ displayName: string; role: string; cause: string }>;
     };
   }>;
-  notifications: Array<{ id: string; title: string; body: string; createdAt: string }>;
+  notifications: Array<{ id: string; type: string; title: string; body: string; createdAt: string }>;
+  notificationsHasMore?: boolean;
+  notificationsNextCursor?: { createdAt: string; id: string } | null;
   rooms: Array<{ id: string; type: 'WEREWOLF' | 'MASON' | 'DEAD'; status: string; access: string }>;
 }
 
@@ -94,11 +96,16 @@ export default function Home() {
   const [feedbackError, setFeedbackError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sendingFeedback, setSendingFeedback] = useState(false);
+  const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
   const selectionDirty = useRef(false);
   const selectionPhaseId = useRef<string | null>(null);
+  const olderNotifications = useRef<DashboardData['notifications']>([]);
+  const refreshSequence = useRef(0);
 
   const refresh = useCallback(async (preserveLocalSelection = false) => {
+    const sequence = ++refreshSequence.current;
     const response = await fetch('/api/player');
+    if (sequence !== refreshSequence.current) return;
     if (response.status === 401) {
       setUnauthenticated(true);
       setLoading(false);
@@ -106,11 +113,16 @@ export default function Home() {
     }
     const result = await response.json() as DashboardData & { error?: string };
     if (!response.ok) throw new Error(result.error ?? 'Unable to load the game.');
+    if (sequence !== refreshSequence.current) return;
     const incomingPhaseId = result.phase?.id ?? null;
     const keepLocalSelection = preserveLocalSelection
       && selectionDirty.current
       && selectionPhaseId.current === incomingPhaseId;
-    setData(result);
+    const mergedNotifications = [
+      ...result.notifications,
+      ...olderNotifications.current.filter((older) => !result.notifications.some((current) => current.id === older.id)),
+    ];
+    setData({ ...result, notifications: mergedNotifications });
     if (!keepLocalSelection) {
       setSelected(result.currentAction?.targetIds ?? []);
       selectionDirty.current = false;
@@ -119,6 +131,35 @@ export default function Home() {
     setUnauthenticated(false);
     setLoading(false);
   }, []);
+
+  async function loadOlderNotifications() {
+    if (!data?.notificationsNextCursor || loadingOlderNotifications) return;
+    const sequence = ++refreshSequence.current;
+    setLoadingOlderNotifications(true);
+    try {
+      const params = new URLSearchParams({
+        notificationBefore: data.notificationsNextCursor.createdAt,
+        notificationBeforeId: data.notificationsNextCursor.id,
+      });
+      const response = await fetch(`/api/player?${params.toString()}`);
+      const result = await response.json() as DashboardData & { error?: string };
+      if (sequence !== refreshSequence.current) return;
+      if (!response.ok) throw new Error(result.error ?? 'Unable to load older updates.');
+      setData((current) => {
+        if (!current) return current;
+        const merged = [
+          ...current.notifications,
+          ...result.notifications.filter((incoming) => !current.notifications.some((existing) => existing.id === incoming.id)),
+        ];
+        olderNotifications.current = merged.slice(result.notifications.length);
+        return { ...current, notifications: merged, notificationsHasMore: result.notificationsHasMore, notificationsNextCursor: result.notificationsNextCursor };
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to load older updates.');
+    } finally {
+      setLoadingOlderNotifications(false);
+    }
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -297,12 +338,12 @@ export default function Home() {
               <div className="ballot-footer"><p><span>●</span> Your latest revision counts when the phase locks.</p><button className="primary-button" type="button" onClick={submitAction} disabled={submitting || selected.length === 0}>{submitting ? 'Saving…' : 'Save response'}</button></div>
             </section>
           ) : (
-            <section className="ballot-card waiting-card"><span className="waiting-icon" aria-hidden="true">◐</span><div><h2>{data.permission.label}</h2><p>{data.player.alive ? 'You can step away. This page will show the next official action when it opens.' : 'Published outcomes and game announcements will continue to appear here.'}</p></div><button className="secondary-button" onClick={() => void refresh()}>Check for updates</button></section>
+            <section className="ballot-card waiting-card"><span className="waiting-icon" aria-hidden="true">◐</span><div><h2>{data.permission.label}</h2><p>{data.game.status === 'COMPLETED' ? 'This campaign is complete. Review the official timeline and your private result history below.' : data.player.alive ? 'You can step away. This page will show the next official action when it opens.' : 'Published outcomes and game announcements will continue to appear here.'}</p></div><button className="secondary-button" onClick={() => void refresh()}>Check for updates</button></section>
           )}
         </section>
 
         <aside className="right-rail">
-          {data.notifications[0] && <section className="rail-card announcement" id="notifications"><p className="eyebrow">Private result</p><h2>{data.notifications[0].title}</h2><p>{data.notifications[0].body}</p><small>{new Date(data.notifications[0].createdAt).toLocaleString()}</small></section>}
+          {data.notifications.length > 0 && <section className="rail-card announcement" id="notifications"><div className="rail-heading"><div><p className="eyebrow">Your updates</p><h2>Private result history</h2></div><span>{data.notifications.length}</span></div><div className="timeline-mini">{data.notifications.map((notification) => <article key={notification.id}><strong>{notification.type === 'ANNOUNCEMENT' ? 'Announcement' : 'Private investigation'}</strong><h3>{notification.title}</h3><p>{notification.body}</p><small>{new Date(notification.createdAt).toLocaleString()}</small></article>)}</div>{data.notificationsHasMore && <button className="secondary-button" type="button" onClick={() => void loadOlderNotifications()} disabled={loadingOlderNotifications}>{loadingOlderNotifications ? 'Loading older updates…' : 'Load older updates'}</button>}</section>}
           {data.player.teammates.length > 0 && <section className="rail-card" id="team"><div className="rail-heading"><h2>{data.player.role === 'WEREWOLF' ? 'Your pack' : 'Fellow Masons'}</h2><span>{data.player.teammates.length}</span></div><div className="player-stack">{data.player.teammates.map((teammate) => <div className="player-row" key={teammate.id}><span className="candidate-avatar small">{initials(teammate.displayName)}</span><span><strong>{teammate.displayName}</strong><small>{teammate.alive ? 'Living' : 'Eliminated'}</small></span><span className={`ready-dot ${teammate.alive ? 'ready' : ''}`} /></div>)}</div></section>}
           {data.rooms.length > 0 && <PrivateRoomChat rooms={data.rooms} />}
           <section className="rail-card" id="timeline"><div className="rail-heading"><h2>Official timeline</h2><span>{data.timeline.length}</span></div>{data.timeline.length ? <div className="timeline-mini">{data.timeline.map((event) => <article key={event.id}><strong>{event.eventType === 'GAME_COMPLETED' ? `${event.payload.winner} wins` : event.eventType === 'GAME_STOPPED' ? 'Campaign stopped' : event.eventType === 'FINAL_SHOWDOWN_ENTERED' ? 'Final showdown entered' : event.eventType === 'ANNOUNCEMENT' ? event.payload.title : `${event.payload.kind} resolved`}</strong><p>{event.eventType === 'ANNOUNCEMENT' ? event.payload.body : event.eventType === 'GAME_STOPPED' ? 'Player actions are blocked and rooms are read-only.' : event.eventType === 'FINAL_SHOWDOWN_ENTERED' ? 'The final ballot is now the only legal phase.' : event.payload.eliminations?.length ? event.payload.eliminations.map((item) => `${item.displayName} · ${item.role}`).join(', ') : 'No elimination published.'}</p><small>{new Date(event.createdAt).toLocaleString()}</small></article>)}</div> : <p>No published outcomes yet.</p>}</section>
