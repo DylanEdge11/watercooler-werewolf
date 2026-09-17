@@ -6,7 +6,7 @@ Last updated: 2026-09-16
 
 The application has been migrated in the working tree to a native Next.js App Router application with a server-only libSQL database boundary. Local migration, bootstrap, provider-concurrency, domain, build, and fictional 20-player rehearsal checks pass. A Vercel project shell is configured in the `dyl-edge` team, but preview and production deployments are intentionally not claimed: a remote Turso database and its environment-specific credentials have not been provisioned in this session.
 
-The old Sites deployment and database were not modified or deleted. No paid plan, add-on, custom domain, live-data copy, email service, SSO provider, AI feature, or WebSocket was added.
+The old Sites deployment and database were not modified or deleted. No paid plan, add-on, custom domain, live-data copy, email service, SSO provider, AI feature, or WebSocket was added. The operator-facing next-step proof is in [VERCEL_SETUP_GUIDE.md](VERCEL_SETUP_GUIDE.md).
 
 ## Decisions
 

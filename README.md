@@ -23,6 +23,8 @@ npm audit --json > audit-full.json
 
 `npm run db:migrate` is the explicit schema operation; requests never run DDL. `npm run owner:bootstrap` is a one-time trusted-operator command. It reads the initial password without echoing it, creates the singleton primary moderator, and prints recovery codes once. Do not put passwords, invite codes, tokens, or production values in this repository.
 
+For the complete dummy local proof and Vercel/Turso setup sequence, see [VERCEL_SETUP_GUIDE.md](VERCEL_SETUP_GUIDE.md).
+
 `npm run pilot:setup` creates a disposable local game from the fictional 20-player fixture and writes a one-time invite CSV under `outputs/`. It is deliberately mutation-gated: set `PILOT_ALLOW_MUTATION=yes` and provide a fictional `PILOT_MODERATOR_PASSWORD` (at least 12 characters). The default URL is `http://localhost:3000`; use `PILOT_BASE_URL` only for an explicitly approved fictional staging environment and also set `PILOT_ALLOW_REMOTE=yes`. The helper requires an existing app-owned moderator and never creates or bypasses owner setup. Never run it against production data. In PowerShell:
 
 ```powershell
