@@ -4,14 +4,14 @@ Last updated: 2026-09-16
 
 ## Current status
 
-The application has been migrated in the working tree to a native Next.js App Router application with a server-only libSQL database boundary. Local migration, bootstrap, provider-concurrency, domain, build, and fictional 20-player rehearsal checks pass. A Vercel project shell is configured in the `dyl-edge` team, but preview and production deployments are intentionally not claimed: a remote Turso database and its environment-specific credentials have not been provisioned in this session.
+The application has been migrated to a native Next.js App Router application with a server-only libSQL database boundary. Local checks pass, and the hosted Preview environment now has a remote Turso database, environment variables, a Ready Vercel deployment, a working moderator login, and a fictional automated 20-player rehearsal with every check passing. A separate Production deployment exists but has no Production database credentials yet; it is not ready for real play.
 
 The old Sites deployment and database were not modified or deleted. No paid plan, add-on, custom domain, live-data copy, email service, SSO provider, AI feature, or WebSocket was added. The operator-facing next-step proof is in [VERCEL_SETUP_GUIDE.md](VERCEL_SETUP_GUIDE.md).
 
 ## Decisions
 
 - Target: native Next.js App Router on the Vercel Node.js runtime, with Node 22.x pinned in `package.json`, `.nvmrc`, CI, and the Vercel project settings.
-- Database: free Turso/libSQL is the selected candidate. The application uses `@libsql/client` 0.18.0 through an application-owned contract. The ordered batch API, rollback behavior, affected-row metadata, SQLite SQL, foreign keys, and result mapping were exercised against an isolated real libSQL client/database. A remote Turso account/database has not yet been created, so remote persistence is an external gate.
+- Database: free Turso/libSQL is the selected candidate. The application uses `@libsql/client` 0.18.0 through an application-owned contract. The ordered batch API, rollback behavior, affected-row metadata, SQLite SQL, foreign keys, and result mapping were exercised against an isolated real libSQL client/database. A remote Turso Preview database has now been created and exercised; a separate Production database remains an external gate.
 - Cost: Vercel Hobby plus a free remote SQLite-compatible database remains the target for this personal, non-commercial pilot. No billable provisioning was performed.
 - Scheduling: moderator-driven Operations reconciliation remains the supported low-cost path. Server-enforced cutoffs remain in the action endpoints. No minute-frequency cron was configured; the scheduler route accepts authenticated `GET` with `Bearer CRON_SECRET` and retains `POST` compatibility for an external caller.
 - Data: start with a fresh database. Existing games are disposable, and no live-data migration was implemented.
@@ -34,7 +34,7 @@ Key target-contract files: `db/contracts.ts`, `db/libsql.ts`, `db/index.ts`, `db
 
 ## Stage 2 — Database implementation and migrations
 
-Status: complete locally; remote-provider provisioning remains blocked on account access.
+Status: complete for local and hosted Preview verification; Production provider provisioning remains pending.
 
 Implemented:
 
@@ -47,12 +47,12 @@ Implemented:
 
 Checks completed:
 
-- `npm run db:migrate` — passed against the local development database; rerun reports all 5 migrations current.
+- `npm run db:migrate` — passed against the hosted Preview Turso database; the database reports all 5 migrations current.
 - `npx drizzle-kit check` — passed (`Everything's fine`).
 - `npm test -- --run` — provider and domain suite passed: 26 files, 83 tests.
-- `pilot:setup` and `pilot:rehearsal` used separate command processes against the persisted fictional local database. The rehearsal passed all 10 checks, including 20 seat claims, stale-preview rejection, role composition, Hunter follow-up, private investigation, Stop visibility, Reset session invalidation, and reset/reimport.
+- `pilot:setup` and `pilot:rehearsal` used separate command processes against the hosted Preview deployment with fictional data. The rehearsal passed all checks, including 20 seat claims, stale-preview rejection, role composition, Hunter follow-up, private investigation, Stop visibility, Reset session invalidation, and reset/reimport.
 
-Not yet verified: a newly provisioned remote Turso database, remote network failure behavior, and remote restart persistence. Local restart persistence is verified by reopening a file-backed database with a second provider client, and the local application path is also exercised by the separate setup/rehearsal invocations and repeat migration command.
+Not yet verified: remote network failure behavior and remote restart persistence. Local restart persistence is verified by reopening a file-backed database with a second provider client, and the local application path is also exercised by the separate setup/rehearsal invocations and repeat migration command.
 
 ## Stage 3 — Native Next.js build
 
@@ -75,7 +75,7 @@ Checks completed:
 
 ## Stage 4 — Credentials, owner setup, and environment
 
-Status: complete locally.
+Status: complete locally and for the hosted Preview deployment; Production remains pending.
 
 Implemented:
 
@@ -111,7 +111,7 @@ Checks completed:
 
 ## Stage 6 — Verification gate
 
-Status: complete for local/isolated verification; browser and remote deployment portions are explicitly separated below.
+Status: complete for local and hosted Preview automated verification; manual browser show-and-play and Production remain pending.
 
 | Command or check | Result |
 | --- | --- |
@@ -123,22 +123,24 @@ Status: complete for local/isolated verification; browser and remote deployment 
 | `npx drizzle-kit check` | Passed. |
 | `npm audit --omit=dev --audit-level=moderate` | Passed: 0 production vulnerabilities. |
 | `npm audit --json` | Exit 1 because of 4 moderate development-only advisories in the Drizzle-kit/esbuild toolchain; no high/critical finding. The full report's suggested fix is a breaking toolchain change, so it was not applied without a need. |
-| `npm run db:migrate` | Passed; local database reports 5 migrations current. |
+| `npm run db:migrate` | Passed against the hosted Preview database; all 5 migrations are current. |
 | Fictional 20-player setup/rehearsal | Passed: 10/10 rehearsal checks. |
 | File-backed provider restart check | Passed: a second `@libsql/client/node` client reopened the database after the first client closed and read the previously inserted `persisted` row; the temporary probe file was removed. |
 | Desktop browser | In-app CUA verified landing, player-login, moderator sign-in, and anonymous protected-endpoint rejection. API response included `Cache-Control: private, no-store, max-age=0` and `Vary: Cookie, Origin`. |
+| Hosted Preview deployment | Passed: Vercel deployment is Ready at https://watercooler-werewolf-a0oxuxxn7-dyl-edge.vercel.app; the operator signed in to the moderator console. |
+| Hosted Preview fictional rehearsal | Passed: remote pilot rehearsal completed with every check true after the protected-deployment automation bypass was supplied. |
 
 The restart check command was `node --input-type=module -e 'import { createClient } from "@libsql/client/node"; const url = "file:./work/restart-persistence-check-2.db"; const first = createClient({ url }); await first.execute("CREATE TABLE restart_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL)"); await first.execute({ sql: "INSERT INTO restart_probe (value) VALUES (?)", args: ["persisted"] }); first.close(); const second = createClient({ url }); const result = await second.execute("SELECT value FROM restart_probe"); console.log(JSON.stringify({ rows: result.rows })); second.close();'`; it returned `{"rows":[{"value":"persisted"}]}` and the ignored probe file was then removed.
 
 Browser limitations:
 
 - The requested 390x844 mobile viewport, keyboard-action pass, and browser-console inspection are not claimed. The prescribed `agent-browser` executable was unavailable in the environment; the available in-app browser fallback verified the desktop flow but did not expose viewport/devtools controls.
-- Remote provider persistence and Vercel runtime logs are not claimed because no remote database/deployment exists yet.
+- Manual 20-player browser show-and-play, mobile viewport/devtools inspection, and a separate remote restart check remain unclaimed.
 - The local checks ran on Node 24.20.0 available in the environment; the target is pinned to Node 22.x in project/CI/Vercel configuration and should receive one final Node 22 run before release.
 
 ## Stage 7 — Vercel preview and production
 
-Status: access and project configuration complete; preview/production deployment blocked on remote database provisioning.
+Status: hosted Preview access, deployment, remote database initialization, moderator login, and fictional automated rehearsal complete; Production database and release verification remain pending.
 
 Verified through the authenticated Vercel CLI:
 
@@ -150,20 +152,20 @@ Verified through the authenticated Vercel CLI:
 - Project inspection confirmed root `.`, Next.js framework preset, Node `22.x`, install `npm ci`, build `npm run build`, and framework-managed Next.js output.
 - Linked the local repository to that project; the temporary local OIDC value was removed from the ignored `.env.local` after linking. No secret was committed.
 
-Not performed and intentionally not claimed:
+Remaining gates / intentionally not claimed:
 
-- No Vercel preview URL, deployment commit, deployment logs, or production URL exists yet.
-- No preview/production `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `SITE_ORIGIN`, `WATERCOOLER_OWNER_EMAIL`, or `CRON_SECRET` values were entered. The application correctly refuses a local writable `file:` URL in a deployed function.
+- Preview deployment is Ready at https://watercooler-werewolf-a0oxuxxn7-dyl-edge.vercel.app (target `preview`); the operator verified moderator sign-in.
+- Preview has `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, and `WATERCOOLER_OWNER_EMAIL` configured; Production has no environment variables yet. `SITE_ORIGIN` is intentionally still pending until the final origin policy is set. The application correctly refuses a local writable `file:` URL in a deployed function.
 - GitHub import/integration was not exercised; the authenticated CLI project path was used instead.
-- Production smoke tests, deployment protection checks, remote restart persistence, and preview-versus-production database isolation remain pending.
+- The Production deployment is Ready at https://watercooler-werewolf.vercel.app but is not configured for gameplay; the Preview automation bypass was used only for fictional testing and should be revoked after the rehearsal. Production database setup, manual 20-player browser play, runtime-log review, remote restart persistence, and Preview/Production isolation remain pending.
 
 ## Resume runbook for the external gates
 
-1. Provision two separate free Turso/libSQL databases (Preview and Production) without upgrading or creating a billable resource. Keep their URLs and auth tokens out of chat and source control.
-2. Set the Vercel Preview and Production environment variables separately: `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `SITE_ORIGIN`, `WATERCOOLER_OWNER_EMAIL`; add `CRON_SECRET` only if an external authenticated scheduler is actually used.
-3. From a controlled operator environment, run `npm ci`, set the target database variables, and run `npm run db:migrate`. Run `npm run owner:bootstrap` once per fresh environment using a hidden password entry. Do not run either command from a Vercel request/build.
-4. Deploy a preview of the configured project, record its concrete URL and commit, and rerun the Stage 6 gate against that URL. Confirm mutations and persistence stay in Preview and inspect runtime logs.
-5. After preview approval, configure/verify Production with its own database and secrets, deploy a production build, and run the fictional-data smoke checks. Do not promote preview-configured secrets into Production.
+1. Preview database provisioning, environment configuration, migrations, owner bootstrap, deployment, moderator login, and the hosted fictional rehearsal are complete. Keep Preview data fictional.
+2. Create a separate free Turso/libSQL Production database only after Preview approval. Keep its URL and auth token out of chat and source control.
+3. Configure Production separately with `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `WATERCOOLER_OWNER_EMAIL`, and `SITE_ORIGIN=https://watercooler-werewolf.vercel.app`; add `CRON_SECRET` only if an external authenticated scheduler is actually used.
+4. From a controlled operator environment, run `npm run db:migrate` and `npm run owner:bootstrap` once for the fresh Production database. Do not run either command from a Vercel request/build.
+5. Revoke the Preview automation-bypass secret, deploy Production with `vercel --prod`, and run the fictional-data smoke checks plus the remaining manual browser, runtime-log, restart, and isolation checks. Do not promote Preview secrets or data into Production.
 
 ## Rollback and recovery
 
