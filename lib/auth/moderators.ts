@@ -1,32 +1,31 @@
 import { ensureDatabase } from '../../db/migrate';
-import { getD1 } from '../../db';
+import { getDb } from '../../db';
+import type { Database } from '../../db/contracts';
 import { hashSecret, randomToken, verifySecret } from './crypto';
-
-export interface CreatedModerator {
-  id: string;
-  email: string;
-  recoveryCodes: string[];
-}
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
+import { bootstrapPrimaryModerator, hasModeratorAccountInDatabase as hasModeratorAccountInDatabaseCore, normalizeModeratorEmail, type CreatedModerator } from './bootstrap';
 
 export async function hasModeratorAccount(): Promise<boolean> {
   await ensureDatabase();
-  const row = await getD1().prepare('SELECT COUNT(*) AS count FROM moderator_accounts').first<{ count: number }>();
-  return Number(row?.count ?? 0) > 0;
+  return hasModeratorAccountInDatabaseCore(getDb());
+}
+
+export async function hasModeratorAccountInDatabase(db: Database): Promise<boolean> {
+  return hasModeratorAccountInDatabaseCore(db);
 }
 
 export async function createPrimaryModerator(email: string, password: string): Promise<CreatedModerator> {
   await ensureDatabase();
-  if (await hasModeratorAccount()) throw new Error('The primary moderator already exists.');
-  return createModeratorAccount(email, password);
+  return bootstrapPrimaryModerator(getDb(), email, password);
 }
 
 export async function createModeratorAccount(email: string, password: string): Promise<CreatedModerator> {
   await ensureDatabase();
-  const normalizedEmail = normalizeEmail(email);
+  return createModeratorAccountInDatabase(getDb(), email, password);
+}
+
+/** Create a co-moderator account without changing the primary bootstrap marker. */
+export async function createModeratorAccountInDatabase(db: Database, email: string, password: string): Promise<CreatedModerator> {
+  const normalizedEmail = normalizeModeratorEmail(email);
   if (!/^\S+@\S+\.\S+$/u.test(normalizedEmail)) throw new Error('Enter a valid email address.');
   if (password.length < 12) throw new Error('Moderator passwords must be at least 12 characters.');
 
@@ -34,7 +33,7 @@ export async function createModeratorAccount(email: string, password: string): P
   const recoveryCodeHashes = await Promise.all(recoveryCodes.map((code) => hashSecret(code)));
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  await getD1()
+  await db
     .prepare(
       `INSERT INTO moderator_accounts
        (id, email, password_hash, recovery_codes_json, created_at, updated_at)
@@ -50,9 +49,9 @@ export async function authenticateModerator(
   password: string,
 ): Promise<{ id: string; email: string } | null> {
   await ensureDatabase();
-  const row = await getD1()
+  const row = await getDb()
     .prepare('SELECT id, email, password_hash AS passwordHash FROM moderator_accounts WHERE email = ? LIMIT 1')
-    .bind(normalizeEmail(email))
+    .bind(normalizeModeratorEmail(email))
     .first<{ id: string; email: string; passwordHash: string }>();
   if (!row || !(await verifySecret(password, row.passwordHash))) return null;
   return { id: row.id, email: row.email };
@@ -62,7 +61,7 @@ export async function authenticateModerator(
  * Redeem one stored recovery-code hash and rotate the moderator password.
  * The compare-and-swap on the complete recovery-code JSON makes a code
  * single-use even when two recovery requests arrive at the same time. All
- * existing sessions are invalidated in the same D1 batch as the account
+ * existing sessions are invalidated in the same provider batch as the account
  * update; the caller may then create exactly one fresh session.
  */
 export async function redeemModeratorRecoveryCode(
@@ -71,9 +70,9 @@ export async function redeemModeratorRecoveryCode(
   newPassword: string,
 ): Promise<{ id: string; email: string } | null> {
   await ensureDatabase();
-  const normalizedEmail = normalizeEmail(email);
+  const normalizedEmail = normalizeModeratorEmail(email);
   if (!/^\S+@\S+\.\S+$/u.test(normalizedEmail) || recoveryCode.trim().length < 8 || newPassword.length < 12) return null;
-  const db = getD1();
+  const db = getDb();
   const account = await db
     .prepare('SELECT id, email, recovery_codes_json AS recoveryCodesJson FROM moderator_accounts WHERE email = ? LIMIT 1')
     .bind(normalizedEmail)

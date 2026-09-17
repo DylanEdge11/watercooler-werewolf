@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function PlayerLoginPage() {
+  const router = useRouter();
   const [error, setError] = useState('');
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
@@ -16,7 +18,7 @@ export default function PlayerLoginPage() {
     });
     const data = await response.json() as { error?: string };
     if (!response.ok) return setError(data.error ?? 'Unable to sign in.');
-    window.location.href = '/';
+    router.push('/');
   }
 
   return (

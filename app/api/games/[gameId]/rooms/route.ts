@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../../db';
+import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { ensureGameRooms } from '../../../../../lib/chat/rooms';
@@ -14,7 +14,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
     await ensureGameRooms(gameId);
-    const db = getD1();
+    const db = getDb();
     const rooms = await db
       .prepare(
         `SELECT cr.id, cr.type, cr.status, cr.expires_at AS expiresAt,
@@ -56,7 +56,7 @@ export async function POST(request: Request, context: RouteContext) {
       status?: 'OPEN' | 'READ_ONLY';
       reason?: string;
     };
-    const db = getD1();
+    const db = getDb();
     const now = new Date().toISOString();
     if (body.action === 'DELETE_MESSAGE') {
       if (!body.messageId || (body.reason?.trim().length ?? 0) < 5) throw new Error('Choose a message and enter a moderation reason.');

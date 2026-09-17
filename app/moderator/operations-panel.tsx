@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface Operations {
   viewerRole: string | null;
@@ -45,6 +46,7 @@ async function parse<T>(response: Response): Promise<T> {
 }
 
 export default function OperationsPanel({ gameId, refreshToken = 0, onGameChanged }: { gameId: string; refreshToken?: number; onGameChanged?: () => void }) {
+  const router = useRouter();
   const [operations, setOperations] = useState<Operations | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
@@ -312,7 +314,7 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
 
   async function signOut() {
     await fetch('/api/moderators/logout', { method: 'POST' });
-    window.location.href = '/moderator';
+    router.push('/moderator');
   }
 
   if (!operations) return <section className="setup-card"><p className="setup-loading compact">Loading operational controls…</p></section>;

@@ -2,22 +2,22 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 
-interface TestD1Statement {
+interface TestProviderStatement {
   readonly sql: string;
   getArgs(): SQLInputValue[];
 }
 
-interface TestD1Database {
-  prepare(sql: string): TestD1Statement;
-  batch(statements: TestD1Statement[]): Promise<unknown>;
+interface TestProviderDatabase {
+  prepare(sql: string): TestProviderStatement;
+  batch(statements: TestProviderStatement[]): Promise<unknown>;
 }
 
 const shared = vi.hoisted(() => ({
-  db: null as TestD1Database | null,
+  db: null as TestProviderDatabase | null,
   gate: null as null | ((sql: string, kind: 'first' | 'all') => Promise<void>),
 }));
 
-vi.mock('../db', () => ({ getD1: () => shared.db }));
+vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
 vi.mock('../lib/auth/authorization', () => ({ requireGameModerator: async () => ({ id: 'mod' }) }));
 vi.mock('../lib/auth/session', () => ({ getCurrentPlayer: async () => ({ seatId: 'p0', gameId: 'game', alive: true }) }));
@@ -28,7 +28,7 @@ import { POST as actionPost } from '../app/api/phases/[phaseId]/actions/route';
 
 let sqlite: DatabaseSync;
 
-class D1Statement {
+class ProviderStatement {
   private args: SQLInputValue[] = [];
 
   constructor(readonly sql: string) {}
@@ -102,8 +102,8 @@ beforeEach(() => {
   }
   shared.gate = null;
   shared.db = {
-    prepare: (sql: string) => new D1Statement(sql),
-    batch: async (statements: D1Statement[]) => {
+    prepare: (sql: string) => new ProviderStatement(sql),
+    batch: async (statements: ProviderStatement[]) => {
       sqlite.exec('BEGIN');
       try {
         const results: Array<{ meta: { changes: number } } | { results: unknown[] }> = [];
@@ -133,7 +133,7 @@ beforeEach(() => {
 
 afterEach(() => sqlite.close());
 
-describe('D1 race invariants', () => {
+describe('provider race invariants', () => {
   test('a submission committed before lock is included in the proposal input', async () => {
     const saved = await action({ actionKind: 'DAY_VOTE', targetIds: ['p1'] });
     expect(saved.status).toBe(200);

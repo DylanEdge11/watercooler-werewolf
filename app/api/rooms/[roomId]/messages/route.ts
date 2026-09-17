@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../../db';
+import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentPlayer } from '../../../../../lib/auth/session';
 import { ensureGameRooms, normalizeChatBody } from '../../../../../lib/chat/rooms';
@@ -13,7 +13,7 @@ async function requireRoomAccess(roomId: string) {
   const identity = await getCurrentPlayer();
   if (!identity) throw new Error('Player authentication required.');
   await ensureGameRooms(identity.gameId);
-  const room = await getD1()
+  const room = await getDb()
     .prepare(
       `SELECT cr.id, cr.game_id AS gameId, cr.type, cr.status, crm.access
        FROM chat_rooms cr JOIN chat_room_members crm ON crm.room_id = cr.id
@@ -30,7 +30,7 @@ export async function GET(_request: Request, context: RouteContext) {
     await ensureDatabase();
     const { roomId } = await context.params;
     const { room } = await requireRoomAccess(roomId);
-    const messages = await getD1()
+    const messages = await getDb()
       .prepare(
         `SELECT * FROM (
            SELECT cm.id, cm.author_seat_id AS authorSeatId, s.display_name AS authorName,
@@ -59,7 +59,7 @@ export async function POST(request: Request, context: RouteContext) {
     const message = normalizeChatBody(body.body ?? '');
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    const db = getD1();
+    const db = getDb();
     await db.batch([
       db
         .prepare(

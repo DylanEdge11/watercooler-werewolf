@@ -4,10 +4,12 @@ Watercooler Werewolf is a slow-burn, moderator-reviewed Werewolf game for an off
 
 ## Run and verify
 
-Use Node.js 22.13 or newer. The project uses npm and Vinext.
+Use Node.js 22.x. The project uses npm and native Next.js App Router.
 
 ```text
-npm install
+npm ci
+npm run db:migrate
+npm run owner:bootstrap
 npm run dev
 npm run pilot:setup
 npm run pilot:rehearsal
@@ -15,13 +17,13 @@ npm test
 npm run lint
 npx tsc --noEmit --incremental false
 npm run build
-npm audit --omit=dev --audit-level=high
+npm audit --omit=dev --audit-level=moderate
 npm audit --json > audit-full.json
 ```
 
-`npm run dev` starts the local Vinext/Cloudflare preview. The app creates its local D1 schema on the first request. The production-only audit is a release gate; review the full audit as well because the Vinext/Vite/Cloudflare build graph is part of the deployed Worker build. Do not put passwords, invite codes, tokens, or production values in this repository.
+`npm run db:migrate` is the explicit schema operation; requests never run DDL. `npm run owner:bootstrap` is a one-time trusted-operator command. It reads the initial password without echoing it, creates the singleton primary moderator, and prints recovery codes once. Do not put passwords, invite codes, tokens, or production values in this repository.
 
-`npm run pilot:setup` creates a disposable local game from the fictional 20-player fixture and writes a one-time invite CSV under `outputs/`. It is deliberately mutation-gated: set `PILOT_ALLOW_MUTATION=yes` and provide a fictional `PILOT_MODERATOR_PASSWORD` (at least 12 characters). The default URL is `http://localhost:3000`; use `PILOT_BASE_URL` only for an explicitly approved fictional staging environment and also set `PILOT_ALLOW_REMOTE=yes`. The helper never bypasses the configured owner verification required by the bootstrap API. Never run it against production data. In PowerShell:
+`npm run pilot:setup` creates a disposable local game from the fictional 20-player fixture and writes a one-time invite CSV under `outputs/`. It is deliberately mutation-gated: set `PILOT_ALLOW_MUTATION=yes` and provide a fictional `PILOT_MODERATOR_PASSWORD` (at least 12 characters). The default URL is `http://localhost:3000`; use `PILOT_BASE_URL` only for an explicitly approved fictional staging environment and also set `PILOT_ALLOW_REMOTE=yes`. The helper requires an existing app-owned moderator and never creates or bypasses owner setup. Never run it against production data. In PowerShell:
 
 ```powershell
 $env:PILOT_ALLOW_MUTATION = 'yes'
@@ -31,11 +33,11 @@ npm run pilot:setup
 
 After a fictional moderator exists, `npm run pilot:rehearsal` exercises the real HTTP routes for claims, stale-preview rejection, Hunter override/follow-up, private Seer history, Stop, Reset, session invalidation, and roster re-import. It uses local `.test` data by default and prints the check results; it does not deploy or send invitations.
 
-On a fresh clone, start the preview, open the printed `/signin-with-chatgpt?return_to=%2Fmoderator` URL as the configured local site owner, then rerun the helper. If the owner is not verified, the helper stops before creating a game. `WATERCOOLER_OWNER_EMAIL` is a deployment secret; `.env.example` contains fictional values only.
+On a fresh clone, run the explicit migration and operator bootstrap commands before starting the preview. The helper requires an existing moderator and stops if owner setup has not been completed. `WATERCOOLER_OWNER_EMAIL` is a deployment setting used by the operator command; `.env.example` contains fictional values only.
 
-## Local D1 and fictional data
+## Local libSQL and fictional data
 
-The logical D1 binding is `DB`, configured in `.openai/hosting.json`. Wrangler/Miniflare keeps local state under the project `.wrangler` directory. `ensureDatabase()` applies the ordered checked-in migration registry, including the Bodyguard compatibility migration, pilot-hardening columns, and the separate reviewed-outcome column, before application queries run. Hosted deployments may provision those same checked-in migrations before the Worker starts; the bootstrap recognizes a complete pre-provisioned schema, records it in the application ledger, and only applies missing additive changes. It refuses to guess at or overwrite a partial initial schema. The schema source is `db/schema.ts`; after schema changes, generate and inspect a Drizzle migration with `npm run db:generate`, confirm `npx drizzle-kit check`, and keep the resulting SQL and metadata under `drizzle/`. An unchanged schema must report “No schema changes”; do not apply a duplicate generated migration over an already-applied deployment.
+Local development uses a disposable SQLite file such as `file:./work/watercooler.db`. Vercel functions reject writable local URLs and require a remote Turso/libSQL URL plus `TURSO_AUTH_TOKEN`. Preview and production must use separate databases and secrets. `ensureDatabase()` only verifies the ordered checked-in migration ledger; `npm run db:migrate` applies migrations from a trusted operator environment, including the bootstrap marker. It refuses to guess at or overwrite a partial initial schema. The schema source is `db/schema.ts`; after schema changes, generate and inspect a Drizzle migration with `npm run db:generate`, confirm `npx drizzle-kit check`, and keep the resulting SQL and metadata under `drizzle/`.
 
 Game deadlines are entered as local `datetime-local` values and converted on the server using the game's IANA timezone (including daylight-saving transitions). The stored `*_at` values are UTC ISO timestamps; displayed times use the viewer's locale. Impossible dates are rejected, nonexistent DST-gap times are rejected, and an ambiguous fall-back time uses the earlier occurrence. The moderator console labels the game timezone beside deadline inputs.
 
@@ -43,11 +45,11 @@ Use [fixtures/roster-20.csv](fixtures/roster-20.csv) only with disposable `.test
 
 ## Pilot show-and-play checklist
 
-The pilot build provides a public landing and credential screens so pilot participants do not need ChatGPT accounts. The designated site owner verifies with ChatGPT only once, before creating the first app-owned moderator account; after that, moderators use their app password. The host stores the designated email as the secret `WATERCOOLER_OWNER_EMAIL` environment value—it is not committed to source—and bootstrap fails closed when the setting or matching authenticated owner identity is absent. Each invited player claims a private seat and chooses a six-digit PIN before signing in with their seat code. The public surface does not list games, rosters, roles, rooms, or audit data. Keep claim links private and use fictional `.test` accounts for rehearsals.
+The pilot build provides a public landing and credential screens so pilot participants do not need ChatGPT accounts. The primary moderator is created only by the trusted operator command; public account bootstrap is disabled. After that, moderators use app-owned credentials. Each invited player claims a private seat and chooses a six-digit PIN before signing in with their seat code. The public surface does not list games, rosters, roles, rooms, or audit data. Keep claim links private and use fictional `.test` accounts for rehearsals.
 
 Use a disposable game and keep the moderator console in one browser profile and each test player in a separate profile (or private window):
 
-1. Run the mutation-gated `pilot:setup` helper (PowerShell example above; POSIX shells can prefix `PILOT_ALLOW_MUTATION=yes PILOT_MODERATOR_PASSWORD="a-fictional-12-character-password"`) against a disposable local preview, or bootstrap a fictional moderator manually. Set the game's IANA timezone to the timezone used by the facilitator.
+1. Run `npm run owner:bootstrap` once on a trusted operator machine, then run the mutation-gated `pilot:setup` helper (PowerShell example above; POSIX shells can prefix `PILOT_ALLOW_MUTATION=yes PILOT_MODERATOR_PASSWORD="a-fictional-12-character-password"`) against a disposable local preview. Set the game's IANA timezone to the timezone used by the facilitator.
 2. Import [fixtures/roster-20.csv](fixtures/roster-20.csv), download the one-time invite CSV, and claim every seat with unique six-digit test PINs. Keep the invite CSV private; it contains the only claim links.
 3. Review the default 20-player composition (12 Villagers, 3 Werewolves, 1 Seer, 1 Bodyguard, 1 Hunter, and 2 Masons), randomize, inspect the assignment evidence, and release roles. Verify that each player can see only their own role and permitted teammates/room.
 4. Open a Day ballot. Have a player submit, revise, and submit again; verify that the latest revision is the one counted. Lock and propose, then publish the reviewed outcome. Confirm the timeline, living count, eliminated-role reveal, and Hunter follow-up when a Hunter is eliminated.
@@ -65,11 +67,11 @@ The player dashboard polls for phase, result, notification, and stopped-state ch
 - **Co-moderator:** can run the assigned game and its communications/operations controls, but cannot perform the owner-only Reset action.
 - **Invited player:** claims one private seat with an invite link and a six-digit PIN, then signs in with the private seat code and PIN.
 
-The pilot supports one game with 20–80 seats, weekday day/night cycles, server-authoritative D1 state, private role information, moderator review, polling updates, private faction rooms, in-app announcements, and JSON backups with checksums. Announcements currently create email-ready copy; the app does not send email.
+The pilot supports one game with 20–80 seats, weekday day/night cycles, server-authoritative libSQL state, private role information, moderator review, polling updates, private faction rooms, in-app announcements, and JSON backups with checksums. Announcements currently create email-ready copy; the app does not send email.
 
 ## Roles
 
-The canonical protective role key is `BODYGUARD`; “Doctor” is not a separate role. Older D1 rows containing `DOCTOR` are migrated to `BODYGUARD`.
+The canonical protective role key is `BODYGUARD`; “Doctor” is not a separate role. Older SQLite rows containing `DOCTOR` are migrated to `BODYGUARD`.
 
 | Role | Faction | Exact behavior |
 | --- | --- | --- |
@@ -115,17 +117,17 @@ After each published resolution, living players are recalculated. Village wins w
 
 ## Privacy and permissions
 
-Moderator sessions and player seat sessions are opaque, HTTP-only cookies stored as hashes in D1. Passwords and six-digit PINs use salted PBKDF2-SHA256 at the Worker-supported 100,000-iteration maximum; invite exports contain only the one-time claim URL/code needed for delivery. Every mutation checks same-origin policy and performs server-side authorization and role/phase validation.
+Moderator sessions and player seat sessions are opaque, HTTP-only cookies stored as hashes in libSQL. Passwords and six-digit PINs use salted PBKDF2-SHA256 at the 100,000-iteration work factor; invite exports contain only the one-time claim URL/code needed for delivery. Every mutation checks the configured exact origin and performs server-side authorization and role/phase validation.
 
 Players receive only their own role, legal candidates, private results, permitted teammates, permitted rooms, and published events. Werewolf, Mason, and Afterlife rooms enforce membership on the server. Eliminated faction members become read-only in their former room and receive the Afterlife room. Backup exports are moderator-private and do include role assignments and audit evidence; they never include PIN/password hashes, claim-code hashes, session tokens, or plaintext credentials.
 
-Pilot abuse controls return HTTP 429 with `Retry-After`: moderator login is limited to 5 attempts per 15 minutes, bootstrap to 3 per 15 minutes, player sign-in to 8 per 15 minutes, seat claiming to 3 per hour, player actions/private chat to 30 per 10 minutes, and player feedback to 3 per hour (moderator feedback to 10 per hour). Buckets are stored in D1 and updated atomically so a worker restart or simultaneous requests do not silently remove or overwrite the limit.
+Pilot abuse controls return HTTP 429 with `Retry-After`: moderator login is limited to 5 attempts per 15 minutes, player sign-in to 8 per 15 minutes, seat claiming to 3 per hour, player actions/private chat to 30 per 10 minutes, and player feedback to 3 per hour (moderator feedback to 10 per hour). Buckets are stored in libSQL and updated atomically so a function restart or simultaneous requests do not silently remove or overwrite the limit.
 
 ## Rooms, announcements, backups, and audit
 
 Moderators can lock/reopen rooms, remove a message with a reason, purge messages past the configured retention period, and publish in-app announcements. Announcement records include email-ready subject/body text but are not delivered by an email provider.
 
-JSON backups include the recoverable game state, role assignments, phases, actions, proposals, events, rooms, announcements, notifications, pilot feedback, and operational events. Removed historical seat rows may remain as audit references, but restore only re-imports the current non-removed roster. Each backup has a SHA-256 checksum and is stored as a moderator-only backup record. Stop/Reset operations also create operational and game audit events. A local service restart rehydrates the same D1 state; the moderator can export a backup before any recovery operation.
+JSON backups include the recoverable game state, role assignments, phases, actions, proposals, events, rooms, announcements, notifications, pilot feedback, and operational events. Removed historical seat rows may remain as audit references, but restore only re-imports the current non-removed roster. Each backup has a SHA-256 checksum and is stored as a moderator-only backup record. Stop/Reset operations also create operational and game audit events. A local service restart rehydrates the same SQLite file, and a remote libSQL deployment retains state outside the function; the moderator can export a backup before any recovery operation.
 
 The owner-only **Recovery restore** control lists stored snapshots. Restoring requires explicit confirmation and the exact game name, verifies the checksum and game id, creates a safety backup first, and restores only the selected game’s configuration, roster, and composition to `DRAFT`. Active phases, role assignments, submissions, proposals, notifications, announcements, room memberships, messages, and player sessions are cleared. Existing audit/operational history and both backup records remain. Every restored seat gets a new one-time claim link; PINs, old claim links, role secrets, and sessions are never restored. Download the fresh invite CSV immediately—the codes are not shown again.
 
@@ -139,17 +141,31 @@ The owner-only **Recovery restore** control lists stored snapshots. Restoring re
 
 ### Credential recovery
 
-Bootstrap and co-moderator creation show eight one-time recovery codes exactly once. Store them in the operator's approved secret store; only their salted hashes are kept in D1. A moderator who forgets a password can choose **Forgot password? Use a recovery code** on the moderator sign-in screen, redeem one unused code for a new password, and receive a new session. The code is single-use, the request is rate-limited, and all previous moderator sessions are invalidated. A forgotten player PIN is reset by an authorized moderator from **Player access recovery** in Operations; the new six-digit PIN must be delivered privately and all previous player sessions are revoked. There is no automatic email reset and no temporary-password expiry promise.
+Bootstrap and co-moderator creation show eight one-time recovery codes exactly once. Store them in the operator's approved secret store; only their salted hashes are kept in libSQL. A moderator who forgets a password can choose **Forgot password? Use a recovery code** on the moderator sign-in screen, redeem one unused code for a new password, and receive a new session. The code is single-use, the request is rate-limited, and all previous moderator sessions are invalidated. A forgotten player PIN is reset by an authorized moderator from **Player access recovery** in Operations; the new six-digit PIN must be delivered privately and all previous player sessions are revoked. There is no automatic email reset and no temporary-password expiry promise.
 
 ## Phase 6 scope
 
-Phase 6 is intentionally resumable. The current pilot-hardening build includes timezone/DST conversion, D1-backed auth/action/chat/feedback rate limits, due-phase reconciliation, late-attempt logging, activity health metrics, moderator/player feedback capture, a cron-compatible deadline sweep, checksum-verified setup restore, and the fictional pilot setup helper. The Operations panel also polls and reconciles deadlines as a safe fallback when a host scheduler is not configured.
+Phase 6 is intentionally resumable. The current pilot-hardening build includes timezone/DST conversion, libSQL-backed auth/action/chat/feedback rate limits, due-phase reconciliation, late-attempt logging, activity health metrics, moderator/player feedback capture, an optional authenticated deadline sweep, checksum-verified setup restore, and the fictional pilot setup helper. The Operations panel also polls and reconciles deadlines as the supported Hobby fallback.
 
-For unattended deadline monitoring, configure a private `WATERCOOLER_SCHEDULER_TOKEN` secret and invoke `POST /api/scheduler/deadlines` once per minute with `Authorization: Bearer <token>`. The endpoint is intentionally disabled with HTTP 503 until the secret exists. It is safe to retry: due phases, audit events, and operational events use conditional writes/stable ids. The owner-only Operations panel’s **Check deadlines** action and ten-second polling remain the supported pilot fallback.
+For an explicitly configured scheduler, set a private `CRON_SECRET` and call `GET /api/scheduler/deadlines` with `Authorization: Bearer <token>`. The endpoint is disabled with HTTP 503 until the secret exists and also accepts POST for an approved external scheduler. No Vercel Cron is configured for the Hobby pilot: deadlines remain server-enforced, while the owner-only Operations panel’s **Check deadlines** action and ten-second polling reconcile due phases when the console is active.
+
+## Vercel and Turso operations
+
+The target is a Vercel Hobby deployment for personal, non-commercial use with a free Turso/libSQL database. No paid upgrade, billable add-on, or unattended minute scheduler is required. The old Sites deployment and database remain untouched. This migration starts with a fresh database; it does not copy live games.
+
+Configure these variables separately for Vercel Preview and Production:
+
+- `TURSO_DATABASE_URL` — remote libSQL URL; local `file:` URLs are rejected by deployed functions.
+- `TURSO_AUTH_TOKEN` — private database token.
+- `SITE_ORIGIN` — exact `https://` origin used for browser mutation checks and metadata.
+- `WATERCOOLER_OWNER_EMAIL` — operator email used by the one-time bootstrap command.
+- `CRON_SECRET` — optional private Bearer secret for an approved scheduler.
+
+From a trusted operator environment, run `npm run db:migrate` against the selected environment before serving it, then run `npm run owner:bootstrap` once for the fresh database. A deployment never runs migrations or seeds on request. For rollback, point Vercel back to the last verified deployment while leaving the database intact; inspect the migration ledger before applying any later schema change. Do not delete or reset the old hosting/database as part of rollback.
 
 ## Dependency and release notes
 
-The current compatible set pins React/RSC 19.3.0, Vite 8.3.0, Vinext 1.0.0-beta.10, `@cloudflare/vite-plugin` 1.54.10, Wrangler 4.132.0, and their lockfile-resolved peers. At the current audit snapshot, `npm audit --omit=dev` reports no production vulnerabilities and the full audit reports four moderate development-tool advisories through Drizzle Kit's deprecated esbuild loader. The available audit fix downgrades Drizzle Kit to 0.18.1, which is not accepted; keep the current compatible migration tool and review this residual development-only exposure before each pilot. CI runs the production gate and uploads the full audit report.
+The native deployment pins Next.js 16.3.3, React 19.3.0, Node 22.x, libSQL client 0.18.0, and the Vitest/Vite test toolchain in the lockfile. CI runs the production dependency audit and uploads the full audit report; review any development-only advisories before each pilot.
 
 The remaining pilot gate is human verification and operating the first fictional group game:
 

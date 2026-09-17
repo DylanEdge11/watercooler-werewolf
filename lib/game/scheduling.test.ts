@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Database } from '../../db/contracts';
 import { isValidCalendarDate, parseScheduledDate, sweepDuePhases, validateSchedule, zonedDateTimeToUtcIso } from './scheduling';
 
 describe('timezone-aware scheduling', () => {
@@ -36,7 +37,7 @@ describe('timezone-aware scheduling', () => {
         };
       },
       batch: async () => [],
-    } as unknown as D1Database;
+    } as unknown as Database;
     await expect(sweepDuePhases(fakeDb, new Date('2026-01-01T00:00:01.000Z'))).resolves.toEqual([
       { gameId: 'game-1', phaseIds: ['phase-1'] },
     ]);

@@ -14,14 +14,14 @@ interface TestDatabase {
 
 const shared = vi.hoisted(() => ({ db: null as TestDatabase | null }));
 
-vi.mock('../../db', () => ({ getD1: () => shared.db }));
+vi.mock('../../db', () => ({ getDb: () => shared.db }));
 vi.mock('../../db/migrate', () => ({ ensureDatabase: async () => {} }));
 
 import { authenticateModerator, createModeratorAccount, redeemModeratorRecoveryCode } from './moderators';
 
 let sqlite: DatabaseSync;
 
-class D1Statement {
+class ProviderStatement {
   private args: SQLInputValue[] = [];
 
   constructor(readonly sql: string) {}
@@ -51,7 +51,7 @@ class D1Statement {
 
 function d1Compatible(): TestDatabase {
   return {
-    prepare: (sql) => new D1Statement(sql),
+    prepare: (sql) => new ProviderStatement(sql),
     batch: async (statements) => {
       sqlite.exec('BEGIN');
       try {

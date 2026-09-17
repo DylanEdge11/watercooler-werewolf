@@ -1,4 +1,4 @@
-import { getD1 } from '../../../db';
+import { getDb } from '../../../db';
 import { ensureDatabase } from '../../../db/migrate';
 import { requireModerator } from '../../../lib/auth/authorization';
 import { assertValidCalendarDate, assertValidTimeZone, parseScheduledDate, validateSchedule } from '../../../lib/game/scheduling';
@@ -18,7 +18,7 @@ export async function GET() {
   try {
     await ensureDatabase();
     const moderator = await requireModerator();
-    const games = await getD1()
+    const games = await getDb()
       .prepare(
         `SELECT g.* FROM games g
          JOIN game_moderators gm ON gm.game_id = g.id
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    const db = getD1();
+    const db = getDb();
     await db.batch([
       db
         .prepare(

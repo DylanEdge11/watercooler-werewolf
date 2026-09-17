@@ -48,23 +48,16 @@ async function request(path, options = {}) {
 
 const bootstrap = await request('/api/moderators/bootstrap');
 if (bootstrap.needsBootstrap) {
-  if (!bootstrap.canBootstrap) {
-    throw new Error([
-      'The local app has no moderator account, but the configured owner has not verified this origin.',
-      `Open ${baseUrl}/signin-with-chatgpt?return_to=%2Fmoderator once as the configured site owner, then rerun this command.`,
-      'Do not bypass owner verification or use this helper against a production URL.',
-    ].join(' '));
-  }
-  await request('/api/moderators/bootstrap', {
-    method: 'POST',
-    body: JSON.stringify({ email: moderatorEmail, password: moderatorPassword }),
-  });
-} else {
-  await request('/api/moderators/login', {
-    method: 'POST',
-    body: JSON.stringify({ email: moderatorEmail, password: moderatorPassword }),
-  });
+  throw new Error([
+    'The local app has no moderator account.',
+    'Run npm run owner:bootstrap on a trusted operator machine first, then rerun this helper.',
+    'Do not put the owner password in this script or use the helper against production.',
+  ].join(' '));
 }
+await request('/api/moderators/login', {
+  method: 'POST',
+  body: JSON.stringify({ email: moderatorEmail, password: moderatorPassword }),
+});
 
 const now = new Date();
 const start = new Date(now.valueOf() + 24 * 60 * 60_000);

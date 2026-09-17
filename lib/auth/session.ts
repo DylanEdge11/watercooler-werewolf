@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { ensureDatabase } from '../../db/migrate';
-import { getD1 } from '../../db';
+import { getDb } from '../../db';
 import { randomToken, sha256 } from './crypto';
 
 const MODERATOR_COOKIE = 'ww_mod_session';
@@ -38,7 +38,7 @@ async function setSessionCookie(name: string, token: string, expires: Date): Pro
 
 export async function createModeratorSession(moderatorId: string): Promise<void> {
   await ensureDatabase();
-  const db = getD1();
+  const db = getDb();
   const token = randomToken();
   const tokenHash = await sha256(token);
   const expires = expiryDate();
@@ -53,7 +53,7 @@ export async function createModeratorSession(moderatorId: string): Promise<void>
 
 export async function createPlayerSession(seatId: string, sessionVersion: number): Promise<void> {
   await ensureDatabase();
-  const db = getD1();
+  const db = getDb();
   const token = randomToken();
   const tokenHash = await sha256(token);
   const expires = expiryDate();
@@ -72,7 +72,7 @@ export async function getCurrentModerator(): Promise<ModeratorIdentity | null> {
   if (!token) return null;
   const tokenHash = await sha256(token);
   return (
-    (await getD1()
+    (await getDb()
       .prepare(
         `SELECT ma.id, ma.email
          FROM moderator_sessions ms
@@ -91,7 +91,7 @@ export async function getCurrentPlayer(): Promise<PlayerIdentity | null> {
   if (!token) return null;
   const tokenHash = await sha256(token);
   return (
-    (await getD1()
+    (await getDb()
       .prepare(
         `SELECT s.id AS seatId, s.game_id AS gameId, s.display_name AS displayName, s.alive AS alive
          FROM seat_sessions ss
@@ -112,7 +112,7 @@ export async function clearModeratorSession(): Promise<void> {
   const token = store.get(MODERATOR_COOKIE)?.value;
   if (token) {
     await ensureDatabase();
-    await getD1()
+    await getDb()
       .prepare('DELETE FROM moderator_sessions WHERE token_hash = ?')
       .bind(await sha256(token))
       .run();
@@ -125,7 +125,7 @@ export async function clearPlayerSession(): Promise<void> {
   const token = store.get(PLAYER_COOKIE)?.value;
   if (token) {
     await ensureDatabase();
-    await getD1()
+    await getDb()
       .prepare('DELETE FROM seat_sessions WHERE token_hash = ?')
       .bind(await sha256(token))
       .run();

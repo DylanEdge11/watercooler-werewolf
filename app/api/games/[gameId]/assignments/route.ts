@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../../db';
+import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { validateComposition, scoreComposition } from '../../../../../lib/game/balance';
@@ -35,7 +35,7 @@ function secureRolls(count: number): number[] {
 }
 
 async function loadComposition(gameId: string): Promise<RoleComposition> {
-  const rows = await getD1()
+  const rows = await getDb()
     .prepare('SELECT role_key AS roleKey, count FROM game_role_counts WHERE game_id = ?')
     .bind(gameId)
     .all<{ roleKey: RoleKey; count: number }>();
@@ -49,8 +49,8 @@ export async function GET(_request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
-    const db = getD1();
-    const game = await getD1()
+    const db = getDb();
+    const game = await getDb()
       .prepare('SELECT status, setup_revision AS setupRevision FROM games WHERE id = ? LIMIT 1')
       .bind(gameId)
       .first<GameSetupRow>();
@@ -105,7 +105,7 @@ export async function POST(request: Request, context: RouteContext) {
       composition?: Partial<RoleComposition>;
       batchId?: string;
     };
-    const db = getD1();
+    const db = getDb();
     const game = await db
       .prepare('SELECT status, setup_revision AS setupRevision FROM games WHERE id = ? LIMIT 1')
       .bind(gameId)

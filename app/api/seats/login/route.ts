@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../db';
+import { getDb } from '../../../../db';
 import { ensureDatabase } from '../../../../db/migrate';
 import { sha256, verifySecret } from '../../../../lib/auth/crypto';
 import { createPlayerSession } from '../../../../lib/auth/session';
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     if (!seatCode || !pin) throw new Error('Seat code and PIN are required.');
     await enforceRateLimit(requestRateLimitKey(request, `seat-login:${seatCode.slice(0, 80)}`), 8, 15 * 60_000);
 
-    const seat = await getD1()
+    const seat = await getDb()
       .prepare(
         `SELECT id, game_id AS gameId, display_name AS displayName, pin_hash AS pinHash,
                 session_version AS sessionVersion

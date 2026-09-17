@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../../db';
+import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator, requireGameOwner } from '../../../../../lib/auth/authorization';
 import { createBackupRecord, restoreGameBackup } from '../../../../../lib/backup/snapshot';
@@ -21,7 +21,7 @@ export async function GET(_request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     const moderator = await requireGameModerator(gameId);
-    const db = getD1();
+    const db = getDb();
     const reconciledPhaseIds = await reconcileDuePhases(db, gameId, moderator.id);
     const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
     const [game, membership, counts, overdue, sessions, backup, backups, events, activity, seats] = await Promise.all([
@@ -120,7 +120,7 @@ export async function POST(request: Request, context: RouteContext) {
       confirmationName?: string;
       backupId?: string;
     };
-    const db = getD1();
+    const db = getDb();
     const now = new Date().toISOString();
     const game = await db
       .prepare('SELECT id, name, status, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1')
@@ -189,7 +189,7 @@ export async function POST(request: Request, context: RouteContext) {
         seats.results.map(async (seat) => ({ id: seat.id, hash: await sha256(randomToken(18)) })),
       );
       const resetGuard = "EXISTS (SELECT 1 FROM games g WHERE g.id = ? AND g.status = 'RESETTING' AND g.reset_at = ? AND g.reset_by_moderator_id = ?)";
-      const statements: D1PreparedStatement[] = [
+      const statements = [
         db
           .prepare("UPDATE games SET status = 'RESETTING', setup_revision = setup_revision + 1, reset_at = ?, reset_by_moderator_id = ?, updated_at = ? WHERE id = ? AND status = ? AND updated_at = ?")
           .bind(now, moderator.id, now, gameId, game.status, game.updatedAt),

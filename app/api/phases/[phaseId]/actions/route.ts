@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../../db';
+import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentPlayer } from '../../../../../lib/auth/session';
 import { permissionForRole, validateActionTargets } from '../../../../../lib/game/actions';
@@ -19,7 +19,7 @@ export async function POST(request: Request, context: RouteContext) {
     const playerIdentity = identity;
     const { phaseId } = await context.params;
     const body = (await request.json()) as { actionKind?: ActionKind; targetIds?: string[] };
-    const db = getD1();
+    const db = getDb();
     const phase = await db
       .prepare(
         `SELECT p.id, p.game_id AS gameId, p.kind, p.status, p.slots, p.closes_at AS closesAt,

@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../../db';
+import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { sha256 } from '../../../../../lib/auth/crypto';
@@ -75,7 +75,7 @@ function changes(result: unknown): number {
 }
 
 async function loadPlayers(gameId: string): Promise<PlayerState[]> {
-  const rows = await getD1()
+  const rows = await getDb()
     .prepare(
       `SELECT s.id, s.display_name AS displayName, ra.role_key AS role, s.alive
        FROM seats s JOIN role_assignments ra ON ra.seat_id = s.id AND ra.game_id = s.game_id
@@ -87,7 +87,7 @@ async function loadPlayers(gameId: string): Promise<PlayerState[]> {
 }
 
 async function loadActions(phaseId: string): Promise<ActionSubmission[]> {
-  const rows = await getD1()
+  const rows = await getDb()
     .prepare(
       `SELECT id, actor_seat_id AS actorId, kind, target_ids_json AS targetIdsJson,
               submitted_at AS submittedAt, version
@@ -110,7 +110,7 @@ export async function GET(_request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
-    const db = getD1();
+    const db = getDb();
     const [gameRow, phaseRows, proposalRows, rosterRows] = await Promise.all([
       db.prepare('SELECT status, final_cutoff_at AS finalCutoffAt, timezone, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1').bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string; updatedAt: string }>(),
       db
@@ -212,7 +212,7 @@ export async function POST(request: Request, context: RouteContext) {
       overrideReason?: string;
       overrideEliminationIds?: string[];
     };
-    const db = getD1();
+    const db = getDb();
     const game = await db
       .prepare(
         `SELECT status, day_divisor AS dayDivisor, night_divisor AS nightDivisor,
@@ -394,7 +394,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     if (body.action === 'LOCK_AND_PROPOSE') {
       if (phase.status === 'OPEN') {
-        // Lock before reading the resolution input. D1 serializes this update
+        // Lock before reading the resolution input. The provider serializes this update
         // with action submissions and Stop, so a successful late submission is
         // either committed before this claim (and included below) or rejected
         // after it.
@@ -626,9 +626,9 @@ export async function POST(request: Request, context: RouteContext) {
         SELECT 1 FROM phases p
         WHERE p.id = ? AND p.game_id = ? AND p.status = 'PUBLISHING' AND p.version = ?
       )`;
-      const statements: D1PreparedStatement[] = [
+      const statements = [
         // The PUBLISHING status is the authoritative one-phase claim. Since
-        // this statement and all dependent statements are one D1 batch, Stop
+        // this statement and all dependent statements are one provider batch, Stop
         // and a competing publication cannot interleave with the effects.
         db
           .prepare(

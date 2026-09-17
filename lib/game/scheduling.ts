@@ -1,3 +1,5 @@
+import type { Database, PreparedStatement } from '../../db/contracts';
+
 export interface ScheduleDefinition {
   dayCloses: string;
   nightCloses: string;
@@ -153,14 +155,14 @@ export function validateSchedule(schedule: ScheduleDefinition): string[] {
   return errors;
 }
 
-export async function reconcileDuePhases(db: D1Database, gameId: string, moderatorId: string | null, now = new Date()): Promise<string[]> {
+export async function reconcileDuePhases(db: Database, gameId: string, moderatorId: string | null, now = new Date()): Promise<string[]> {
   const nowIso = now.toISOString();
   const due = await db
     .prepare("SELECT p.id, p.kind, p.closes_at AS closesAt FROM phases p JOIN games g ON g.id = p.game_id WHERE p.game_id = ? AND p.status = 'OPEN' AND p.closes_at <= ? AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN') ORDER BY p.sequence")
     .bind(gameId, nowIso)
     .all<{ id: string; kind: string; closesAt: string }>();
   if (!due.results.length) return [];
-  const statements: D1PreparedStatement[] = [];
+  const statements: PreparedStatement[] = [];
   for (const phase of due.results) {
     statements.push(
       db.prepare("UPDATE phases SET status = 'LOCKED', version = version + 1, updated_at = ? WHERE id = ? AND status = 'OPEN'").bind(nowIso, phase.id),
@@ -188,7 +190,7 @@ export async function reconcileDuePhases(db: D1Database, gameId: string, moderat
  * nullable audit field is intentionally left empty and the source is recorded
  * as SCHEDULER.
  */
-export async function sweepDuePhases(db: D1Database, now = new Date()): Promise<Array<{ gameId: string; phaseIds: string[] }>> {
+export async function sweepDuePhases(db: Database, now = new Date()): Promise<Array<{ gameId: string; phaseIds: string[] }>> {
   const dueGames = await db
     .prepare(
       `SELECT DISTINCT p.game_id AS gameId

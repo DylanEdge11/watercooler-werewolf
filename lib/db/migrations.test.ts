@@ -1,93 +1,77 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { createClient, type Client } from '@libsql/client';
+import { LibsqlDatabase, type LibsqlClient } from '../../db/libsql';
+import { MIGRATION_VERSIONS, verifyDatabaseReady } from '../../db/readiness';
+import { loadMigrations, runMigrations, splitMigrationStatements } from '../../scripts/db-migration-runner.mjs';
 
-vi.mock('../../db', () => ({ getD1: () => { throw new Error('getD1 is not used by this test'); } }));
+let client: Client;
 
-import { applyMigrations } from '../../db/migrate';
-
-let sqlite: DatabaseSync;
-
-class TestStatement {
-  private args: SQLInputValue[] = [];
-
-  constructor(readonly sql: string) {}
-
-  bind(...args: SQLInputValue[]): this {
-    this.args = args;
-    return this;
-  }
-
-  getArgs(): SQLInputValue[] {
-    return this.args;
-  }
-
-  async run(): Promise<{ meta: { changes: number } }> {
-    const result = sqlite.prepare(this.sql).run(...this.args);
-    return { meta: { changes: Number(result.changes) } };
-  }
-
-  async all<T = Record<string, unknown>>(): Promise<{ results: T[] }> {
-    return { results: sqlite.prepare(this.sql).all(...this.args) as T[] };
-  }
-}
-
-function d1Compatible() {
-  return {
-    prepare: (sql: string) => new TestStatement(sql),
-    batch: async (statements: TestStatement[]) => {
-      sqlite.exec('BEGIN');
-      try {
-        const results = [];
-        for (const statement of statements) {
-          const result = sqlite.prepare(statement.sql).run(...statement.getArgs());
-          results.push({ meta: { changes: Number(result.changes) } });
-        }
-        sqlite.exec('COMMIT');
-        return results;
-      } catch (error) {
-        sqlite.exec('ROLLBACK');
-        throw error;
-      }
-    },
-  } as unknown as D1Database;
-}
-
-function applyInitialSchema() {
-  sqlite.exec(readFileSync(new URL('../../drizzle/0000_dashing_smiling_tiger.sql', import.meta.url), 'utf8'));
+function database(): LibsqlDatabase {
+  return new LibsqlDatabase(client as unknown as LibsqlClient);
 }
 
 beforeEach(() => {
-  sqlite = new DatabaseSync(':memory:');
+  client = createClient({ url: ':memory:' });
 });
 
-afterEach(() => sqlite.close());
+afterEach(() => client.close());
 
-describe('migration chain', () => {
+describe('libSQL migration chain', () => {
   test('fresh install applies all migrations and is safe to rerun', async () => {
-    const db = d1Compatible();
-    await applyMigrations(db);
-    await applyMigrations(db);
-    const versions = sqlite.prepare('SELECT version FROM __app_migrations ORDER BY version').all() as Array<{ version: string }>;
-    expect(versions.map((row) => row.version)).toEqual([
-      '0000_dashing_smiling_tiger',
-      '0001_bodyguard_and_lifecycle',
-      '0002_pilot_hardening',
-      '0003_reviewed_outcome',
-    ]);
-    expect(sqlite.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'rate_limit_buckets'").get()).toBeTruthy();
-    expect((sqlite.prepare('PRAGMA table_info(games)').all() as Array<{ name: string }>).map((row) => row.name)).toContain('setup_revision');
-    expect((sqlite.prepare('PRAGMA table_info(assignment_batches)').all() as Array<{ name: string }>).map((row) => row.name)).toContain('roster_fingerprint');
-    expect((sqlite.prepare('PRAGMA table_info(resolution_proposals)').all() as Array<{ name: string }>).map((row) => row.name)).toContain('published_outcome_json');
-    expect((sqlite.prepare('PRAGMA table_info(resolution_proposals)').all() as Array<{ name: string }>).map((row) => row.name)).toContain('reviewed_outcome_json');
+    const migrations = await loadMigrations();
+    await runMigrations(client, migrations);
+    await runMigrations(client, migrations);
+    await verifyDatabaseReady(database());
+
+    const versions = await client.execute('SELECT version FROM __app_migrations ORDER BY version');
+    expect(versions.rows.map((row) => row.version)).toEqual([...MIGRATION_VERSIONS]);
+    const tables = await client.execute("SELECT name FROM sqlite_schema WHERE type = 'table'");
+    expect(tables.rows.map((row) => row.name)).toContain('rate_limit_buckets');
+    expect(tables.rows.map((row) => row.name)).toContain('app_bootstrap');
+
+    const gamesColumns = await client.execute('PRAGMA table_info(games)');
+    expect(gamesColumns.rows.map((row) => row.name)).toContain('setup_revision');
+    const assignmentColumns = await client.execute('PRAGMA table_info(assignment_batches)');
+    expect(assignmentColumns.rows.map((row) => row.name)).toContain('roster_fingerprint');
+    const proposalColumns = await client.execute('PRAGMA table_info(resolution_proposals)');
+    expect(proposalColumns.rows.map((row) => row.name)).toEqual(
+      expect.arrayContaining(['published_outcome_json', 'reviewed_outcome_json']),
+    );
+    const foreignKeys = await client.execute('PRAGMA foreign_keys');
+    expect(Number(foreignKeys.rows[0]?.foreign_keys)).toBe(1);
   });
 
-  test('an existing initial schema receives only the missing additive migrations', async () => {
-    applyInitialSchema();
-    const db = d1Compatible();
-    await applyMigrations(db);
-    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM __app_migrations').get() as { count: number }).toMatchObject({ count: 4 });
-    expect((sqlite.prepare('PRAGMA table_info(games)').all() as Array<{ name: string }>).map((row) => row.name)).toEqual(expect.arrayContaining(['stopped_at', 'reset_at', 'setup_revision']));
-    expect(sqlite.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'pilot_feedback'").get()).toBeTruthy();
+  test('adopts a complete initial schema and applies only the missing migrations', async () => {
+    const migrations = await loadMigrations();
+    await client.batch(
+      splitMigrationStatements(migrations[0].sql).map((sql: string) => ({ sql, args: [] })),
+      'write',
+    );
+    await runMigrations(client, migrations);
+
+    const versions = await client.execute('SELECT COUNT(*) AS count FROM __app_migrations');
+    expect(Number(versions.rows[0]?.count)).toBe(MIGRATION_VERSIONS.length);
+    const gamesColumns = await client.execute('PRAGMA table_info(games)');
+    expect(gamesColumns.rows.map((row) => row.name)).toEqual(
+      expect.arrayContaining(['stopped_at', 'reset_at', 'setup_revision']),
+    );
   });
+
+  test('provider batches roll back every ordered write when one statement fails', async () => {
+    await client.execute('CREATE TABLE batch_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE)');
+
+    await expect(
+      client.batch(
+        [
+          { sql: 'INSERT INTO batch_probe (id, value) VALUES (?, ?)', args: [1, 'first'] },
+          { sql: 'INSERT INTO batch_probe (id, value) VALUES (?, ?)', args: [2, 'first'] },
+        ],
+        'write',
+      ),
+    ).rejects.toThrow();
+
+    const rows = await client.execute('SELECT COUNT(*) AS count FROM batch_probe');
+    expect(Number(rows.rows[0]?.count)).toBe(0);
+  });
+
 });

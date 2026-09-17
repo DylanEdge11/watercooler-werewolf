@@ -1,8 +1,9 @@
 'use client';
 
-/* eslint-disable @next/next/no-html-link-for-pages -- vinext's production Link runtime currently fails before navigation. */
+/* eslint-disable @next/next/no-html-link-for-pages -- the public entry links intentionally use full-page navigation. */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
 
 type RoleKey = 'VILLAGER' | 'WEREWOLF' | 'SEER' | 'BODYGUARD' | 'HUNTER' | 'MASON';
@@ -86,6 +87,7 @@ function PublicWelcome() {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [unauthenticated, setUnauthenticated] = useState(false);
@@ -216,7 +218,7 @@ export default function Home() {
 
   async function signOut() {
     await fetch('/api/seats/logout', { method: 'POST' });
-    window.location.href = '/';
+    router.push('/');
   }
 
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {

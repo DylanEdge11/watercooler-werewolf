@@ -1,8 +1,9 @@
 'use client';
 
-/* eslint-disable @next/next/no-html-link-for-pages -- vinext's production Link runtime currently fails before navigation. */
+/* eslint-disable @next/next/no-html-link-for-pages -- the public entry links intentionally use full-page navigation. */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import LiveGamePanel from './live-game-panel';
 import OperationsPanel from './operations-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
@@ -86,9 +87,9 @@ function BrandHeader() {
 }
 
 export default function ModeratorPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
-  const [canBootstrap, setCanBootstrap] = useState(false);
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
@@ -142,9 +143,8 @@ export default function ModeratorPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const bootstrap = await requestJson<{ needsBootstrap: boolean; canBootstrap: boolean }>('/api/moderators/bootstrap');
+        const bootstrap = await requestJson<{ needsBootstrap: boolean }>('/api/moderators/bootstrap');
         setNeedsBootstrap(bootstrap.needsBootstrap);
-        setCanBootstrap(bootstrap.canBootstrap);
         if (!bootstrap.needsBootstrap) await loadGames();
       } catch {
         setAuthenticated(false);
@@ -167,8 +167,7 @@ export default function ModeratorPage() {
     setError('');
     const form = new FormData(event.currentTarget);
     try {
-      const endpoint = needsBootstrap ? '/api/moderators/bootstrap' : '/api/moderators/login';
-      const data = await requestJson<{ recoveryCodes?: string[] }>(recoveryMode ? '/api/moderators/recover' : endpoint, {
+      const data = await requestJson<{ recoveryCodes?: string[] }>(recoveryMode ? '/api/moderators/recover' : '/api/moderators/login', {
         method: 'POST',
         body: JSON.stringify(recoveryMode
           ? { email: form.get('email'), recoveryCode: form.get('recoveryCode'), newPassword: form.get('newPassword') }
@@ -273,7 +272,7 @@ export default function ModeratorPage() {
 
   async function signOut() {
     await fetch('/api/moderators/logout', { method: 'POST' });
-    window.location.href = '/moderator';
+    router.push('/moderator');
   }
 
   function downloadInvites() {
@@ -302,15 +301,14 @@ export default function ModeratorPage() {
         <BrandHeader />
         <section className="auth-card">
           <p className="eyebrow accent">Private game control</p>
-          <h1>{needsBootstrap ? 'Create the primary moderator' : recoveryMode ? 'Recover moderator access' : 'Moderator sign-in'}</h1>
-          <p>{needsBootstrap ? 'This first account owns the game and can add co-moderators later.' : recoveryMode ? 'Use one unused recovery code to choose a new password. Previous moderator sessions will be signed out.' : 'Sign in to resume setup or run an active game.'}</p>
-          {needsBootstrap && !canBootstrap ? (
+          <h1>{needsBootstrap ? 'Owner setup required' : recoveryMode ? 'Recover moderator access' : 'Moderator sign-in'}</h1>
+          <p>{needsBootstrap ? 'Create the first moderator once from a trusted operator machine, then return here to sign in.' : recoveryMode ? 'Use one unused recovery code to choose a new password. Previous moderator sessions will be signed out.' : 'Sign in to resume setup or run an active game.'}</p>
+          {needsBootstrap ? (
             <div className="form-stack">
-              <p className="notice warning">The designated site owner must verify once before creating the primary moderator. Players will not need ChatGPT accounts.</p>
-              <a className="primary-link" href="/signin-with-chatgpt?return_to=%2Fmoderator" target="_top">Verify site owner</a>
+              <p className="notice warning">Public account creation is disabled. On the server or a trusted operator machine, configure <code>WATERCOOLER_OWNER_EMAIL</code> and run <code>npm run owner:bootstrap</code>. The command prompts for the password without echoing it and displays recovery codes once.</p>
+              <p className="field-help">After the command succeeds, reload this page to sign in with the app-owned moderator credentials.</p>
             </div>
           ) : <form className="form-stack" onSubmit={handleAuth}>
-            {needsBootstrap && canBootstrap && <p className="notice success" role="status">Site owner verified. Create your app moderator credentials below.</p>}
             <label>Email<input name="email" type="email" autoComplete="email" required /></label>
             {recoveryMode ? <><label>One-time recovery code<input name="recoveryCode" autoComplete="one-time-code" required /></label><label>New moderator password<input name="newPassword" type="password" minLength={12} autoComplete="new-password" required /></label></> : <label>Password<input name="password" type="password" minLength={needsBootstrap ? 12 : undefined} autoComplete={needsBootstrap ? 'new-password' : 'current-password'} required /></label>}
             {error && <p className="form-error" role="alert">{error}</p>}

@@ -1,4 +1,4 @@
-import { getD1 } from '../../../db';
+import { getDb } from '../../../db';
 import { ensureDatabase } from '../../../db/migrate';
 import { getCurrentPlayer } from '../../../lib/auth/session';
 import { permissionForRole } from '../../../lib/game/actions';
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     await ensureDatabase();
     const identity = await getCurrentPlayer();
     if (!identity) return jsonError('Player authentication required.', 401);
-    const db = getD1();
+    const db = getDb();
     const player = await db
       .prepare(
         `SELECT s.id, s.display_name AS displayName, s.alive, g.id AS gameId, g.name AS gameName,

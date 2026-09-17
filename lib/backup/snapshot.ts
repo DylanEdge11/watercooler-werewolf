@@ -1,4 +1,4 @@
-import { getD1 } from '../../db';
+import { getDb, type PreparedStatement } from '../../db';
 import { sha256 } from '../auth/crypto';
 import { randomToken } from '../auth/crypto';
 import { backupComposition, backupGameFromRecord, backupSeats, validateBackupForRestore } from './restore';
@@ -26,7 +26,7 @@ export interface GameBackup {
 }
 
 export async function collectGameBackup(gameId: string): Promise<GameBackup> {
-  const db = getD1();
+  const db = getDb();
   const [game, moderators, seats, composition, batches, assignments, phases, actions, resolutions, events, rooms, roomMembers, messages, announcements, notifications, operations, feedback] = await Promise.all([
     db.prepare('SELECT * FROM games WHERE id = ? LIMIT 1').bind(gameId).first(),
     db
@@ -112,7 +112,7 @@ export async function createBackupRecord(gameId: string, moderatorId: string): P
   const data = await collectGameBackup(gameId);
   const checksum = await sha256(JSON.stringify(data));
   const backupId = crypto.randomUUID();
-  await getD1()
+  await getDb()
     .prepare(
       `INSERT INTO backup_exports (id, game_id, moderator_id, schema_version, checksum, payload_json, exported_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -171,7 +171,7 @@ export async function restoreGameBackup(
   const backupGame = backupGameFromRecord(data.game as Record<string, unknown>);
   if (!backupGame) throw new Error('The selected backup has invalid game configuration.');
 
-  const db = getD1();
+  const db = getDb();
   const safetyBackup = await createBackupRecord(gameId, moderatorId);
   const currentGame = await db
     .prepare('SELECT status, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1')
@@ -194,7 +194,7 @@ export async function restoreGameBackup(
   );
   const restoredIds = new Set(restoredSeats.map((seat) => seat.id));
   const restoreGuard = "EXISTS (SELECT 1 FROM games g WHERE g.id = ? AND g.status = 'RESTORING' AND g.reset_at = ? AND g.reset_by_moderator_id = ?)";
-  const statements: D1PreparedStatement[] = [
+  const statements: PreparedStatement[] = [
     db
       .prepare("UPDATE games SET status = 'RESTORING', setup_revision = setup_revision + 1, reset_at = ?, reset_by_moderator_id = ?, updated_at = ? WHERE id = ? AND status = ? AND updated_at = ?")
       .bind(now, moderatorId, now, gameId, currentGame.status, currentGame.updatedAt),

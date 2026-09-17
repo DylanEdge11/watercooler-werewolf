@@ -28,6 +28,11 @@ export type PhaseStatus =
   | 'PUBLISHED'
   | 'SUPERSEDED';
 
+export const appBootstrap = sqliteTable('app_bootstrap', {
+  id: integer('id').primaryKey(),
+  createdAt: text('created_at').notNull(),
+});
+
 export const moderatorAccounts = sqliteTable(
   'moderator_accounts',
   {

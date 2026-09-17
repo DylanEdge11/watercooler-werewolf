@@ -1,16 +1,47 @@
-import { describe, expect, it } from 'vitest';
-import { assertSameOrigin, jsonError } from './security';
+import { afterEach, describe, expect, test } from 'vitest';
+import { assertSameOrigin } from './security';
 
-describe('HTTP mutation security', () => {
-  it('accepts same-origin requests and non-browser requests without an Origin header', () => {
-    expect(() => assertSameOrigin(new Request('https://game.test/api/action', { headers: { origin: 'https://game.test' } }))).not.toThrow();
-    expect(() => assertSameOrigin(new Request('https://game.test/api/action'))).not.toThrow();
+const originalSiteOrigin = process.env.SITE_ORIGIN;
+const originalNodeEnv = process.env.NODE_ENV;
+const originalVercel = process.env.VERCEL;
+
+function restore(name: 'SITE_ORIGIN' | 'NODE_ENV' | 'VERCEL', value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else (process.env as Record<string, string | undefined>)[name] = value;
+}
+
+afterEach(() => {
+  restore('SITE_ORIGIN', originalSiteOrigin);
+  restore('NODE_ENV', originalNodeEnv);
+  restore('VERCEL', originalVercel);
+});
+
+describe('mutation origin policy', () => {
+  test('requires the configured exact origin', () => {
+    (process.env as Record<string, string | undefined>).SITE_ORIGIN = 'https://game.example';
+    const valid = new Request('https://game.example/api/mutation', {
+      headers: { origin: 'https://game.example' },
+    });
+    expect(() => assertSameOrigin(valid)).not.toThrow();
+
+    const wrongPort = new Request('https://game.example:8443/api/mutation', {
+      headers: { origin: 'https://game.example:8443' },
+    });
+    expect(() => assertSameOrigin(wrongPort)).toThrow('Cross-origin mutation rejected.');
   });
 
-  it('rejects cross-origin browser mutations and returns structured errors', async () => {
-    expect(() => assertSameOrigin(new Request('https://game.test/api/action', { headers: { origin: 'https://attacker.test' } }))).toThrow('Cross-origin');
-    const response = jsonError('Denied', 403);
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({ ok: false, error: 'Denied' });
+  test('fails closed for a missing browser origin in a deployed runtime', () => {
+    delete process.env.SITE_ORIGIN;
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
+    expect(() => assertSameOrigin(new Request('https://game.example/api/mutation'))).toThrow(
+      'Origin header required',
+    );
+  });
+
+  test('rejects malformed or non-http configured origins', () => {
+    (process.env as Record<string, string | undefined>).SITE_ORIGIN = 'javascript:alert(1)';
+    expect(() => assertSameOrigin(new Request('https://game.example/api/mutation', {
+      headers: { origin: 'https://game.example' },
+    }))).toThrow('SITE_ORIGIN must use http or https.');
   });
 });

@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS app_bootstrap (
+  id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+  created_at TEXT NOT NULL
+);

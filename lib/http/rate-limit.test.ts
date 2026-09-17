@@ -13,8 +13,15 @@ describe('request rate-limit policy', () => {
   it('starts a fresh window after expiry and scopes buckets by subject and client', () => {
     const now = new Date('2026-10-01T12:01:01Z');
     expect(decideRateLimit({ attempts: 99, windowStartedAt: new Date('2026-10-01T12:00:00Z'), now, limit: 3, windowMs: 60_000 }).attempts).toBe(1);
-    const request = new Request('https://game.test/api', { headers: { 'cf-connecting-ip': '203.0.113.10' } });
+    const request = new Request('https://game.test/api', { headers: { 'x-forwarded-for': '203.0.113.10' } });
     expect(requestRateLimitKey(request, 'moderator-login')).toBe('moderator-login:203.0.113.10');
+  });
+
+  it('ignores the former Cloudflare-only client IP header', () => {
+    const request = new Request('https://game.test/api', {
+      headers: { 'cf-connecting-ip': '198.51.100.7' },
+    });
+    expect(requestRateLimitKey(request, 'moderator-login')).toBe('moderator-login:unknown-client');
   });
 
   it('exposes a retry duration for a blocked request', () => {

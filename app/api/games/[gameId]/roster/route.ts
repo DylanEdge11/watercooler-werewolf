@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../../db';
+import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
@@ -17,7 +17,7 @@ export async function GET(_request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
-    const db = getD1();
+    const db = getDb();
     const roster = await db
       .prepare(
         `SELECT id, display_name AS displayName, email, status, claimed_at AS claimedAt
@@ -51,7 +51,7 @@ export async function POST(request: Request, context: RouteContext) {
       return Response.json({ ok: false, errors: parsed.errors }, { status: 400 });
     }
 
-    const db = getD1();
+    const db = getDb();
     const game = await db
       .prepare('SELECT status, setup_revision AS setupRevision FROM games WHERE id = ? LIMIT 1')
       .bind(gameId)
@@ -95,7 +95,7 @@ export async function POST(request: Request, context: RouteContext) {
       WHERE g.id = ? AND g.setup_revision = ? AND g.status = 'ROSTER_IMPORTING'
         AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.game_id = g.id)
     )`;
-    const statements: D1PreparedStatement[] = [
+    const statements = [
       db
         .prepare(
           `UPDATE games SET status = 'ROSTER_IMPORTING', setup_revision = setup_revision + 1, updated_at = ?

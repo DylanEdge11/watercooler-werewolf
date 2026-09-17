@@ -1,20 +1,41 @@
-import { env } from 'cloudflare:workers';
-import { drizzle } from 'drizzle-orm/d1';
-import * as schema from './schema';
+import 'server-only';
 
-export function getDb() {
-  if (!env.DB) {
+import { createClient } from '@libsql/client/node';
+import {
+  LibsqlDatabase,
+  type LibsqlClient,
+} from './libsql';
+
+function isLocalDatabaseUrl(url: string): boolean {
+  return url === ':memory:' || url.startsWith('file:');
+}
+
+let database: LibsqlDatabase | undefined;
+
+export function getDb(): LibsqlDatabase {
+  const url = process.env.TURSO_DATABASE_URL?.trim();
+  if (!url) {
     throw new Error(
-      'Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database.',
+      'TURSO_DATABASE_URL is not configured. Run the explicit database migration command and configure the deployment environment.',
+    );
+  }
+  if (
+    (process.env.NODE_ENV === 'production' || process.env.VERCEL === '1') &&
+    isLocalDatabaseUrl(url)
+  ) {
+    throw new Error(
+      'A writable local database URL is not allowed in a deployed function. Configure the remote Turso/libSQL database.',
     );
   }
 
-  return drizzle(env.DB, { schema });
+  database ??= new LibsqlDatabase(
+    createClient({
+      url,
+      authToken: process.env.TURSO_AUTH_TOKEN?.trim() || undefined,
+    }) as unknown as LibsqlClient,
+  );
+  return database;
 }
 
-export function getD1(): D1Database {
-  if (!env.DB) {
-    throw new Error('Cloudflare D1 binding `DB` is unavailable.');
-  }
-  return env.DB;
-}
+export { LibsqlDatabase } from './libsql';
+export type { Database, PreparedStatement, QueryResult, RunResult } from './contracts';

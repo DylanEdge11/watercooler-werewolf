@@ -1,11 +1,11 @@
-import { getD1 } from '../../db';
+import { getDb, type PreparedStatement } from '../../db';
 import { canonicalRoleKey, type RoleKey } from '../game/types';
 import { allowedRoomTypes, type PrivateRoomType } from './policy';
 
 export { allowedRoomTypes, normalizeChatBody } from './policy';
 
 export async function ensureGameRooms(gameId: string): Promise<void> {
-  const db = getD1();
+  const db = getDb();
   const now = new Date().toISOString();
   for (const type of ['WEREWOLF', 'MASON', 'DEAD'] as PrivateRoomType[]) {
     await db
@@ -30,7 +30,7 @@ export async function ensureGameRooms(gameId: string): Promise<void> {
     .bind(gameId)
     .all<{ id: string; alive: number; role: RoleKey }>();
 
-  const statements: D1PreparedStatement[] = [];
+  const statements: PreparedStatement[] = [];
   for (const seat of seats.results) {
     const alive = Boolean(seat.alive);
     const role = canonicalRoleKey(seat.role);

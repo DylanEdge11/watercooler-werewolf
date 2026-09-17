@@ -2,6 +2,8 @@
 
 This file is the restart point for future Codex sessions. The entries below distinguish the current uncommitted pilot-hardening worktree from historical hosted checkpoints; historical deployment notes are not current release evidence.
 
+The native Next.js/libSQL migration is tracked in [MIGRATION_PROGRESS.md](MIGRATION_PROGRESS.md). The historical Sites/Cloudflare entries below remain as a record of the prior deployment and are not evidence of a Vercel preview or production deployment.
+
 ## Current checkpoint
 
 - Current source checkpoint: uncommitted pilot-hardening worktree based on reviewed commit `1db8eb87ba002fdc3468d62bb1f56ebe37ec2545`
@@ -98,4 +100,4 @@ This file is the restart point for future Codex sessions. The entries below dist
 
 ## Architecture note
 
-The Sites runtime uses Cloudflare D1 and private realtime-style polling/broadcast patterns instead of the proposed Supabase/Vercel deployment. Product rules, security boundaries, audit requirements, and moderator-review workflow remain unchanged.
+The historical Sites runtime used Cloudflare D1 and private realtime-style polling/broadcast patterns instead of the proposed Supabase/Vercel deployment. Product rules, security boundaries, audit requirements, and moderator-review workflow remain unchanged in the native Next.js/libSQL migration.

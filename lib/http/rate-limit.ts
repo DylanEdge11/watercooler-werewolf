@@ -1,3 +1,5 @@
+import type { Database } from '../../db/contracts';
+
 export interface RateLimitDecision {
   allowed: boolean;
   attempts: number;
@@ -30,7 +32,9 @@ export function decideRateLimit(input: {
 }
 
 export function requestRateLimitKey(request: Request, subject: string): string {
-  const forwarded = request.headers.get('cf-connecting-ip') ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const forwarded = process.env.VERCEL === '1'
+    ? request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim()
+    : request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
   return `${subject}:${forwarded || 'unknown-client'}`;
 }
 
@@ -38,12 +42,13 @@ export async function enforceRateLimit(
   bucketKey: string,
   limit: number,
   windowMs: number,
+  database?: Database,
 ): Promise<void> {
-  const { getD1 } = await import('../../db');
-  const db = getD1();
+  const db = database ?? (await import('../../db')).getDb();
   const now = new Date();
   const nowIso = now.toISOString();
-  // The insert, increment/reset, and read execute in one D1 batch. This keeps
+  // The insert, increment/reset, and read execute in one ordered provider
+  // batch. This keeps
   // simultaneous requests from overwriting each other's attempt count.
   const results = await db.batch([
     db
@@ -70,7 +75,7 @@ export async function enforceRateLimit(
       .prepare('SELECT window_started_at AS windowStartedAt, attempts FROM rate_limit_buckets WHERE bucket_key = ? LIMIT 1')
       .bind(bucketKey),
   ]);
-  const row = (results[2] as D1Result<{ windowStartedAt: string; attempts: number }>).results[0];
+  const row = results[2]?.results[0] as { windowStartedAt: string; attempts: number } | undefined;
   if (!row) throw new Error('Rate-limit bucket could not be updated.');
   const resetAt = new Date(new Date(row.windowStartedAt).valueOf() + windowMs);
   if (Number(row.attempts) > limit) {

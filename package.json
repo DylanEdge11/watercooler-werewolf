@@ -3,45 +3,42 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "node": "22.x"
   },
   "scripts": {
-    "dev": "vinext dev",
-    "build": "vinext build",
-    "start": "vinext start",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "node scripts/db-generate.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "owner:bootstrap": "node scripts/owner-bootstrap.mjs",
     "pilot:setup": "node scripts/pilot-setup.mjs",
     "pilot:rehearsal": "node scripts/controlled-rehearsal.mjs",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
-    "drizzle-orm": "0.45.2",
+    "@libsql/client": "0.18.0",
     "next": "16.3.3",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "server-only": "0.0.1"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.54.10",
-    "@cloudflare/workers-types": "5.20260915.1",
-    "@openai/sites-vite-plugin": "^0.1.0 || ^0.2.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "6.0.2",
-    "@vitejs/plugin-rsc": "0.5.34",
+    "drizzle-orm": "0.45.2",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
-    "react-server-dom-webpack": "19.3.0",
+    "eslint-config-next": "16.3.3",
     "tailwindcss": "4.2.1",
+    "tsx": "4.23.13",
     "typescript": "5.9.3",
-    "vinext": "1.0.0-beta.10",
     "vite": "8.3.0",
-    "vitest": "^4.1.11",
-    "wrangler": "4.132.0"
+    "vitest": "4.1.11"
   },
   "type": "module"
 }

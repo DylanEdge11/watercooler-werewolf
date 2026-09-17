@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../../db';
+import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentModerator, getCurrentPlayer } from '../../../../../lib/auth/session';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
@@ -19,7 +19,7 @@ export async function POST(request: Request, context: RouteContext) {
     const feedback = validatePilotFeedback({ rating: body.rating, comment: body.comment });
     const now = new Date().toISOString();
     const feedbackId = crypto.randomUUID();
-    const db = getD1();
+    const db = getDb();
     const moderator = await getCurrentModerator();
     let respondentType: 'MODERATOR' | 'PLAYER';
     let respondentId: string;

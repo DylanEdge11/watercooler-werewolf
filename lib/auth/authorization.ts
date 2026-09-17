@@ -1,4 +1,4 @@
-import { getD1 } from '../../db';
+import { getDb } from '../../db';
 import { getCurrentModerator, type ModeratorIdentity } from './session';
 
 export async function requireModerator(): Promise<ModeratorIdentity> {
@@ -9,7 +9,7 @@ export async function requireModerator(): Promise<ModeratorIdentity> {
 
 export async function requireGameModerator(gameId: string): Promise<ModeratorIdentity> {
   const moderator = await requireModerator();
-  const membership = await getD1()
+  const membership = await getDb()
     .prepare('SELECT role FROM game_moderators WHERE game_id = ? AND moderator_id = ? LIMIT 1')
     .bind(gameId, moderator.id)
     .first<{ role: string }>();
@@ -19,7 +19,7 @@ export async function requireGameModerator(gameId: string): Promise<ModeratorIde
 
 export async function requireGameOwner(gameId: string): Promise<ModeratorIdentity> {
   const moderator = await requireModerator();
-  const membership = await getD1()
+  const membership = await getDb()
     .prepare('SELECT role FROM game_moderators WHERE game_id = ? AND moderator_id = ? LIMIT 1')
     .bind(gameId, moderator.id)
     .first<{ role: string }>();

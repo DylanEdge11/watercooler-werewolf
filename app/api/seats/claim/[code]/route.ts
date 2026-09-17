@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../../db';
+import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { createPlayerSession } from '../../../../../lib/auth/session';
 import { hashSecret, sha256 } from '../../../../../lib/auth/crypto';
@@ -13,7 +13,7 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { code } = await context.params;
-    const seat = await getD1()
+    const seat = await getDb()
       .prepare(
         `SELECT s.display_name AS displayName, s.status, g.name AS gameName
          FROM seats s JOIN games g ON g.id = s.game_id
@@ -38,7 +38,7 @@ export async function POST(request: Request, context: RouteContext) {
     if (!/^\d{6}$/u.test(pin)) throw new Error('Choose a six-digit PIN.');
     await enforceRateLimit(requestRateLimitKey(request, `seat-claim:${code.slice(0, 80)}`), 3, 60 * 60_000);
 
-    const db = getD1();
+    const db = getDb();
     const seat = await db
       .prepare(
         `SELECT id, game_id AS gameId, display_name AS displayName, status, session_version AS sessionVersion

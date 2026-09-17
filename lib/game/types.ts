@@ -11,7 +11,7 @@ export type RoleKey = (typeof ROLE_KEYS)[number];
 export type LegacyRoleKey = 'DOCTOR';
 
 /**
- * Existing D1 rows from the first MVP may still contain DOCTOR. The migration
+ * Existing SQLite rows from the first MVP may still contain DOCTOR. The migration
  * rewrites those rows, while this mapper keeps older exported records safe to
  * read if they are encountered during recovery.
  */

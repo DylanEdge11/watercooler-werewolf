@@ -15,7 +15,7 @@ interface TestDatabase {
 
 const shared = vi.hoisted(() => ({ db: null as TestDatabase | null }));
 
-vi.mock('../db', () => ({ getD1: () => shared.db }));
+vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
 vi.mock('../lib/auth/authorization', () => ({ requireGameModerator: async () => ({ id: 'mod' }) }));
 vi.mock('../lib/chat/rooms', () => ({ ensureGameRooms: async () => {} }));
@@ -25,7 +25,7 @@ import { GET as phaseGet, POST as phasePost } from '../app/api/games/[gameId]/ph
 
 let sqlite: DatabaseSync;
 
-class D1Statement {
+class ProviderStatement {
   private args: SQLInputValue[] = [];
 
   constructor(readonly sql: string) {}
@@ -69,9 +69,9 @@ function phases(body: Record<string, unknown>): Promise<Response> {
   return phasePost(request(body), { params: Promise.resolve({ gameId: 'game' }) });
 }
 
-function d1Compatible(): TestDatabase {
+function providerCompatible(): TestDatabase {
   return {
-    prepare: (sql) => new D1Statement(sql),
+    prepare: (sql) => new ProviderStatement(sql),
     batch: async (statements) => {
       sqlite.exec('BEGIN');
       try {
@@ -111,7 +111,7 @@ function seedSetupGame(): void {
 beforeEach(() => {
   sqlite = new DatabaseSync(':memory:');
   seedSetupGame();
-  shared.db = d1Compatible();
+  shared.db = providerCompatible();
 });
 
 afterEach(() => sqlite.close());

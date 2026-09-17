@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../../db';
+import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { createModeratorAccount } from '../../../../../lib/auth/moderators';
@@ -13,7 +13,7 @@ export async function GET(_request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
-    const rows = await getD1()
+    const rows = await getDb()
       .prepare(
         `SELECT ma.id, ma.email, gm.role, gm.added_at AS addedAt
          FROM game_moderators gm JOIN moderator_accounts ma ON ma.id = gm.moderator_id
@@ -33,7 +33,7 @@ export async function POST(request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     const owner = await requireGameModerator(gameId);
-    const ownerMembership = await getD1()
+    const ownerMembership = await getDb()
       .prepare("SELECT role FROM game_moderators WHERE game_id = ? AND moderator_id = ? AND role = 'OWNER'")
       .bind(gameId, owner.id)
       .first();
@@ -41,7 +41,7 @@ export async function POST(request: Request, context: RouteContext) {
     const body = (await request.json()) as { email?: string; password?: string };
     const email = body.email?.trim().toLowerCase() ?? '';
     if (!/^\S+@\S+\.\S+$/u.test(email)) throw new Error('Enter a valid co-moderator email.');
-    const db = getD1();
+    const db = getDb();
     let account = await db
       .prepare('SELECT id, email FROM moderator_accounts WHERE email = ? LIMIT 1')
       .bind(email)

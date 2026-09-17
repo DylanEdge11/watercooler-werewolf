@@ -1,4 +1,4 @@
-import { getD1 } from '../../../../../db';
+import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
@@ -12,7 +12,7 @@ export async function GET(_request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
-    const rows = await getD1()
+    const rows = await getDb()
       .prepare(
         `SELECT id, title, body, email_subject AS emailSubject, email_body AS emailBody, created_at AS createdAt
          FROM announcements WHERE game_id = ? ORDER BY created_at DESC`,
@@ -40,7 +40,7 @@ export async function POST(request: Request, context: RouteContext) {
     const emailBody = body.emailBody?.trim() || `${announcementBody}\n\nOpen Watercooler Werewolf for the official game state.`;
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
-    const db = getD1();
+    const db = getDb();
     const seats = await db
       .prepare("SELECT id FROM seats WHERE game_id = ? AND status = 'CLAIMED'")
       .bind(gameId)
