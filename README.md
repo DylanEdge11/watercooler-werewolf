@@ -2,6 +2,10 @@
 
 Watercooler Werewolf is a slow-burn, moderator-reviewed Werewolf game for an office or other trusted group. The current source is the Phase 6 pilot-hardening build. The exact source checkpoint is always available with `git log -1 --oneline`; the current deployment version and commit are recorded in [BUILD_STATUS.md](BUILD_STATUS.md).
 
+> **Review status — September 16, 2026:** before using real players, read the [review findings](docs/REVIEW_2026-09-16.md) and complete the fictional rehearsal. The review documents remaining hosted/browser gates and known issues; this README is not a production sign-off.
+
+Detailed [operations](docs/OPERATIONS.md), [pilot testing](docs/PILOT_TESTING.md), and [technical](docs/TECHNICAL.md) references are included with the migration.
+
 ## Run and verify
 
 Use Node.js 22.x. The project uses npm and native Next.js App Router.
