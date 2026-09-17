@@ -22,6 +22,7 @@ if (!moderatorPassword || moderatorPassword.length < 12) {
 }
 
 let cookie = '';
+const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
 function rememberSession(response) {
   const setCookies = typeof response.headers.getSetCookie === 'function'
     ? response.headers.getSetCookie()
@@ -35,6 +36,7 @@ function rememberSession(response) {
 async function request(path, options = {}) {
   const headers = new Headers(options.headers);
   headers.set('origin', baseUrl);
+  if (vercelBypassSecret) headers.set('x-vercel-protection-bypass', vercelBypassSecret);
   if (cookie) headers.set('cookie', cookie);
   if (options.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
   const response = await fetch(`${baseUrl}${path}`, { ...options, headers });

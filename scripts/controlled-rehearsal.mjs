@@ -11,6 +11,7 @@ if (!localHosts.has(parsedBaseUrl.hostname) && process.env.PILOT_ALLOW_REMOTE !=
 
 const moderatorEmail = (process.env.PILOT_MODERATOR_EMAIL ?? 'moderator@pilot.test').trim().toLowerCase();
 const moderatorPassword = process.env.PILOT_MODERATOR_PASSWORD ?? 'fictional-review-password-2026';
+const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
 let moderatorCookie = '';
 const checks = [];
 
@@ -31,6 +32,7 @@ function rememberSession(response) {
 
 async function request(path, body, cookie = moderatorCookie) {
   const headers = { origin: baseUrl, cookie, 'content-type': 'application/json' };
+  if (vercelBypassSecret) headers['x-vercel-protection-bypass'] = vercelBypassSecret;
   const response = await fetch(`${baseUrl}${path}`, {
     method: body === undefined ? 'GET' : 'POST',
     headers,

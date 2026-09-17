@@ -178,6 +178,12 @@ npm run pilot:rehearsal
 
 Replace the angle-bracket placeholder with the actual URL. The two commands create and exercise disposable game data; they do not send email or invite real players.
 
+If the Preview deployment has Vercel Authentication or Deployment Protection enabled, the terminal helper will receive a 401 Protected deployment response before it reaches the app. In the project dashboard, open **Settings → Deployment Protection → Protection Bypass for Automation**, create a bypass secret, and keep it private. In the temporary operator shell, set it alongside the pilot variables:
+
+    $env:VERCEL_AUTOMATION_BYPASS_SECRET = '<vercel-automation-bypass-secret>'
+
+The pilot helpers send this value only as Vercel's x-vercel-protection-bypass request header. Do not commit it, add it to a client-visible environment variable, or use it with the Production URL. Remove it from the shell after the rehearsal with Remove-Item Env:VERCEL_AUTOMATION_BYPASS_SECRET.
+
 Inspect the deployment after the proof:
 
 ```powershell
@@ -225,4 +231,3 @@ Use Proof A locally. In that mode, the home PC is the temporary server and must 
 - Roll back the application by selecting a previous Vercel deployment or redeploying a known-good commit.
 - Application rollback does not roll back Turso data or schema. Keep backups and inspect the migration ledger before changing a database.
 - Keep the old Sites deployment/database untouched until the new Production proof is accepted.
-
