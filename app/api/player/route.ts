@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     if (phase?.status === 'PENDING_HUNTER') {
       const proposal = await db
         .prepare(
-          `SELECT outcome_json AS outcomeJson FROM resolution_proposals
+          `SELECT COALESCE(reviewed_outcome_json, outcome_json) AS outcomeJson FROM resolution_proposals
            WHERE phase_id = ? AND status = 'PROPOSED' ORDER BY created_at DESC LIMIT 1`,
         )
         .bind(phase.id)
@@ -190,6 +190,54 @@ export async function GET(request: Request) {
       participation = { submitted: Number(submitted?.count ?? 0), eligible };
     }
 
+    const publicTimeline = timelineRows.results.map((event) => {
+      const payload = JSON.parse(event.payloadJson) as Record<string, unknown>;
+      if (event.eventType === 'PHASE_PUBLISHED') {
+        const eliminations = Array.isArray(payload.eliminations)
+          ? payload.eliminations.map((item) => {
+              const elimination = item as Record<string, unknown>;
+              return {
+                displayName: elimination.displayName,
+                role: elimination.role,
+                cause: elimination.cause,
+              };
+            })
+          : [];
+        return {
+          id: event.id,
+          eventType: event.eventType,
+          createdAt: event.createdAt,
+          payload: {
+            kind: payload.kind,
+            eliminations,
+            winner: payload.winner ?? null,
+          },
+        };
+      }
+      if (event.eventType === 'GAME_COMPLETED') {
+        return {
+          id: event.id,
+          eventType: event.eventType,
+          createdAt: event.createdAt,
+          payload: { winner: payload.winner ?? null },
+        };
+      }
+      if (event.eventType === 'ANNOUNCEMENT') {
+        return {
+          id: event.id,
+          eventType: event.eventType,
+          createdAt: event.createdAt,
+          payload: { title: payload.title, body: payload.body },
+        };
+      }
+      return {
+        id: event.id,
+        eventType: event.eventType,
+        createdAt: event.createdAt,
+        payload: {},
+      };
+    });
+
     return Response.json({
       ok: true,
       player: {
@@ -215,7 +263,7 @@ export async function GET(request: Request) {
         ? { ...currentAction, targetIds: JSON.parse(currentAction.targetIdsJson) as string[], targetIdsJson: undefined }
         : null,
       participation,
-      timeline: timelineRows.results.map((event) => ({ ...event, payload: JSON.parse(event.payloadJson), payloadJson: undefined })),
+      timeline: publicTimeline,
       notifications: notificationRows.results,
       notificationsHasMore,
       notificationsNextCursor: notificationsHasMore && lastNotification ? { createdAt: lastNotification.createdAt, id: lastNotification.id } : null,
