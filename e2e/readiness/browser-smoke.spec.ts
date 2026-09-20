@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { BASE_URL } from '../constants';
 import { BrowserTelemetry } from './browser-fixture';
+import { newBrowserContext } from '../transport';
 
 test.describe('browser smoke', () => {
   test('public, player, and moderator entry points render without browser errors', async ({ browser }) => {
-    const context = await browser.newContext({ baseURL: BASE_URL });
+    const context = await newBrowserContext(browser);
     const page = await context.newPage();
     const telemetry = new BrowserTelemetry();
     telemetry.attach(page, `smoke-${test.info().project.name}`);

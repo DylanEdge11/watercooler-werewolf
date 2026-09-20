@@ -1,6 +1,6 @@
 # Rehearsal fixtures
 
-Use `roster-20.csv` for a complete minimum-size rehearsal before a real office campaign.
+Use `roster-20.csv` for the standard multiplayer rehearsal. The application accepts 6–80 player seats; a six-player rehearsal should use one Werewolf and five Villagers as its initial preset.
 
 Recommended rehearsal:
 

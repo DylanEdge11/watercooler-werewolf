@@ -7,7 +7,7 @@ import {
   type Bot,
   type Decision,
 } from './bot-farm';
-import { DEFAULT_COMPOSITION, WEREWOLF_HEAVY_COMPOSITION } from './constants';
+import { DEFAULT_COMPOSITION, E2E_PLAYER_COUNT, WEREWOLF_HEAVY_COMPOSITION } from './constants';
 
 async function expectRejected(response: Awaited<ReturnType<Bot['context']['post']>>, status: number, message: string) {
   expect(response.status()).toBe(status);
@@ -30,7 +30,7 @@ test.describe('scripted 20-player bot farm', () => {
   test('runs a complete Village win with revisions, late/dead actions, privacy, protection, and concurrent submissions', async () => {
     const farm = await GameHarness.create({ name: 'Scripted Village Win' });
     try {
-      expect(farm.bots).toHaveLength(20);
+      expect(farm.bots).toHaveLength(E2E_PLAYER_COUNT);
       expect(farm.byRole('WEREWOLF')).toHaveLength(DEFAULT_COMPOSITION.WEREWOLF);
       expect(farm.byRole('SEER')).toHaveLength(1);
       expect(farm.byRole('BODYGUARD')).toHaveLength(1);

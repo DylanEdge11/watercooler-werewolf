@@ -9,6 +9,29 @@ import {
 } from './balance';
 
 describe('role balance', () => {
+  it('uses staged small-game presets without forcing every special role', () => {
+    expect(defaultComposition(6)).toEqual({
+      VILLAGER: 5,
+      WEREWOLF: 1,
+      SEER: 0,
+      BODYGUARD: 0,
+      HUNTER: 0,
+      MASON: 0,
+    });
+    for (const count of [6, 7, 8, 9, 11, 12, 14, 15, 19]) {
+      const composition = defaultComposition(count);
+      expect(countComposition(composition)).toBe(count);
+      expect(validateComposition(composition, count).valid).toBe(true);
+    }
+    expect(defaultComposition(7).SEER).toBe(0);
+    expect(defaultComposition(19)).toMatchObject({ SEER: 1, BODYGUARD: 1, HUNTER: 0, MASON: 0 });
+  });
+
+  it('rejects counts outside the shared roster limits', () => {
+    expect(() => defaultComposition(5)).toThrow('6–80');
+    expect(() => defaultComposition(81)).toThrow('6–80');
+  });
+
   it('builds the agreed 20-player default and recommends the nearest balancing wolf count', () => {
     const composition = defaultComposition(20);
     expect(composition).toEqual({
@@ -47,6 +70,7 @@ describe('role balance', () => {
 
 describe('elimination scaling', () => {
   it.each([
+    [6, 1],
     [20, 1],
     [30, 1],
     [31, 2],

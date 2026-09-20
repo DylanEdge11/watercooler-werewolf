@@ -2,7 +2,7 @@ import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator, requireGameOwner } from '../../../../../lib/auth/authorization';
 import { createBackupRecord, restoreGameBackup } from '../../../../../lib/backup/snapshot';
-import { canResetGame, canStopGame } from '../../../../../lib/game/lifecycle';
+import { canCancelSetup, canResetGame, canStopGame } from '../../../../../lib/game/lifecycle';
 import { reconcileDuePhases } from '../../../../../lib/game/scheduling';
 import { hashSecret, randomToken, sha256 } from '../../../../../lib/auth/crypto';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
@@ -111,7 +111,7 @@ export async function POST(request: Request, context: RouteContext) {
     const { gameId } = await context.params;
     const moderator = await requireGameModerator(gameId);
     const body = (await request.json()) as {
-      action?: 'SET_CHAT_RETENTION' | 'REVOKE_SEAT_SESSIONS' | 'RESET_PLAYER_PIN' | 'STOP' | 'RESET' | 'RESTORE_BACKUP' | 'RECONCILE_DEADLINES';
+      action?: 'SET_CHAT_RETENTION' | 'REVOKE_SEAT_SESSIONS' | 'RESET_PLAYER_PIN' | 'STOP' | 'RESET' | 'CANCEL_SETUP' | 'RESTORE_BACKUP' | 'RECONCILE_DEADLINES';
       days?: number;
       seatId?: string;
       newPin?: string;
@@ -127,6 +127,62 @@ export async function POST(request: Request, context: RouteContext) {
       .bind(gameId)
       .first<{ id: string; name: string; status: string; updatedAt: string }>();
     if (!game) throw new Error('Game not found.');
+    if (body.action === 'CANCEL_SETUP') {
+      await requireGameOwner(gameId);
+      const decision = canCancelSetup(game.status, game.name, body.confirmationName?.trim() ?? '', 'OWNER', body.confirmed === true);
+      if (!decision.allowed) throw new Error(decision.error);
+      const seats = await db
+        .prepare('SELECT id FROM seats WHERE game_id = ?')
+        .bind(gameId)
+        .all<{ id: string }>();
+      const replacementHashes = await Promise.all(
+        seats.results.map(async (seat) => ({ id: seat.id, hash: await sha256(randomToken(18)) })),
+      );
+      const cancelGuard = "EXISTS (SELECT 1 FROM games g WHERE g.id = ? AND g.status = 'CANCELLED' AND g.updated_at = ?)";
+      const statements = [
+        db
+          .prepare(
+            `UPDATE games SET status = 'CANCELLED', stopped_at = NULL, stopped_by_moderator_id = NULL, stop_reason = NULL, updated_at = ?
+             WHERE id = ? AND status = ? AND updated_at = ?
+               AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.game_id = games.id)`,
+          )
+          .bind(now, gameId, game.status, game.updatedAt),
+        db.prepare('DELETE FROM seat_sessions WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?) AND ' + cancelGuard).bind(gameId, gameId, now),
+        db
+          .prepare(
+            `UPDATE seats SET status = 'REMOVED', pin_hash = NULL, session_version = session_version + 1,
+                              alive = 0, claimed_at = NULL, updated_at = ?
+             WHERE game_id = ? AND ${cancelGuard}`,
+          )
+          .bind(now, gameId, gameId, now),
+        db.prepare('UPDATE chat_rooms SET status = \'READ_ONLY\' WHERE game_id = ? AND ' + cancelGuard).bind(gameId, gameId, now),
+        db
+          .prepare(
+            `INSERT INTO game_events
+             (id, game_id, event_type, actor_moderator_id, payload_json, created_at)
+             SELECT ?, ?, 'GAME_CANCELLED', ?, ?, ? WHERE ${cancelGuard}`,
+          )
+          .bind(crypto.randomUUID(), gameId, moderator.id, JSON.stringify({ status: 'CANCELLED', invalidatedSeatCount: seats.results.length }), now, gameId, now),
+        db
+          .prepare(
+            `INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at)
+             SELECT ?, ?, 'WARNING', 'GAME_CONTROL', 'An unfinished game setup was cancelled.', ?, ? WHERE ${cancelGuard}`,
+          )
+          .bind(crypto.randomUUID(), gameId, JSON.stringify({ moderatorId: moderator.id, invalidatedSeatCount: seats.results.length, auditHistoryRetained: true }), now, gameId, now),
+      ];
+      for (const replacement of replacementHashes) {
+        statements.push(
+          db
+            .prepare('UPDATE seats SET claim_code_hash = ? WHERE id = ? AND game_id = ? AND ' + cancelGuard)
+            .bind(replacement.hash, replacement.id, gameId, gameId, now),
+        );
+      }
+      const result = await db.batch(statements);
+      if (changes(result[0]) !== 1) {
+        return jsonError('The setup changed before it could be cancelled. Refresh and review its current state.', 409);
+      }
+      return Response.json({ ok: true, status: 'CANCELLED', invalidatedSeatCount: seats.results.length });
+    }
     if (body.action === 'RECONCILE_DEADLINES') {
       const lockedPhaseIds = await reconcileDuePhases(db, gameId, moderator.id);
       return Response.json({ ok: true, lockedPhaseIds });

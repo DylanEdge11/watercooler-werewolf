@@ -139,4 +139,17 @@ describe('Hunter and victory', () => {
     }));
     expect(evaluateWinner(parityPlayers).winner).toBe('WEREWOLF');
   });
+
+  it('keeps the same victory rules for a six-player game', () => {
+    const smallPlayers: PlayerState[] = [
+      { id: 'small-wolf', displayName: 'Small Wolf', role: 'WEREWOLF', alive: true },
+      { id: 'small-v1', displayName: 'Small Villager 1', role: 'VILLAGER', alive: true },
+      { id: 'small-v2', displayName: 'Small Villager 2', role: 'VILLAGER', alive: true },
+      { id: 'small-v3', displayName: 'Small Villager 3', role: 'VILLAGER', alive: true },
+      { id: 'small-v4', displayName: 'Small Villager 4', role: 'VILLAGER', alive: true },
+      { id: 'small-v5', displayName: 'Small Villager 5', role: 'VILLAGER', alive: true },
+    ];
+    expect(evaluateWinner(smallPlayers, [{ playerId: 'small-wolf' }]).winner).toBe('VILLAGE');
+    expect(evaluateWinner(smallPlayers.map((player) => ({ ...player, alive: ['small-wolf', 'small-v1'].includes(player.id) }))).winner).toBe('WEREWOLF');
+  });
 });

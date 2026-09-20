@@ -59,7 +59,13 @@ describe('backup restore preparation', () => {
     const data = backup({ game: { ...(backup().game as Record<string, unknown>), id: 'other-game' }, seats: [] });
     const errors = validateBackupForRestore(data, 'game-1');
     expect(errors).toContain('The backup belongs to a different game.');
-    expect(errors).toContain('The backup must contain between 20 and 80 seats.');
+    expect(errors).toContain('The backup must contain between 6 and 80 seats.');
+  });
+
+  it('accepts a six-player setup while still excluding removed audit seats', () => {
+    const data = backup({ seats: backup().seats.slice(0, 6) });
+    expect(validateBackupForRestore(data, 'game-1')).toEqual([]);
+    expect(backupSeats(data)).toHaveLength(6);
   });
 
   it('requires exact name confirmation for destructive restore', () => {

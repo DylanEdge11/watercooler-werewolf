@@ -22,6 +22,8 @@ Read-only Vercel CLI verification on September 19 established:
 
 A generated Vercel deployment hostname does not establish environment isolation. The first two addresses serve the same deployment and its configured database connection. Do not point the mutating test suite at the supplied production deployment as if it were staging.
 
+GitHub verification: the remote repository's [migration record, line 157](https://github.com/DylanEdge11/watercooler-werewolf/blob/639363de1b562a916d8d2a6ea6ba4e5e5c7a983d/MIGRATION_PROGRESS.md#L157) identifies `watercooler-werewolf-a0oxuxxn7-dyl-edge.vercel.app` as Preview, matching the live Vercel classification. GitHub's `main` points to `639363de1b562a916d8d2a6ea6ba4e5e5c7a983d`; its commit-status response contains no statuses, and the two repository PR discussions contain no Vercel preview announcement. The GitHub connector does not support the deployments endpoint, so no claim is made about the contents of that API collection. The URL is verified through the checked-in GitHub record and Vercel's live deployment API via CLI.
+
 - The project uses Next.js, Node `22.x`, root `.`, install `npm ci`, and build `npm run build`. Run deployment commands from `project/`, where the app and `.vercel/project.json` reside.
 - Preview currently lists `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, and `WATERCOOLER_OWNER_EMAIL`. It does not list a custom `SITE_ORIGIN` or `CRON_SECRET`.
 - Production currently lists those three variables plus `SITE_ORIGIN`. This supersedes the older migration note saying Production has no variables. Variable values were not downloaded or exposed.

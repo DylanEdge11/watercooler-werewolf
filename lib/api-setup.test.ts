@@ -17,10 +17,14 @@ const shared = vi.hoisted(() => ({ db: null as TestDatabase | null }));
 
 vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
-vi.mock('../lib/auth/authorization', () => ({ requireGameModerator: async () => ({ id: 'mod' }) }));
+vi.mock('../lib/auth/authorization', () => ({
+  requireGameModerator: async () => ({ id: 'mod' }),
+  requireGameOwner: async () => ({ id: 'mod' }),
+}));
 vi.mock('../lib/chat/rooms', () => ({ ensureGameRooms: async () => {} }));
 
 import { POST as assignmentPost } from '../app/api/games/[gameId]/assignments/route';
+import { POST as operationsPost } from '../app/api/games/[gameId]/operations/route';
 import { POST as rosterPost } from '../app/api/games/[gameId]/roster/route';
 import { GET as phaseGet, POST as phasePost } from '../app/api/games/[gameId]/phases/route';
 
@@ -70,6 +74,14 @@ function phases(body: Record<string, unknown>): Promise<Response> {
   return phasePost(request(body), { params: Promise.resolve({ gameId: 'game' }) });
 }
 
+function operations(body: Record<string, unknown>): Promise<Response> {
+  return operationsPost(request(body), { params: Promise.resolve({ gameId: 'game' }) });
+}
+
+function rosterCsv(count: number): string {
+  return ['display_name,email', ...Array.from({ length: count }, (_, index) => `Roster Player ${index},roster${index}@pilot.test`)].join('\n');
+}
+
 function providerCompatible(): TestDatabase {
   return {
     prepare: (sql) => new ProviderStatement(sql),
@@ -95,18 +107,25 @@ function providerCompatible(): TestDatabase {
   };
 }
 
-function seedSetupGame(): void {
+function seedSetupGame(playerCount = 20): void {
   for (const file of ['0000_dashing_smiling_tiger.sql', '0001_bodyguard_and_lifecycle.sql', '0002_pilot_hardening.sql', '0003_reviewed_outcome.sql']) {
     sqlite.exec(readFileSync(new URL('../drizzle/' + file, import.meta.url), 'utf8'));
   }
   sqlite.exec("INSERT INTO moderator_accounts (id,email,password_hash,recovery_codes_json,created_at,updated_at) VALUES ('mod','review@pilot.test','fake','[]','2026-01-01','2026-01-01'); INSERT INTO games (id,name,status,timezone,start_date,end_date,active_weekdays_json,schedule_json,final_cutoff_at,created_by_moderator_id,created_at,updated_at) VALUES ('game','Review','REGISTRATION','UTC','2026-01-01','2027-01-01','[1]','{}','2099-01-01','mod','2026-01-01','2026-01-01'); INSERT INTO game_moderators (game_id,moderator_id,role,added_at) VALUES ('game','mod','OWNER','2026-01-01');");
-  const composition = defaultComposition(20);
+  const composition = defaultComposition(playerCount);
   for (const [role, count] of Object.entries(composition)) {
     sqlite.prepare('INSERT INTO game_role_counts (game_id,role_key,count,power_snapshot) VALUES (?,?,?,0)').run('game', role, count);
   }
-  for (let index = 0; index < 20; index += 1) {
+  for (let index = 0; index < playerCount; index += 1) {
     sqlite.prepare("INSERT INTO seats (id,game_id,display_name,email,status,claim_code_hash,created_at,updated_at) VALUES (?,'game',?,?,'CLAIMED',?,'2026-01-01','2026-01-01')").run('p' + index, 'Player ' + index, 'p' + index + '@pilot.test', 'hash' + index);
   }
+}
+
+function resetSetupGame(playerCount = 20): void {
+  sqlite.close();
+  sqlite = new DatabaseSync(':memory:');
+  seedSetupGame(playerCount);
+  shared.db = providerCompatible();
 }
 
 beforeEach(() => {
@@ -118,6 +137,43 @@ beforeEach(() => {
 afterEach(() => sqlite.close());
 
 describe('setup and publication invariants', () => {
+  test.each([5, 81])('the roster route rejects %i players', async (count) => {
+    const response = await rosterPost(request({ csv: rosterCsv(count) }), { params: Promise.resolve({ gameId: 'game' }) });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ errors: [expect.stringContaining('between 6 and 80')] });
+  });
+
+  test.each([6, 19, 20, 80])('the roster route accepts %i players', async (count) => {
+    const response = await rosterPost(request({ csv: rosterCsv(count) }), { params: Promise.resolve({ gameId: 'game' }) });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ playerCount: count });
+  });
+
+  test('six claimed players can preview and release the small-game composition', async () => {
+    resetSetupGame(6);
+    const preview = await assignments({ action: 'PREVIEW' });
+    expect(preview.status).toBe(200);
+    const previewData = await preview.json() as { batchId: string; assignments: Array<{ seatId: string; role: string }> };
+    expect(previewData.assignments).toHaveLength(6);
+    expect(previewData.assignments.filter((assignment) => assignment.role === 'WEREWOLF')).toHaveLength(1);
+    expect((await assignments({ action: 'RELEASE', batchId: previewData.batchId })).status).toBe(200);
+    expect((sqlite.prepare("SELECT status FROM games WHERE id = 'game'").get() as { status: string }).status).toBe('ACTIVE');
+    expect((sqlite.prepare("SELECT COUNT(*) AS count FROM role_assignments WHERE game_id = 'game'").get() as { count: number }).count).toBe(6);
+  });
+
+  test('cancelling unfinished setup is atomic and preserves audit history', async () => {
+    const originalHash = (sqlite.prepare("SELECT claim_code_hash AS hash FROM seats WHERE id = 'p0'").get() as { hash: string }).hash;
+    const response = await operations({ action: 'CANCEL_SETUP', confirmed: true, confirmationName: 'Review' });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: 'CANCELLED', invalidatedSeatCount: 20 });
+    expect((sqlite.prepare("SELECT status FROM games WHERE id = 'game'").get() as { status: string }).status).toBe('CANCELLED');
+    expect((sqlite.prepare("SELECT status FROM seats WHERE id = 'p0'").get() as { status: string }).status).toBe('REMOVED');
+    expect((sqlite.prepare("SELECT claim_code_hash AS hash FROM seats WHERE id = 'p0'").get() as { hash: string }).hash).not.toBe(originalHash);
+    expect(sqlite.prepare("SELECT event_type AS eventType FROM game_events WHERE game_id = 'game' AND event_type = 'GAME_CANCELLED'").all()).toHaveLength(1);
+    expect(sqlite.prepare("SELECT message FROM operational_events WHERE game_id = 'game' AND message = 'An unfinished game setup was cancelled.'").all()).toHaveLength(1);
+    expect((await operations({ action: 'CANCEL_SETUP', confirmed: true, confirmationName: 'Review' })).status).toBe(400);
+  });
+
   test('a roster replacement records its audit event and returns to registration', async () => {
     const csv = ['display_name,email', ...Array.from({ length: 20 }, (_, index) => `New Player ${index},new${index}@pilot.test`)].join('\n');
     const response = await rosterPost(request({ csv }), { params: Promise.resolve({ gameId: 'game' }) });

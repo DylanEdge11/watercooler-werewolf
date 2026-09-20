@@ -46,3 +46,20 @@ export function canResetGame(
   }
   return { allowed: true, idempotent: status === 'DRAFT' };
 }
+
+export function canCancelSetup(
+  status: string,
+  gameName: string,
+  confirmation: string,
+  moderatorRole: string,
+  confirmed: boolean,
+): LifecycleDecision {
+  if (moderatorRole !== 'OWNER') return { allowed: false, error: 'Only the game owner can cancel an unfinished setup.' };
+  if (!confirmed || confirmation !== gameName) {
+    return { allowed: false, error: 'Cancelling setup requires explicit confirmation with the exact game name.' };
+  }
+  if (!['DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'].includes(status)) {
+    return { allowed: false, error: 'Only an unfinished setup can be cancelled. Active and completed games are unchanged.' };
+  }
+  return { allowed: true };
+}

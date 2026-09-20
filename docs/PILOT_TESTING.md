@@ -48,9 +48,9 @@ The rehearsal exercises real HTTP routes for claims, stale-preview rejection, Hu
 
 Use a disposable game. Keep the moderator in one browser profile and test players in separate profiles/private windows.
 
-1. Import the fictional 20-player roster and privately retain the one-time invite CSV.
+1. Import a fictional roster of 6–80 players and privately retain the one-time invite CSV. The included fixture remains a 20-player rehearsal baseline.
 2. Claim every seat with unique six-digit test PINs.
-3. Review the default composition: 12 Villagers, 3 Werewolves, 1 Seer, 1 Bodyguard, 1 Hunter, 2 Masons. Randomize, inspect assignment evidence, and release roles.
+3. Review the generated preset. For six players it is one Werewolf and five Villagers; the 20-player baseline is 12 Villagers, 3 Werewolves, 1 Seer, 1 Bodyguard, 1 Hunter, 2 Masons. Presets are starting points, not a balance guarantee. Randomize, inspect assignment evidence, and release roles.
 4. Verify each player sees only their role and permitted teammates/rooms.
 5. Run a Day ballot. Submit, revise, lock, propose, and publish. Verify only the latest revision counts and confirm timeline/living-count/role-reveal behavior.
 6. Run Night actions for Werewolf attack, Bodyguard protection, and Seer investigation. Verify protection and the private exact-role Seer result.
@@ -61,7 +61,7 @@ Use a disposable game. Keep the moderator in one browser profile and test player
 11. Test Stop, then owner-only Reset using the exact game name. Confirm old sessions/claim links fail and audit/backup history remains.
 12. Collect private pilot feedback and record defects/rule questions before using any real roster.
 
-The player dashboard polls every ten seconds for phase, result, notification, and stopped-state changes while preserving an unsaved ballot selection. **Check for updates** remains available manually.
+The moderator console always exposes a game selector and **Start new setup** action. An unfinished setup can be cancelled only by its owner after confirmation; invite links and player sessions are invalidated, while audit history remains. The player dashboard polls every ten seconds for phase, result, notification, and stopped-state changes while preserving an unsaved ballot selection. **Check for updates** remains available manually.
 
 Desktop and 390x844 visual checks require a connected browser; this checklist does not replace that QA gate.
 

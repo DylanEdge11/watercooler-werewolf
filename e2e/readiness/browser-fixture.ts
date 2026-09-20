@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { expect, type APIResponse, type Browser, type BrowserContext, type Page, type Response as PageResponse } from '@playwright/test';
 import type { ActionKind, PhaseKind, PhaseResolution, RoleComposition, RoleKey } from '../../lib/game/types';
 import type { TestInfo } from '@playwright/test';
-import { BASE_URL, DEFAULT_COMPOSITION, MODERATOR_EMAIL, MODERATOR_PASSWORD } from '../constants';
+import { BASE_URL, DEFAULT_COMPOSITION, E2E_PLAYER_COUNT, E2E_RUN_ID, MODERATOR_EMAIL, MODERATOR_PASSWORD } from '../constants';
+import { E2E_REQUEST_HEADERS, newBrowserContext } from '../transport';
 
 const ROLE_NAMES: Record<RoleKey, string> = {
   VILLAGER: 'Villager',
@@ -143,6 +144,21 @@ function isLocalUrl(value: string): boolean {
   }
 }
 
+function isExpectedVercelProtectionProbe(method: string, value: string): boolean {
+  try {
+    const url = new URL(value, BASE_URL);
+    if (url.origin !== new URL(BASE_URL).origin) return false;
+    if (url.pathname === '/.well-known/vercel/jwe') return true;
+    // Protected Preview navigation emits canceled HEAD probes for document
+    // routes and an OPTIONS probe at the origin while browser contexts move
+    // between pages. No application flow uses these methods; GET/POST failures
+    // remain strict so API and document failures are still reported.
+    return method === 'HEAD' || (method === 'OPTIONS' && url.pathname === '/');
+  } catch {
+    return false;
+  }
+}
+
 function responseKey(response: PageResponse): string {
   return `${response.request().method()}:${response.url()}:${response.status()}`;
 }
@@ -154,7 +170,7 @@ function csvValue(value: string): string {
 function rosterCsv(suffix: string): string {
   return [
     'display_name,email',
-    ...Array.from({ length: 20 }, (_, index) => {
+    ...Array.from({ length: E2E_PLAYER_COUNT }, (_, index) => {
       const number = String(index + 1).padStart(2, '0');
       return `${csvValue(`Player ${number}`)},${csvValue(`player${number}-${suffix}@e2e.test`)}`;
     }),
@@ -178,11 +194,11 @@ async function json<T>(response: JsonResponseLike, operation: string): Promise<T
 }
 
 async function post<T>(context: BrowserContext, path: string, data: Record<string, unknown>, operation: string): Promise<T> {
-  return json<T>(await context.request.post(path, { data }), operation);
+  return json<T>(await context.request.post(path, { data, headers: E2E_REQUEST_HEADERS }), operation);
 }
 
 async function get<T>(context: BrowserContext, path: string, operation: string): Promise<T> {
-  return json<T>(await context.request.get(path), operation);
+  return json<T>(await context.request.get(path, { headers: E2E_REQUEST_HEADERS }), operation);
 }
 
 function recordForbiddenKeys(value: unknown, path = '$', found: string[] = []): string[] {
@@ -229,7 +245,11 @@ export class BrowserTelemetry {
       }
     });
     page.on('requestfailed', (request) => {
-      if (isLocalUrl(request.url())) {
+      // Vercel's protected Preview runtime probes this platform-owned endpoint
+      // from the page without forwarding the automation bypass header. Its
+      // failure is expected after the root/API preflight has authenticated the
+      // deployment; application-origin failures remain strict below.
+      if (isLocalUrl(request.url()) && !isExpectedVercelProtectionProbe(request.method(), request.url())) {
         state.entries.push({ kind: 'requestfailed', label, detail: `${request.method()} ${redactedUrl(request.url())}` });
       }
     });
@@ -295,7 +315,7 @@ let sharedModeratorPromise: Promise<SharedModerator> | null = null;
 export async function getSharedModerator(browser: Browser): Promise<SharedModerator> {
   if (sharedModerator) return sharedModerator;
   sharedModeratorPromise ??= (async () => {
-    const context = await browser.newContext({ baseURL: BASE_URL });
+    const context = await newBrowserContext(browser);
     const page = await context.newPage();
     const telemetry = new BrowserTelemetry();
     telemetry.attach(page, 'moderator');
@@ -372,7 +392,7 @@ export class BrowserPlayer {
   }
 
   async dashboard(): Promise<PlayerDashboard> {
-    return json<PlayerDashboard>(await this.context.request.get('/api/player'), `dashboard ${this.account.index}`);
+    return json<PlayerDashboard>(await this.context.request.get('/api/player', { headers: E2E_REQUEST_HEADERS }), `dashboard ${this.account.index}`);
   }
 
   async selectTarget(target: BrowserPlayerAccount): Promise<void> {
@@ -425,7 +445,7 @@ export class BrowserPlayer {
   }
 
   async submitActionDirect(phaseId: string, actionKind: ActionKind, targetIds: string[]): Promise<{ response: APIResponse; body: ApiError }> {
-    const response = await this.context.request.post(`/api/phases/${phaseId}/actions`, { data: { actionKind, targetIds } });
+    const response = await this.context.request.post(`/api/phases/${phaseId}/actions`, { data: { actionKind, targetIds }, headers: E2E_REQUEST_HEADERS });
     const body = await response.json() as ApiError;
     return { response, body };
   }
@@ -467,7 +487,7 @@ export class BrowserGame {
   static async create(browser: Browser, testInfo: TestInfo, options: BrowserGameOptions = {}): Promise<BrowserGame> {
     const moderator = await getSharedModerator(browser);
     const telemetry = moderator.telemetry;
-    const gameName = options.name ?? `Browser Readiness ${randomUUID().slice(0, 8)}`;
+    const gameName = options.name ?? `Browser Readiness ${E2E_RUN_ID} ${randomUUID().slice(0, 8)}`;
     const composition = options.composition ?? DEFAULT_COMPOSITION;
     const suffix = `${Date.now()}-${randomUUID().slice(0, 6)}`;
     const useUiSetup = Boolean(options.setupThroughUi);
@@ -478,8 +498,13 @@ export class BrowserGame {
     try {
       if (useUiSetup) {
         await moderator.page.goto('/moderator');
-        await expect(moderator.page.getByLabel('Game name')).toBeVisible();
-        await moderator.page.getByLabel('Game name').fill(gameName);
+        const gameNameField = moderator.page.getByLabel('Game name');
+        if (!(await gameNameField.count())) {
+          await expect(moderator.page.getByRole('button', { name: 'Start new setup', exact: true })).toBeVisible();
+          await moderator.page.getByRole('button', { name: 'Start new setup', exact: true }).click();
+        }
+        await expect(gameNameField).toBeVisible();
+        await gameNameField.fill(gameName);
         const createResponsePromise = moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/games');
         await moderator.page.getByRole('button', { name: 'Create game', exact: true }).click();
         const created = await json<{ gameId: string }>(await createResponsePromise, 'create browser game');
@@ -512,7 +537,7 @@ export class BrowserGame {
       // independent browser contexts, while avoiding SQLite write-lock races
       // in the disposable local server during fixture setup.
       for (const [index, invite] of invites.entries()) {
-        const context = await browser.newContext({ baseURL: BASE_URL });
+        const context = await newBrowserContext(browser);
         contexts.push(context);
         const page = await context.newPage();
         telemetry.attach(page, `player-${String(index + 1).padStart(2, '0')}`);
@@ -549,7 +574,7 @@ export class BrowserGame {
         await post(moderator.context, `/api/games/${gameId}/assignments`, { action: 'RELEASE', batchId: preview.batchId }, 'release browser assignments');
       } else {
         await moderator.page.reload();
-        await expect(moderator.page.getByText('20 of 20 claimed', { exact: true })).toBeVisible({ timeout: 30_000 });
+        await expect(moderator.page.getByText(`${E2E_PLAYER_COUNT} of ${E2E_PLAYER_COUNT} claimed`, { exact: true })).toBeVisible({ timeout: 30_000 });
         for (const role of Object.keys(composition) as RoleKey[]) await moderator.page.getByRole('spinbutton', { name: ROLE_NAMES[role], exact: true }).fill(String(composition[role]));
         await moderator.page.getByRole('button', { name: 'Save composition', exact: true }).click();
         await expect(moderator.page.getByRole('status')).toContainText('Role composition saved');
@@ -570,7 +595,7 @@ export class BrowserGame {
       }
 
       const game = new BrowserGame(moderator, gameId, gameName, players, composition, telemetry);
-      testInfo.annotations.push({ type: 'scenario', description: `game=${gameId}; players=20` });
+      testInfo.annotations.push({ type: 'scenario', description: `game=${gameId}; players=${E2E_PLAYER_COUNT}` });
       await Promise.all(players.map(async (player) => {
         await expect.poll(async () => (await player.dashboard()).player.role, { timeout: 30_000 }).toBe(player.account.role);
         await player.reload();
@@ -697,7 +722,7 @@ export class BrowserGame {
 
   async assertModeratorOnlyRoutes(player: BrowserPlayer): Promise<void> {
     for (const path of [`/api/games/${this.gameId}/roster`, `/api/games/${this.gameId}/assignments`, `/api/games/${this.gameId}/phases`, `/api/games/${this.gameId}/operations`]) {
-      const response = await player.context.request.get(path);
+      const response = await player.context.request.get(path, { headers: E2E_REQUEST_HEADERS });
       expect(response.status()).toBe(401);
     }
   }

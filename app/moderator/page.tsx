@@ -8,6 +8,7 @@ import LiveGamePanel from './live-game-panel';
 import OperationsPanel from './operations-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
+import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
 
 const sampleRoster = [
   'display_name,email',
@@ -44,6 +45,7 @@ interface GameSummary {
   name: string;
   status: string;
   timezone: string;
+  moderatorRole?: string;
 }
 
 interface RosterSeat {
@@ -60,6 +62,8 @@ interface Batch {
   releasedAt: string | null;
   assignments: Array<{ seatId: string; role: RoleKey }>;
 }
+
+const SETUP_STATUSES = new Set(['DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW']);
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -102,9 +106,23 @@ export default function ModeratorPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [liveRefreshToken, setLiveRefreshToken] = useState(0);
+  const [showNewGameForm, setShowNewGameForm] = useState(false);
+  const [compositionDraftIds, setCompositionDraftIds] = useState<Set<string>>(() => new Set());
   const selectedGameRef = useRef('');
   const gamesRequest = useRef(0);
   const gameDetailRequest = useRef(0);
+  const compositionDrafts = useRef(new Map<string, Composition>());
+
+  function markCompositionDraft(selectedGameId: string, draft: Composition | null) {
+    if (draft) compositionDrafts.current.set(selectedGameId, draft);
+    else compositionDrafts.current.delete(selectedGameId);
+    setCompositionDraftIds((current) => {
+      const next = new Set(current);
+      if (draft) next.add(selectedGameId);
+      else next.delete(selectedGameId);
+      return next;
+    });
+  }
 
   const loadGame = useCallback(async (selectedGameId: string) => {
     const requestId = ++gameDetailRequest.current;
@@ -114,7 +132,7 @@ export default function ModeratorPage() {
     ]);
     if (requestId !== gameDetailRequest.current || selectedGameRef.current !== selectedGameId) return;
     setRoster(rosterData.roster);
-    setComposition(assignmentData.composition);
+    setComposition(compositionDrafts.current.get(selectedGameId) ?? assignmentData.composition);
     setBatches(assignmentData.batches);
     if (assignmentData.game?.status) {
       setGames((current) => current.map((game) => game.id === selectedGameId ? { ...game, status: assignmentData.game?.status ?? game.status } : game));
@@ -132,6 +150,12 @@ export default function ModeratorPage() {
       selectedGameRef.current = selected.id;
       setGameId(selected.id);
       await loadGame(selected.id);
+    } else {
+      selectedGameRef.current = '';
+      setGameId('');
+      setRoster([]);
+      setComposition(null);
+      setBatches([]);
     }
   }, [loadGame]);
 
@@ -201,12 +225,50 @@ export default function ModeratorPage() {
         }),
       });
       setMessage('Game created. Import the player roster next.');
-      await loadGames();
-      selectedGameRef.current = data.gameId;
-      setGameId(data.gameId);
-      await loadGame(data.gameId);
+      setInviteCsv('');
+      setShowNewGameForm(false);
+      await loadGames(data.gameId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to create the game.');
+    }
+  }
+
+  function selectGame(nextGameId: string) {
+    if (!nextGameId) return;
+    setShowNewGameForm(false);
+    setInviteCsv('');
+    setMessage('');
+    setError('');
+    selectedGameRef.current = nextGameId;
+    void loadGames(nextGameId).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load the selected game.'));
+  }
+
+  function startNewSetup() {
+    setShowNewGameForm(true);
+    setError('');
+    setMessage('');
+    setInviteCsv('');
+  }
+
+  async function cancelSetup() {
+    if (!selectedGame) return;
+    if (!window.confirm(`Cancel “${selectedGame.name}” and start a new setup? This permanently cancels the unfinished setup, invalidates all invite links and player sessions for it, and retains its audit history.`)) return;
+    setError('');
+    try {
+      await requestJson(`/api/games/${gameId}/operations`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'CANCEL_SETUP', confirmed: true, confirmationName: selectedGame.name }),
+      });
+      markCompositionDraft(gameId, null);
+      setInviteCsv('');
+      setRoster([]);
+      setComposition(null);
+      setBatches([]);
+      setShowNewGameForm(true);
+      setMessage('The unfinished setup was cancelled. Its invite links and player sessions are invalid, and its audit history remains available.');
+      await loadGames(gameId);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to cancel the setup.');
     }
   }
 
@@ -220,6 +282,7 @@ export default function ModeratorPage() {
         { method: 'POST', body: JSON.stringify({ csv: form.get('csv') }) },
       );
       setInviteCsv(data.inviteCsv);
+      markCompositionDraft(gameId, null);
       setComposition(data.composition);
       setMessage(`${data.playerCount} private seats created. Download the invite file now; codes are not shown again.`);
       await loadGame(gameId);
@@ -236,6 +299,7 @@ export default function ModeratorPage() {
         method: 'POST',
         body: JSON.stringify({ action: 'SAVE_COMPOSITION', composition }),
       });
+      markCompositionDraft(gameId, null);
       setMessage('Role composition saved and logged.');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to save role counts.');
@@ -285,6 +349,8 @@ export default function ModeratorPage() {
   }
 
   const selectedGame = games.find((game) => game.id === gameId);
+  const setupEditable = Boolean(selectedGame && SETUP_STATUSES.has(selectedGame.status));
+  const canCancelSetup = setupEditable && selectedGame?.moderatorRole === 'OWNER';
   const claimed = roster.filter((seat) => seat.status === 'CLAIMED').length;
   const latestBatch = batches[0];
   const rosterById = useMemo(() => new Map(roster.map((seat) => [seat.id, seat])), [roster]);
@@ -328,7 +394,7 @@ export default function ModeratorPage() {
           <p className="eyebrow">Launch checklist</p>
           <ol>
             <li className={games.length ? 'done' : 'active'}><span>1</span><div><strong>Game schedule</strong><small>Timezone and cadence</small></div></li>
-            <li className={roster.length ? 'done' : games.length ? 'active' : ''}><span>2</span><div><strong>Player roster</strong><small>20–80 private seats</small></div></li>
+            <li className={roster.length ? 'done' : games.length ? 'active' : ''}><span>2</span><div><strong>Player roster</strong><small>{MIN_PLAYERS}–{MAX_PLAYERS} private seats</small></div></li>
             <li className={latestBatch ? 'done' : roster.length ? 'active' : ''}><span>3</span><div><strong>Role balance</strong><small>Compose and randomize</small></div></li>
             <li className={latestBatch?.releasedAt ? 'done' : latestBatch ? 'active' : ''}><span>4</span><div><strong>Release roles</strong><small>Irreversible launch</small></div></li>
           </ol>
@@ -338,7 +404,7 @@ export default function ModeratorPage() {
         <section className="console-main">
           <div className="console-title">
             <div><p className="eyebrow accent">Office campaign</p><h1>{selectedGame?.name ?? 'Set up a new game'}</h1></div>
-            <div className="console-title-actions">{selectedGame && <span className="status-pill">{selectedGame.status.replaceAll('_', ' ')}</span>}<button className="text-button" type="button" onClick={signOut}>Sign out</button></div>
+            <div className="console-title-actions">{selectedGame && <span className="status-pill">{selectedGame.status.replaceAll('_', ' ')}</span>}<button className="secondary-button" type="button" onClick={startNewSetup}>Start new setup</button><button className="text-button" type="button" onClick={signOut}>Sign out</button></div>
           </div>
           {error && <p className="notice error" role="alert">{error}</p>}
           {message && <p className="notice success" role="status">{message}</p>}
@@ -346,7 +412,22 @@ export default function ModeratorPage() {
             <div className="notice warning"><strong>Save these one-time recovery codes now:</strong><code>{recoveryCodes.join(' · ')}</code></div>
           )}
 
-          {!games.length ? (
+          {games.length > 0 && (
+            <section className="setup-card game-selector-card">
+              <div className="setup-card-heading"><span>↔</span><div><h2>Game workspace</h2><p>Select a prior game to review its scoped roster, roles, and operations.</p></div></div>
+              <div className="button-row">
+                <label className="game-selector-label">Selected game
+                  <select aria-label="Selected game" value={gameId} onChange={(event) => selectGame(event.target.value)}>
+                    {games.map((game) => <option key={game.id} value={game.id}>{game.name} · {game.status.replaceAll('_', ' ')}</option>)}
+                  </select>
+                </label>
+                {canCancelSetup && <button className="danger-button" type="button" onClick={() => void cancelSetup()}>Cancel setup and start new game</button>}
+                {showNewGameForm && <button className="secondary-button" type="button" onClick={() => setShowNewGameForm(false)}>Back to selected game</button>}
+              </div>
+            </section>
+          )}
+
+          {!games.length || showNewGameForm ? (
             <section className="setup-card">
               <div className="setup-card-heading"><span>01</span><div><h2>Schedule the campaign</h2><p>Weekday phases keep the game lively without disrupting work.</p></div></div>
               <form className="setup-grid" onSubmit={createGame}>
@@ -361,8 +442,8 @@ export default function ModeratorPage() {
             </section>
           ) : (
             <>
-              <section className="setup-card">
-                <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Re-importing replaces unlaunched seats.</p></div></div>
+              {setupEditable ? <section className="setup-card">
+                <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Re-importing replaces unlaunched seats. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
                 <form className="form-stack" onSubmit={importRoster}>
                   <label>Roster CSV<textarea name="csv" defaultValue={sampleRoster} rows={8} spellCheck={false} required /></label>
                   <div className="button-row">
@@ -371,24 +452,29 @@ export default function ModeratorPage() {
                   </div>
                 </form>
                 {roster.length > 0 && <div className="claim-meter"><span style={{ width: `${(claimed / roster.length) * 100}%` }} /><strong>{claimed} of {roster.length} claimed</strong></div>}
-              </section>
+              </section> : <section className="setup-card"><p className="notice warning">This game is {selectedGame?.status.replaceAll('_', ' ').toLowerCase()}. Setup changes are locked. Select another game or start a new setup.</p></section>}
 
-              {composition && (
+              {setupEditable && composition && (
                 <section className="setup-card">
-                  <div className="setup-card-heading"><span>03</span><div><h2>Balance the roles</h2><p>Counts must equal the roster. Unique roles cap at one; Masons travel in groups.</p></div></div>
+                  <div className="setup-card-heading"><span>03</span><div><h2>Balance the roles</h2><p>Counts must equal the roster. Unique roles cap at one; Masons travel in groups. Small-game presets are editable before release.</p></div></div>
                   <div className="role-composer">
                     {roleOrder.map((role) => (
                       <label key={role}>{role.toLowerCase().replace(/^./u, (letter) => letter.toUpperCase())}
-                        <input type="number" min="0" max={role === 'SEER' || role === 'BODYGUARD' || role === 'HUNTER' ? 1 : roster.length} value={composition[role]} onChange={(event) => setComposition({ ...composition, [role]: Number(event.target.value) })} />
+                        <input type="number" min="0" max={role === 'SEER' || role === 'BODYGUARD' || role === 'HUNTER' ? 1 : roster.length} value={composition[role]} onChange={(event) => {
+                          const next = { ...composition, [role]: Number(event.target.value) };
+                          markCompositionDraft(gameId, next);
+                          setComposition(next);
+                        }} />
                       </label>
                     ))}
                   </div>
                   <div className="balance-bar"><div><strong>Signed balance score</strong><small>Village positive · Werewolf negative</small></div><b className={Math.abs(balanceScore) <= Math.max(2, roster.length * .15) ? 'balanced' : ''}>{balanceScore > 0 ? '+' : ''}{balanceScore}</b></div>
                   <div className="button-row">
                     <button className="secondary-button" type="button" onClick={saveComposition}>Save composition</button>
-                    <button className="primary-button" type="button" onClick={previewAssignments} disabled={claimed !== roster.length}>Randomize roles</button>
+                    <button className="primary-button" type="button" onClick={previewAssignments} disabled={claimed !== roster.length || compositionDraftIds.has(gameId)}>Randomize roles</button>
                   </div>
                   {claimed !== roster.length && <p className="field-help">Randomization unlocks when every seat is claimed.</p>}
+                  {compositionDraftIds.has(gameId) && <p className="field-help">Save the role composition before randomizing; the preview is invalidated when counts change.</p>}
                 </section>
               )}
 
@@ -398,11 +484,11 @@ export default function ModeratorPage() {
                   <div className="assignment-grid">
                     {latestBatch.assignments.map((assignment) => <div key={assignment.seatId}><span>{rosterById.get(assignment.seatId)?.displayName ?? 'Player'}</span><strong>{ROLE_CATALOG[assignment.role].name}</strong></div>)}
                   </div>
-                  {latestBatch.releasedAt ? <p className="notice success">Released {new Date(latestBatch.releasedAt).toLocaleString()}</p> : <button className="danger-button" type="button" onClick={() => releaseAssignments(latestBatch.id)}>Release roles to players</button>}
+                  {latestBatch.releasedAt ? <p className="notice success">Released {new Date(latestBatch.releasedAt).toLocaleString()}</p> : setupEditable ? <button className="danger-button" type="button" onClick={() => releaseAssignments(latestBatch.id)}>Release roles to players</button> : <p className="notice warning">This preview cannot be released because setup is locked.</p>}
                 </section>
               )}
-              {latestBatch?.releasedAt && <LiveGamePanel gameId={gameId} gameStatus={selectedGame?.status ?? ''} onChanged={handleLiveChange} />}
-              <OperationsPanel gameId={gameId} refreshToken={liveRefreshToken} onGameChanged={handleLiveChange} />
+              {latestBatch?.releasedAt && <LiveGamePanel key={`live-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} onChanged={handleLiveChange} />}
+              <OperationsPanel key={`operations-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} onGameChanged={handleLiveChange} />
             </>
           )}
         </section>

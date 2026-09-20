@@ -1,5 +1,6 @@
 import type { GameBackup } from './snapshot';
 import { ROLE_CATALOG } from '../game/catalog';
+import { MAX_PLAYERS, MIN_PLAYERS } from '../game/player-count';
 import { canonicalRoleKey, ROLE_KEYS, type RoleKey } from '../game/types';
 import { assertValidCalendarDate, assertValidTimeZone } from '../game/scheduling';
 
@@ -65,8 +66,8 @@ export function validateBackupForRestore(data: GameBackup, expectedGameId: strin
   const activeSeatRows = Array.isArray(data.seats)
     ? data.seats.filter((rawSeat) => readString(asRecord(rawSeat) ?? {}, 'status') !== 'REMOVED')
     : [];
-  if (!Array.isArray(data.seats) || activeSeatRows.length < 20 || activeSeatRows.length > 80) {
-    errors.push('The backup must contain between 20 and 80 seats.');
+  if (!Array.isArray(data.seats) || activeSeatRows.length < MIN_PLAYERS || activeSeatRows.length > MAX_PLAYERS) {
+    errors.push(`The backup must contain between ${MIN_PLAYERS} and ${MAX_PLAYERS} seats.`);
   }
   const seatIds = new Set<string>();
   for (const rawSeat of data.seats ?? []) {

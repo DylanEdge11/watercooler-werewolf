@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
-import { BASE_URL, MODERATOR_EMAIL, MODERATOR_PASSWORD } from './e2e/constants';
+import { BASE_URL, E2E_REMOTE, E2E_RUN_ID, MODERATOR_EMAIL, MODERATOR_PASSWORD } from './e2e/constants';
+import { E2E_REQUEST_HEADERS } from './e2e/transport';
+
+const artifactRunId = E2E_RUN_ID || 'local';
 
 export default defineConfig({
   testDir: './e2e',
@@ -8,12 +11,14 @@ export default defineConfig({
   timeout: 180_000,
   expect: { timeout: 10_000 },
   forbidOnly: Boolean(process.env.CI),
-  retries: 1,
-  outputDir: 'test-results',
-  reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
+  retries: E2E_REMOTE ? 0 : 1,
+  outputDir: `test-results/${artifactRunId}`,
+  preserveOutput: 'always',
+  reporter: [['list'], ['html', { outputFolder: `playwright-report/${artifactRunId}`, open: 'never' }]],
   use: {
     baseURL: BASE_URL,
-    trace: 'on-first-retry',
+    extraHTTPHeaders: E2E_REQUEST_HEADERS,
+    trace: E2E_REMOTE ? 'retain-on-failure' : 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
@@ -38,7 +43,7 @@ export default defineConfig({
       use: { ...devices['Desktop Safari'] },
     },
   ],
-  webServer: {
+  webServer: E2E_REMOTE ? undefined : {
     command: 'node scripts/playwright-server.mjs',
     url: `${BASE_URL}/api/moderators/bootstrap`,
     reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',

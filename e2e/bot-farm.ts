@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { request as playwrightRequest, type APIRequestContext, type APIResponse } from '@playwright/test';
+import { type APIRequestContext, type APIResponse } from '@playwright/test';
 import type { ActionKind, PhaseKind, PhaseResolution, RoleComposition, RoleKey } from '../lib/game/types';
-import { BASE_URL, DEFAULT_COMPOSITION, MODERATOR_EMAIL, MODERATOR_PASSWORD } from './constants';
+import { DEFAULT_COMPOSITION, E2E_PLAYER_COUNT, E2E_RUN_ID, MODERATOR_EMAIL, MODERATOR_PASSWORD } from './constants';
+import { newRequestContext } from './transport';
 
 interface ApiError {
   error?: string;
@@ -94,7 +95,7 @@ let sharedModeratorLogin: Promise<APIRequestContext> | null = null;
 async function moderatorContext(): Promise<APIRequestContext> {
   if (sharedModerator) return sharedModerator;
   sharedModeratorLogin ??= (async () => {
-    const context = await playwrightRequest.newContext({ baseURL: BASE_URL });
+    const context = await newRequestContext();
     try {
       await requireOk<{ ok: true }>(
         await context.post('/api/moderators/login', { data: { email: MODERATOR_EMAIL, password: MODERATOR_PASSWORD } }),
@@ -134,7 +135,7 @@ function csvValue(value: string): string {
 function rosterCsv(suffix: string): string {
   return [
     'display_name,email',
-    ...Array.from({ length: 20 }, (_, index) => {
+    ...Array.from({ length: E2E_PLAYER_COUNT }, (_, index) => {
       const number = String(index + 1).padStart(2, '0');
       return `${csvValue(`Bot ${number}`)},${csvValue(`bot${number}-${suffix}@e2e.test`)}`;
     }),
@@ -153,7 +154,7 @@ export class GameHarness {
   static async create(options: { name?: string; composition?: RoleComposition } = {}): Promise<GameHarness> {
     const moderator = await moderatorContext();
     const contexts: APIRequestContext[] = [];
-    const name = options.name ?? `Playwright Bot Farm ${randomUUID().slice(0, 8)}`;
+    const name = options.name ?? `Playwright Bot Farm ${E2E_RUN_ID} ${randomUUID().slice(0, 8)}`;
     const composition = options.composition ?? DEFAULT_COMPOSITION;
     const suffix = `${Date.now()}-${randomUUID().slice(0, 6)}`;
 
@@ -175,7 +176,7 @@ export class GameHarness {
 
       const imported = await requireOk<{ invites: Invite[] }>(
         await moderator.post(`/api/games/${created.gameId}/roster`, { data: { csv: rosterCsv(suffix) } }),
-        'import 20-player roster',
+        `import ${E2E_PLAYER_COUNT}-player roster`,
       );
       const roster = await requireOk<{ roster: Array<{ id: string; displayName: string }> }>(
         await moderator.get(`/api/games/${created.gameId}/roster`),
@@ -184,7 +185,7 @@ export class GameHarness {
       const seatByName = new Map(roster.roster.map((seat) => [seat.displayName, seat.id]));
 
       const bots = await Promise.all(imported.invites.map(async (invite, index) => {
-        const context = await playwrightRequest.newContext({ baseURL: BASE_URL });
+        const context = await newRequestContext();
         contexts.push(context);
         const pin = String(410000 + index).slice(-6);
         await requireOk<{ seat: { displayName: string } }>(

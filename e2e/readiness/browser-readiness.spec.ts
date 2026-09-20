@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { ActionKind, PhaseResolution, RoleKey } from '../../lib/game/types';
-import { BASE_URL, DEFAULT_COMPOSITION } from '../constants';
+import { BASE_URL, DEFAULT_COMPOSITION, E2E_PLAYER_COUNT } from '../constants';
+import { newBrowserContext } from '../transport';
 import {
   BrowserGame,
   closeSharedModerator,
@@ -123,9 +124,9 @@ test.describe('browser player-readiness scenarios', () => {
     const game = await BrowserGame.create(browser, testInfo, { setupThroughUi: true, mobilePlayerIndex: 0 });
     try {
       verifyExpectedRoleComposition(game.accounts, DEFAULT_COMPOSITION);
-      expect(new Set(game.players.map((player) => player.context)).size).toBe(20);
-      expect(new Set(game.players.map((player) => player.page)).size).toBe(20);
-      expect(new Set(game.accounts.map((player) => player.seatId)).size).toBe(20);
+      expect(new Set(game.players.map((player) => player.context)).size).toBe(E2E_PLAYER_COUNT);
+      expect(new Set(game.players.map((player) => player.page)).size).toBe(E2E_PLAYER_COUNT);
+      expect(new Set(game.accounts.map((player) => player.seatId)).size).toBe(E2E_PLAYER_COUNT);
 
       for (const player of game.players) {
         const dashboard = await game.assertPlayerPrivacy(player);
@@ -144,7 +145,7 @@ test.describe('browser player-readiness scenarios', () => {
       expect(forgedDashboard.player.id).toBe(first.account.seatId);
       expect(forgedDashboard.player.role).toBe(first.account.role);
 
-      const duplicateClaimContext = await browser.newContext({ baseURL: BASE_URL });
+      const duplicateClaimContext = await newBrowserContext(browser);
       const duplicateClaimPage = await duplicateClaimContext.newPage();
       game.telemetry.attach(duplicateClaimPage, 'duplicate-claim');
       try {
@@ -167,7 +168,7 @@ test.describe('browser player-readiness scenarios', () => {
         const dashboard = await player.reload();
         expect(dashboard.phase?.id).toBe(phase.phaseId);
         expect(dashboard.permission.actionKind).toBe('DAY_VOTE');
-        expect(dashboard.candidates).toHaveLength(19);
+        expect(dashboard.candidates).toHaveLength(E2E_PLAYER_COUNT - 1);
         expect(dashboard.candidates.every((candidate) => Object.keys(candidate).sort().join(',') === 'displayName,id')).toBe(true);
         await game.assertPlayerPrivacy(player);
       }));

@@ -1,4 +1,5 @@
 import { ROLE_CATALOG } from './catalog';
+import { MAX_PLAYERS, MIN_PLAYERS } from './player-count';
 import { ROLE_KEYS, type RoleComposition, type RoleKey } from './types';
 
 export type BalanceLabel =
@@ -26,18 +27,42 @@ export function recommendedWerewolves(playerCount: number): number {
 }
 
 export function defaultComposition(playerCount: number): RoleComposition {
-  if (!Number.isInteger(playerCount) || playerCount < 20) {
-    throw new Error('Watercooler Werewolf requires at least 20 players.');
+  if (!Number.isInteger(playerCount) || playerCount < MIN_PLAYERS || playerCount > MAX_PLAYERS) {
+    throw new Error(`Watercooler Werewolf supports ${MIN_PLAYERS}–${MAX_PLAYERS} players.`);
   }
 
   const composition: RoleComposition = {
     VILLAGER: 0,
-    WEREWOLF: recommendedWerewolves(playerCount),
-    SEER: 1,
-    BODYGUARD: 1,
-    HUNTER: 1,
-    MASON: 2,
+    WEREWOLF: 0,
+    SEER: 0,
+    BODYGUARD: 0,
+    HUNTER: 0,
+    MASON: 0,
   };
+
+  // Small games deliberately add information and follow-up roles in stages.
+  // This is an initial playable preset policy, not a claim of balance proof.
+  if (playerCount <= 8) {
+    composition.WEREWOLF = 1;
+  } else if (playerCount <= 11) {
+    composition.WEREWOLF = 1;
+    composition.SEER = 1;
+  } else if (playerCount <= 14) {
+    composition.WEREWOLF = 2;
+    composition.SEER = 1;
+  } else if (playerCount < 20) {
+    composition.WEREWOLF = 3;
+    composition.SEER = 1;
+    composition.BODYGUARD = 1;
+  } else {
+    // Preserve the established 20-player composition and its existing
+    // one-Werewolf-per-six recommendation for larger games.
+    composition.WEREWOLF = recommendedWerewolves(playerCount);
+    composition.SEER = 1;
+    composition.BODYGUARD = 1;
+    composition.HUNTER = 1;
+    composition.MASON = 2;
+  }
   composition.VILLAGER = playerCount - countComposition(composition);
 
   if (composition.VILLAGER < 0) {

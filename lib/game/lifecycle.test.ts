@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canResetGame, canStopGame } from './lifecycle';
+import { canCancelSetup, canResetGame, canStopGame } from './lifecycle';
 
 describe('game lifecycle safety policy', () => {
   it('requires confirmation and a reason to stop, and makes repeat stop harmless', () => {
@@ -15,5 +15,12 @@ describe('game lifecycle safety policy', () => {
     expect(canResetGame('ACTIVE', 'Office Game', 'Office Game', 'OWNER', false).allowed).toBe(false);
     expect(canResetGame('ACTIVE', 'Office Game', 'Office Game', 'OWNER', true).allowed).toBe(true);
     expect(canResetGame('DRAFT', 'Office Game', 'Office Game', 'OWNER', true)).toMatchObject({ allowed: true, idempotent: true });
+  });
+
+  it('limits setup cancellation to an explicitly confirmed owner operation', () => {
+    expect(canCancelSetup('REGISTRATION', 'Office Game', 'Office Game', 'CO_MODERATOR', true).allowed).toBe(false);
+    expect(canCancelSetup('REGISTRATION', 'Office Game', 'office game', 'OWNER', true).allowed).toBe(false);
+    expect(canCancelSetup('ACTIVE', 'Office Game', 'Office Game', 'OWNER', true).allowed).toBe(false);
+    expect(canCancelSetup('REGISTRATION', 'Office Game', 'Office Game', 'OWNER', true)).toEqual({ allowed: true });
   });
 });

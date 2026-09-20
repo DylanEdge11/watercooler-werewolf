@@ -20,7 +20,7 @@ export async function GET() {
     const moderator = await requireModerator();
     const games = await getDb()
       .prepare(
-        `SELECT g.* FROM games g
+        `SELECT g.*, gm.role AS moderatorRole FROM games g
          JOIN game_moderators gm ON gm.game_id = g.id
          WHERE gm.moderator_id = ?
          ORDER BY g.created_at DESC`,

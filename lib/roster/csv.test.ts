@@ -9,6 +9,18 @@ function validCsv(count = 20): string {
 }
 
 describe('roster CSV', () => {
+  it.each([6, 19, 20, 80])('accepts a %i-player roster', (count) => {
+    const result = parseRosterCsv(validCsv(count));
+    expect(result.errors).toEqual([]);
+    expect(result.entries).toHaveLength(count);
+  });
+
+  it.each([5, 81])('rejects a %i-player roster', (count) => {
+    const result = parseRosterCsv(validCsv(count));
+    expect(result.entries).toHaveLength(count);
+    expect(result.errors).toContain('The roster must contain between 6 and 80 valid players.');
+  });
+
   it('parses the required headers and a valid 20-player roster', () => {
     const result = parseRosterCsv(validCsv());
     expect(result.errors).toEqual([]);

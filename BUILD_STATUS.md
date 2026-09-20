@@ -28,7 +28,7 @@ The native Next.js/libSQL migration is tracked in [MIGRATION_PROGRESS.md](MIGRAT
 - Day, night, Bodyguard, Seer, Hunter, random tie, and faction victory rules pass the engine regression tests.
 - D1 schema and initial migration cover identities, games, seats, assignments, phases, actions, resolutions, events, rooms, notifications, and backups.
 - Moderator bootstrap/sign-in uses durable opaque sessions and PBKDF2-SHA256 password hashing compatible with the Worker runtime.
-- CSV roster import validates 20–80 unique players and creates private hashed seat codes plus a one-time invite export.
+- CSV roster import validates 6–80 unique players and creates private hashed seat codes plus a one-time invite export; the standard rehearsal fixture remains 20 players.
 - Players can claim a seat with a six-digit PIN, resume with seat code + PIN, and sign out.
 - The moderator launch console covers schedule creation, roster claim progress, constrained role composition, randomized assignment previews, and one-way role release.
 - Assignment evidence hashes, immutable revisions, release locks, and game events provide an audit trail without exposing player roles in invite files.

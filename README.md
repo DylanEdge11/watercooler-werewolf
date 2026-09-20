@@ -73,7 +73,7 @@ The player dashboard polls for phase, result, notification, and stopped-state ch
 - **Co-moderator:** can run the assigned game and its communications/operations controls, but cannot perform the owner-only Reset action.
 - **Invited player:** claims one private seat with an invite link and a six-digit PIN, then signs in with the private seat code and PIN.
 
-The pilot supports one game with 20–80 seats, weekday day/night cycles, server-authoritative libSQL state, private role information, moderator review, polling updates, private faction rooms, in-app announcements, and JSON backups with checksums. Announcements currently create email-ready copy; the app does not send email.
+The pilot supports games with 6–80 player seats (the moderator is not counted), weekday day/night cycles, server-authoritative libSQL state, private role information, moderator review, polling updates, private faction rooms, in-app announcements, and JSON backups with checksums. Announcements currently create email-ready copy; the app does not send email.
 
 ## Roles
 
@@ -90,7 +90,7 @@ The canonical protective role key is `BODYGUARD`; “Doctor” is not a separate
 
 ## Composition and limits
 
-The roster must contain 20–80 unique email addresses. Every claimed seat receives exactly one role. The default composition uses the nearest whole number to one Werewolf per six players, plus one Seer, one Bodyguard, one Hunter, two Masons, and Villagers for the remainder. The moderator may edit counts before release.
+The roster must contain 6–80 unique email addresses. Every claimed seat receives exactly one role. Small-game presets add roles in stages: 6–8 starts with one Werewolf and Villagers, 9–11 adds a Seer, 12–14 uses two Werewolves and a Seer, and 15–19 adds a Bodyguard. These presets are editable starting points, not a gameplay-balance proof. The established 20-player default remains exactly 12 Villagers, 3 Werewolves, 1 Seer, 1 Bodyguard, 1 Hunter, and 2 Masons; larger rosters use the existing nearest-whole-number Werewolf recommendation. The moderator may edit counts before release.
 
 Seer, Bodyguard, and Hunter are unique and capped at one each. Masons must be zero or at least two. At least one Werewolf is required. Counts must equal the claimed roster size. Role release is one-way until the game is Reset.
 

@@ -1,3 +1,5 @@
+import { MAX_PLAYERS, MIN_PLAYERS } from '../game/player-count';
+
 export interface RosterEntry {
   displayName: string;
   email: string;
@@ -65,8 +67,8 @@ export function parseRosterCsv(csv: string): RosterParseResult {
       seenEmails.add(email);
     }
   });
-  if (entries.length < 20 || entries.length > 80) {
-    errors.push('The roster must contain between 20 and 80 valid players.');
+  if (entries.length < MIN_PLAYERS || entries.length > MAX_PLAYERS) {
+    errors.push(`The roster must contain between ${MIN_PLAYERS} and ${MAX_PLAYERS} valid players.`);
   }
   return { entries, errors };
 }

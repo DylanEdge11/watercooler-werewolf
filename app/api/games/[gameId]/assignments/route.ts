@@ -2,6 +2,7 @@ import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { validateComposition, scoreComposition } from '../../../../../lib/game/balance';
+import { MAX_PLAYERS, MIN_PLAYERS } from '../../../../../lib/game/player-count';
 import { createAssignmentPreview, fingerprintComposition, fingerprintRoster } from '../../../../../lib/game/assignment';
 import { ROLE_CATALOG } from '../../../../../lib/game/catalog';
 import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from '../../../../../lib/game/types';
@@ -115,8 +116,8 @@ export async function POST(request: Request, context: RouteContext) {
       .prepare("SELECT id, status FROM seats WHERE game_id = ? AND status != 'REMOVED' ORDER BY id")
       .bind(gameId)
       .all<{ id: string; status: string }>();
-    if (roster.results.length < 20 || roster.results.length > 80) {
-      throw new Error('A valid 20–80 player roster is required.');
+    if (roster.results.length < MIN_PLAYERS || roster.results.length > MAX_PLAYERS) {
+      throw new Error(`A valid ${MIN_PLAYERS}–${MAX_PLAYERS} player roster is required.`);
     }
     const releasedCount = await db
       .prepare('SELECT COUNT(*) AS count FROM role_assignments WHERE game_id = ?')
