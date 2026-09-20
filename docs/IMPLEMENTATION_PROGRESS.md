@@ -46,8 +46,10 @@ Updated 2026-09-19.
 - Remote preflight passed against `dpl_BU6dMkHvU1cUFou477j2bBX184hC` for every hosted invocation.
 - Hosted API coverage: 6/6 passed; all existing multiplayer scenarios remained at 20 players.
 - Hosted Chromium readiness: 14/14 passed in 1.3 hours, one worker, retries disabled.
+- Hosted Edge smoke: 1/1 passed in 2.2 seconds; Chrome/Chromium and Edge are the required desktop-browser coverage.
 - Hosted WebKit smoke: passed. Firefox smoke was blocked before application testing by Windows `browserType.launch: spawn UNKNOWN`; WSL/Linux was not installed.
 - Second hosted persistent-data invocation: setup navigation and smoke passed 2/2 with a new run ID.
 - Final remote-runner smoke after Windows Vercel CLI invocation hardening: 1/1 passed without shell-spawn warnings.
 - No production URL was opened for mutation. Preview mutations used only run-owned fictional games/accounts; no shared data was deleted.
 - Hosted artifacts, first-attempt findings, and exact commands are recorded in `docs/PLAYWRIGHT_HOSTED_QA_REPORT.md` and `docs/PLAYWRIGHT_HOSTED_RUNBOOK.md`.
+- The one-game manual handoff is recorded in `docs/FULL_GAME_TEST_HANDOFF.md`; it requires one complete six-player game and does not repeat the completed suite.

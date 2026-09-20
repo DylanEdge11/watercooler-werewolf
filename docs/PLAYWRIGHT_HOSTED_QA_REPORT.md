@@ -66,8 +66,9 @@ Hosted results against the Preview above:
 | Existing API suite | 6/6 passed in 2.4 minutes; all multiplayer cases remained at 20 players |
 | Focused 20-player Chromium onboarding rerun | 1/1 passed in 1.3 minutes |
 | Full Chromium readiness | 14/14 passed in 1.3 hours; one worker, retries 0; includes privacy, Hunter, elimination/read-only, concurrent reload/reconnect, setup navigation, smoke, and seeds 7/21/42 |
+| Edge smoke | 1/1 passed in 2.2 seconds in run `preview-qa-20260919-l` |
 | WebKit smoke | 1 passed in 1.7 seconds |
-| Firefox smoke | Not application-tested: Firefox launch failed before any page request with Windows `browserType.launch: spawn UNKNOWN` |
+| Firefox smoke | Optional only; not application-tested because launch failed before any page request with Windows `browserType.launch: spawn UNKNOWN` |
 | Second persistent-data invocation | 2/2 passed in 6.8 seconds: setup navigation/restart and browser smoke, new run ID |
 | Final remote-runner smoke after Windows CLI invocation hardening | 1/1 passed in 1.5 seconds; no shell-spawn deprecation warning |
 
@@ -78,7 +79,7 @@ All hosted invocations passed the deployment preflight and reported deployment `
 1. The first hosted smoke run caught two failed requests to Vercel's platform-owned `/.well-known/vercel/jwe` endpoint. The telemetry filter now allows only that exact platform probe while retaining strict application-origin GET/POST failures, page errors, console errors, navigation errors, and 5xx checks.
 2. The first full readiness attempt found that the UI fixture assumed an empty setup form although the preceding API run left an active selected game in the persistent Preview database. The fixture now clicks the visible `Start new setup` control before UI setup when persisted games are present.
 3. A subsequent 20-player run exposed canceled same-origin `HEAD` probes and `OPTIONS /` during protected multi-context navigation. The browser transport now keeps the Vercel bypass header on browser contexts but applies `Origin` explicitly to programmatic API requests; telemetry allows only those exact protected navigation probes. The focused rerun and final 14-test Chromium suite then passed.
-4. Firefox remained a host runner limitation: `spawn UNKNOWN` occurred at browser launch before application testing. WSL is not installed on this workstation, so the requested Linux fallback was unavailable. WebKit passed.
+4. Firefox remains optional and a host runner limitation: `spawn UNKNOWN` occurred at browser launch before application testing. WSL is not installed on this workstation, so the requested Linux fallback was unavailable. Firefox is excluded from required acceptance; WebKit remains optional Safari coverage.
 
 ### Hosted artifacts and logs
 
@@ -88,8 +89,9 @@ Retained run-scoped artifacts are under:
 - `test-results/preview-qa-20260919-i` — Firefox/WebKit smoke, including the pre-application Firefox launch failure and WebKit pass.
 - `test-results/preview-qa-20260919-j` and `playwright-report/preview-qa-20260919-j` — second persistent-data invocation, 2/2 passed.
 - `test-results/preview-qa-20260919-k` and `playwright-report/preview-qa-20260919-k` — final hardened-runner smoke, 1/1 passed.
+- `test-results/preview-qa-20260919-l` and `playwright-report/preview-qa-20260919-l` — required Edge smoke, 1/1 passed in 2.2 seconds.
 - Earlier failed attempts remain under run IDs `c`, `d`, `e`, and `f`; corrected focused run `g` is retained as well.
 
 The final read-only `vercel inspect <preview> --logs` showed a successful Node 22.x build/deployment and `status Ready`; no application runtime exception appeared in the inspected output. Vercel reported four moderate install-time audit findings and package deprecation notices; no dependency upgrade was made.
 
-The six-person application feature is ready for a run-owned manual player test on the Preview. The hosted multiplayer fixture intentionally remains 20 players; six-player behavior is covered by the focused local unit/route/lifecycle/assignment/backup tests. The only remaining verification limitation is Firefox on this Windows host.
+The six-person application feature is ready for a run-owned manual player test on the Preview. The hosted multiplayer fixture intentionally remains 20 players; six-player behavior is covered by the focused local unit/route/lifecycle/assignment/backup tests. Required browser acceptance is Chromium/Chrome plus Edge smoke; WebKit/Safari is optional and Firefox is not required.

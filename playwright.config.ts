@@ -33,6 +33,11 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      name: 'edge',
+      testMatch: /readiness\/browser-smoke\.spec\.ts$/u,
+      use: { ...devices['Desktop Chrome'], channel: 'msedge' },
+    },
+    {
       name: 'firefox',
       testMatch: /readiness\/browser-smoke\.spec\.ts$/u,
       use: { ...devices['Desktop Firefox'] },

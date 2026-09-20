@@ -18,13 +18,13 @@ The runner rejects non-HTTPS URLs, paths, queries, fragments, missing credential
 ```powershell
 $env:E2E_RUN_ID = 'preview-qa-<unique-run-id>'
 node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote --project=chromium --retries=0 e2e/readiness/browser-smoke.spec.ts
+node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote --project=edge --retries=0 e2e/readiness/browser-smoke.spec.ts
 node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote --project=api --retries=0
 node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote --project=chromium --retries=0 e2e/readiness
-node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote --project=firefox --project=webkit --retries=0 e2e/readiness/browser-smoke.spec.ts
 node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote --project=chromium --retries=0 e2e/readiness/browser-setup-navigation.spec.ts
 ```
 
-The full `e2e/readiness` directory includes the three seeded randomized browser scenarios (seeds 7, 21, and 42). Run the same sequence a second time with a new `E2E_RUN_ID`; the existing database is intentionally retained to prove reruns are scoped and repeatable. The harness uses one worker, retries disabled in remote mode, unique run-scoped artifact directories, exact same-origin `Origin` headers on programmatic requests, and the Vercel protection header on every explicitly created browser/API context.
+The full `e2e/readiness` directory includes the three seeded randomized browser scenarios (seeds 7, 21, and 42). WebKit is optional Safari coverage; Firefox is optional and is not required for release acceptance. Run the same required sequence a second time with a new `E2E_RUN_ID`; the existing database is intentionally retained to prove reruns are scoped and repeatable. The harness uses one worker, retries disabled in remote mode, unique run-scoped artifact directories, exact same-origin `Origin` headers on programmatic requests, and the Vercel protection header on every explicitly created browser/API context.
 
 Artifacts are retained under `test-results/<run-id>` and `playwright-report/<run-id>`. Inspect the Vercel deployment after the run with `vercel inspect $env:E2E_BASE_URL --logs`; hosted runtime logs are not a substitute for Playwright evidence.
 
