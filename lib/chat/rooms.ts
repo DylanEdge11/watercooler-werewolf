@@ -7,15 +7,14 @@ export { allowedRoomTypes, normalizeChatBody } from './policy';
 export async function ensureGameRooms(gameId: string): Promise<void> {
   const db = getDb();
   const now = new Date().toISOString();
-  for (const type of ['WEREWOLF', 'MASON', 'DEAD'] as PrivateRoomType[]) {
-    await db
+  await db.batch((['WEREWOLF', 'MASON', 'DEAD'] as PrivateRoomType[]).map((type) =>
+    db
       .prepare(
         `INSERT OR IGNORE INTO chat_rooms (id, game_id, type, status, created_at)
          VALUES (?, ?, ?, 'OPEN', ?)`,
       )
-      .bind(crypto.randomUUID(), gameId, type, now)
-      .run();
-  }
+      .bind(crypto.randomUUID(), gameId, type, now),
+  ));
   const rooms = await db
     .prepare('SELECT id, type FROM chat_rooms WHERE game_id = ?')
     .bind(gameId)
@@ -37,28 +36,16 @@ export async function ensureGameRooms(gameId: string): Promise<void> {
     for (const type of allowedRoomTypes(role, alive)) {
       const roomId = roomByType.get(type);
       if (!roomId) continue;
+      const access = !alive && type !== 'DEAD' ? 'READ_ONLY' : 'WRITE';
       statements.push(
         db
           .prepare(
-            `INSERT INTO chat_room_members (room_id, seat_id, access, granted_at)
-             VALUES (?, ?, 'WRITE', ?)
-             ON CONFLICT(room_id, seat_id) DO UPDATE SET access = 'WRITE', revoked_at = NULL`,
+            `INSERT INTO chat_room_members (room_id, seat_id, access, granted_at, revoked_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(room_id, seat_id) DO UPDATE SET access = excluded.access, revoked_at = excluded.revoked_at`,
           )
-          .bind(roomId, seat.id, now),
+          .bind(roomId, seat.id, access, now, access === 'READ_ONLY' ? now : null),
       );
-    }
-    if (!alive && (role === 'WEREWOLF' || role === 'MASON')) {
-      const formerRoomId = roomByType.get(role);
-      if (formerRoomId) {
-        statements.push(
-          db
-            .prepare(
-              `UPDATE chat_room_members SET access = 'READ_ONLY', revoked_at = ?
-               WHERE room_id = ? AND seat_id = ?`,
-            )
-            .bind(now, formerRoomId, seat.id),
-        );
-      }
     }
   }
   if (statements.length) await db.batch(statements);

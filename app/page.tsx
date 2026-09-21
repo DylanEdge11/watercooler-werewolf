@@ -136,9 +136,10 @@ export default function Home() {
     const keepLocalSelection = preserveLocalSelection
       && selectionDirty.current
       && selectionPhaseId.current === incomingPhaseId;
+    const notificationIds = new Set(result.notifications.map((notification) => notification.id));
     const mergedNotifications = [
       ...result.notifications,
-      ...olderNotifications.current.filter((older) => !result.notifications.some((current) => current.id === older.id)),
+      ...olderNotifications.current.filter((older) => !notificationIds.has(older.id)),
     ];
     setData({ ...result, notifications: mergedNotifications });
     if (!keepLocalSelection) {
@@ -165,9 +166,10 @@ export default function Home() {
       if (!response.ok) throw new Error(result.error ?? 'Unable to load older updates.');
       setData((current) => {
         if (!current) return current;
+        const notificationIds = new Set(current.notifications.map((notification) => notification.id));
         const merged = [
           ...current.notifications,
-          ...result.notifications.filter((incoming) => !current.notifications.some((existing) => existing.id === incoming.id)),
+          ...result.notifications.filter((incoming) => !notificationIds.has(incoming.id)),
         ];
         olderNotifications.current = merged.slice(result.notifications.length);
         return { ...current, notifications: merged, notificationsHasMore: result.notificationsHasMore, notificationsNextCursor: result.notificationsNextCursor };

@@ -29,6 +29,8 @@ vi.mock('../lib/http/rate-limit', () => {
 
 import { POST as claimPost } from '../app/api/seats/claim/[code]/route';
 import { POST as phasePost } from '../app/api/games/[gameId]/phases/route';
+import { GET as roomsGet } from '../app/api/games/[gameId]/rooms/route';
+import { GET as operationsGet } from '../app/api/games/[gameId]/operations/route';
 
 let client: Client;
 let db: LibsqlDatabase;
@@ -112,6 +114,69 @@ afterEach(() => {
 });
 
 describe('real libSQL provider integration', () => {
+  test('reconciles living and eliminated room access without replacing grant timestamps', async () => {
+    await seedActiveGame();
+    const { ensureGameRooms } = await vi.importActual<typeof import('./chat/rooms')>('./chat/rooms');
+    await ensureGameRooms('game');
+    await client.execute("UPDATE chat_room_members SET granted_at = '2026-01-01' WHERE seat_id = 'p17'");
+    await client.execute("UPDATE seats SET alive = 0 WHERE id = 'p17'");
+    await ensureGameRooms('game');
+
+    const membership = await client.execute(`SELECT r.type, m.access, m.granted_at AS grantedAt, m.revoked_at AS revokedAt
+      FROM chat_room_members m JOIN chat_rooms r ON r.id = m.room_id
+      WHERE m.seat_id = 'p17' ORDER BY r.type`);
+    expect(membership.rows).toEqual([
+      { type: 'DEAD', access: 'WRITE', grantedAt: expect.any(String), revokedAt: null },
+      { type: 'WEREWOLF', access: 'READ_ONLY', grantedAt: '2026-01-01', revokedAt: expect.any(String) },
+    ]);
+    const living = await client.execute("SELECT access, revoked_at AS revokedAt FROM chat_room_members WHERE seat_id = 'p18'");
+    expect(living.rows).toEqual([{ access: 'WRITE', revokedAt: null }]);
+  });
+
+  test('counts room members and messages independently, including empty rooms', async () => {
+    await seedActiveGame();
+    await client.execute(`INSERT INTO chat_rooms (id, game_id, type, status, created_at) VALUES
+      ('wolf-room', 'game', 'WEREWOLF', 'OPEN', '2026-01-01'),
+      ('mason-room', 'game', 'MASON', 'OPEN', '2026-01-01'),
+      ('dead-room', 'game', 'DEAD', 'OPEN', '2026-01-01')`);
+    await client.execute(`INSERT INTO chat_room_members (room_id, seat_id, access, granted_at) VALUES
+      ('wolf-room', 'p0', 'WRITE', '2026-01-01'),
+      ('wolf-room', 'p1', 'READ_ONLY', '2026-01-01'),
+      ('wolf-room', 'p2', 'REVOKED', '2026-01-01'),
+      ('mason-room', 'p3', 'WRITE', '2026-01-01')`);
+    await client.execute(`INSERT INTO chat_messages (id, room_id, author_seat_id, body, deleted_at, purged_at, created_at) VALUES
+      ('message-1', 'wolf-room', 'p0', 'Hello', NULL, NULL, '2026-01-01'),
+      ('message-2', 'wolf-room', 'p1', NULL, '2026-01-02', NULL, '2026-01-01'),
+      ('message-3', 'wolf-room', 'p2', NULL, NULL, '2026-01-02', '2026-01-01')`);
+
+    const response = await roomsGet(new Request('http://localhost:3000/api/games/game/rooms'), { params: Promise.resolve({ gameId: 'game' }) });
+    expect(response.status).toBe(200);
+    const data = await response.json() as { rooms: Array<{ type: string; memberCount: number; messageCount: number }> };
+    expect(data.rooms.map(({ type, memberCount, messageCount }) => ({ type, memberCount, messageCount }))).toEqual([
+      { type: 'DEAD', memberCount: 0, messageCount: 0 },
+      { type: 'MASON', memberCount: 1, messageCount: 0 },
+      { type: 'WEREWOLF', memberCount: 2, messageCount: 3 },
+    ]);
+  });
+
+  test('preserves the latest-backup response with and without stored exports', async () => {
+    await seedActiveGame();
+    const context = { params: Promise.resolve({ gameId: 'game' }) };
+    const url = 'http://localhost:3000/api/games/game/operations';
+    const empty = await operationsGet(new Request(url), context);
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toMatchObject({ lastBackup: null, backups: [] });
+
+    await client.execute(`INSERT INTO backup_exports (id, game_id, moderator_id, schema_version, checksum, exported_at) VALUES
+      ('old', 'game', 'mod', 2, 'old-checksum', '2026-01-01'),
+      ('new', 'game', 'mod', 2, 'new-checksum', '2026-01-02')`);
+    const response = await operationsGet(new Request(url), context);
+    expect(response.status).toBe(200);
+    const data = await response.json() as { lastBackup: unknown; backups: Array<{ id: string }> };
+    expect(data.lastBackup).toEqual({ exportedAt: '2026-01-02', checksum: 'new-checksum' });
+    expect(data.backups.map((backup) => backup.id)).toEqual(['new', 'old']);
+  });
+
   test('allows only one concurrent claim for a one-time invite', async () => {
     await seedClaim();
     const context = { params: Promise.resolve({ code: 'fictional-claim-code' }) };

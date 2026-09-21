@@ -232,9 +232,9 @@ export async function GET(request: Request) {
         .bind(phase.id, permission.actionKind)
         .first<{ count: number }>();
       const eligible = permission.actionKind === 'DAY_VOTE'
-        ? roster.filter((seat) => seat.alive).length
+        ? livingPlayers.length
         : permission.actionKind === 'WOLF_VOTE'
-          ? roster.filter((seat) => seat.alive && seat.role === 'WEREWOLF').length
+          ? werewolvesRemaining
           : 1;
       participation = { submitted: Number(submitted?.count ?? 0), eligible };
     }

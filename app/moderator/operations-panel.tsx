@@ -63,9 +63,9 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
     const [ops, roomData, moderatorData] = await Promise.all([
-      parse<Operations>(await fetch(`/api/games/${gameId}/operations`)),
-      parse<{ rooms: Room[]; recentMessages: RoomMessage[] }>(await fetch(`/api/games/${gameId}/rooms`)),
-      parse<{ moderators: Moderator[] }>(await fetch(`/api/games/${gameId}/moderators`)),
+      fetch(`/api/games/${gameId}/operations`).then(parse<Operations>),
+      fetch(`/api/games/${gameId}/rooms`).then(parse<{ rooms: Room[]; recentMessages: RoomMessage[] }>),
+      fetch(`/api/games/${gameId}/moderators`).then(parse<{ moderators: Moderator[] }>),
     ]);
     if (sequence !== refreshSequence.current) return;
     setOperations(ops);

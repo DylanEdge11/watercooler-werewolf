@@ -23,10 +23,6 @@ interface SelectionResult {
   randomDraws: RandomDraw[];
 }
 
-function playerMap(players: PlayerState[]): Map<string, PlayerState> {
-  return new Map(players.map((player) => [player.id, player]));
-}
-
 function latestActions(actions: ActionSubmission[]): ActionSubmission[] {
   const current = new Map<string, ActionSubmission>();
   for (const action of actions) {
@@ -48,15 +44,16 @@ function tallyActions(
   const counts = new Map<string, number>();
   const warnings: ResolutionWarning[] = [];
 
-  for (const action of actions.filter((candidate) => candidate.kind === kind)) {
+  for (const action of actions) {
+    if (action.kind !== kind) continue;
     const actor = players.get(action.actorId);
     if (!actor || !actorIsEligible(actor)) {
       warnings.push({ actionId: action.id, reason: 'Actor was not eligible for this action.' });
       continue;
     }
 
-    const uniqueTargets = [...new Set(action.targetIds)];
-    if (uniqueTargets.length > slots) {
+    const uniqueTargets = new Set(action.targetIds);
+    if (uniqueTargets.size > slots) {
       warnings.push({ actionId: action.id, reason: `Only the first ${slots} valid targets counted.` });
     }
 
@@ -103,7 +100,8 @@ export function selectFromTally(
       continue;
     }
 
-    const pool = [...tied].sort();
+    tied.sort();
+    const pool = [...tied];
     const picked: string[] = [];
     const usedRolls: number[] = [];
     while (picked.length < remaining) {
@@ -119,7 +117,7 @@ export function selectFromTally(
     selected.push(...picked);
     randomDraws.push({
       kind: 'BOUNDARY_TIE',
-      candidates: [...tied].sort(),
+      candidates: tied,
       selected: picked,
       rolls: usedRolls,
     });
@@ -133,21 +131,21 @@ function firstValidSingleTargetAction(
   kind: ActionKind,
   players: Map<string, PlayerState>,
   actorRole: PlayerState['role'],
-): { actor: PlayerState; target: PlayerState; action: ActionSubmission } | null {
+): { actor: PlayerState; target: PlayerState } | null {
   const action = actions.find((candidate) => candidate.kind === kind);
   if (!action) return null;
   const actor = players.get(action.actorId);
   const target = players.get(action.targetIds[0]);
   if (!actor || !target || !actor.alive || actor.role !== actorRole) return null;
   if (!target.alive || actor.id === target.id) return null;
-  return { actor, target, action };
+  return { actor, target };
 }
 
 export function resolvePhase(input: PhaseResolutionInput): PhaseResolution {
   if (!Number.isInteger(input.slots) || input.slots < 1) {
     throw new Error('A phase must have at least one elimination slot.');
   }
-  const players = playerMap(input.players);
+  const players = new Map(input.players.map((player) => [player.id, player]));
   const actions = latestActions(input.actions);
   const isDay = input.kind === 'DAY' || input.kind === 'FINAL_BALLOT';
   const voteKind: ActionKind = isDay ? 'DAY_VOTE' : 'WOLF_VOTE';
@@ -209,7 +207,6 @@ export function resolveHunterShot(input: HunterResolutionInput): PhaseResolution
   const hunterId = resolution.hunterRequiredIds[0];
   const hunter = players.find((player) => player.id === hunterId);
   const target = players.find((player) => player.id === hunterAction.targetIds[0]);
-  const alreadyEliminated = new Set(resolution.eliminations.map((item) => item.playerId));
 
   if (
     hunterAction.kind !== 'HUNTER_SHOT' ||
@@ -217,7 +214,7 @@ export function resolveHunterShot(input: HunterResolutionInput): PhaseResolution
     hunter?.role !== 'HUNTER' ||
     !target?.alive ||
     target.id === hunterId ||
-    alreadyEliminated.has(target.id)
+    resolution.eliminations.some((item) => item.playerId === target.id)
   ) {
     return {
       ...resolution,

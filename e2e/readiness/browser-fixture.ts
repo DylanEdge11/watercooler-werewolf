@@ -216,12 +216,12 @@ function recordForbiddenKeys(value: unknown, path = '$', found: string[] = []): 
 }
 
 export class BrowserTelemetry {
-  private readonly byPage = new Map<Page, { label: string; entries: TelemetryEntry[]; playerPayloads: unknown[] }>();
+  private readonly byPage = new Map<Page, { label: string; entries: TelemetryEntry[] }>();
   private readonly allowedResponses = new Set<string>();
   private readonly allowedConsoleErrors: RegExp[] = [];
 
   attach(page: Page, label: string): void {
-    const state = { label, entries: [] as TelemetryEntry[], playerPayloads: [] as unknown[] };
+    const state = { label, entries: [] as TelemetryEntry[] };
     this.byPage.set(page, state);
     void page.addInitScript(() => {
       window.addEventListener('unhandledrejection', (event) => {
@@ -256,11 +256,6 @@ export class BrowserTelemetry {
     page.on('response', (response) => {
       if (response.status() >= 500 && !this.allowedResponses.has(responseKey(response))) {
         state.entries.push({ kind: '5xx', label, detail: `${response.status()} ${redactedUrl(response.url())}` });
-      }
-      if (response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/player') {
-        void response.json()
-          .then((payload) => state.playerPayloads.push(payload))
-          .catch(() => undefined);
       }
     });
     page.on('framenavigated', (frame) => {
@@ -687,20 +682,7 @@ export class BrowserGame {
   async submitConcurrently(decisions: Array<{ player: BrowserPlayer; target: BrowserPlayer }>): Promise<Array<{ status: number; version?: number; elapsedMs: number }>> {
     if (!decisions.length) return [];
     await Promise.all(decisions.map((decision) => decision.player.prepareTarget(decision.target.account)));
-    let release!: () => void;
-    const barrier = new Promise<void>((resolve) => { release = resolve; });
-    let ready = 0;
-    const readyPromises = decisions.map(async () => {
-      ready += 1;
-      if (ready === decisions.length) release();
-      await barrier;
-    });
-    const start = Date.now();
-    const submissions = decisions.map(async (decision, index) => {
-      await readyPromises[index];
-      return decision.player.submitPrepared();
-    });
-    const result = await Promise.all(submissions);
+    const result = await Promise.all(decisions.map((decision) => decision.player.submitPrepared()));
     expect(result.every((entry) => entry.status < 500)).toBe(true);
     return result;
   }

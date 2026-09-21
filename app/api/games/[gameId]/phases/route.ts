@@ -151,6 +151,12 @@ export async function GET(_request: Request, context: RouteContext) {
     for (const proposal of proposalRows.results) {
       if (!proposalByPhase.has(proposal.phaseId)) proposalByPhase.set(proposal.phaseId, proposal);
     }
+    const rosterPlayers: PlayerState[] = rosterRows.results.map((row) => ({
+      id: String(row.id),
+      displayName: String(row.displayName),
+      role: canonicalRoleKey(String(row.role)),
+      alive: Boolean(row.alive),
+    }));
     return Response.json({
       ok: true,
       game: gameRow,
@@ -159,12 +165,6 @@ export async function GET(_request: Request, context: RouteContext) {
         const proposal = proposalByPhase.get(phase.id);
         const proposedOutcome = proposal ? JSON.parse(proposal.outcomeJson) as PhaseResolution : null;
         const overrideIds = proposal ? overrideIdsFromJson(proposal.overrideJson) : null;
-        const rosterPlayers: PlayerState[] = rosterRows.results.map((row) => ({
-          id: String(row.id),
-          displayName: String(row.displayName),
-          role: canonicalRoleKey(String(row.role)),
-          alive: Boolean(row.alive),
-        }));
         const reviewedOutcome = proposal?.reviewedOutcomeJson
           ? JSON.parse(proposal.reviewedOutcomeJson) as PhaseResolution
           : proposedOutcome && overrideIds

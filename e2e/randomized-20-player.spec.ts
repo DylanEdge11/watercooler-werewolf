@@ -43,7 +43,7 @@ async function runRandomPhase(farm: GameHarness, kind: 'DAY' | 'NIGHT', random: 
       if (!choices.length) continue;
       const first = random.pick(choices);
       const revise = random.chance(0.32);
-      const final = revise ? random.pick(choices.filter((candidate) => candidate.seatId !== first.seatId) || choices) : null;
+      const final = revise ? random.pick(choices.filter((candidate) => candidate.seatId !== first.seatId)) : null;
       expectedActors.add(bot.seatId);
       submissions.push((async () => {
         await farm.submitToPhase(phase.phaseId, { bot, actionKind: 'DAY_VOTE', targetIds: [first.seatId] });

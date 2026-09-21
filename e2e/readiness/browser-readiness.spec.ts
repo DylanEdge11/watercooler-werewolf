@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { ActionKind, PhaseResolution, RoleKey } from '../../lib/game/types';
+import type { ActionKind, PhaseResolution } from '../../lib/game/types';
 import { BASE_URL, DEFAULT_COMPOSITION, E2E_PLAYER_COUNT } from '../constants';
 import { newBrowserContext } from '../transport';
 import {

@@ -110,14 +110,15 @@ export async function collectGameBackup(gameId: string): Promise<GameBackup> {
 
 export async function createBackupRecord(gameId: string, moderatorId: string): Promise<{ backupId: string; data: GameBackup; checksum: string }> {
   const data = await collectGameBackup(gameId);
-  const checksum = await sha256(JSON.stringify(data));
+  const payloadJson = JSON.stringify(data);
+  const checksum = await sha256(payloadJson);
   const backupId = crypto.randomUUID();
   await getDb()
     .prepare(
       `INSERT INTO backup_exports (id, game_id, moderator_id, schema_version, checksum, payload_json, exported_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(backupId, gameId, moderatorId, data.schemaVersion, checksum, JSON.stringify(data), data.exportedAt)
+    .bind(backupId, gameId, moderatorId, data.schemaVersion, checksum, payloadJson, data.exportedAt)
     .run();
   return { backupId, data, checksum };
 }

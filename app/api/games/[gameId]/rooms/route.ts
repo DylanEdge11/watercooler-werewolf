@@ -18,12 +18,11 @@ export async function GET(_request: Request, context: RouteContext) {
     const rooms = await db
       .prepare(
         `SELECT cr.id, cr.type, cr.status, cr.expires_at AS expiresAt,
-                COUNT(DISTINCT CASE WHEN crm.access != 'REVOKED' THEN crm.seat_id END) AS memberCount,
-                COUNT(DISTINCT cm.id) AS messageCount
+                (SELECT COUNT(*) FROM chat_room_members crm
+                 WHERE crm.room_id = cr.id AND crm.access != 'REVOKED') AS memberCount,
+                (SELECT COUNT(*) FROM chat_messages cm WHERE cm.room_id = cr.id) AS messageCount
          FROM chat_rooms cr
-         LEFT JOIN chat_room_members crm ON crm.room_id = cr.id
-         LEFT JOIN chat_messages cm ON cm.room_id = cr.id
-         WHERE cr.game_id = ? GROUP BY cr.id ORDER BY cr.type`,
+         WHERE cr.game_id = ? ORDER BY cr.type`,
       )
       .bind(gameId)
       .all();

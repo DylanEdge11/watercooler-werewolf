@@ -52,17 +52,9 @@ export function assertValidCalendarDate(value: string, label = 'Date'): void {
   if (!isValidCalendarDate(value)) throw new Error(`${label} must be a real YYYY-MM-DD calendar date.`);
 }
 
-export function assertValidTimeZone(timeZone: string): void {
+function zonedFormatter(timeZone: string): Intl.DateTimeFormat {
   try {
-    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());
-  } catch {
-    throw new Error('The game timezone must be a valid IANA timezone.');
-  }
-}
-
-function formattedParts(instant: number, timeZone: string): LocalDateTimeParts {
-  const values = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat('en-US', {
       timeZone,
       hourCycle: 'h23',
       year: 'numeric',
@@ -71,7 +63,19 @@ function formattedParts(instant: number, timeZone: string): LocalDateTimeParts {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-    })
+    });
+  } catch {
+    throw new Error('The game timezone must be a valid IANA timezone.');
+  }
+}
+
+export function assertValidTimeZone(timeZone: string): void {
+  zonedFormatter(timeZone);
+}
+
+function formattedParts(instant: number, formatter: Intl.DateTimeFormat): LocalDateTimeParts {
+  const values = Object.fromEntries(
+    formatter
       .formatToParts(new Date(instant))
       .filter((part) => part.type !== 'literal')
       .map((part) => [part.type, part.value]),
@@ -95,14 +99,14 @@ function sameParts(left: LocalDateTimeParts, right: LocalDateTimeParts): boolean
     && left.second === right.second;
 }
 
-function offsetAt(instant: number, timeZone: string): number {
-  const parts = formattedParts(instant, timeZone);
+function offsetAt(instant: number, formatter: Intl.DateTimeFormat): number {
+  const parts = formattedParts(instant, formatter);
   return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) - instant;
 }
 
 /** Convert a datetime-local value in the game's IANA zone to an absolute UTC ISO. */
 export function zonedDateTimeToUtcIso(value: string, timeZone: string): string {
-  assertValidTimeZone(timeZone);
+  const formatter = zonedFormatter(timeZone);
   const parts = localParts(value);
   const localAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
   // Sample the nearby offsets, then verify candidates by formatting them back
@@ -111,12 +115,11 @@ export function zonedDateTimeToUtcIso(value: string, timeZone: string): string {
   // the earlier occurrence (the smaller UTC instant).
   const offsets = new Set(
     [-172_800_000, -86_400_000, -21_600_000, 0, 21_600_000, 86_400_000, 172_800_000]
-      .map((delta) => offsetAt(localAsUtc + delta, timeZone)),
+      .map((delta) => offsetAt(localAsUtc + delta, formatter)),
   );
   const candidates = [...offsets]
     .map((offset) => localAsUtc - offset)
-    .filter((instant, index, all) => all.indexOf(instant) === index)
-    .filter((instant) => sameParts(formattedParts(instant, timeZone), parts))
+    .filter((instant) => sameParts(formattedParts(instant, formatter), parts))
     .sort((left, right) => left - right);
   if (!candidates.length) {
     throw new Error('The selected local time does not exist in the game timezone (usually a daylight-saving transition).');
@@ -139,8 +142,7 @@ export function parseScheduledDate(value: string, timeZone: string): Date {
 
 /** Format an instant as a datetime-local value in the game's timezone. */
 export function formatZonedDateTimeLocal(date: Date, timeZone: string): string {
-  assertValidTimeZone(timeZone);
-  const parts = formattedParts(date.valueOf(), timeZone);
+  const parts = formattedParts(date.valueOf(), zonedFormatter(timeZone));
   return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}T${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`;
 }
 

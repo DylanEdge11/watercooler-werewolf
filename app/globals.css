@@ -37,7 +37,6 @@ button { color: inherit; }
 .avatar, .candidate-avatar { align-items: center; background: #d9e9df; border: 1px solid #c7dace; border-radius: 50%; color: #245848; display: flex; font-size: 12px; font-weight: 800; height: 36px; justify-content: center; width: 36px; }
 .profile-name { font-size: 13px; font-weight: 700; }
 .icon-button { background: transparent; border: 0; cursor: pointer; font-size: 18px; height: 38px; position: relative; width: 38px; }
-.notification-dot { background: var(--coral); border: 2px solid var(--panel); border-radius: 50%; height: 8px; position: absolute; right: 6px; top: 7px; width: 8px; }
 .workspace { display: grid; grid-template-columns: 220px minmax(460px, 760px) 290px; gap: 28px; justify-content: center; padding: 32px 28px 72px; }
 .mobile-nav { display: none; }
 .sidebar { border-right: 1px solid var(--line); min-height: calc(100vh - 140px); padding: 10px 25px 0 0; }

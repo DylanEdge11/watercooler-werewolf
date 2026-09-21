@@ -1,5 +1,5 @@
 import { sha256 } from '../auth/crypto';
-import { countComposition, validateComposition } from './balance';
+import { validateComposition } from './balance';
 import { ROLE_KEYS, type RoleComposition, type RoleKey } from './types';
 
 export interface AssignmentPreview {
@@ -24,7 +24,6 @@ export async function createAssignmentPreview(
 ): Promise<AssignmentPreview> {
   const validation = validateComposition(composition, seatIds.length);
   if (!validation.valid) throw new Error(validation.errors.join(' '));
-  if (countComposition(composition) !== seatIds.length) throw new Error('Every seat requires one role.');
 
   const roles = ROLE_KEYS.flatMap((role) => Array.from({ length: composition[role] }, () => role));
   if (randomRolls.length < Math.max(0, roles.length - 1)) {
@@ -38,10 +37,9 @@ export async function createAssignmentPreview(
     [roles[index], roles[swapIndex]] = [roles[swapIndex], roles[index]];
   }
 
-  const assignments = [...seatIds]
-    .sort()
-    .map((seatId, index) => ({ seatId, role: roles[index] }));
-  const evidenceHash = await sha256(JSON.stringify({ seatIds: [...seatIds].sort(), composition, randomRolls }));
+  const sortedSeatIds = [...seatIds].sort();
+  const assignments = sortedSeatIds.map((seatId, index) => ({ seatId, role: roles[index] }));
+  const evidenceHash = await sha256(JSON.stringify({ seatIds: sortedSeatIds, composition, randomRolls }));
   return { assignments, randomRolls, evidenceHash };
 }
 

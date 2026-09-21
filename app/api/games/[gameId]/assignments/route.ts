@@ -5,6 +5,7 @@ import { validateComposition, scoreComposition } from '../../../../../lib/game/b
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../../../../lib/game/player-count';
 import { createAssignmentPreview, fingerprintComposition, fingerprintRoster } from '../../../../../lib/game/assignment';
 import { ROLE_CATALOG } from '../../../../../lib/game/catalog';
+import { createSecureRandomRolls } from '../../../../../lib/game/random';
 import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { ensureGameRooms } from '../../../../../lib/chat/rooms';
@@ -28,12 +29,6 @@ function changes(result: unknown): number {
 }
 
 const SETUP_STATUSES = "'DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'";
-
-function secureRolls(count: number): number[] {
-  const values = new Uint32Array(count);
-  crypto.getRandomValues(values);
-  return Array.from(values, (value) => value / 2 ** 32);
-}
 
 async function loadComposition(gameId: string): Promise<RoleComposition> {
   const rows = await getDb()
@@ -187,7 +182,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     if (body.action === 'PREVIEW') {
       if (rolesAreReleased) throw new Error('Assignments are locked after roles are released.');
-      if (![...['DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW']].includes(game.status)) {
+      if (!['DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'].includes(game.status)) {
         throw new Error('Assignments can only be prepared during setup. Reset or restore the game before preparing them again.');
       }
       if (roster.results.some((seat) => seat.status !== 'CLAIMED')) {
@@ -201,7 +196,7 @@ export async function POST(request: Request, context: RouteContext) {
       const preview = await createAssignmentPreview(
         seatIds,
         composition,
-        secureRolls(Math.max(0, seatIds.length - 1)),
+        createSecureRandomRolls(Math.max(0, seatIds.length - 1)),
       );
       const currentRevision = await db
         .prepare('SELECT COALESCE(MAX(revision), 0) AS revision FROM assignment_batches WHERE game_id = ?')
@@ -261,13 +256,6 @@ export async function POST(request: Request, context: RouteContext) {
                AND EXISTS (SELECT 1 FROM games WHERE id = ? AND setup_revision = ? AND status IN ('ASSIGNMENT_PREVIEWING', 'ASSIGNMENT_PREVIEW'))`,
           )
           .bind(crypto.randomUUID(), gameId, moderator.id, JSON.stringify({ batchId, revision, setupRevision, rosterFingerprint, compositionFingerprint }), now, batchId, gameId, gameId, setupRevision),
-        db
-          .prepare(
-            `UPDATE games SET status = 'ASSIGNMENT_PREVIEW', updated_at = ?
-             WHERE id = ? AND setup_revision = ? AND status = 'ASSIGNMENT_PREVIEWING'
-               AND EXISTS (SELECT 1 FROM assignment_batches b WHERE b.id = ? AND b.game_id = games.id AND b.released_at IS NULL)`,
-          )
-          .bind(now, gameId, setupRevision, batchId),
       ]);
       if (changes(result[0]) !== 1) {
         return jsonError('Setup changed while the assignment preview was being created. Refresh and randomize again.', 409);
@@ -310,7 +298,7 @@ export async function POST(request: Request, context: RouteContext) {
         throw new Error('This assignment preview is stale because the roster or composition changed. Create a new preview.');
       }
       const assignmentIds = assignments.map((assignment) => assignment.seatId);
-      if (new Set(assignmentIds).size !== assignmentIds.length || new Set(assignmentIds).size !== roster.results.length) {
+      if (new Set(assignmentIds).size !== assignmentIds.length) {
         throw new Error('Assignment batch does not match the current roster. Create a new preview.');
       }
       const rosterIds = new Set(roster.results.map((seat) => seat.id));

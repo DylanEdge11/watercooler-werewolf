@@ -24,7 +24,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const db = getDb();
     const reconciledPhaseIds = await reconcileDuePhases(db, gameId, moderator.id);
     const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
-    const [game, membership, counts, overdue, sessions, backup, backups, events, activity, seats] = await Promise.all([
+    const [game, membership, counts, overdue, sessions, backups, events, activity, seats] = await Promise.all([
       db
         .prepare(
       `SELECT status, name, chat_retention_days AS chatRetentionDays, final_cutoff_at AS finalCutoffAt,
@@ -61,13 +61,6 @@ export async function GET(_request: Request, context: RouteContext) {
         .first(),
       db
         .prepare(
-          `SELECT exported_at AS exportedAt, checksum FROM backup_exports
-           WHERE game_id = ? ORDER BY exported_at DESC LIMIT 1`,
-        )
-        .bind(gameId)
-        .first(),
-      db
-        .prepare(
           `SELECT id, schema_version AS schemaVersion, exported_at AS exportedAt, checksum
            FROM backup_exports WHERE game_id = ? ORDER BY exported_at DESC LIMIT 12`,
         )
@@ -98,7 +91,9 @@ export async function GET(_request: Request, context: RouteContext) {
         .bind(gameId)
         .all<{ id: string; displayName: string; status: string }>(),
     ]);
-    return Response.json({ ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, seats: seats.results, lastBackup: backup, backups: backups.results, events: events.results });
+    const latestBackup = backups.results[0];
+    const lastBackup = latestBackup ? { exportedAt: latestBackup.exportedAt, checksum: latestBackup.checksum } : null;
+    return Response.json({ ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, seats: seats.results, lastBackup, backups: backups.results, events: events.results });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unable to load operational health.', 401);
   }
