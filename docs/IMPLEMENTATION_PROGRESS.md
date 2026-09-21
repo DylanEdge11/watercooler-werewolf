@@ -53,3 +53,10 @@ Updated 2026-09-19.
 - No production URL was opened for mutation. Preview mutations used only run-owned fictional games/accounts; no shared data was deleted.
 - Hosted artifacts, first-attempt findings, and exact commands are recorded in `docs/PLAYWRIGHT_HOSTED_QA_REPORT.md` and `docs/PLAYWRIGHT_HOSTED_RUNBOOK.md`.
 - The one-game manual handoff is recorded in `docs/FULL_GAME_TEST_HANDOFF.md`; it requires one complete six-player game and does not repeat the completed suite.
+
+## Latest Preview deployment
+
+- Reviewed source revision: `7322290` (`Trigger Preview rebuild for committed UI updates`).
+- Preview deployment: `dpl_BBABEZrQ7tB5ArjZfhgtg1cEJKog`, target `preview`, status `READY`.
+- Preview origin: `https://watercooler-werewolf-8ssdpjq7y-dyl-edge.vercel.app`.
+- The deployed client bundle contains the updated Living/Eliminated roster, werewolf count, timeline vote ledger, and eliminated-state UI markers. The earlier deployment record above remains historical.

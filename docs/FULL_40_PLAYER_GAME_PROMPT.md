@@ -12,11 +12,11 @@ Run exactly one new, run-owned 40-player game against the isolated Vercel Previe
 
 Use this exact Preview origin:
 
-`https://watercooler-werewolf-21kmzkv1j-dyl-edge.vercel.app`
+`https://watercooler-werewolf-8ssdpjq7y-dyl-edge.vercel.app`
 
 Deployment identity:
 
-- Deployment ID: `dpl_BU6dMkHvU1cUFou477j2bBX184hC`
+- Deployment ID: `dpl_BBABEZrQ7tB5ArjZfhgtg1cEJKog`
 - Vercel project: `watercooler-werewolf`
 - Target: `preview`
 - Expected state: `READY`

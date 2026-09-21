@@ -8,8 +8,8 @@ Use this prompt to run one Watercooler Werewolf game with the user as a player a
 - 11 Villagers, 4 Werewolves, 1 Seer, 1 Bodyguard, 1 Hunter, and 2 Masons. Confirm the application reports `BALANCED` (score -1). This score is a heuristic, not proof of competitive balance.
 - For the next role walkthrough, deliberately assign `Human Player` the `WEREWOLF` role before release. Keep every other role randomized and hidden, and do not reroll after that valid assignment. This is an intentional role-coverage parameter, not a claim about ordinary random-role odds.
 - Keep roles hidden during play. Release the spoiler audit only after the game ends or the human explicitly requests it.
-- Preview origin: `https://watercooler-werewolf-21kmzkv1j-dyl-edge.vercel.app`
-- Expected deployment: `dpl_BU6dMkHvU1cUFou477j2bBX184hC`, project `watercooler-werewolf`, target `preview`, state `READY`.
+- Preview origin: `https://watercooler-werewolf-8ssdpjq7y-dyl-edge.vercel.app`
+- Expected deployment: `dpl_BBABEZrQ7tB5ArjZfhgtg1cEJKog`, project `watercooler-werewolf`, target `preview`, state `READY`.
 - Never open or mutate Production. Do not reuse, reset, or alter another game, including the earlier completed 80-player QA game.
 
 ## Responsibilities and evidence
