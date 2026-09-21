@@ -7,6 +7,14 @@ import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution
 import { jsonError } from '../../../lib/http/security';
 import { ensureGameRooms } from '../../../lib/chat/rooms';
 
+interface PublicVoteRow {
+  id: string;
+  phaseId: string;
+  actorName: string;
+  targetIdsJson: string;
+  submittedAt: string;
+}
+
 export async function GET(request: Request) {
   try {
     await ensureDatabase();
@@ -91,6 +99,11 @@ export async function GET(request: Request) {
       .bind(player.gameId)
       .all<{ id: string; displayName: string; alive: number; role: RoleKey | null }>();
     const roster = rosterRows.results.map((seat) => ({ ...seat, role: seat.role ? canonicalRoleKey(seat.role) : null, alive: Boolean(seat.alive) }));
+    const livingPlayers = roster.filter((seat) => seat.alive).map(({ id, displayName }) => ({ id, displayName }));
+    const eliminatedPlayers = roster
+      .filter((seat) => !seat.alive)
+      .map(({ id, displayName, role }) => ({ id, displayName, role }));
+    const werewolvesRemaining = roster.filter((seat) => seat.alive && seat.role === 'WEREWOLF').length;
     const candidates = permission.actionKind
       ? roster
           .filter((seat) => seat.alive && seat.id !== player.id)
@@ -139,14 +152,50 @@ export async function GET(request: Request) {
     }
     const timelineRows = await db
       .prepare(
-        `SELECT id, event_type AS eventType, payload_json AS payloadJson, created_at AS createdAt
-         FROM game_events WHERE game_id = ?
-           AND (created_at > COALESCE(?, '') OR (created_at = ? AND event_type NOT IN ('GAME_RESET', 'GAME_RESTORED')))
-           AND event_type IN ('PHASE_PUBLISHED', 'GAME_COMPLETED', 'ANNOUNCEMENT', 'GAME_STOPPED', 'FINAL_SHOWDOWN_ENTERED')
-           ORDER BY created_at DESC LIMIT 12`,
+        `SELECT ge.id, ge.event_type AS eventType, ge.phase_id AS phaseId,
+                p.sequence AS phaseSequence, ge.payload_json AS payloadJson, ge.created_at AS createdAt
+         FROM game_events ge LEFT JOIN phases p ON p.id = ge.phase_id
+         WHERE ge.game_id = ?
+           AND (ge.created_at > COALESCE(?, '') OR (ge.created_at = ? AND ge.event_type NOT IN ('GAME_RESET', 'GAME_RESTORED')))
+           AND ge.event_type IN ('PHASE_PUBLISHED', 'GAME_COMPLETED', 'ANNOUNCEMENT', 'GAME_STOPPED', 'FINAL_SHOWDOWN_ENTERED')
+           ORDER BY ge.created_at DESC LIMIT 100`,
       )
       .bind(player.gameId, runBoundary?.createdAt ?? null, runBoundary?.createdAt ?? null)
-      .all<{ id: string; eventType: string; payloadJson: string; createdAt: string }>();
+      .all<{ id: string; eventType: string; phaseId: string | null; phaseSequence: number | null; payloadJson: string; createdAt: string }>();
+
+    const publicVoteRows = await db
+      .prepare(
+        `SELECT a.id, p.id AS phaseId, s.display_name AS actorName,
+                a.target_ids_json AS targetIdsJson, a.submitted_at AS submittedAt
+         FROM phases p
+         JOIN action_submissions a ON a.phase_id = p.id
+         JOIN seats s ON s.id = a.actor_seat_id
+         WHERE p.game_id = ? AND p.status = 'PUBLISHED'
+           AND p.kind IN ('DAY', 'FINAL_BALLOT')
+           AND a.kind = 'DAY_VOTE' AND a.superseded_at IS NULL
+           AND p.created_at > COALESCE(?, '')
+         ORDER BY p.sequence ASC, a.submitted_at ASC, a.id ASC`,
+      )
+      .bind(player.gameId, runBoundary?.createdAt ?? null)
+      .all<PublicVoteRow>();
+    const displayNameById = new Map(roster.map((seat) => [seat.id, seat.displayName]));
+    const publicVotesByPhase = new Map<string, Array<{ actorName: string; targetNames: string[] }>>();
+    for (const vote of publicVoteRows.results) {
+      let targetIds: unknown[] = [];
+      try {
+        const parsed = JSON.parse(vote.targetIdsJson) as unknown;
+        targetIds = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        targetIds = [];
+      }
+      const targetNames = targetIds
+        .filter((targetId): targetId is string => typeof targetId === 'string')
+        .map((targetId) => displayNameById.get(targetId))
+        .filter((name): name is string => Boolean(name));
+      const phaseVotes = publicVotesByPhase.get(vote.phaseId) ?? [];
+      phaseVotes.push({ actorName: vote.actorName, targetNames });
+      publicVotesByPhase.set(vote.phaseId, phaseVotes);
+    }
     const notificationLimit = 25;
     const notificationWhere = notificationBefore
       ? ' AND (created_at < ? OR (created_at = ? AND id < ?))'
@@ -208,9 +257,14 @@ export async function GET(request: Request) {
           eventType: event.eventType,
           createdAt: event.createdAt,
           payload: {
+            phaseId: event.phaseId,
+            sequence: event.phaseSequence,
             kind: payload.kind,
             eliminations,
             winner: payload.winner ?? null,
+            votes: ['DAY', 'FINAL_BALLOT'].includes(String(payload.kind)) && event.phaseId
+              ? publicVotesByPhase.get(event.phaseId) ?? []
+              : undefined,
           },
         };
       }
@@ -254,7 +308,9 @@ export async function GET(request: Request) {
         status: player.gameStatus,
         timezone: player.timezone,
         stopReason: player.stopReason,
-        counts: { total: roster.length, living: roster.filter((seat) => seat.alive).length },
+        counts: { total: roster.length, living: livingPlayers.length, werewolvesRemaining },
+        livingPlayers,
+        eliminatedPlayers,
       },
       phase: phase ? { ...phase, deadline: phase.status === 'PENDING_HUNTER' ? phase.hunterDeadlineAt : phase.closesAt } : null,
       permission,

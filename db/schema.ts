@@ -1,4 +1,5 @@
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
 import type { ActionKind, PhaseKind, RoleKey } from '../lib/game/types';
 
 export type GameStatus =
@@ -28,10 +29,14 @@ export type PhaseStatus =
   | 'PUBLISHED'
   | 'SUPERSEDED';
 
-export const appBootstrap = sqliteTable('app_bootstrap', {
-  id: integer('id').primaryKey(),
-  createdAt: text('created_at').notNull(),
-});
+export const appBootstrap = sqliteTable(
+  'app_bootstrap',
+  {
+    id: integer('id').primaryKey(),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [check('app_bootstrap_id_check', sql`${table.id} = 1`)],
+);
 
 export const moderatorAccounts = sqliteTable(
   'moderator_accounts',

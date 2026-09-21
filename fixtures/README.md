@@ -2,6 +2,8 @@
 
 Use `roster-20.csv` for the standard multiplayer rehearsal. The application accepts 6–80 player seats; a six-player rehearsal should use one Werewolf and five Villagers as its initial preset.
 
+Follow [How to Use Watercooler Werewolf](../docs/HOW_TO_USE_WATERCOOLER_WEREWOLF.md) for the actual button-by-button workflow and [Pilot testing](../docs/PILOT_TESTING.md) for environment setup. If `pilot:setup` already imported this roster, do not import it again unless deliberately replacing the invitations. Use separate browser profiles/contexts per seat; private windows may share sessions.
+
 Recommended rehearsal:
 
 1. Create a game in the moderator console with a short test schedule.

@@ -132,7 +132,7 @@ export async function POST(request: Request, context: RouteContext) {
       const decision = canCancelSetup(game.status, game.name, body.confirmationName?.trim() ?? '', 'OWNER', body.confirmed === true);
       if (!decision.allowed) throw new Error(decision.error);
       const seats = await db
-        .prepare('SELECT id FROM seats WHERE game_id = ?')
+        .prepare("SELECT id FROM seats WHERE game_id = ? AND status != 'REMOVED'")
         .bind(gameId)
         .all<{ id: string }>();
       const replacementHashes = await Promise.all(
@@ -238,7 +238,7 @@ export async function POST(request: Request, context: RouteContext) {
       if (decision.idempotent) return Response.json({ ok: true, idempotent: true, status: 'DRAFT' });
       const backup = await createBackupRecord(gameId, moderator.id);
       const seats = await db
-        .prepare('SELECT id FROM seats WHERE game_id = ?')
+        .prepare("SELECT id FROM seats WHERE game_id = ? AND status != 'REMOVED'")
         .bind(gameId)
         .all<{ id: string }>();
       const replacementHashes = await Promise.all(
@@ -263,7 +263,7 @@ export async function POST(request: Request, context: RouteContext) {
         db.prepare('DELETE FROM seat_sessions WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?) AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db
           .prepare(
-            "UPDATE seats SET status = 'INVITED', pin_hash = NULL, session_version = session_version + 1, alive = 1, predecessor_seat_id = NULL, claimed_at = NULL, updated_at = ? WHERE game_id = ? AND " + resetGuard,
+            "UPDATE seats SET status = 'INVITED', pin_hash = NULL, session_version = session_version + 1, alive = 1, predecessor_seat_id = NULL, claimed_at = NULL, updated_at = ? WHERE game_id = ? AND status != 'REMOVED' AND " + resetGuard,
           )
           .bind(now, gameId, gameId, now, moderator.id),
         db
@@ -280,7 +280,7 @@ export async function POST(request: Request, context: RouteContext) {
       for (const replacement of replacementHashes) {
         statements.push(
           db
-            .prepare('UPDATE seats SET claim_code_hash = ? WHERE id = ? AND game_id = ? AND ' + resetGuard)
+            .prepare("UPDATE seats SET claim_code_hash = ? WHERE id = ? AND game_id = ? AND status != 'REMOVED' AND " + resetGuard)
             .bind(replacement.hash, replacement.id, gameId, gameId, now, moderator.id),
         );
       }

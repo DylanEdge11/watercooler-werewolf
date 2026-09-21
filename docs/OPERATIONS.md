@@ -1,6 +1,6 @@
 # Operations and Recovery
 
-This document describes moderator operations, backups, Stop, Reset, recovery, credentials, and private communications.
+Use this reference for recovery consequences. For button-by-button instructions and normal play, start with [How to Use Watercooler Werewolf](HOW_TO_USE_WATERCOOLER_WEREWOLF.md#help-and-recovery). Check **Selected game** before any operation; these controls are under **Communications & operations**.
 
 ## Rooms and announcements
 
@@ -16,7 +16,7 @@ Backups do **not** include PIN/password hashes, claim-code hashes, session token
 
 Each backup receives a SHA-256 checksum and is stored as a moderator-only backup record. Historical removed seat rows may remain as audit references; restore re-imports only the current non-removed roster.
 
-A local service restart rehydrates the same D1 state. Export a backup before recovery operations.
+A local service restart retains the same SQLite file; Vercel uses persistent remote Turso/libSQL state. Export a backup before recovery operations.
 
 ## Stop
 
@@ -30,7 +30,7 @@ It requires explicit confirmation and a reason of at least five characters. Stop
 - blocks player actions and further gameplay; and
 - displays a clear stopped-state message to players.
 
-Repeating Stop on an already stopped game is idempotent. Completed and cancelled games cannot be stopped.
+Stop is not a pause: there is no Resume control. Repeating Stop on an already stopped game has no additional effect. Completed and cancelled games cannot be stopped.
 
 ## Reset
 
@@ -47,7 +47,7 @@ Before destructive changes, the application creates a recoverable backup. Reset 
 
 Existing event/audit history and the pre-reset backup remain. Re-importing a roster archives old seat rows rather than deleting referenced identities.
 
-Repeating Reset on a clean draft is harmless. Cancelled games cannot be reset. Re-import the roster before configuring roles again.
+Reset does not resume the old game. Repeating Reset on a clean draft is harmless. Cancelled games cannot be reset. Re-import the roster before configuring roles again.
 
 ## Recovery Restore
 
@@ -57,11 +57,11 @@ The restore verifies checksum and game ID and creates a safety backup first. It 
 
 It deliberately clears active phases, role assignments, submissions, proposals, notifications, announcements, room memberships/messages, and player sessions. Existing audit/operational history and both backup records remain.
 
-Every restored seat receives a new one-time claim link. PINs, old claim links, role secrets, and sessions are never restored. Download the fresh invite CSV immediately because the codes are not shown again.
+The UI selects an existing stored snapshot; it has no JSON-upload control. This restores setup, not a game in progress. Every restored seat receives a new one-time claim link. PINs, old claim links, role secrets, and sessions are never restored. Download the fresh invite CSV immediately because the codes are not shown again.
 
 ## Credential recovery
 
-Bootstrap and co-moderator creation display eight one-time recovery codes exactly once. Store them in the operator's approved secret store; only salted hashes are kept in D1.
+Bootstrap and co-moderator creation display eight one-time recovery codes exactly once. Store them in the operator's approved secret store; only salted hashes are kept in libSQL.
 
 A moderator who forgets a password can use **Forgot password? Use a recovery code** to redeem one unused code, set a new password, and receive a new session. The code is single-use, the request is rate-limited, and previous moderator sessions are invalidated.
 

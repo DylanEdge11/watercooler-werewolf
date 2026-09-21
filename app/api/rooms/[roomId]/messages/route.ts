@@ -60,21 +60,53 @@ export async function POST(request: Request, context: RouteContext) {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const db = getDb();
-    await db.batch([
+    const result = await db.batch([
       db
         .prepare(
           `INSERT INTO chat_messages (id, room_id, author_seat_id, body, created_at)
-           VALUES (?, ?, ?, ?, ?)`,
+           SELECT ?, ?, ?, ?, ?
+           FROM chat_rooms cr
+           JOIN games g ON g.id = cr.game_id
+           JOIN chat_room_members crm ON crm.room_id = cr.id AND crm.seat_id = ?
+           JOIN seats s ON s.id = crm.seat_id AND s.game_id = cr.game_id
+           JOIN role_assignments ra ON ra.game_id = s.game_id AND ra.seat_id = s.id
+           WHERE cr.id = ?
+             AND cr.status = 'OPEN'
+             AND crm.access = 'WRITE'
+             AND crm.revoked_at IS NULL
+             AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN')
+             AND s.status = 'CLAIMED'
+             AND (
+               (cr.type = 'DEAD' AND s.alive = 0)
+               OR (cr.type = 'WEREWOLF' AND s.alive = 1 AND ra.role_key = 'WEREWOLF')
+               OR (cr.type = 'MASON' AND s.alive = 1 AND ra.role_key = 'MASON')
+             )`,
         )
-        .bind(id, roomId, identity.seatId, message, now),
+        .bind(id, roomId, identity.seatId, message, now, identity.seatId, roomId),
       db
         .prepare(
           `INSERT INTO game_events
            (id, game_id, event_type, actor_seat_id, payload_json, created_at)
-           VALUES (?, ?, 'CHAT_MESSAGE_SENT', ?, ?, ?)`,
+           SELECT ?, ?, 'CHAT_MESSAGE_SENT', ?, ?, ?
+           WHERE EXISTS (
+             SELECT 1 FROM chat_messages
+             WHERE id = ? AND room_id = ? AND author_seat_id = ?
+           )`,
         )
-        .bind(crypto.randomUUID(), identity.gameId, identity.seatId, JSON.stringify({ roomId, messageId: id }), now),
+        .bind(
+          crypto.randomUUID(),
+          identity.gameId,
+          identity.seatId,
+          JSON.stringify({ roomId, messageId: id }),
+          now,
+          id,
+          roomId,
+          identity.seatId,
+        ),
     ]);
+    if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
+      return jsonError('The room or your write access changed before the message could be saved. Refresh and try again.', 409);
+    }
     return Response.json({ ok: true, message: { id, body: message, authorName: identity.displayName, createdAt: now } }, { status: 201 });
   } catch (error) {
     return error instanceof RateLimitError

@@ -1,6 +1,6 @@
 # Watercooler Werewolf Build Status
 
-This file is the restart point for future Codex sessions. The entries below distinguish the current uncommitted pilot-hardening worktree from historical hosted checkpoints; historical deployment notes are not current release evidence.
+> Historical build log. For the newer Vercel checkpoint, read [Implementation progress](docs/IMPLEMENTATION_PROGRESS.md) and [Hosted QA](docs/PLAYWRIGHT_HOSTED_QA_REPORT.md). For user instructions, read [How to Use Watercooler Werewolf](docs/HOW_TO_USE_WATERCOOLER_WEREWOLF.md). The dated material below is retained as history; its references to current work, old hosting, pending gates, and resume steps are not current instructions.
 
 The native Next.js/libSQL migration is tracked in [MIGRATION_PROGRESS.md](MIGRATION_PROGRESS.md). The historical Sites/Cloudflare entries below remain as a record of the prior deployment and are not evidence of a Vercel preview or production deployment.
 

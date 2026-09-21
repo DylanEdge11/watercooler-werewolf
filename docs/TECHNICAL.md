@@ -1,91 +1,56 @@
-# Technical Reference
+# Technical reference
 
-This document preserves implementation details that are useful to maintainers but are too detailed for the main README.
+Maintainer reference for the current Next.js/Vercel build. For user instructions, see [How to Use Watercooler Werewolf](HOW_TO_USE_WATERCOOLER_WEREWOLF.md); for installation, see [Operator setup](../VERCEL_SETUP_GUIDE.md).
 
 ## Runtime and database
 
-Watercooler Werewolf requires Node.js 22.13 or newer and uses npm, Vinext, React, Cloudflare Workers, Cloudflare D1, and Drizzle.
+Use Node.js 22.x and npm. The application uses Next.js App Router, React, Drizzle, and libSQL. Local development uses a disposable SQLite file; deployed Vercel functions require a remote Turso/libSQL URL and token. Keep Preview and Production databases and secrets separate.
 
-The logical D1 binding is `DB`, configured in `.openai/hosting.json`. Wrangler/Miniflare stores local state under `.wrangler`.
+`npm run db:migrate` explicitly applies checked-in migrations. `ensureDatabase()` verifies the migration ledger; requests do not run DDL. `npm run owner:bootstrap` creates the first moderator from a trusted operator environment and displays recovery codes once. Public bootstrap is disabled. Do not put credentials or production values in the repository.
 
-`ensureDatabase()` applies the ordered checked-in migration registry before application queries run. Hosted deployments may provision those migrations before the Worker starts. Bootstrap recognizes a complete pre-provisioned schema, records it in the application ledger, applies only missing additive changes, and refuses to guess at or overwrite a partial initial schema.
+The schema is `db/schema.ts`. After schema changes, run `npm run db:generate`, inspect the SQL and metadata under `drizzle/`, and run `npx drizzle-kit check`. Do not apply duplicate migrations or infer repairs for a partial schema. Legacy `DOCTOR` rows are migrated to canonical `BODYGUARD`; Doctor is not a separate role.
 
-The schema source is `db/schema.ts`. After schema changes:
+## Rules and phase state
 
-```text
-npm run db:generate
-npx drizzle-kit check
-```
+Role behavior and user workflows are maintained in the [user guide](HOW_TO_USE_WATERCOOLER_WEREWOLF.md). The implementation sources are:
 
-Inspect and retain generated SQL and metadata under `drizzle/`. An unchanged schema should report "No schema changes"; do not apply duplicate generated migrations to an already-applied deployment.
+| Concern | Source |
+| --- | --- |
+| Role catalog and presets | `lib/game/catalog.ts`, `lib/game/balance.ts` |
+| Action eligibility and targets | `lib/game/actions.ts` |
+| Tallies, protection, Hunter, wins | `lib/game/engine.ts` |
+| Legal phase sequence | `lib/game/phase-policy.ts` |
+| Live review/publication | `app/api/games/[gameId]/phases/route.ts` |
+| Setup cancellation, Stop, Reset, restore | `app/api/games/[gameId]/operations/route.ts` |
 
-Older D1 rows using the role key `DOCTOR` are migrated to the canonical `BODYGUARD` role.
+After release, Day is first; ordinary phases alternate Day/Night. Each opened phase snapshots its elimination slots: `max(1, ceil(living / divisor))`. New games use divisor 30 for both Day and Night, a 60-minute Hunter window, and seven-day chat retention. Seer, Bodyguard, and Hunter special actions each allow one target.
 
-## Time handling
+Only the latest revision per actor/action counts. Targets must be living, unique, and legal for the role. Boundary ties use recorded random draws. The engine retains `proposedOutcome`, any `reviewedOutcome` during Hunter follow-up, and authoritative `publishedOutcome` separately. Overrides retain their reason, reviewer, and timestamp.
 
-Game deadlines are entered as local `datetime-local` values and converted server-side using the game's IANA timezone, including daylight-saving transitions. Stored `*_at` values are UTC ISO timestamps and displayed times use the viewer's locale.
+Publication applies eliminations, role reveals, private Seer results, room changes, timeline events, and victory evaluation. Final showdown requires explicit entry after cutoff and a published ordinary phase; only Final ballots are then legal. A no-winner publication stays in showdown.
 
-Impossible dates and nonexistent DST-gap times are rejected. An ambiguous fall-back time uses the earlier occurrence.
+## Time and deadline monitoring
 
-## Phase engine
+Deadline inputs are interpreted in the game's IANA timezone, stored as UTC ISO timestamps, and displayed in the viewer's locale or the explicitly labelled game timezone. Impossible calendar values and DST-gap times are rejected; an ambiguous fall-back time uses the earlier occurrence.
 
-After role release, the first legal phase is `DAY`. Ordinary phases alternate `DAY → NIGHT → DAY`.
+Weekday/day-night settings describe cadence. They do not automatically open phases, enforce weekdays, or publish results. Stored `AUTOMATIC` publication and final-round duration do not drive the review workflow.
 
-The resolution sequence is:
+The Operations panel polls and reconciles due deadlines every ten seconds and offers **Check deadlines**. Submissions are deadline-enforced server-side even when the console is closed. Locking and publication are separate steps.
 
-1. Moderator opens a legal phase with a future deadline.
-2. Eligible players submit or revise actions.
-3. Moderator locks responses and the deterministic engine proposes an outcome.
-4. Hunter follow-up is collected when required.
-5. Moderator approves the proposal or publishes a reasoned override.
-6. Publication applies eliminations, private Seer results, room membership changes, timeline events, and win evaluation.
+An optional scheduler uses `CRON_SECRET` and `GET` or `POST /api/scheduler/deadlines` with `Authorization: Bearer <token>`. Without the secret, it returns HTTP 503. No Vercel Cron is configured in `vercel.json`; configure any external scheduler explicitly. The old `WATERCOOLER_SCHEDULER_TOKEN` name is not used by this build.
 
-The engine keeps `proposedOutcome`, any `reviewedOutcome` used during Hunter follow-up, and the authoritative `publishedOutcome` separate. Override reason, reviewer, and review timestamp remain attached for audit.
+## Authentication and privacy
 
-Only the latest revision from each actor/action is counted. Invalid self-targets, dead targets, duplicate targets, and illegal faction targets are rejected server-side. Boundary ties use a recorded random draw included in the proposal/audit trail.
+Moderator and player sessions are opaque HTTP-only cookies stored as hashes in libSQL. Passwords and six-digit PINs use salted PBKDF2-SHA256 with 100,000 iterations. Mutations perform origin checks, authorization, and role/phase validation on the server.
 
-Stored weekday/day-night settings describe intended cadence; moderators still open phases. The scheduler does not create recurring phases or enforce weekdays. `AUTOMATIC` publication and the stored final-round duration are not wired into the review workflow.
+Players receive their own role, permitted teammates/rooms, legal candidates, private results, and published events. Eliminated faction members become read-only in their former room and gain Afterlife. Moderators can inspect assignments and private rooms. Announcements include email-ready copy but no email provider sends it.
 
-## Final Showdown
+Rate limits are stored in libSQL and updated atomically. HTTP 429 includes `Retry-After`. Current limits include moderator login (5/15 minutes), player sign-in (8/15 minutes), claiming (3/hour), actions/chat (30/10 minutes), player feedback (3/hour), and moderator feedback (10/hour). See route implementations for the exact bucket scope.
 
-Final Showdown is entered explicitly by a moderator after the configured final cutoff and after the latest ordinary phase has been published. It changes game status to `FINAL_SHOWDOWN`.
+Backups include private game state and audit evidence, exclude credential/session secrets, and carry a SHA-256 checksum. Restore rebuilds configuration, current roster, and composition in setup; it does not restore gameplay or credentials. See [Operations](OPERATIONS.md) for consequences.
 
-Only `FINAL_BALLOT` is legal in this state. It uses Day-style voting and the normal review, tie, no-vote, Hunter, elimination, and win rules. A winning publication completes the game. Otherwise the game remains in Final Showdown and another final ballot may be opened.
+## Verification and deployment records
 
-## Authentication and authorization
+`package.json` and `package-lock.json` are authoritative for installed dependencies. Use [Pilot testing](PILOT_TESTING.md#release-verification) for checks and [the hosted runbook](PLAYWRIGHT_HOSTED_RUNBOOK.md) for Preview verification. Audit counts are dated observations, not permanent properties.
 
-Moderator and player sessions use opaque HTTP-only cookies stored as hashes in D1. Passwords and six-digit PINs use salted PBKDF2-SHA256 at the Worker-supported 100,000-iteration maximum.
-
-Every mutation performs same-origin checks plus server-side authorization and role/phase validation. Players receive only their own role, legal candidates, private results, permitted teammates, permitted rooms, and published events.
-
-Werewolf, Mason, and Afterlife rooms enforce membership server-side. Eliminated faction members become read-only in their former room and receive access to Afterlife.
-
-## Abuse controls
-
-Pilot abuse controls are persisted in D1 and updated atomically. HTTP 429 responses include `Retry-After`.
-
-- Moderator login: 5 attempts / 15 minutes
-- Bootstrap: 3 / 15 minutes
-- Player sign-in: 8 / 15 minutes
-- Seat claiming: 3 / hour
-- Player actions/private chat: 30 / 10 minutes
-- Player feedback: 3 / hour
-- Moderator feedback: 10 / hour
-
-## Deadline monitoring
-
-Operations polling reconciles deadlines as a fallback. For unattended monitoring, configure the private `WATERCOOLER_SCHEDULER_TOKEN` secret and invoke:
-
-`POST /api/scheduler/deadlines`
-
-once per minute with `Authorization: Bearer <token>`.
-
-The endpoint returns HTTP 503 until the secret exists. It is retry-safe: due phases and their audit/operational events use conditional writes and stable IDs.
-
-## Dependency/release notes
-
-The compatible dependency set currently pins React/RSC 19.3.0, Vite 8.3.0, Vinext 1.0.0-beta.10, `@cloudflare/vite-plugin` 1.54.10, Wrangler 4.132.0, and lockfile-resolved peers.
-
-At the documented audit snapshot, the production audit reported no production vulnerabilities. The full audit reported four moderate development-tool advisories through Drizzle Kit's deprecated esbuild loader. The available automated fix downgrades Drizzle Kit to 0.18.1 and is not accepted. Review this residual development-only exposure before each pilot.
-
-See [../BUILD_STATUS.md](../BUILD_STATUS.md) for the current deployment checkpoint.
+[Implementation progress](IMPLEMENTATION_PROGRESS.md) and [Hosted QA](PLAYWRIGHT_HOSTED_QA_REPORT.md) record the September 19 Preview checkpoint. [BUILD_STATUS.md](../BUILD_STATUS.md) retains older Sites/Cloudflare history; it is not current hosting guidance. A Preview pass does not certify Production or performance/load readiness.

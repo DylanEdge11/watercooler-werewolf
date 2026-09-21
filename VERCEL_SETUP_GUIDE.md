@@ -1,15 +1,12 @@
-# Watercooler Werewolf: dummy Vercel setup guide
+# Watercooler Werewolf: operator setup guide
 
 This is a proof-oriented setup guide for the migration. It uses fictional values where possible and keeps real passwords, database tokens, and recovery codes out of the repository and out of chat.
 
-## What is already done
+## Who should use this guide
 
-- Local `main` contains the migration at commit `14c60b5`.
-- Vercel project `dyl-edge/watercooler-werewolf` exists with the Next.js preset, Node `22.x`, `npm ci`, and `npm run build`.
-- The Vercel project currently has **no deployments**, so there is no live website URL to verify yet.
-- The old Sites deployment/database are untouched.
+This is the site operator's installation reference. Players and game moderators should start with [How to Use Watercooler Werewolf](docs/HOW_TO_USE_WATERCOOLER_WEREWOLF.md).
 
-The local `main` branch has not been pushed to GitHub. Either push it when you are ready, or deploy the local checkout with the Vercel CLI as shown below.
+Vercel deployments already exist. The steps below describe provisioning a fresh environment; do not repeat database/bootstrap steps against an existing game as routine startup. Check [the recorded Preview checkpoint](docs/IMPLEMENTATION_PROGRESS.md) and the actual target environment before making changes. Historical migration commits are not deployment status.
 
 ## Do I need to keep my home PC running?
 

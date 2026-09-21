@@ -186,6 +186,23 @@ describe('setup and publication invariants', () => {
     expect(JSON.parse(events[0].payloadJson)).toEqual({ playerCount: 20 });
   });
 
+  test('reset preserves removed seats and their audit references', async () => {
+    sqlite.prepare("INSERT INTO seats (id,game_id,display_name,email,status,claim_code_hash,alive,created_at,updated_at) VALUES ('archived','game','Archived Player','archived@invalid.test','REMOVED','archived-hash',0,'2026-01-01','2026-01-01')").run();
+    sqlite.prepare("INSERT INTO game_events (id,game_id,event_type,actor_seat_id,payload_json,created_at) VALUES ('archived-event','game','HISTORICAL_NOTE','archived','{}','2026-01-01')").run();
+
+    const response = await operations({ action: 'RESET', confirmed: true, confirmationName: 'Review' });
+    expect(response.status).toBe(200);
+    expect(sqlite.prepare("SELECT status FROM seats WHERE id = 'archived'").get()).toMatchObject({ status: 'REMOVED' });
+    expect((sqlite.prepare("SELECT COUNT(*) AS count FROM seats WHERE game_id = 'game' AND status = 'INVITED'").get() as { count: number }).count).toBe(20);
+    expect((sqlite.prepare("SELECT actor_seat_id AS actorSeatId FROM game_events WHERE id = 'archived-event'").get() as { actorSeatId: string }).actorSeatId).toBe('archived');
+
+    const csv = ['display_name,email', ...Array.from({ length: 20 }, (_, index) => `Replacement ${index},replacement${index}@pilot.test`)].join('\n');
+    const reimport = await rosterPost(request({ csv }), { params: Promise.resolve({ gameId: 'game' }) });
+    expect(reimport.status).toBe(200);
+    expect((sqlite.prepare("SELECT COUNT(*) AS count FROM seats WHERE game_id = 'game' AND status = 'REMOVED'").get() as { count: number }).count).toBe(21);
+    expect((sqlite.prepare("SELECT COUNT(*) AS count FROM seats WHERE game_id = 'game' AND status != 'REMOVED'").get() as { count: number }).count).toBe(20);
+  });
+
   test('a composition change invalidates an old preview before release', async () => {
     const original = await assignments({ action: 'PREVIEW' });
     expect(original.status).toBe(200);
