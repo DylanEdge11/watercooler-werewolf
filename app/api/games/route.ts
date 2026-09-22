@@ -1,7 +1,7 @@
 import { getDb } from '../../../db';
 import { ensureDatabase } from '../../../db/migrate';
 import { requireModerator } from '../../../lib/auth/authorization';
-import { assertValidCalendarDate, assertValidTimeZone, parseScheduledDate, validateSchedule } from '../../../lib/game/scheduling';
+import { assertValidCalendarDate, assertValidTimeZone, formatZonedDateTimeLocal, parseScheduledDate, validateSchedule } from '../../../lib/game/scheduling';
 import { assertSameOrigin, jsonError } from '../../../lib/http/security';
 
 interface CreateGameBody {
@@ -14,20 +14,54 @@ interface CreateGameBody {
   schedule?: Record<string, string>;
 }
 
+interface GameListRow {
+  id: string;
+  name: string;
+  status: string;
+  timezone: string;
+  startDate: string;
+  endDate: string;
+  activeWeekdaysJson: string;
+  scheduleJson: string;
+  finalCutoffAt: string;
+  moderatorRole: string;
+}
+
 export async function GET() {
   try {
     await ensureDatabase();
     const moderator = await requireModerator();
     const games = await getDb()
       .prepare(
-        `SELECT g.*, gm.role AS moderatorRole FROM games g
+        `SELECT g.id, g.name, g.status, g.timezone,
+                g.start_date AS startDate, g.end_date AS endDate,
+                g.active_weekdays_json AS activeWeekdaysJson,
+                g.schedule_json AS scheduleJson,
+                g.final_cutoff_at AS finalCutoffAt,
+                gm.role AS moderatorRole
+         FROM games g
          JOIN game_moderators gm ON gm.game_id = g.id
          WHERE gm.moderator_id = ?
          ORDER BY g.created_at DESC`,
       )
       .bind(moderator.id)
-      .all();
-    return Response.json({ ok: true, games: games.results });
+      .all<GameListRow>();
+    return Response.json({
+      ok: true,
+      games: games.results.map((game) => ({
+        id: game.id,
+        name: game.name,
+        status: game.status,
+        timezone: game.timezone,
+        startDate: game.startDate,
+        endDate: game.endDate,
+        activeWeekdays: JSON.parse(game.activeWeekdaysJson) as number[],
+        schedule: JSON.parse(game.scheduleJson) as Record<string, string>,
+        finalCutoffAt: game.finalCutoffAt,
+        finalCutoffLocal: formatZonedDateTimeLocal(new Date(game.finalCutoffAt), game.timezone),
+        moderatorRole: game.moderatorRole,
+      })),
+    });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unable to list games.', 401);
   }

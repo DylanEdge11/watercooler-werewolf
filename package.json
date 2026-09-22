@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern playwright-report --ignore-pattern test-results",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern playwright-report --ignore-pattern test-results --ignore-pattern work",
     "db:generate": "node scripts/db-generate.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "owner:bootstrap": "node scripts/owner-bootstrap.mjs",

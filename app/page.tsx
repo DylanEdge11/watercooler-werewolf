@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-html-link-for-pages -- the public entry links intentionally use full-page navigation. */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
 
@@ -69,6 +69,15 @@ function readableRole(role: RoleKey | string | null): string {
   return role ? role.replaceAll('_', ' ') : 'Role unavailable';
 }
 
+function roleGlyph(role: RoleKey | null): string {
+  if (role === 'WEREWOLF') return '☾';
+  if (role === 'SEER') return '◉';
+  if (role === 'BODYGUARD') return '✚';
+  if (role === 'HUNTER') return '⌖';
+  if (role === 'MASON') return '◇';
+  return '⌂';
+}
+
 function deadlineLabel(deadline: string | null): string {
   if (!deadline) return 'Awaiting moderator';
   const milliseconds = new Date(deadline).valueOf() - Date.now();
@@ -115,6 +124,7 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
+  const [roleThemeEnabled, setRoleThemeEnabled] = useState(false);
   const selectionDirty = useRef(false);
   const selectionPhaseId = useRef<string | null>(null);
   const olderNotifications = useRef<DashboardData['notifications']>([]);
@@ -239,6 +249,11 @@ export default function Home() {
     router.push('/');
   }
 
+  function toggleRoleTheme() {
+    if (!data?.player.role) return;
+    setRoleThemeEnabled((current) => !current);
+  }
+
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (sendingFeedback) return;
@@ -267,15 +282,11 @@ export default function Home() {
     }
   }
 
-  const selectedNames = useMemo(
-    () => selected.map((id) => data?.candidates.find((candidate) => candidate.id === id)?.displayName).filter(Boolean),
-    [data?.candidates, selected],
-  );
-
   if (loading) return <main className="setup-shell"><p className="setup-loading">Opening the village…</p></main>;
   if (unauthenticated) return <PublicWelcome />;
   if (!data) return <main className="setup-shell centered"><section className="auth-card"><h1>The village is out of reach.</h1><p>{error}</p><a className="primary-link" href="/player-login">Try signing in</a></section></main>;
 
+  const selectedNames = selected.map((id) => data.candidates.find((candidate) => candidate.id === id)?.displayName).filter(Boolean);
   const role = data.player.roleDefinition;
   const phaseTitle = data.game.status === 'STOPPED'
     ? 'The moderator has stopped this campaign.'
@@ -291,8 +302,10 @@ export default function Home() {
       ? 'The campaign is complete.'
       : 'The village is between phases.';
 
+  const roleThemeClass = roleThemeEnabled && data.player.role ? ` role-theme role-theme-${data.player.role.toLowerCase()}` : '';
+
   return (
-    <main className="app-shell">
+    <main className={`app-shell${roleThemeClass}`}>
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Watercooler Werewolf home">
           <span className="brand-mark" aria-hidden="true"><span className="brand-moon" /><span className="brand-cup" /></span>
@@ -300,6 +313,10 @@ export default function Home() {
         </a>
         <div className="game-switcher"><span className="status-dot" aria-hidden="true" />{data.game.name}<span className="chevron" aria-hidden="true">⌄</span></div>
         <div className="profile">
+          <button className="theme-toggle" type="button" role="switch" aria-checked={roleThemeEnabled} aria-label={`Role theme ${roleThemeEnabled ? 'on' : 'off'}`} onClick={toggleRoleTheme} disabled={!data.player.role}>
+            <span className="theme-toggle-track" aria-hidden="true"><span /></span>
+            <span className="theme-toggle-label">Theme</span>
+          </button>
           <div className="avatar">{initials(data.player.displayName)}</div>
           <span className="profile-name">{data.player.displayName}</span>
           <button className="icon-button signout-button" aria-label="Sign out" onClick={signOut}>↗</button>
@@ -350,7 +367,7 @@ export default function Home() {
 
           <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`}>
             {!data.player.alive && <span className="eliminated-banner" role="status">☠ Eliminated · spectator mode</span>}
-            <div className="role-orbit"><span aria-hidden="true">{data.player.role === 'WEREWOLF' ? '☾' : data.player.role === 'SEER' ? '◉' : data.player.role === 'BODYGUARD' ? '✚' : '◆'}</span></div>
+            <div className="role-orbit"><span aria-hidden="true">{roleGlyph(data.player.role)}</span></div>
             <div className="role-copy"><p className="eyebrow">Your private role</p><h2>{role?.name ?? 'Not released'}</h2><p>{data.player.alive ? role?.summary ?? 'The moderator is preparing assignments.' : 'You have been eliminated. Your role is now public and you may spectate.'}</p></div>
             <div className="role-faction"><span>Faction</span><strong>{role?.faction ?? 'Hidden'}</strong><small>{data.player.alive ? 'You are alive' : 'Eliminated'}</small></div>
           </section>

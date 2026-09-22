@@ -633,11 +633,11 @@ export class BrowserGame {
     return phase;
   }
 
-  async openPhase(kind: PhaseKind): Promise<{ phaseId: string; slots: number }> {
+  async openPhase(kind: PhaseKind, closesAt = futureDeadlineInput()): Promise<{ phaseId: string; slots: number }> {
     await this.moderator.page.reload();
     await expect(this.moderator.page.getByRole('heading', { name: 'Run the live game', exact: true })).toBeVisible({ timeout: 30_000 });
     await this.moderator.page.getByLabel('Phase').selectOption(kind);
-    await this.moderator.page.getByLabel(/Deadline \(/u).fill(futureDeadlineInput());
+    await this.moderator.page.getByLabel(/Deadline \(/u).fill(closesAt);
     const responsePromise = this.moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/games/${this.gameId}/phases`);
     await this.moderator.page.getByRole('button', { name: 'Open phase', exact: true }).click();
     return json<{ phaseId: string; slots: number }>(await responsePromise, `open ${kind}`);

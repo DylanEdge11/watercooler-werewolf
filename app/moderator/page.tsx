@@ -19,6 +19,15 @@ const sampleRoster = [
 ].join('\n');
 
 const roleOrder = ['VILLAGER', 'WEREWOLF', 'SEER', 'BODYGUARD', 'HUNTER', 'MASON'] as const;
+const weekdayOptions = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 0, label: 'Sun' },
+] as const;
 type RoleKey = (typeof roleOrder)[number];
 type Composition = Record<RoleKey, number>;
 
@@ -45,6 +54,12 @@ interface GameSummary {
   name: string;
   status: string;
   timezone: string;
+  startDate: string;
+  endDate: string;
+  finalCutoffAt: string;
+  finalCutoffLocal: string;
+  activeWeekdays: number[];
+  schedule: { dayCloses?: string; nightCloses?: string };
   moderatorRole?: string;
 }
 
@@ -107,6 +122,7 @@ export default function ModeratorPage() {
   const [error, setError] = useState('');
   const [liveRefreshToken, setLiveRefreshToken] = useState(0);
   const [showNewGameForm, setShowNewGameForm] = useState(false);
+  const [showSchedulePanel, setShowSchedulePanel] = useState(false);
   const [compositionDraftIds, setCompositionDraftIds] = useState<Set<string>>(() => new Set());
   const selectedGameRef = useRef('');
   const gamesRequest = useRef(0);
@@ -220,13 +236,14 @@ export default function ModeratorPage() {
           startDate: form.get('startDate'),
           endDate: form.get('endDate'),
           finalCutoffAt: form.get('finalCutoffAt'),
-          activeWeekdays: [1, 2, 3, 4, 5],
-          schedule: { dayCloses: '16:00', nightCloses: '09:00' },
+          activeWeekdays: form.getAll('activeWeekdays').map(Number),
+          schedule: { dayCloses: form.get('dayCloses'), nightCloses: form.get('nightCloses') },
         }),
       });
       setMessage('Game created. Import the player roster next.');
       setInviteCsv('');
       setShowNewGameForm(false);
+      setShowSchedulePanel(false);
       await loadGames(data.gameId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to create the game.');
@@ -236,6 +253,7 @@ export default function ModeratorPage() {
   function selectGame(nextGameId: string) {
     if (!nextGameId) return;
     setShowNewGameForm(false);
+    setShowSchedulePanel(false);
     setInviteCsv('');
     setMessage('');
     setError('');
@@ -245,9 +263,48 @@ export default function ModeratorPage() {
 
   function startNewSetup() {
     setShowNewGameForm(true);
+    setShowSchedulePanel(false);
     setError('');
     setMessage('');
     setInviteCsv('');
+  }
+
+  function openGameSchedule() {
+    setError('');
+    setMessage('');
+    if (!selectedGame) {
+      setShowNewGameForm(true);
+      setShowSchedulePanel(false);
+    } else {
+      setShowNewGameForm(false);
+      setShowSchedulePanel(true);
+    }
+    window.setTimeout(() => document.getElementById('game-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  }
+
+  async function updateSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedGame || !setupEditable) return;
+    setError('');
+    const form = new FormData(event.currentTarget);
+    try {
+      await requestJson(`/api/games/${gameId}/schedule`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: form.get('name'),
+          timezone: form.get('timezone'),
+          startDate: form.get('startDate'),
+          endDate: form.get('endDate'),
+          finalCutoffAt: form.get('finalCutoffAt'),
+          activeWeekdays: form.getAll('activeWeekdays').map(Number),
+          schedule: { dayCloses: form.get('dayCloses'), nightCloses: form.get('nightCloses') },
+        }),
+      });
+      setMessage('Game schedule updated. The launch checklist is ready to continue.');
+      await loadGames(gameId);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to update the game schedule.');
+    }
   }
 
   async function cancelSetup() {
@@ -393,8 +450,8 @@ export default function ModeratorPage() {
         <aside className="setup-progress">
           <p className="eyebrow">Launch checklist</p>
           <ol>
-            <li className={games.length ? 'done' : 'active'}><span>1</span><div><strong>Game schedule</strong><small>Timezone and cadence</small></div></li>
-            <li className={roster.length ? 'done' : games.length ? 'active' : ''}><span>2</span><div><strong>Player roster</strong><small>{MIN_PLAYERS}–{MAX_PLAYERS} private seats</small></div></li>
+            <li className={`${games.length ? 'done' : 'active'} ${showSchedulePanel || showNewGameForm ? 'reviewing' : ''}`}><button className="checklist-step" type="button" onClick={openGameSchedule} aria-controls="game-schedule"><span>1</span><div><strong>Game schedule</strong><small>Open timezone and cadence</small></div></button></li>
+            <li className={roster.length ? 'done' : games.length ? 'active' : ''}><span>2</span><div><strong>Player roster</strong><small>Minimum {MIN_PLAYERS} · up to {MAX_PLAYERS} private seats</small></div></li>
             <li className={latestBatch ? 'done' : roster.length ? 'active' : ''}><span>3</span><div><strong>Role balance</strong><small>Compose and randomize</small></div></li>
             <li className={latestBatch?.releasedAt ? 'done' : latestBatch ? 'active' : ''}><span>4</span><div><strong>Release roles</strong><small>Irreversible launch</small></div></li>
           </ol>
@@ -428,7 +485,7 @@ export default function ModeratorPage() {
           )}
 
           {!games.length || showNewGameForm ? (
-            <section className="setup-card">
+            <section className="setup-card" id="game-schedule">
               <div className="setup-card-heading"><span>01</span><div><h2>Schedule the campaign</h2><p>Weekday phases keep the game lively without disrupting work.</p></div></div>
               <form className="setup-grid" onSubmit={createGame}>
                 <label className="wide">Game name<input name="name" defaultValue="Office Werewolf Campaign" required /></label>
@@ -436,12 +493,32 @@ export default function ModeratorPage() {
                 <label>Start date<input name="startDate" type="date" defaultValue={gameDates.start} required /></label>
                 <label>End date<input name="endDate" type="date" defaultValue={gameDates.end} required /></label>
                 <label>Final cutoff<input name="finalCutoffAt" type="datetime-local" defaultValue={gameDates.cutoff} required /></label>
-                <div className="schedule-note wide"><strong>Default cadence</strong><span>Day ballot closes 4:00 PM · Night actions close 9:00 AM · Monday–Friday</span></div>
+                <label>Day ballot closes<input name="dayCloses" type="time" defaultValue="16:00" required /></label>
+                <label>Night actions close<input name="nightCloses" type="time" defaultValue="09:00" required /></label>
+                <fieldset className="weekday-picker wide"><legend>Active weekdays</legend><div>{weekdayOptions.map((day) => <label key={day.value}><input name="activeWeekdays" type="checkbox" value={day.value} defaultChecked={[1, 2, 3, 4, 5].includes(day.value)} />{day.label}</label>)}</div></fieldset>
                 <button className="primary-button" type="submit">Create game</button>
               </form>
             </section>
           ) : (
             <>
+              {showSchedulePanel && selectedGame && <section className="setup-card" id="game-schedule">
+                <div className="setup-card-heading"><span>01</span><div><h2>Game schedule</h2><p>{setupEditable ? 'Review or update the setup details, then continue where you left off.' : 'Review the launch schedule. It becomes read-only after roles are released.'}</p></div></div>
+                <form className="setup-grid" key={`schedule-${selectedGame.id}-${selectedGame.finalCutoffAt}`} onSubmit={updateSchedule}>
+                  <label className="wide">Game name<input name="name" defaultValue={selectedGame.name} disabled={!setupEditable} required /></label>
+                  <label>Timezone<input name="timezone" defaultValue={selectedGame.timezone} disabled={!setupEditable} required /></label>
+                  <label>Start date<input name="startDate" type="date" defaultValue={selectedGame.startDate} disabled={!setupEditable} required /></label>
+                  <label>End date<input name="endDate" type="date" defaultValue={selectedGame.endDate} disabled={!setupEditable} required /></label>
+                  <label>Final cutoff<input name="finalCutoffAt" type="datetime-local" defaultValue={selectedGame.finalCutoffLocal} disabled={!setupEditable} required /></label>
+                  <label>Day ballot closes<input name="dayCloses" type="time" defaultValue={selectedGame.schedule.dayCloses ?? '16:00'} disabled={!setupEditable} required /></label>
+                  <label>Night actions close<input name="nightCloses" type="time" defaultValue={selectedGame.schedule.nightCloses ?? '09:00'} disabled={!setupEditable} required /></label>
+                  <fieldset className="weekday-picker wide" disabled={!setupEditable}><legend>Active weekdays</legend><div>{weekdayOptions.map((day) => <label key={day.value}><input name="activeWeekdays" type="checkbox" value={day.value} defaultChecked={selectedGame.activeWeekdays.includes(day.value)} />{day.label}</label>)}</div></fieldset>
+                  <div className="button-row wide">
+                    {setupEditable && <button className="primary-button" type="submit">Save schedule</button>}
+                    <button className="secondary-button" type="button" onClick={() => setShowSchedulePanel(false)}>Close schedule</button>
+                  </div>
+                </form>
+                {!setupEditable && <p className="notice warning schedule-lock-note">Schedule changes are locked for this {selectedGame.status.replaceAll('_', ' ').toLowerCase()} game.</p>}
+              </section>}
               {setupEditable ? <section className="setup-card">
                 <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Re-importing replaces unlaunched seats. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
                 <form className="form-stack" onSubmit={importRoster}>

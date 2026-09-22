@@ -26,6 +26,7 @@ vi.mock('../lib/chat/rooms', () => ({ ensureGameRooms: async () => {} }));
 import { POST as assignmentPost } from '../app/api/games/[gameId]/assignments/route';
 import { POST as operationsPost } from '../app/api/games/[gameId]/operations/route';
 import { POST as rosterPost } from '../app/api/games/[gameId]/roster/route';
+import { PATCH as schedulePatch } from '../app/api/games/[gameId]/schedule/route';
 import { GET as phaseGet, POST as phasePost } from '../app/api/games/[gameId]/phases/route';
 
 let sqlite: DatabaseSync;
@@ -76,6 +77,10 @@ function phases(body: Record<string, unknown>): Promise<Response> {
 
 function operations(body: Record<string, unknown>): Promise<Response> {
   return operationsPost(request(body), { params: Promise.resolve({ gameId: 'game' }) });
+}
+
+function schedule(body: Record<string, unknown>): Promise<Response> {
+  return schedulePatch(request(body), { params: Promise.resolve({ gameId: 'game' }) });
 }
 
 function rosterCsv(count: number): string {
@@ -137,6 +142,42 @@ beforeEach(() => {
 afterEach(() => sqlite.close());
 
 describe('setup and publication invariants', () => {
+  test('the launch schedule can be revisited during setup and is audited', async () => {
+    const response = await schedule({
+      name: 'Updated Review',
+      timezone: 'America/Regina',
+      startDate: '2026-02-02',
+      endDate: '2026-03-02',
+      finalCutoffAt: '2026-03-02T16:00',
+      activeWeekdays: [1, 2, 3, 4, 5],
+      schedule: { dayCloses: '15:30', nightCloses: '08:30' },
+    });
+    expect(response.status).toBe(200);
+    expect(sqlite.prepare("SELECT name, timezone, start_date AS startDate, schedule_json AS scheduleJson FROM games WHERE id = 'game'").get()).toMatchObject({
+      name: 'Updated Review',
+      timezone: 'America/Regina',
+      startDate: '2026-02-02',
+      scheduleJson: JSON.stringify({ dayCloses: '15:30', nightCloses: '08:30' }),
+    });
+    expect(sqlite.prepare("SELECT event_type AS eventType FROM game_events WHERE game_id = 'game' AND event_type = 'GAME_SCHEDULE_UPDATED'").all()).toHaveLength(1);
+  });
+
+  test('the launch schedule is read-only after roles are released', async () => {
+    sqlite.exec("UPDATE games SET status = 'ACTIVE'");
+    const response = await schedule({
+      name: 'Too Late',
+      timezone: 'UTC',
+      startDate: '2026-01-01',
+      endDate: '2027-01-01',
+      finalCutoffAt: '2026-12-31T16:00',
+      activeWeekdays: [1, 2, 3, 4, 5],
+      schedule: { dayCloses: '16:00', nightCloses: '09:00' },
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining('locked') });
+    expect((sqlite.prepare("SELECT name FROM games WHERE id = 'game'").get() as { name: string }).name).toBe('Review');
+  });
+
   test.each([5, 81])('the roster route rejects %i players', async (count) => {
     const response = await rosterPost(request({ csv: rosterCsv(count) }), { params: Promise.resolve({ gameId: 'game' }) });
     expect(response.status).toBe(400);

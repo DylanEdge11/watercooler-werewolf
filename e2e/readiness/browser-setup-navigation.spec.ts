@@ -28,6 +28,16 @@ test('keeps setup drafts scoped, supports safe restart, and exposes another game
   await moderator.page.getByRole('button', { name: 'Create game', exact: true }).click();
   const firstGameId = (await (await firstCreate).json() as { gameId: string }).gameId;
   await expect(moderator.page.getByRole('heading', { name: firstName, exact: true })).toBeVisible();
+  await expect(moderator.page.getByText('Minimum 6 · up to 80 private seats', { exact: true })).toBeVisible();
+
+  await moderator.page.getByRole('button', { name: /Game schedule/u }).click();
+  await expect(moderator.page.getByRole('heading', { name: 'Game schedule', exact: true })).toBeVisible();
+  await moderator.page.getByLabel('Day ballot closes').fill('15:45');
+  const scheduleUpdate = moderator.page.waitForResponse((response) => response.request().method() === 'PATCH' && new URL(response.url()).pathname === `/api/games/${firstGameId}/schedule`);
+  await moderator.page.getByRole('button', { name: 'Save schedule', exact: true }).click();
+  expect((await scheduleUpdate).status()).toBe(200);
+  await expect(moderator.page.getByText('Game schedule updated.', { exact: false })).toBeVisible();
+  await moderator.page.getByRole('button', { name: 'Close schedule', exact: true }).click();
 
   await moderator.page.getByLabel('Roster CSV').fill(rosterCsv());
   const rosterImport = moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/games/${firstGameId}/roster`);
