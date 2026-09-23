@@ -6,6 +6,7 @@ import { calculateEliminationSlots } from '../../../../../lib/game/balance';
 import { evaluateWinner, resolveHunterShot, resolvePhase } from '../../../../../lib/game/engine';
 import { validateFinalShowdownEntry, validatePhaseOpen } from '../../../../../lib/game/phase-policy';
 import { createSecureRandomRolls } from '../../../../../lib/game/random';
+import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
 import { parseScheduledDate } from '../../../../../lib/game/scheduling';
 import { canonicalRoleKey, type ActionSubmission, type PhaseKind, type PhaseResolution, type PlayerState, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
@@ -62,11 +63,21 @@ function applyEliminationOverride(
   players: PlayerState[],
 ): PhaseResolution {
   const cause = proposedOutcome.kind === 'NIGHT' ? 'WEREWOLF_ATTACK' : 'DAY_VOTE';
+  const eliminations: PhaseResolution['eliminations'] = ids.map((playerId) => ({ playerId, cause }));
+  const loverPair = proposedOutcome.loverPair;
+  if (loverPair) {
+    const eliminatedIds = new Set(eliminations.map((item) => item.playerId));
+    const [first, second] = loverPair.playerIds;
+    if (eliminatedIds.has(first) && !eliminatedIds.has(second)) eliminations.push({ playerId: second, cause: 'LOVER_BOND' });
+    else if (eliminatedIds.has(second) && !eliminatedIds.has(first)) eliminations.push({ playerId: first, cause: 'LOVER_BOND' });
+  }
   return {
     ...proposedOutcome,
     selectedTargets: ids,
-    eliminations: ids.map((playerId) => ({ playerId, cause })),
-    hunterRequiredIds: ids.filter((id) => players.find((player) => player.id === id)?.role === 'HUNTER'),
+    eliminations,
+    hunterRequiredIds: eliminations
+      .filter((item) => players.find((player) => player.id === item.playerId)?.role === 'HUNTER')
+      .map((item) => item.playerId),
   };
 }
 
@@ -414,6 +425,7 @@ export async function POST(request: Request, context: RouteContext) {
       }
       const players = await loadPlayers(gameId);
       const actions = await loadActions(phase.id);
+      const loverPair = await loadCurrentLoverPair(gameId);
       const lockedPhase = await db
         .prepare('SELECT version FROM phases WHERE id = ? AND game_id = ? AND status = \'LOCKED\' LIMIT 1')
         .bind(phase.id, gameId)
@@ -427,8 +439,9 @@ export async function POST(request: Request, context: RouteContext) {
         players,
         actions,
         randomRolls,
+        loverPair,
       });
-      const inputHash = await sha256(JSON.stringify({ phaseId: phase.id, version: Number(lockedPhase.version), kind: phase.kind, slots: phase.slots, players, actions }));
+      const inputHash = await sha256(JSON.stringify({ phaseId: phase.id, version: Number(lockedPhase.version), kind: phase.kind, slots: phase.slots, players, actions, loverPair }));
       const proposalId = crypto.randomUUID();
       const now = new Date();
       const hunterDeadline = outcome.hunterRequiredIds.length
@@ -559,6 +572,7 @@ export async function POST(request: Request, context: RouteContext) {
     if (body.action === 'PUBLISH') {
       if (phase.status !== 'PENDING_APPROVAL') throw new Error('This phase is not ready for publication.');
       const players = await loadPlayers(gameId);
+      const currentLoverPair = await loadCurrentLoverPair(gameId);
       const proposedOutcome = JSON.parse(proposal.outcomeJson) as PhaseResolution;
       const storedOverrideIds = overrideIdsFromJson(proposal.overrideJson);
       let outcome = proposal.reviewedOutcomeJson
@@ -669,6 +683,36 @@ export async function POST(request: Request, context: RouteContext) {
           )
           .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ kind: phase.kind, proposedOutcome, publishedOutcome: outcome, eliminations: eliminated, winner: win.winner, overrideReason }), now, phase.id, gameId, claimedVersion),
       ];
+      if (!currentLoverPair && outcome.loverPair) {
+        statements.push(
+          db
+            .prepare(
+              `INSERT INTO game_events
+               (id, game_id, phase_id, event_type, actor_seat_id, payload_json, created_at)
+               SELECT ?, ?, ?, 'CUPID_PAIR_SET', ?, ?, ? WHERE ${publicationGuard}`,
+            )
+            .bind(crypto.randomUUID(), gameId, phase.id, outcome.loverPair.cupidId, JSON.stringify(outcome.loverPair), now, phase.id, gameId, claimedVersion),
+        );
+        const notificationBodies = new Map<string, { title: string; body: string }>();
+        const [firstId, secondId] = outcome.loverPair.playerIds;
+        const firstName = players.find((player) => player.id === firstId)?.displayName ?? 'your partner';
+        const secondName = players.find((player) => player.id === secondId)?.displayName ?? 'your partner';
+        notificationBodies.set(firstId, { title: 'Cupid has linked you', body: `You and ${secondName} are lovers. If either of you is eliminated, both of you will die.` });
+        notificationBodies.set(secondId, { title: 'Cupid has linked you', body: `You and ${firstName} are lovers. If either of you is eliminated, both of you will die.` });
+        if (outcome.loverPair.cupidId !== firstId && outcome.loverPair.cupidId !== secondId) {
+          notificationBodies.set(outcome.loverPair.cupidId, { title: 'Your pairing is set', body: `${firstName} and ${secondName} are lovers. If either is eliminated, both will die.` });
+        }
+        for (const [seatId, notification] of notificationBodies) {
+          statements.push(
+            db
+              .prepare(
+                `INSERT INTO notifications (id, seat_id, type, title, body, created_at)
+                 SELECT ?, ?, 'LOVER_BOND', ?, ?, ? WHERE ${publicationGuard}`,
+              )
+              .bind(crypto.randomUUID(), seatId, notification.title, notification.body, now, phase.id, gameId, claimedVersion),
+          );
+        }
+      }
       for (const elimination of eliminated) {
         statements.push(
           db

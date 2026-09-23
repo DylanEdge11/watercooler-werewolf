@@ -5,6 +5,9 @@ export const ROLE_KEYS = [
   'BODYGUARD',
   'HUNTER',
   'MASON',
+  'APPRENTICE_SEER',
+  'MAYOR',
+  'CUPID',
 ] as const;
 
 export type RoleKey = (typeof ROLE_KEYS)[number];
@@ -25,7 +28,8 @@ export type ActionKind =
   | 'WOLF_VOTE'
   | 'INVESTIGATE'
   | 'PROTECT'
-  | 'HUNTER_SHOT';
+  | 'HUNTER_SHOT'
+  | 'CUPID_PAIR';
 
 export interface PlayerState {
   id: string;
@@ -57,7 +61,12 @@ export interface TallyEntry {
 
 export interface Elimination {
   playerId: string;
-  cause: 'DAY_VOTE' | 'WEREWOLF_ATTACK' | 'HUNTER_SHOT';
+  cause: 'DAY_VOTE' | 'WEREWOLF_ATTACK' | 'HUNTER_SHOT' | 'LOVER_BOND';
+}
+
+export interface LoverPair {
+  cupidId: string;
+  playerIds: [string, string];
 }
 
 export interface InvestigationResult {
@@ -78,6 +87,7 @@ export interface PhaseResolutionInput {
   players: PlayerState[];
   actions: ActionSubmission[];
   randomRolls?: number[];
+  loverPair?: LoverPair | null;
 }
 
 export interface PhaseResolution {
@@ -87,6 +97,7 @@ export interface PhaseResolution {
   tally: TallyEntry[];
   selectedTargets: string[];
   protectedPlayerIds: string[];
+  loverPair?: LoverPair | null;
   eliminations: Elimination[];
   investigations: InvestigationResult[];
   hunterRequiredIds: string[];

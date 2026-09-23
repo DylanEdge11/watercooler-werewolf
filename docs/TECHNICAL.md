@@ -23,11 +23,11 @@ Role behavior and user workflows are maintained in the [user guide](HOW_TO_USE_W
 | Live review/publication | `app/api/games/[gameId]/phases/route.ts` |
 | Setup cancellation, Stop, Reset, restore | `app/api/games/[gameId]/operations/route.ts` |
 
-After release, Day is first; ordinary phases alternate Day/Night. Each opened phase snapshots its elimination slots: `max(1, ceil(living / divisor))`. New games use divisor 30 for both Day and Night, a 60-minute Hunter window, and seven-day chat retention. Seer, Bodyguard, and Hunter special actions each allow one target.
+After release, Day is first; ordinary phases alternate Day/Night. Each opened phase snapshots its elimination slots: `max(1, ceil(living / divisor))`. New games use divisor 30 for both Day and Night, a 60-minute Hunter window, and seven-day chat retention. Seer, Apprentice Seer, Bodyguard, and Hunter special actions each allow one target; Cupid pairs two seats once, and Mayor ballots count double.
 
 Only the latest revision per actor/action counts. Targets must be living, unique, and legal for the role. Boundary ties use recorded random draws. The engine retains `proposedOutcome`, any `reviewedOutcome` during Hunter follow-up, and authoritative `publishedOutcome` separately. Overrides retain their reason, reviewer, and timestamp.
 
-Publication applies eliminations, role reveals, private Seer results, room changes, timeline events, and victory evaluation. Final showdown requires explicit entry after cutoff and a published ordinary phase; only Final ballots are then legal. A no-winner publication stays in showdown.
+Publication applies eliminations, role reveals, private investigation and lover notices, room changes, timeline events, and victory evaluation. Apprentice Seers gain action access and the eliminated Seer's saved investigation history. Cupid pairings persist in game events after publication; a lover's elimination adds the partner to the same outcome. If that eliminates the Hunter, the normal Hunter follow-up still applies. Bodyguard protection blocks pack attacks only, and the public timeline reports a blocked attack without naming its protected target. Final showdown requires explicit entry after cutoff and a published ordinary phase; only Final ballots are then legal. A no-winner publication stays in showdown.
 
 ## Time and deadline monitoring
 
@@ -43,7 +43,7 @@ An optional scheduler uses `CRON_SECRET` and `GET` or `POST /api/scheduler/deadl
 
 Moderator and player sessions are opaque HTTP-only cookies stored as hashes in libSQL. Passwords and six-digit PINs use salted PBKDF2-SHA256 with 100,000 iterations. Mutations perform origin checks, authorization, and role/phase validation on the server.
 
-Players receive their own role, permitted teammates/rooms, legal candidates, private results, and published events. Eliminated faction members become read-only in their former room and gain Afterlife. Moderators can inspect assignments and private rooms. Announcements include email-ready copy but no email provider sends it.
+Players receive their own role, permitted teammates/rooms, legal candidates, private results, and published events. Players sign in with invitation email and PIN, with the seat code retained as a fallback. Eliminated faction members become read-only in their former room and gain Afterlife. Moderators can inspect assignments and private rooms. Announcements include email-ready copy but no email provider sends it.
 
 Rate limits are stored in libSQL and updated atomically. HTTP 429 includes `Retry-After`. Current limits include moderator login (5/15 minutes), player sign-in (8/15 minutes), claiming (3/hour), actions/chat (30/10 minutes), player feedback (3/hour), and moderator feedback (10/hour). See route implementations for the exact bucket scope.
 

@@ -38,6 +38,9 @@ export function defaultComposition(playerCount: number): RoleComposition {
     BODYGUARD: 0,
     HUNTER: 0,
     MASON: 0,
+    APPRENTICE_SEER: 0,
+    MAYOR: 0,
+    CUPID: 0,
   };
 
   // Small games deliberately add information and follow-up roles in stages.
@@ -116,8 +119,8 @@ export function validateComposition(
   if (countComposition(composition) !== playerCount) {
     errors.push('Role counts must equal the claimed roster size.');
   }
-  for (const role of ['SEER', 'BODYGUARD', 'HUNTER'] as RoleKey[]) {
-    if (composition[role] > 1) errors.push(`${ROLE_CATALOG[role].name} is unique.`);
+  for (const role of ROLE_KEYS) {
+    if (ROLE_CATALOG[role].unique && composition[role] > 1) errors.push(`${ROLE_CATALOG[role].name} is unique.`);
   }
   if (composition.MASON === 1) errors.push('Masons require either zero or at least two seats.');
   if (composition.WEREWOLF < 1) errors.push('At least one Werewolf is required.');

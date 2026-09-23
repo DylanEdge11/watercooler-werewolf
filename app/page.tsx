@@ -2,12 +2,12 @@
 
 /* eslint-disable @next/next/no-html-link-for-pages -- the public entry links intentionally use full-page navigation. */
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
 
-type RoleKey = 'VILLAGER' | 'WEREWOLF' | 'SEER' | 'BODYGUARD' | 'HUNTER' | 'MASON';
-type ActionKind = 'DAY_VOTE' | 'WOLF_VOTE' | 'INVESTIGATE' | 'PROTECT' | 'HUNTER_SHOT';
+type RoleKey = 'VILLAGER' | 'WEREWOLF' | 'SEER' | 'BODYGUARD' | 'HUNTER' | 'MASON' | 'APPRENTICE_SEER' | 'MAYOR' | 'CUPID';
+type ActionKind = 'DAY_VOTE' | 'WOLF_VOTE' | 'INVESTIGATE' | 'PROTECT' | 'HUNTER_SHOT' | 'CUPID_PAIR';
 
 interface DashboardData {
   player: {
@@ -53,6 +53,7 @@ interface DashboardData {
       winner?: string | null;
       eliminations?: Array<{ displayName: string; role: string; cause: string }>;
       votes?: Array<{ actorName: string; targetNames: string[] }>;
+      protectedAttackBlocked?: boolean;
     };
   }>;
   notifications: Array<{ id: string; type: string; title: string; body: string; createdAt: string }>;
@@ -66,7 +67,9 @@ function initials(name: string): string {
 }
 
 function readableRole(role: RoleKey | string | null): string {
-  return role ? role.replaceAll('_', ' ') : 'Role unavailable';
+  return role
+    ? role.toLowerCase().split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+    : 'Role unavailable';
 }
 
 function roleGlyph(role: RoleKey | null): string {
@@ -75,6 +78,9 @@ function roleGlyph(role: RoleKey | null): string {
   if (role === 'BODYGUARD') return '✚';
   if (role === 'HUNTER') return '⌖';
   if (role === 'MASON') return '◇';
+  if (role === 'APPRENTICE_SEER') return '◉';
+  if (role === 'MAYOR') return '♛';
+  if (role === 'CUPID') return '♥';
   return '⌂';
 }
 
@@ -87,6 +93,14 @@ function deadlineLabel(deadline: string | null): string {
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
   return `${hours}h ${remainder}m`;
+}
+
+function roleVisibilityKey(playerId: string): string {
+  return `werewolf:v1:role-hidden:${playerId}`;
+}
+
+function deathAlertKey(gameId: string, playerId: string): string {
+  return `werewolf:v1:death-alert:${gameId}:${playerId}`;
 }
 
 function PublicWelcome() {
@@ -125,10 +139,23 @@ export default function Home() {
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
   const [roleThemeEnabled, setRoleThemeEnabled] = useState(false);
+  const [roleHidden, setRoleHidden] = useState(false);
+  const [deathAlert, setDeathAlert] = useState<DashboardData['timeline'][number] | null>(null);
+  const [selectedTimeline, setSelectedTimeline] = useState<DashboardData['timeline'][number] | null>(null);
+  const activeModal = deathAlert ? 'death' : selectedTimeline ? 'votes' : null;
+  const modalState = useRef<{
+    deathAlert: DashboardData['timeline'][number] | null;
+    selectedTimeline: DashboardData['timeline'][number] | null;
+    data: DashboardData | null;
+  }>({ deathAlert: null, selectedTimeline: null, data: null });
   const selectionDirty = useRef(false);
   const selectionPhaseId = useRef<string | null>(null);
   const olderNotifications = useRef<DashboardData['notifications']>([]);
   const refreshSequence = useRef(0);
+
+  useLayoutEffect(() => {
+    modalState.current = { deathAlert, selectedTimeline, data };
+  }, [deathAlert, selectedTimeline, data]);
 
   const refresh = useCallback(async (preserveLocalSelection = false) => {
     const sequence = ++refreshSequence.current;
@@ -152,6 +179,11 @@ export default function Home() {
       ...olderNotifications.current.filter((older) => !notificationIds.has(older.id)),
     ];
     setData({ ...result, notifications: mergedNotifications });
+    const latestDeath = result.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED' && event.payload.eliminations?.length);
+    if (latestDeath) {
+      const seenKey = deathAlertKey(result.game.id, result.player.id);
+      if (window.localStorage.getItem(seenKey) !== latestDeath.id) setDeathAlert(latestDeath);
+    }
     if (!keepLocalSelection) {
       setSelected(result.currentAction?.targetIds ?? []);
       selectionDirty.current = false;
@@ -209,11 +241,59 @@ export default function Home() {
     };
   }, [refresh]);
 
+  useLayoutEffect(() => {
+    if (!data?.player.id) return;
+    setRoleHidden(window.localStorage.getItem(roleVisibilityKey(data.player.id)) === 'true');
+  }, [data?.player.id]);
+
+  useEffect(() => {
+    if (!activeModal) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
+    const focusable = dialog?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    focusable?.item(0)?.focus();
+
+    function closeOnEscape(event: KeyboardEvent) {
+      const current = modalState.current;
+      if (event.key === 'Escape' && current.deathAlert) {
+        event.preventDefault();
+        if (current.data) {
+          window.localStorage.setItem(deathAlertKey(current.data.game.id, current.data.player.id), current.deathAlert.id);
+        }
+        setDeathAlert(null);
+        return;
+      }
+      if (event.key === 'Escape' && current.selectedTimeline) {
+        event.preventDefault();
+        setSelectedTimeline(null);
+        return;
+      }
+      if (event.key !== 'Tab' || !dialog || !focusable?.length) return;
+      const first = focusable.item(0);
+      const last = focusable.item(focusable.length - 1);
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [activeModal]);
+
   function toggleCandidate(id: string) {
     if (!data) return;
     selectionDirty.current = true;
     setSelected((current) => {
       if (current.includes(id)) return current.filter((item) => item !== id);
+      if (data.permission.maxTargets === 1) return [id];
       if (current.length >= data.permission.maxTargets) return current;
       return [...current, id];
     });
@@ -252,6 +332,22 @@ export default function Home() {
   function toggleRoleTheme() {
     if (!data?.player.role) return;
     setRoleThemeEnabled((current) => !current);
+  }
+
+  function toggleRoleVisibility() {
+    if (!data?.player.id) return;
+    setRoleHidden((current) => {
+      const next = !current;
+      window.localStorage.setItem(roleVisibilityKey(data.player.id), String(next));
+      return next;
+    });
+  }
+
+  function dismissDeathAlert() {
+    if (deathAlert && data) {
+      window.localStorage.setItem(deathAlertKey(data.game.id, data.player.id), deathAlert.id);
+    }
+    setDeathAlert(null);
   }
 
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {
@@ -302,7 +398,7 @@ export default function Home() {
       ? 'The campaign is complete.'
       : 'The village is between phases.';
 
-  const roleThemeClass = roleThemeEnabled && data.player.role ? ` role-theme role-theme-${data.player.role.toLowerCase()}` : '';
+  const roleThemeClass = roleThemeEnabled && !roleHidden && data.player.role ? ` role-theme role-theme-${data.player.role.toLowerCase()}` : '';
 
   return (
     <main className={`app-shell${roleThemeClass}`}>
@@ -367,9 +463,13 @@ export default function Home() {
 
           <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`}>
             {!data.player.alive && <span className="eliminated-banner" role="status">☠ Eliminated · spectator mode</span>}
-            <div className="role-orbit"><span aria-hidden="true">{roleGlyph(data.player.role)}</span></div>
-            <div className="role-copy"><p className="eyebrow">Your private role</p><h2>{role?.name ?? 'Not released'}</h2><p>{data.player.alive ? role?.summary ?? 'The moderator is preparing assignments.' : 'You have been eliminated. Your role is now public and you may spectate.'}</p></div>
-            <div className="role-faction"><span>Faction</span><strong>{role?.faction ?? 'Hidden'}</strong><small>{data.player.alive ? 'You are alive' : 'Eliminated'}</small></div>
+            <div className="role-orbit"><span aria-hidden="true">{roleHidden ? '⌂' : roleGlyph(data.player.role)}</span></div>
+            <div className="role-copy">
+              <div className="role-copy-heading"><p className="eyebrow">{roleHidden ? 'Private role · concealed' : 'Your private role'}</p><button className="role-visibility-toggle" type="button" aria-pressed={roleHidden} onClick={toggleRoleVisibility}>{roleHidden ? 'Show role' : 'Hide role'}</button></div>
+              <h2>{roleHidden ? 'Hidden' : role?.name ?? 'Not released'}</h2>
+              <p>{roleHidden ? 'Your role and role details are hidden on this device.' : data.player.alive ? role?.summary ?? 'The moderator is preparing assignments.' : 'You have been eliminated. Your role is now public and you may spectate.'}</p>
+            </div>
+            <div className="role-faction"><span>Faction</span><strong>{roleHidden ? 'Hidden' : role?.faction ?? 'Hidden'}</strong><small>{data.player.alive ? 'You are alive' : 'Eliminated'}</small></div>
           </section>
 
           {data.permission.actionKind && data.phase ? (
@@ -384,7 +484,7 @@ export default function Home() {
               </div>
               {error && <p className="form-error" role="alert">{error}</p>}
               {message && <p className="action-success" role="status">{message}</p>}
-              <div className="ballot-footer"><p><span>●</span> Your latest revision counts when the phase locks.</p><button className="primary-button" type="button" onClick={submitAction} disabled={submitting || selected.length === 0}>{submitting ? 'Saving…' : 'Save response'}</button></div>
+              <div className="ballot-footer"><p><span>●</span> Your latest revision counts when the phase locks.</p><button className="primary-button" type="button" onClick={submitAction} disabled={submitting || selected.length === 0 || (data.permission.actionKind === 'CUPID_PAIR' && selected.length !== 2)}>{submitting ? 'Saving…' : 'Save response'}</button></div>
             </section>
           ) : (
             <section className="ballot-card waiting-card"><span className="waiting-icon" aria-hidden="true">◐</span><div><h2>{data.permission.label}</h2><p>{data.game.status === 'COMPLETED' ? 'This campaign is complete. Review the official timeline and your private result history below.' : data.player.alive ? 'You can step away. This page will show the next official action when it opens.' : 'Published outcomes and game announcements will continue to appear here.'}</p></div><button className="secondary-button" onClick={() => void refresh()}>Check for updates</button></section>
@@ -392,7 +492,7 @@ export default function Home() {
         </section>
 
         <aside className="right-rail">
-          {data.notifications.length > 0 && <section className="rail-card announcement" id="notifications"><div className="rail-heading"><div><p className="eyebrow">Your updates</p><h2>Private result history</h2></div><span>{data.notifications.length}</span></div><div className="timeline-mini">{data.notifications.map((notification) => <article key={notification.id}><strong>{notification.type === 'ANNOUNCEMENT' ? 'Announcement' : 'Private investigation'}</strong><h3>{notification.title}</h3><p>{notification.body}</p><small>{new Date(notification.createdAt).toLocaleString()}</small></article>)}</div>{data.notificationsHasMore && <button className="secondary-button" type="button" onClick={() => void loadOlderNotifications()} disabled={loadingOlderNotifications}>{loadingOlderNotifications ? 'Loading older updates…' : 'Load older updates'}</button>}</section>}
+          {data.notifications.length > 0 && <section className="rail-card announcement" id="notifications"><div className="rail-heading"><div><p className="eyebrow">Your updates</p><h2>Private result history</h2></div><span>{data.notifications.length}</span></div><div className="timeline-mini">{data.notifications.map((notification) => <article key={notification.id}><strong>{notification.type === 'ANNOUNCEMENT' ? 'Announcement' : notification.type === 'LOVER_BOND' ? 'Cupid’s pairing' : 'Private investigation'}</strong><h3>{notification.title}</h3><p>{notification.body}</p><small>{new Date(notification.createdAt).toLocaleString()}</small></article>)}</div>{data.notificationsHasMore && <button className="secondary-button" type="button" onClick={() => void loadOlderNotifications()} disabled={loadingOlderNotifications}>{loadingOlderNotifications ? 'Loading older updates…' : 'Load older updates'}</button>}</section>}
           {data.player.teammates.length > 0 && <section className="rail-card" id="team"><div className="rail-heading"><h2>{data.player.role === 'WEREWOLF' ? 'Your pack' : 'Fellow Masons'}</h2><span>{data.player.teammates.length}</span></div><div className="player-stack">{data.player.teammates.map((teammate) => <div className="player-row" key={teammate.id}><span className="candidate-avatar small">{initials(teammate.displayName)}</span><span><strong>{teammate.displayName}</strong><small>{teammate.alive ? 'Living' : 'Eliminated'}</small></span><span className={`ready-dot ${teammate.alive ? 'ready' : ''}`} /></div>)}</div></section>}
           {data.rooms.length > 0 && <PrivateRoomChat rooms={data.rooms} />}
           <section className="rail-card" id="timeline">
@@ -416,27 +516,42 @@ export default function Home() {
                   : event.eventType === 'FINAL_SHOWDOWN_ENTERED'
                     ? 'The final ballot is now the only legal phase.'
                     : event.payload.eliminations?.length
-                      ? event.payload.eliminations.map((item) => `${item.displayName} · ${readableRole(item.role)}`).join(', ')
-                      : 'No elimination published.';
+                      ? `${event.payload.eliminations.map((item) => `${item.displayName} · ${readableRole(item.role)}${item.cause === 'LOVER_BOND' ? ' · lover bond' : item.cause === 'HUNTER_SHOT' ? ' · Hunter shot' : ''}`).join(', ')}${event.payload.protectedAttackBlocked ? ' · Bodyguard protection stopped a pack attack.' : ''}`
+                      : event.payload.protectedAttackBlocked
+                        ? 'Bodyguard protection stopped a pack attack. No one died.'
+                        : 'No elimination published.';
               if (!isPublicBallot) {
                 return <article key={event.id}><strong>{title}</strong><p>{description}</p><small>{new Date(event.createdAt).toLocaleString()}</small></article>;
               }
-              return <details className="timeline-entry" key={event.id}>
-                <summary>
+              return <article className="timeline-entry" key={event.id}>
+                <button className="timeline-trigger" type="button" onClick={() => setSelectedTimeline(event)} aria-label={`View votes for ${title}`}>
                   <span className="timeline-summary-copy"><strong>{title}</strong><span>{description}</span><small>{new Date(event.createdAt).toLocaleString()}</small></span>
                   <span className="timeline-summary-hint">View votes</span>
-                </summary>
-                <div className="timeline-detail">
-                  {event.payload.votes?.length ? <div className="vote-ledger">{event.payload.votes.map((vote, index) => <div className="vote-ledger-row" key={`${event.id}-${vote.actorName}-${index}`}><strong>{vote.actorName}</strong><span aria-hidden="true">→</span><span>{vote.targetNames.length ? vote.targetNames.join(', ') : 'No target recorded'}</span></div>)}</div> : <p className="empty-note">No public Day votes were recorded.</p>}
-                  <small>Published Day ballots are public. Night actions and special-role actions remain private.</small>
-                </div>
-              </details>;
+                </button>
+              </article>;
             })}</div> : <p>No published outcomes yet.</p>}
           </section>
           <section className="rail-card pilot-feedback-card" id="feedback"><div className="rail-heading"><h2>Pilot feedback</h2><span aria-hidden="true">?</span></div><p>Share a quick signal with the moderator team. This is private to the pilot operators.</p><form className="chat-compose" onSubmit={submitFeedback}><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve?" /></label>{feedbackError && <p className="form-error" role="alert">{feedbackError}</p>}{feedbackMessage && <p className="action-success" role="status">{feedbackMessage}</p>}<button className="secondary-button" type="submit" disabled={sendingFeedback}>{sendingFeedback ? 'Sending…' : 'Send feedback'}</button></form></section>
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>
       </div>
+      {deathAlert && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dismissDeathAlert(); }}>
+        <section className="game-modal death-modal" role="dialog" aria-modal="true" aria-labelledby="death-alert-title">
+          <div className="modal-symbol" aria-hidden="true">☠</div>
+          <p className="eyebrow accent">Official game update</p>
+          <h2 id="death-alert-title">A player has been eliminated</h2>
+          <p className="modal-intro">{deathAlert.payload.kind?.replaceAll('_', ' ') ?? 'The latest phase'} · Cycle {deathAlert.payload.sequence ?? '—'}</p>
+          <div className="death-list">{deathAlert.payload.eliminations?.map((elimination) => <article key={`${deathAlert.id}-${elimination.displayName}`}><strong>{elimination.displayName}</strong><span>{readableRole(elimination.role)}{elimination.cause === 'LOVER_BOND' ? ' · lover bond' : elimination.cause === 'HUNTER_SHOT' ? ' · Hunter shot' : ''}</span></article>)}</div>
+          <button className="primary-button" type="button" onClick={dismissDeathAlert}>I understand</button>
+        </section>
+      </div>}
+      {selectedTimeline && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTimeline(null); }}>
+        <section className="game-modal timeline-modal" role="dialog" aria-modal="true" aria-labelledby="timeline-modal-title">
+          <div className="modal-heading"><div><p className="eyebrow accent">Published ballot</p><h2 id="timeline-modal-title">{selectedTimeline.payload.kind}{selectedTimeline.payload.sequence ? ` · Cycle ${selectedTimeline.payload.sequence}` : ''}</h2><p className="modal-intro">{selectedTimeline.payload.eliminations?.length ? selectedTimeline.payload.eliminations.map((item) => `${item.displayName} · ${readableRole(item.role)}`).join(', ') : 'No elimination published.'}</p></div><button className="icon-button modal-close" type="button" aria-label="Close vote details" onClick={() => setSelectedTimeline(null)}>×</button></div>
+          {selectedTimeline.payload.votes?.length ? <div className="vote-ledger">{selectedTimeline.payload.votes.map((vote, index) => <div className="vote-ledger-row" key={`${selectedTimeline.id}-${vote.actorName}-${index}`}><strong>{vote.actorName}</strong><span aria-hidden="true">→</span><span>{vote.targetNames.length ? vote.targetNames.join(', ') : 'No target recorded'}</span></div>)}</div> : <p className="empty-note">No public Day votes were recorded.</p>}
+          <p className="timeline-privacy-note">Published Day ballots are public. Night actions and special-role actions remain private.</p>
+        </section>
+      </div>}
     </main>
   );
 }

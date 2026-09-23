@@ -19,7 +19,7 @@ A browser-based Werewolf game for 6–80 players and a moderator. Players receiv
 
 ## Before the first game
 
-The site operator must configure the application and create the first moderator. Players then need their private invitation, seat code, and a six-digit PIN. Moderators use their own email and password.
+The site operator must configure the application and create the first moderator. Players receive a private claim link and choose a six-digit PIN; afterward, they can sign in with the invitation email and PIN. The seat code remains available as a fallback. Moderators use their own email and password.
 
 - Use the **exact game URL supplied by the organizer**. Preview and Production are separate environments.
 - The moderator must open phases and publish results manually. The displayed weekday schedule does not run the game automatically.

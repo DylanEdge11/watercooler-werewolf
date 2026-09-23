@@ -18,7 +18,7 @@ const sampleRoster = [
   }),
 ].join('\n');
 
-const roleOrder = ['VILLAGER', 'WEREWOLF', 'SEER', 'BODYGUARD', 'HUNTER', 'MASON'] as const;
+const roleOrder = ['VILLAGER', 'WEREWOLF', 'SEER', 'BODYGUARD', 'HUNTER', 'MASON', 'APPRENTICE_SEER', 'MAYOR', 'CUPID'] as const;
 const weekdayOptions = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -413,7 +413,7 @@ export default function ModeratorPage() {
   const rosterById = useMemo(() => new Map(roster.map((seat) => [seat.id, seat])), [roster]);
   const gameDates = useMemo(() => defaultGameDates(), []);
   const balanceScore = composition
-    ? composition.VILLAGER - composition.WEREWOLF * 5 + composition.SEER * 3 + composition.BODYGUARD * 2 + composition.HUNTER + composition.MASON
+    ? composition.VILLAGER - composition.WEREWOLF * 5 + composition.SEER * 3 + composition.BODYGUARD * 2 + composition.HUNTER + composition.MASON + composition.APPRENTICE_SEER * 2 + composition.MAYOR * 2 + composition.CUPID
     : 0;
 
   if (loading) return <main className="setup-shell"><BrandHeader /><p className="setup-loading">Opening the moderator console…</p></main>;
@@ -535,9 +535,9 @@ export default function ModeratorPage() {
                 <section className="setup-card">
                   <div className="setup-card-heading"><span>03</span><div><h2>Balance the roles</h2><p>Counts must equal the roster. Unique roles cap at one; Masons travel in groups. Small-game presets are editable before release.</p></div></div>
                   <div className="role-composer">
-                    {roleOrder.map((role) => (
-                      <label key={role}>{role.toLowerCase().replace(/^./u, (letter) => letter.toUpperCase())}
-                        <input type="number" min="0" max={role === 'SEER' || role === 'BODYGUARD' || role === 'HUNTER' ? 1 : roster.length} value={composition[role]} onChange={(event) => {
+                      {roleOrder.map((role) => (
+                        <label key={role}>{ROLE_CATALOG[role].name}
+                        <input type="number" min="0" max={ROLE_CATALOG[role].unique ? 1 : roster.length} value={composition[role]} onChange={(event) => {
                           const next = { ...composition, [role]: Number(event.target.value) };
                           markCompositionDraft(gameId, next);
                           setComposition(next);

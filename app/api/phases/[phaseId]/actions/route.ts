@@ -5,6 +5,7 @@ import { permissionForRole, validateActionTargets } from '../../../../../lib/gam
 import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type PlayerState, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../../lib/http/rate-limit';
+import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
 
 interface RouteContext {
   params: Promise<{ phaseId: string }>;
@@ -79,7 +80,11 @@ export async function POST(request: Request, context: RouteContext) {
     const actor = players.find((player) => player.id === identity.seatId);
     if (!actor?.alive) throw new Error('Eliminated players cannot submit this action.');
     await enforceRateLimit(requestRateLimitKey(request, `player-action:${identity.seatId}:${phaseId}`), 30, 10 * 60_000);
-    const permission = permissionForRole(actor.role, phase.kind, Number(phase.slots), pendingHunter);
+    const loverPair = await loadCurrentLoverPair(identity.gameId);
+    const permission = permissionForRole(actor.role, phase.kind, Number(phase.slots), pendingHunter, {
+      seerAlive: players.some((player) => player.alive && player.role === 'SEER'),
+      cupidPairExists: Boolean(loverPair),
+    });
     if (!permission.actionKind || body.actionKind !== permission.actionKind) throw new Error('This action is not available to your role.');
 
     let hunterEliminatedIds: string[] | undefined;

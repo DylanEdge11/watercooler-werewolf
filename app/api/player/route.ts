@@ -6,6 +6,7 @@ import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type RoleKey } from '../../../lib/game/types';
 import { jsonError } from '../../../lib/http/security';
 import { ensureGameRooms } from '../../../lib/chat/rooms';
+import { loadCurrentLoverPair } from '../../../lib/game/relationships';
 
 interface PublicVoteRow {
   id: string;
@@ -65,8 +66,22 @@ export async function GET(request: Request) {
         hunterDeadlineAt: string | null;
       }>();
 
+    const rosterRows = await db
+      .prepare(
+        `SELECT s.id, s.display_name AS displayName, s.alive, ra.role_key AS role
+         FROM seats s LEFT JOIN role_assignments ra ON ra.game_id = s.game_id AND ra.seat_id = s.id
+         WHERE s.game_id = ? AND s.status = 'CLAIMED' ORDER BY s.display_name COLLATE NOCASE`,
+      )
+      .bind(player.gameId)
+      .all<{ id: string; displayName: string; alive: number; role: RoleKey | null }>();
+    const roster = rosterRows.results.map((seat) => ({ ...seat, role: seat.role ? canonicalRoleKey(seat.role) : null, alive: Boolean(seat.alive) }));
+    const seerAlive = roster.some((seat) => seat.alive && seat.role === 'SEER');
+    const loverPair = await loadCurrentLoverPair(player.gameId);
     let permission = player.role && phase
-      ? permissionForRole(player.role, phase.kind, Number(phase.slots), phase.status === 'PENDING_HUNTER')
+      ? permissionForRole(player.role, phase.kind, Number(phase.slots), phase.status === 'PENDING_HUNTER', {
+          seerAlive,
+          cupidPairExists: Boolean(loverPair),
+        })
       : { actionKind: null as ActionKind | null, maxTargets: 0, label: 'Waiting for the moderator' };
     let hunterEliminatedIds: string[] = [];
     if (phase?.status === 'PENDING_HUNTER') {
@@ -89,16 +104,6 @@ export async function GET(request: Request) {
     if (player.gameStatus === 'STOPPED') {
       permission = { actionKind: null, maxTargets: 0, label: 'This game has been stopped by a moderator.' };
     }
-
-    const rosterRows = await db
-      .prepare(
-        `SELECT s.id, s.display_name AS displayName, s.alive, ra.role_key AS role
-         FROM seats s LEFT JOIN role_assignments ra ON ra.game_id = s.game_id AND ra.seat_id = s.id
-         WHERE s.game_id = ? AND s.status = 'CLAIMED' ORDER BY s.display_name COLLATE NOCASE`,
-      )
-      .bind(player.gameId)
-      .all<{ id: string; displayName: string; alive: number; role: RoleKey | null }>();
-    const roster = rosterRows.results.map((seat) => ({ ...seat, role: seat.role ? canonicalRoleKey(seat.role) : null, alive: Boolean(seat.alive) }));
     const livingPlayers = roster.filter((seat) => seat.alive).map(({ id, displayName }) => ({ id, displayName }));
     const eliminatedPlayers = roster
       .filter((seat) => !seat.alive)
@@ -106,10 +111,10 @@ export async function GET(request: Request) {
     const werewolvesRemaining = roster.filter((seat) => seat.alive && seat.role === 'WEREWOLF').length;
     const candidates = permission.actionKind
       ? roster
-          .filter((seat) => seat.alive && seat.id !== player.id)
+          .filter((seat) => seat.alive && (permission.actionKind === 'CUPID_PAIR' || seat.id !== player.id))
           .filter((seat) => permission.actionKind !== 'WOLF_VOTE' || seat.role !== 'WEREWOLF')
           .filter((seat) => permission.actionKind !== 'HUNTER_SHOT' || !hunterEliminatedIds.includes(seat.id))
-          .map(({ id, displayName }) => ({ id, displayName }))
+          .map(({ id, displayName }) => ({ id, displayName: id === player.id ? `${displayName} (you)` : displayName }))
       : [];
 
     const currentAction = phase && permission.actionKind
@@ -128,6 +133,13 @@ export async function GET(request: Request) {
           .filter((seat) => seat.id !== player.id && seat.role === player.role)
           .map(({ id, displayName, alive }) => ({ id, displayName, alive }))
       : [];
+    const inheritedSeer = player.role === 'APPRENTICE_SEER' && !seerAlive
+      ? roster.find((seat) => seat.role === 'SEER')
+      : undefined;
+    const notificationSeatIds = [...new Set([player.id, ...(inheritedSeer ? [inheritedSeer.id] : [])])];
+    const notificationSeatFilter = inheritedSeer
+      ? "(seat_id = ? OR (seat_id = ? AND type = 'INVESTIGATION_RESULT'))"
+      : 'seat_id = ?';
     // Reset and restore deliberately retain the audit trail, but a fresh run
     // must not make the prior campaign look like the current player's story.
     // The boundary event is written in the same transaction as the reset or
@@ -200,13 +212,14 @@ export async function GET(request: Request) {
     const notificationWhere = notificationBefore
       ? ' AND (created_at < ? OR (created_at = ? AND id < ?))'
       : '';
-    const notificationBindings = notificationBefore
-      ? [player.id, notificationBefore, notificationBefore, notificationBeforeId, notificationLimit]
-      : [player.id, notificationLimit];
+    const notificationBindings: Array<string | number> = [...notificationSeatIds];
+    if (notificationBefore) notificationBindings.push(notificationBefore, notificationBefore, notificationBeforeId!);
+    notificationBindings.push(notificationLimit);
     const notificationRows = await db
       .prepare(
         `SELECT id, type, title, body, created_at AS createdAt
-         FROM notifications WHERE seat_id = ?${notificationWhere} ORDER BY created_at DESC, id DESC LIMIT ?`,
+         FROM notifications WHERE ${notificationSeatFilter}${notificationWhere}
+         ORDER BY created_at DESC, id DESC LIMIT ?`,
       )
       .bind(...notificationBindings)
       .all<{ id: string; type: string; title: string; body: string; createdAt: string }>();
@@ -242,16 +255,33 @@ export async function GET(request: Request) {
     const publicTimeline = timelineRows.results.map((event) => {
       const payload = JSON.parse(event.payloadJson) as Record<string, unknown>;
       if (event.eventType === 'PHASE_PUBLISHED') {
-        const eliminations = Array.isArray(payload.eliminations)
-          ? payload.eliminations.map((item) => {
-              const elimination = item as Record<string, unknown>;
-              return {
-                displayName: elimination.displayName,
-                role: elimination.role,
-                cause: elimination.cause,
-              };
-            })
+        const rawEliminations = Array.isArray(payload.eliminations) ? payload.eliminations : [];
+        const eliminations = rawEliminations.map((item) => {
+          const elimination = item as Record<string, unknown>;
+          return {
+            displayName: elimination.displayName,
+            role: elimination.role,
+            cause: elimination.cause,
+          };
+        });
+        const publishedOutcome = payload.publishedOutcome && typeof payload.publishedOutcome === 'object'
+          ? payload.publishedOutcome as Record<string, unknown>
+          : null;
+        const selectedTargets = Array.isArray(publishedOutcome?.selectedTargets)
+          ? publishedOutcome.selectedTargets.filter((id): id is string => typeof id === 'string')
           : [];
+        const protectedPlayerIds = Array.isArray(publishedOutcome?.protectedPlayerIds)
+          ? publishedOutcome.protectedPlayerIds.filter((id): id is string => typeof id === 'string')
+          : [];
+        const packEliminatedIds = new Set(rawEliminations
+          .map((item) => item as Record<string, unknown>)
+          .filter((item) => item.cause === 'WEREWOLF_ATTACK')
+          .map((item) => item.playerId)
+          .filter((id): id is string => typeof id === 'string'));
+        const protectedAttackBlocked = selectedTargets.some((id) =>
+          protectedPlayerIds.includes(id)
+          && !packEliminatedIds.has(id),
+        );
         return {
           id: event.id,
           eventType: event.eventType,
@@ -261,6 +291,7 @@ export async function GET(request: Request) {
             sequence: event.phaseSequence,
             kind: payload.kind,
             eliminations,
+            protectedAttackBlocked,
             winner: payload.winner ?? null,
             votes: ['DAY', 'FINAL_BALLOT'].includes(String(payload.kind)) && event.phaseId
               ? publicVotesByPhase.get(event.phaseId) ?? []

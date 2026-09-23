@@ -10,6 +10,7 @@ import type {
   RandomDraw,
   ResolutionWarning,
   TallyEntry,
+  LoverPair,
   WinResult,
 } from './types';
 
@@ -40,6 +41,7 @@ function tallyActions(
   players: Map<string, PlayerState>,
   actorIsEligible: (actor: PlayerState) => boolean,
   targetIsEligible: (actor: PlayerState, target: PlayerState) => boolean,
+  voteWeight: (actor: PlayerState) => number = () => 1,
 ): TallyResult {
   const counts = new Map<string, number>();
   const warnings: ResolutionWarning[] = [];
@@ -65,7 +67,7 @@ function tallyActions(
         warnings.push({ actionId: action.id, reason: `Target ${targetId} was not eligible.` });
         continue;
       }
-      counts.set(targetId, (counts.get(targetId) ?? 0) + 1);
+      counts.set(targetId, (counts.get(targetId) ?? 0) + voteWeight(actor));
       accepted += 1;
     }
   }
@@ -130,15 +132,40 @@ function firstValidSingleTargetAction(
   actions: ActionSubmission[],
   kind: ActionKind,
   players: Map<string, PlayerState>,
-  actorRole: PlayerState['role'],
+  actorIsEligible: (actor: PlayerState) => boolean,
 ): { actor: PlayerState; target: PlayerState } | null {
   const action = actions.find((candidate) => candidate.kind === kind);
   if (!action) return null;
   const actor = players.get(action.actorId);
   const target = players.get(action.targetIds[0]);
-  if (!actor || !target || !actor.alive || actor.role !== actorRole) return null;
+  if (!actor || !target || !actor.alive || !actorIsEligible(actor)) return null;
   if (!target.alive || actor.id === target.id) return null;
   return { actor, target };
+}
+
+function cupidPairFromActions(
+  actions: ActionSubmission[],
+  players: Map<string, PlayerState>,
+): LoverPair | null {
+  const action = actions.find((candidate) => candidate.kind === 'CUPID_PAIR');
+  if (!action || action.targetIds.length !== 2 || new Set(action.targetIds).size !== 2) return null;
+  const cupid = players.get(action.actorId);
+  const first = players.get(action.targetIds[0]);
+  const second = players.get(action.targetIds[1]);
+  if (!cupid?.alive || cupid.role !== 'CUPID' || !first?.alive || !second?.alive) return null;
+  return { cupidId: cupid.id, playerIds: [first.id, second.id] };
+}
+
+function applyLoverBond(eliminations: Elimination[], loverPair: LoverPair | null | undefined): Elimination[] {
+  if (!loverPair) return eliminations;
+  const eliminatedIds = new Set(eliminations.map((item) => item.playerId));
+  const [first, second] = loverPair.playerIds;
+  if (eliminatedIds.has(first) && !eliminatedIds.has(second)) {
+    eliminations.push({ playerId: second, cause: 'LOVER_BOND' });
+  } else if (eliminatedIds.has(second) && !eliminatedIds.has(first)) {
+    eliminations.push({ playerId: first, cause: 'LOVER_BOND' });
+  }
+  return eliminations;
 }
 
 export function resolvePhase(input: PhaseResolutionInput): PhaseResolution {
@@ -148,6 +175,7 @@ export function resolvePhase(input: PhaseResolutionInput): PhaseResolution {
   const players = new Map(input.players.map((player) => [player.id, player]));
   const actions = latestActions(input.actions);
   const isDay = input.kind === 'DAY' || input.kind === 'FINAL_BALLOT';
+  const loverPair = input.loverPair ?? (!isDay ? cupidPairFromActions(actions, players) : null);
   const voteKind: ActionKind = isDay ? 'DAY_VOTE' : 'WOLF_VOTE';
   const tallied = tallyActions(
     actions,
@@ -157,16 +185,23 @@ export function resolvePhase(input: PhaseResolutionInput): PhaseResolution {
     (actor) => actor.alive && (isDay || actor.role === 'WEREWOLF'),
     (actor, target) =>
       target.alive && actor.id !== target.id && (isDay || target.role !== 'WEREWOLF'),
+    (actor) => isDay && actor.role === 'MAYOR' ? 2 : 1,
   );
   const selection = selectFromTally(tallied.tally, input.slots, input.randomRolls);
   const protectedPlayerIds: string[] = [];
   const investigations: PhaseResolution['investigations'] = [];
 
   if (!isDay) {
-    const protection = firstValidSingleTargetAction(actions, 'PROTECT', players, 'BODYGUARD');
+    const protection = firstValidSingleTargetAction(actions, 'PROTECT', players, (actor) => actor.role === 'BODYGUARD');
     if (protection) protectedPlayerIds.push(protection.target.id);
 
-    const investigation = firstValidSingleTargetAction(actions, 'INVESTIGATE', players, 'SEER');
+    const seerIsAlive = input.players.some((player) => player.alive && player.role === 'SEER');
+    const investigation = firstValidSingleTargetAction(
+      actions,
+      'INVESTIGATE',
+      players,
+      (actor) => actor.role === 'SEER' || (actor.role === 'APPRENTICE_SEER' && !seerIsAlive),
+    );
     if (investigation) {
       investigations.push({
         seerId: investigation.actor.id,
@@ -176,12 +211,12 @@ export function resolvePhase(input: PhaseResolutionInput): PhaseResolution {
     }
   }
 
-  const eliminations: Elimination[] = selection.selected
+  const eliminations = applyLoverBond(selection.selected
     .filter((playerId) => isDay || !protectedPlayerIds.includes(playerId))
     .map((playerId) => ({
       playerId,
       cause: isDay ? 'DAY_VOTE' : 'WEREWOLF_ATTACK',
-    }));
+    })), loverPair);
   const hunterRequiredIds = eliminations
     .filter((elimination) => players.get(elimination.playerId)?.role === 'HUNTER')
     .map((elimination) => elimination.playerId);
@@ -193,6 +228,7 @@ export function resolvePhase(input: PhaseResolutionInput): PhaseResolution {
     tally: tallied.tally,
     selectedTargets: selection.selected,
     protectedPlayerIds,
+    loverPair,
     eliminations,
     investigations,
     hunterRequiredIds,
@@ -225,12 +261,14 @@ export function resolveHunterShot(input: HunterResolutionInput): PhaseResolution
     };
   }
 
+  const eliminations = applyLoverBond([
+    ...resolution.eliminations,
+    { playerId: target.id, cause: 'HUNTER_SHOT' },
+  ], resolution.loverPair);
+
   return {
     ...resolution,
-    eliminations: [
-      ...resolution.eliminations,
-      { playerId: target.id, cause: 'HUNTER_SHOT' },
-    ],
+    eliminations,
     hunterRequiredIds: [],
   };
 }
