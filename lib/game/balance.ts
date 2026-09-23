@@ -1,6 +1,6 @@
 import { ROLE_CATALOG } from './catalog';
 import { MAX_PLAYERS, MIN_PLAYERS } from './player-count';
-import { ROLE_KEYS, type RoleComposition, type RoleKey } from './types';
+import { ROLE_KEYS, type RoleComposition } from './types';
 
 export type BalanceLabel =
   | 'BALANCED'

@@ -178,6 +178,7 @@ export default function Home() {
       ...result.notifications,
       ...olderNotifications.current.filter((older) => !notificationIds.has(older.id)),
     ];
+    setRoleHidden(window.localStorage.getItem(roleVisibilityKey(result.player.id)) === 'true');
     setData({ ...result, notifications: mergedNotifications });
     const latestDeath = result.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED' && event.payload.eliminations?.length);
     if (latestDeath) {
@@ -240,11 +241,6 @@ export default function Home() {
       window.clearInterval(poll);
     };
   }, [refresh]);
-
-  useLayoutEffect(() => {
-    if (!data?.player.id) return;
-    setRoleHidden(window.localStorage.getItem(roleVisibilityKey(data.player.id)) === 'true');
-  }, [data?.player.id]);
 
   useEffect(() => {
     if (!activeModal) return;
