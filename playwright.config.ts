@@ -1,8 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 import { BASE_URL, E2E_REMOTE, E2E_RUN_ID, MODERATOR_EMAIL, MODERATOR_PASSWORD } from './e2e/constants';
+import { resolvePlaywrightArtifactPaths } from './e2e/artifact-paths';
 import { E2E_REQUEST_HEADERS } from './e2e/transport';
 
-const artifactRunId = E2E_RUN_ID || 'local';
+const artifacts = resolvePlaywrightArtifactPaths(
+  E2E_RUN_ID || 'local',
+  process.env.E2E_INVOCATION_ID?.trim() || `invocation-${process.pid}-${Date.now()}`,
+);
 
 export default defineConfig({
   testDir: './e2e',
@@ -12,9 +16,9 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   forbidOnly: Boolean(process.env.CI),
   retries: E2E_REMOTE ? 0 : 1,
-  outputDir: `test-results/${artifactRunId}`,
+  outputDir: artifacts.outputDir,
   preserveOutput: 'always',
-  reporter: [['list'], ['html', { outputFolder: `playwright-report/${artifactRunId}`, open: 'never' }]],
+  reporter: [['list'], ['html', { outputFolder: artifacts.reportDir, open: 'never' }]],
   use: {
     baseURL: BASE_URL,
     extraHTTPHeaders: E2E_REQUEST_HEADERS,

@@ -70,7 +70,7 @@ Acceptance checks: reject five and 81; accept six, 19, 20, and 80; import, claim
 | Missing deployment-protection access | Every manual `newContext({ baseURL: BASE_URL })` | Supply the automation bypass through a secret environment variable and same-origin request/context configuration. Include moderator, all players, duplicate-claim context, smoke contexts, API contexts, and remote preflight. Setting only Playwright `use.extraHTTPHeaders` is insufficient for these explicitly constructed contexts. |
 | Persistent shared data | Fixtures dispose contexts, not hosted games; first onboarding scenario expects no games | Use an isolated automated-QA database and deliberate run lifecycle. Fix game creation/selection, run with one worker, and give games a run ID. Define cleanup only for that disposable environment or exact run-owned data. Keep the human pilot separate from bot runs. |
 | Origin and invite URL consistency | `SITE_ORIGIN` is exact-match when configured; claim links derive from the request origin | Choose a canonical Preview origin for the run. Verify browser Origin, programmatic Origin, invite URLs, redirects, and cookie host agree. The missing Preview `SITE_ORIGIN` is not itself a proven outage: code falls back to the request URL origin. A mismatched configured value does block mutations. |
-| CI has no E2E job | `.github/workflows/ci.yml` runs unit/lint/type/build/audit only | Add a job after a Ready Preview deployment, pin Node 22, install Playwright browsers/dependencies, pass the exact deployment URL and secrets, and retain restricted QA artifacts. |
+| CI has no E2E job | `.github/workflows/ci.yml` runs unit/lint/type/build/audit only | Add a job after a Ready Preview deployment, use the Node 24.x LTS baseline, install Playwright browsers/dependencies, pass the exact deployment URL and secrets, and retain restricted QA artifacts. The package engine accepts `>=24`. |
 | Reruns consume real rate-limit buckets | Moderator login allows 5 attempts per email/client per 15 minutes | Reuse sessions within a run; account for retries and worker restarts. Use a dedicated account and clean isolated fixture lifecycle rather than disabling production rate limiting. |
 | Missing remote evidence | Existing suites use development Next + file-backed SQLite | Verify production cookies, remote libSQL writes/concurrency, polling, private chat, reconnects, and persistence across new sessions/redeployment on the actual Preview. |
 
@@ -111,7 +111,7 @@ The three old race failures in `review/race-results.json` are historical. Curren
 
 Fresh checks in this assessment:
 
-- `npm test -- --run`: **85 tests passed in 26 files**, using local Node `24.20.0`. This is not a fresh Node 22 result.
+- `npm test -- --run`: **85 tests passed in 26 files**, using local Node `24.20.0`. This evidence predates the current Node `>=24` support declaration and is not a substitute for CI on its Node 24.x baseline.
 - Direct calls to `parseRosterCsv`: five, six, 19, and 81 rejected; 20 and 80 accepted. `defaultComposition(6)` throws. `calculateEliminationSlots(6, 30)` returns one.
 - The direct TypeScript probe initially hit the Windows `tsx` user-info restriction, then succeeded using the same process-local `geteuid` shim already used by `scripts/playwright-server.mjs`. No application source was changed for it.
 - Vercel deployment/environment metadata and the limited HTTP results listed above were checked live. Application login, mutations, gameplay, database isolation, and hosted browser behavior were not tested in this assessment.
@@ -125,7 +125,7 @@ Recommended order:
 3. Fix new-game/game-selection and role-draft preservation; resolve the Reset/chat defects before relying on those workflows in a pilot.
 4. Add remote Playwright mode, dedicated credentials, Origin and bypass handling across every context, and persistent-fixture isolation.
 5. Deploy the reviewed source to Preview, run migration readiness checks, and confirm the test moderator exists. Migrations/bootstrap are explicit operator tasks, not request-time or build-time seeding.
-6. Run hosted smoke, API 20-player scenarios, full Chromium readiness/regressions/random seeds, and Firefox/WebKit smoke on Node 22. Require no unexplained failures; passing retries do not erase first-attempt failures. Use trace retention that still captures evidence when running with `--retries=0` (current `on-first-retry` does not).
+6. Run hosted smoke, API 20-player scenarios, full Chromium readiness/regressions/random seeds, and Firefox/WebKit smoke on Node 24.x LTS. Require no unexplained failures; passing retries do not erase first-attempt failures. Use trace retention that still captures evidence when running with `--retries=0` (current `on-first-retry` does not).
 7. Repeat the hosted run, then verify simultaneous reconnects, chat/privacy, deadline handling, persistent state, and logs.
 8. Conduct a separate six-person manual rehearsal using ordinary player access: claim, sign-in again, role release, Day/Night, elimination/read-only, completion, and moderator recovery procedure. Keep automated bot runs out of this live pilot dataset.
 

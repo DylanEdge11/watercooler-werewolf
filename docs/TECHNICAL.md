@@ -4,7 +4,7 @@ Maintainer reference for the current Next.js/Vercel build. For user instructions
 
 ## Runtime and database
 
-Use Node.js 22.x and npm. The application uses Next.js App Router, React, Drizzle, and libSQL. Local development uses a disposable SQLite file; deployed Vercel functions require a remote Turso/libSQL URL and token. Keep Preview and Production databases and secrets separate.
+Use Node.js 24.x LTS and npm. The package supports Node.js `>=24`; CI verifies Node 24.x. The application uses Next.js App Router, React, Drizzle, and libSQL. Local development uses a disposable SQLite file; deployed Vercel functions require a remote Turso/libSQL URL and token. Keep Preview and Production databases and secrets separate.
 
 `npm run db:migrate` explicitly applies checked-in migrations. `ensureDatabase()` verifies the migration ledger; requests do not run DDL. `npm run owner:bootstrap` creates the first moderator from a trusted operator environment and displays recovery codes once. Public bootstrap is disabled. Do not put credentials or production values in the repository.
 

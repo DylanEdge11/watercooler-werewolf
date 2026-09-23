@@ -26,7 +26,7 @@ For the intended setup, your PC is an operator workstation, not the game server.
 
 1. Access to the Vercel `dyl-edge` team.
 2. A free Turso/libSQL account and two separate databases: one for Preview and one for Production. Do not share a Production database with Preview.
-3. A computer with Node 22.x and Git for the one-time operator steps.
+3. A computer with Node.js 24.x LTS and Git for the one-time operator steps. The package accepts Node.js `>=24`; CI verifies 24.x. On Vercel, the package engine range selects the supported Node 24.x runtime for new deployments.
 4. A primary moderator email address.
 5. A password manager for the one-time recovery codes. The bootstrap command prints them once; do not save them in Git.
 6. A browser. No custom domain, email service, SSO provider, or always-on home server is required.

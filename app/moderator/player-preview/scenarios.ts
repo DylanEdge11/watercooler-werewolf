@@ -37,6 +37,7 @@ const candidates = [
 ];
 
 function makeTimeline(now: Date, scenario: PreviewScenarioId): DashboardData['timeline'] {
+  if (scenario === 'unreleased') return [];
   const publishedAt = new Date(now.valueOf() - 5 * 60 * 60_000).toISOString();
   const isDay = scenario === 'day-ballot' || scenario === 'day-submitted';
   return [
@@ -107,22 +108,26 @@ export function createPreviewData(roleKey: RoleKey, scenario: PreviewScenarioId)
   const livingPlayers = isEliminated ? candidates : [player, ...candidates];
   const roomStatus = isClosed ? 'CLOSED' : 'OPEN';
   const roomAccess = isClosed ? 'READ' : 'WRITE';
-  const rooms: DashboardData['rooms'] = scenario === 'eliminated'
-    ? [{ id: 'preview-room-dead', type: 'DEAD', status: 'OPEN', access: 'READ' }]
-    : !isEliminated && roleKey === 'WEREWOLF'
-      ? [{ id: 'preview-room-werewolf', type: 'WEREWOLF', status: roomStatus, access: roomAccess }]
-      : !isEliminated && roleKey === 'MASON'
-        ? [{ id: 'preview-room-mason', type: 'MASON', status: roomStatus, access: roomAccess }]
-        : [];
+  const rooms: DashboardData['rooms'] = isUnreleased
+    ? []
+    : scenario === 'eliminated'
+      ? [{ id: 'preview-room-dead', type: 'DEAD', status: 'OPEN', access: 'READ' }]
+      : !isEliminated && roleKey === 'WEREWOLF'
+        ? [{ id: 'preview-room-werewolf', type: 'WEREWOLF', status: roomStatus, access: roomAccess }]
+        : !isEliminated && roleKey === 'MASON'
+          ? [{ id: 'preview-room-mason', type: 'MASON', status: roomStatus, access: roomAccess }]
+          : [];
 
   const currentAction = scenario === 'day-submitted'
     ? { targetIds: [candidates[0].id], version: 2, submittedAt: new Date(now.valueOf() - 12 * 60_000).toISOString() }
     : null;
-  const notifications: DashboardData['notifications'] = roleKey === 'SEER' || (roleKey === 'APPRENTICE_SEER' && scenario !== 'unreleased')
-    ? [{ id: 'preview-seer-result', type: 'INVESTIGATION_RESULT', title: 'Your investigation', body: 'Morgan Lee is a Werewolf.', createdAt: new Date(now.valueOf() - 2 * 60 * 60_000).toISOString() }]
-    : roleKey === 'CUPID' && scenario !== 'unreleased'
-      ? [{ id: 'preview-cupid-result', type: 'LOVER_BOND', title: 'Your bond is known', body: 'Casey Rivera and Morgan Lee are linked as lovers.', createdAt: new Date(now.valueOf() - 2 * 60 * 60_000).toISOString() }]
-      : [{ id: 'preview-announcement', type: 'ANNOUNCEMENT', title: 'A note from the moderator', body: 'The next update will arrive after this response window closes.', createdAt: new Date(now.valueOf() - 45 * 60_000).toISOString() }];
+  const notifications: DashboardData['notifications'] = isUnreleased
+    ? []
+    : roleKey === 'SEER' || roleKey === 'APPRENTICE_SEER'
+      ? [{ id: 'preview-seer-result', type: 'INVESTIGATION_RESULT', title: 'Your investigation', body: 'Morgan Lee is a Werewolf.', createdAt: new Date(now.valueOf() - 2 * 60 * 60_000).toISOString() }]
+      : roleKey === 'CUPID'
+        ? [{ id: 'preview-cupid-result', type: 'LOVER_BOND', title: 'Your bond is known', body: 'Casey Rivera and Morgan Lee are linked as lovers.', createdAt: new Date(now.valueOf() - 2 * 60 * 60_000).toISOString() }]
+        : [{ id: 'preview-announcement', type: 'ANNOUNCEMENT', title: 'A note from the moderator', body: 'The next update will arrive after this response window closes.', createdAt: new Date(now.valueOf() - 45 * 60_000).toISOString() }];
 
   const gameStatus = scenario === 'completed' ? 'COMPLETED'
     : scenario === 'stopped' ? 'STOPPED'
@@ -136,7 +141,7 @@ export function createPreviewData(roleKey: RoleKey, scenario: PreviewScenarioId)
       alive: !isEliminated,
       role: isUnreleased ? null : roleKey,
       roleDefinition: isUnreleased ? null : ROLE_CATALOG[roleKey],
-      teammates: isEliminated ? []
+      teammates: isEliminated || isUnreleased ? []
         : roleKey === 'WEREWOLF' ? [{ id: 'preview-pack-morgan', displayName: 'Morgan Lee', alive: true }, { id: 'preview-pack-jordan', displayName: 'Jordan Blake', alive: false }]
           : roleKey === 'MASON' ? [{ id: 'preview-mason-casey', displayName: 'Casey Rivera', alive: true }, { id: 'preview-mason-riley', displayName: 'Riley Chen', alive: true }]
             : [],
@@ -146,9 +151,13 @@ export function createPreviewData(roleKey: RoleKey, scenario: PreviewScenarioId)
       name: 'Studio Sample Campaign',
       status: gameStatus,
       timezone: 'America/Regina',
-      counts: { total: 20, living: isEliminated ? 14 : 15, werewolvesRemaining: 3 },
+      counts: {
+        total: isUnreleased ? candidates.length + 1 : 20,
+        living: isUnreleased ? candidates.length + 1 : isEliminated ? 14 : 15,
+        werewolvesRemaining: isUnreleased ? 0 : 3,
+      },
       livingPlayers: livingPlayers.map(({ id, displayName }) => ({ id, displayName })),
-      eliminatedPlayers: [
+      eliminatedPlayers: isUnreleased ? [] : [
         { id: 'preview-eliminated-jordan', displayName: 'Jordan Blake', role: 'WEREWOLF' },
         { id: 'preview-eliminated-riley', displayName: 'Riley Chen', role: 'VILLAGER' },
       ],
@@ -158,7 +167,9 @@ export function createPreviewData(roleKey: RoleKey, scenario: PreviewScenarioId)
     permission,
     candidates: actionCandidates,
     currentAction,
-    participation: { submitted: currentAction ? 9 : 8, eligible: isFinal ? 6 : 15 },
+    participation: isUnreleased
+      ? { submitted: 0, eligible: 0 }
+      : { submitted: currentAction ? 9 : 8, eligible: isFinal ? 6 : 15 },
     timeline: makeTimeline(now, scenario),
     notifications,
     notificationsHasMore: false,

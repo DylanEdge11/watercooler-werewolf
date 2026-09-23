@@ -52,7 +52,7 @@ export async function POST(request: Request, context: RouteContext) {
       action?: 'DELETE_MESSAGE' | 'SET_ROOM_STATUS' | 'PURGE_RETENTION';
       messageId?: string;
       roomId?: string;
-      status?: 'OPEN' | 'READ_ONLY';
+      status?: unknown;
       reason?: string;
     };
     const db = getDb();
@@ -81,7 +81,9 @@ export async function POST(request: Request, context: RouteContext) {
       return Response.json({ ok: true });
     }
     if (body.action === 'SET_ROOM_STATUS') {
-      if (!body.roomId || !body.status) throw new Error('Choose a room and status.');
+      if (!body.roomId || (body.status !== 'OPEN' && body.status !== 'READ_ONLY')) {
+        throw new Error('Choose a room and a valid status.');
+      }
       const game = await db
         .prepare('SELECT status FROM games WHERE id = ? LIMIT 1')
         .bind(gameId)
@@ -90,10 +92,11 @@ export async function POST(request: Request, context: RouteContext) {
       if (body.status === 'OPEN' && ['STOPPED', 'COMPLETED', 'CANCELLED'].includes(game.status)) {
         throw new Error('Rooms remain read-only after the game has stopped or completed.');
       }
-      await db
+      const result = await db
         .prepare("UPDATE chat_rooms SET status = ? WHERE id = ? AND game_id = ? AND status != 'PURGED'")
         .bind(body.status, body.roomId, gameId)
         .run();
+      if (Number(result.meta.changes ?? 0) === 0) throw new Error('Room not found or purged.');
       return Response.json({ ok: true });
     }
     if (body.action === 'PURGE_RETENTION') {

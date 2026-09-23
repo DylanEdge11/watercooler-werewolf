@@ -2,7 +2,7 @@
 
 The Playwright suite exercises a disposable local game through the same HTTP routes used by the moderator and player dashboards. The test server creates a fresh libSQL file under `work/playwright/`, runs the checked-in migrations, bootstraps a fictional moderator, and removes that database when the server exits.
 
-Run it from `project/` with Node.js 22.x:
+Run it from `project/` with Node.js 24.x LTS. The package supports Node.js `>=24`; CI verifies Node 24.x.
 
 ```text
 npm run test:e2e

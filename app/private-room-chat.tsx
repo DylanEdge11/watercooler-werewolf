@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { LatestRoomRequest } from '../lib/chat/latest-room-request';
 
 interface Room {
   id: string;
@@ -48,20 +49,33 @@ function previewMessages(roomType: Room['type']): Message[] {
 
 export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms: Room[]; previewMode?: boolean }) {
   const [roomId, setRoomId] = useState(rooms[0]?.id ?? '');
-  const [loadedMessages, setLoadedMessages] = useState<Message[]>([]);
+  const [loadedMessagesByRoom, setLoadedMessagesByRoom] = useState<Record<string, Message[]>>({});
   const [previewMessagesByRoom, setPreviewMessagesByRoom] = useState<Record<string, Message[]>>(
     () => previewMode ? Object.fromEntries(rooms.map((candidate) => [candidate.id, previewMessages(candidate.type)] as const)) : {},
   );
   const [error, setError] = useState('');
+  const messageRequest = useRef<LatestRoomRequest | null>(null);
+  if (messageRequest.current === null) {
+    messageRequest.current = new LatestRoomRequest(roomId);
+  }
   const room = rooms.find((candidate) => candidate.id === roomId) ?? rooms[0];
-  const messages = previewMode ? previewMessagesByRoom[room?.id ?? ''] ?? [] : loadedMessages;
+  const messages = previewMode
+    ? previewMessagesByRoom[room?.id ?? ''] ?? []
+    : loadedMessagesByRoom[room?.id ?? ''] ?? [];
 
   const load = useCallback(async () => {
     if (!roomId || previewMode) return;
-    const response = await fetch(`/api/rooms/${roomId}/messages`);
-    const data = await response.json() as { messages?: Message[]; error?: string };
-    if (!response.ok) throw new Error(data.error ?? 'Unable to load messages.');
-    setLoadedMessages(data.messages ?? []);
+    await messageRequest.current?.run(
+      roomId,
+      async () => {
+        const response = await fetch(`/api/rooms/${roomId}/messages`);
+        const data = await response.json() as { messages?: Message[]; error?: string };
+        if (!response.ok) throw new Error(data.error ?? 'Unable to load messages.');
+        return data.messages ?? [];
+      },
+      (messages) => setLoadedMessagesByRoom((current) => ({ ...current, [roomId]: messages })),
+      (caught) => setError(caught instanceof Error ? caught.message : 'Unable to load messages.'),
+    );
   }, [previewMode, roomId]);
 
   useEffect(() => {
@@ -114,7 +128,7 @@ export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms:
   return (
     <section className="rail-card private-chat" id="private-room">
       <div className="rail-heading"><h2>{roomNames[room.type]}</h2><span>{messages.length}</span></div>
-      {rooms.length > 1 && <div className="room-tabs">{rooms.map((candidate) => <button className={candidate.id === room.id ? 'active' : ''} key={candidate.id} type="button" aria-pressed={candidate.id === room.id} onClick={() => setRoomId(candidate.id)}>{roomNames[candidate.type]}</button>)}</div>}
+      {rooms.length > 1 && <div className="room-tabs">{rooms.map((candidate) => <button className={candidate.id === room.id ? 'active' : ''} key={candidate.id} type="button" aria-pressed={candidate.id === room.id} onClick={() => { messageRequest.current?.select(candidate.id); setRoomId(candidate.id); }}>{roomNames[candidate.type]}</button>)}</div>}
       <div className="chat-scroll">
         {messages.length ? messages.map((message) => <article key={message.id} className="chat-line"><div><strong>{message.authorName}</strong><small suppressHydrationWarning>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small></div><p>{message.body ?? (message.purgedAt ? 'Message expired.' : 'Message removed by a moderator.')}</p></article>) : <p className="empty-note">No messages yet. This room is visible only to its members.</p>}
       </div>

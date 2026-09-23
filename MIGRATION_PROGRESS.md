@@ -1,6 +1,6 @@
 # Vercel migration progress
 
-Last updated: 2026-09-16
+Last updated: 2026-09-23
 
 ## Current status
 
@@ -10,7 +10,7 @@ The old Sites deployment and database were not modified or deleted. No paid plan
 
 ## Decisions
 
-- Target: native Next.js App Router on the Vercel Node.js runtime, with Node 22.x pinned in `package.json`, `.nvmrc`, CI, and the Vercel project settings.
+- Target: native Next.js App Router on the Vercel Node.js runtime. The supported minimum is Node.js `>=24`; `.nvmrc` and CI use Node 24.x LTS as the verified baseline. Vercel deploys use the Node 24.x version selected by the package engine range.
 - Database: free Turso/libSQL is the selected candidate. The application uses `@libsql/client` 0.18.0 through an application-owned contract. The ordered batch API, rollback behavior, affected-row metadata, SQLite SQL, foreign keys, and result mapping were exercised against an isolated real libSQL client/database. A remote Turso Preview database has now been created and exercised; a separate Production database remains an external gate.
 - Cost: Vercel Hobby plus a free remote SQLite-compatible database remains the target for this personal, non-commercial pilot. No billable provisioning was performed.
 - Scheduling: moderator-driven Operations reconciliation remains the supported low-cost path. Server-enforced cutoffs remain in the action endpoints. No minute-frequency cron was configured; the scheduler route accepts authenticated `GET` with `Bearer CRON_SECRET` and retains `POST` compatibility for an external caller.
@@ -136,7 +136,7 @@ Browser limitations:
 
 - The requested 390x844 mobile viewport, keyboard-action pass, and browser-console inspection are not claimed. The prescribed `agent-browser` executable was unavailable in the environment; the available in-app browser fallback verified the desktop flow but did not expose viewport/devtools controls.
 - Manual 20-player browser show-and-play, mobile viewport/devtools inspection, and a separate remote restart check remain unclaimed.
-- The local checks ran on Node 24.20.0 available in the environment; the target is pinned to Node 22.x in project/CI/Vercel configuration and should receive one final Node 22 run before release.
+- The migration checks ran on Node 24.20.0. The runtime policy was updated on 2026-09-23: Node.js `>=24` is supported and the Node 24.x LTS line is the CI and release-verification baseline; no Node 22 rerun is required.
 
 ## Stage 7 — Vercel preview and production
 

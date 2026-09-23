@@ -28,7 +28,7 @@ The site operator must configure the application and create the first moderator.
 
 ## Maintainer quick start
 
-From this `project` directory, use Node.js 22.x and follow the [local setup steps](VERCEL_SETUP_GUIDE.md#proof-a-run-everything-locally-with-dummy-data). Configure a disposable local database, then run `npm ci`, `npm run db:migrate`, `npm run owner:bootstrap`, and `npm run dev`, in that order. Bootstrap displays recovery codes once.
+From this `project` directory, use Node.js 24.x LTS and follow the [local setup steps](VERCEL_SETUP_GUIDE.md#proof-a-run-everything-locally-with-dummy-data). The package accepts Node.js `>=24`; CI verifies the Node 24.x baseline. Configure a disposable local database, then run `npm ci`, `npm run db:migrate`, `npm run owner:bootstrap`, and `npm run dev`, in that order. Bootstrap displays recovery codes once.
 
 Run the checks in [Pilot testing](docs/PILOT_TESTING.md#release-verification) before a release. Never run fictional-data helpers against Production.
 

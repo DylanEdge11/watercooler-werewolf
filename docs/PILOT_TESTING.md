@@ -4,7 +4,7 @@ For fictional local or isolated Preview games only. To learn normal play, use [H
 
 ## Prepare a local rehearsal
 
-Use Node.js 22.x. From `project`, follow [local setup](../VERCEL_SETUP_GUIDE.md#proof-a-run-everything-locally-with-dummy-data): configure a disposable database, run `npm ci`, `npm run db:migrate`, and `npm run owner:bootstrap`, then start `npm run dev`.
+Use Node.js 24.x LTS. The package supports Node.js `>=24`; CI verifies Node 24.x. From `project`, follow [local setup](../VERCEL_SETUP_GUIDE.md#proof-a-run-everything-locally-with-dummy-data): configure a disposable database, run `npm ci`, `npm run db:migrate`, and `npm run owner:bootstrap`, then start `npm run dev`.
 
 Keep that server running. In a second PowerShell window, provide the **same fictional moderator email/password used for bootstrap**:
 

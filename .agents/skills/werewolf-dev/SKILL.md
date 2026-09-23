@@ -11,7 +11,7 @@ Use this skill only for the Dev phase: make a focused change, do the smallest us
 
 - Resolve the candidate worktree that contains the app's `package.json`. Use the worktree on the branch and base intended for this change; do not edit a different checkout just because it is open in the workspace.
 - Git remote: `origin` (`DylanEdge11/watercooler-werewolf`). Vercel project: `watercooler-werewolf`, team: `dyl-edge`.
-- Use Node 22.x. Preview and Production have separate Turso databases and Vercel environment variables. This skill targets Preview only.
+- Use Node 24.x LTS, the verified baseline. The package supports Node.js `>=24`. Preview and Production have separate Turso databases and Vercel environment variables. This skill targets Preview only.
 
 ## Make a focused change and quick checks
 

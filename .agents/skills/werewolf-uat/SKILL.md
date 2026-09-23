@@ -12,7 +12,7 @@ Use this skill only for the UAT phase: comprehensively review a specific, alread
 - Resolve the Git worktree that contains the exact UAT candidate SHA before running commands. In this workspace `project/` is the default app root, but use the matching candidate worktree when it is checked out elsewhere; never test a different worktree's files against the Preview deployment.
 - Git remote: `origin` (`DylanEdge11/watercooler-werewolf`). The production branch is `main`; use the appropriate development base for each candidate.
 - Vercel project: `watercooler-werewolf`, team scope: `dyl-edge`.
-- Use Node 22.x and the repository's existing scripts and CI workflow.
+- Use Node 24.x LTS, the verified baseline; the package supports Node.js `>=24`. Use the repository's existing scripts and CI workflow.
 - Read [the hosted Preview Playwright runbook](../../../docs/PLAYWRIGHT_HOSTED_RUNBOOK.md), [the Vercel setup guide](../../../VERCEL_SETUP_GUIDE.md), and `.github/workflows/ci.yml` as needed.
 - Resolve those references from the exact candidate checkout. If a referenced file is missing, locate the version that belongs to the candidate SHA or stop and report the gap; do not silently use stale instructions from another branch.
 - Preview and Production use separate Turso databases and Vercel environment variables. This skill only targets Preview.
