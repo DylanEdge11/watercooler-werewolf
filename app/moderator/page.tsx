@@ -455,7 +455,8 @@ export default function ModeratorPage() {
             <li className={latestBatch ? 'done' : roster.length ? 'active' : ''}><span>3</span><div><strong>Role balance</strong><small>Compose and randomize</small></div></li>
             <li className={latestBatch?.releasedAt ? 'done' : latestBatch ? 'active' : ''}><span>4</span><div><strong>Release roles</strong><small>Irreversible launch</small></div></li>
           </ol>
-          <a className="quiet-link" href="/">View player preview →</a>
+          <a className="quiet-link" href="/">View current player session →</a>
+          <a className="quiet-link" href="/moderator/player-preview">Open Player View Studio →</a>
         </aside>
 
         <section className="console-main">
