@@ -136,7 +136,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const [data, setData] = useState<DashboardData | null>(() => previewMode ? previewData ?? null : null);
   const [loading, setLoading] = useState(!previewMode);
   const [unauthenticated, setUnauthenticated] = useState(false);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>(() => previewMode ? previewData?.currentAction?.targetIds ?? [] : []);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
@@ -233,14 +233,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   }
 
   useEffect(() => {
-    if (previewMode) {
-      setData(previewData ?? null);
-      setLoading(false);
-      setUnauthenticated(false);
-      setError('');
-      setSelected(previewData?.currentAction?.targetIds ?? []);
-      return;
-    }
+    if (previewMode) return;
     const timer = window.setTimeout(() => {
       void refresh().catch((caught) => {
         setError(caught instanceof Error ? caught.message : 'Unable to load the game.');
@@ -256,7 +249,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       window.clearTimeout(timer);
       window.clearInterval(poll);
     };
-  }, [previewData, previewMode, refresh]);
+  }, [previewMode, refresh]);
 
   useEffect(() => {
     if (!activeModal) return;
