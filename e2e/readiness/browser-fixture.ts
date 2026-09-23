@@ -12,6 +12,9 @@ const ROLE_NAMES: Record<RoleKey, string> = {
   BODYGUARD: 'Bodyguard',
   HUNTER: 'Hunter',
   MASON: 'Mason',
+  APPRENTICE_SEER: 'Apprentice Seer',
+  MAYOR: 'Mayor',
+  CUPID: 'Cupid',
 };
 
 const FORBIDDEN_PLAYER_KEYS = new Set([
@@ -123,7 +126,7 @@ interface TelemetryEntry {
 function redactMessage(value: string): string {
   return value
     .replace(/\b\d{6}\b/gu, REDACTED_MESSAGE)
-    .replace(/\b(?:VILLAGER|WEREWOLF|SEER|BODYGUARD|HUNTER|MASON)\b/giu, '[role]')
+    .replace(/\b(?:VILLAGER|WEREWOLF|SEER|BODYGUARD|HUNTER|MASON|APPRENTICE_SEER|MAYOR|CUPID)\b/giu, '[role]')
     .replace(/\/claim\/[^/?#]+/gu, '/claim/[redacted]');
 }
 

@@ -17,6 +17,9 @@ describe('role balance', () => {
       BODYGUARD: 0,
       HUNTER: 0,
       MASON: 0,
+      APPRENTICE_SEER: 0,
+      MAYOR: 0,
+      CUPID: 0,
     });
     for (const count of [6, 7, 8, 9, 11, 12, 14, 15, 19]) {
       const composition = defaultComposition(count);
@@ -41,6 +44,9 @@ describe('role balance', () => {
       BODYGUARD: 1,
       HUNTER: 1,
       MASON: 2,
+      APPRENTICE_SEER: 0,
+      MAYOR: 0,
+      CUPID: 0,
     });
     expect(countComposition(composition)).toBe(20);
     expect(scoreComposition(composition)).toMatchObject({
@@ -58,7 +64,17 @@ describe('role balance', () => {
 
   it('rejects duplicate unique roles, a lone Mason, and the wrong total', () => {
     const result = validateComposition(
-      { VILLAGER: 13, WEREWOLF: 3, SEER: 2, BODYGUARD: 0, HUNTER: 0, MASON: 1 },
+      {
+        VILLAGER: 13,
+        WEREWOLF: 3,
+        SEER: 2,
+        BODYGUARD: 0,
+        HUNTER: 0,
+        MASON: 1,
+        APPRENTICE_SEER: 0,
+        MAYOR: 0,
+        CUPID: 0,
+      },
       20,
     );
     expect(result.valid).toBe(false);

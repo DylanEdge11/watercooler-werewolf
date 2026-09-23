@@ -25,6 +25,9 @@ export const DEFAULT_COMPOSITION: RoleComposition = {
   BODYGUARD: 1,
   HUNTER: 1,
   MASON: 2,
+  APPRENTICE_SEER: 0,
+  MAYOR: 0,
+  CUPID: 0,
 };
 
 export const WEREWOLF_HEAVY_COMPOSITION: RoleComposition = {
@@ -34,4 +37,7 @@ export const WEREWOLF_HEAVY_COMPOSITION: RoleComposition = {
   BODYGUARD: 1,
   HUNTER: 1,
   MASON: 2,
+  APPRENTICE_SEER: 0,
+  MAYOR: 0,
+  CUPID: 0,
 };
