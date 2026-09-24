@@ -1,5 +1,5 @@
 import { request as playwrightRequest, type APIRequestContext, type Browser, type BrowserContext, type BrowserContextOptions } from '@playwright/test';
-import { BASE_ORIGIN, BASE_URL, VERCEL_AUTOMATION_BYPASS_SECRET } from './constants';
+import { BASE_ORIGIN, BASE_URL, E2E_REMOTE, VERCEL_AUTOMATION_BYPASS_SECRET } from './constants';
 
 export const E2E_REQUEST_HEADERS: Record<string, string> = {
   Origin: BASE_ORIGIN,
@@ -22,8 +22,14 @@ export function browserContextOptions(options: BrowserContextOptions = {}): Brow
   };
 }
 
-export function newBrowserContext(browser: Browser, options: BrowserContextOptions = {}): Promise<BrowserContext> {
-  return browser.newContext(browserContextOptions(options));
+export async function newBrowserContext(browser: Browser, options: BrowserContextOptions = {}): Promise<BrowserContext> {
+  const context = await browser.newContext(browserContextOptions(options));
+  if (E2E_REMOTE) {
+    // Vercel injects its feedback toolbar into Preview pages. Tests never use it,
+    // and some networks block vercel.live, which would show up as failed requests.
+    await context.route(/^https:\/\/vercel\.live\//u, (route) => route.fulfill({ status: 204, body: '' }));
+  }
+  return context;
 }
 
 export function newRequestContext(options: APIRequestContextOptions = {}): Promise<APIRequestContext> {

@@ -67,7 +67,7 @@ VERCEL_AUTOMATION_BYPASS_SECRET=<scoped to this Preview>
 
 The preflight calls `vercel inspect`, so the Vercel CLI must be installed and signed in to `dyl-edge`, or `VERCEL_TOKEN` must be set.
 
-In a Claude Code cloud session, these values are environment variables set in the environment's settings (plus `VERCEL_TOKEN`), and there is no `.env.e2e.local`. Drop `--env-file=.env.e2e.local` from the commands below, because Node exits when the file is missing, and pass `E2E_BASE_URL` and `E2E_VERCEL_DEPLOYMENT_ID` inline.
+In a Claude Code cloud session, these values are environment variables set in the environment's settings (plus `VERCEL_TOKEN`), and there is no `.env.e2e.local`. Drop `--env-file=.env.e2e.local` from the commands below, because Node exits when the file is missing, and pass `E2E_BASE_URL` and `E2E_VERCEL_DEPLOYMENT_ID` inline. Chromium automatically trusts the session's network proxy (`e2e/proxy-trust.ts`), and hosted runs stub out Vercel's Preview toolbar, which tests don't use.
 
 ### Run
 
