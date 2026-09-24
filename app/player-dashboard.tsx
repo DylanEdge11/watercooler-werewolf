@@ -125,6 +125,7 @@ function PublicWelcome() {
           <a className="primary-link" href="/player-login">Player sign-in</a>
           <a className="secondary-link" href="/moderator">Moderator console</a>
         </div>
+        <a className="welcome-guide-link" href="/guide">New here? Learn how to play →</a>
         <small>Have an invite link? Open it directly to claim your private seat.</small>
       </section>
     </main>
