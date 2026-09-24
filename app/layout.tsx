@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import { landingFontVariables } from './landing/fonts';
 import './globals.css';
+import './paper-theatre.css';
 
 export const runtime = 'nodejs';
 
@@ -32,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={landingFontVariables}>
       <body
         className="antialiased"
       >

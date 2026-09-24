@@ -407,10 +407,11 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       ? 'The campaign is complete.'
       : 'The village is between phases.';
 
+  const stageLight = data.phase?.kind === 'NIGHT' ? 'night' : 'day';
   const roleThemeClass = roleThemeEnabled && !roleHidden && data.player.role ? ` role-theme role-theme-${data.player.role.toLowerCase()}` : '';
 
   return (
-    <main className={`app-shell${roleThemeClass}${previewMode ? ' preview-player-shell' : ''}`}>
+    <main className={`app-shell${roleThemeClass}${previewMode ? ' preview-player-shell' : ''}`} data-stage-light={stageLight}>
       {previewMode && <div className="preview-mode-banner" role="status">
         <span><strong>Player View Studio.</strong> Synthetic sample data; actions, feedback, and chat stay in this page.</span>
         <button className="text-button" type="button" onClick={onExitPreview}>Back to studio controls</button>
@@ -474,7 +475,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           </div>
           {data.game.status === 'STOPPED' && <p className="notice warning" role="status">{data.game.stopReason ?? 'This game is stopped. Player actions and rooms are read-only.'}</p>}
 
-          <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`}>
+          <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`} data-concealed={roleHidden}>
             {!data.player.alive && <span className="eliminated-banner" role="status">☠ Eliminated · spectator mode</span>}
             <div className="role-orbit"><span aria-hidden="true">{roleHidden ? '⌂' : roleGlyph(data.player.role)}</span></div>
             <div className="role-copy">
@@ -550,7 +551,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>
       </div>
-      {deathAlert && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dismissDeathAlert(); }}>
+      {deathAlert && <div className="modal-backdrop curtain-call" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dismissDeathAlert(); }}>
         <section className="game-modal death-modal" role="dialog" aria-modal="true" aria-labelledby="death-alert-title">
           <div className="modal-symbol" aria-hidden="true">☠</div>
           <p className="eyebrow accent">Official game update</p>
