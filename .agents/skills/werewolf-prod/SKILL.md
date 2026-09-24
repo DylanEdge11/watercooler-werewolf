@@ -12,7 +12,7 @@ Use this skill only when the user separately asks to release a specific, already
 - Resolve the application worktree that contains the intended candidate and `package.json` before running commands. Confirm it is the correct repository and branch before merging or releasing.
 - Git remote: `origin` (`DylanEdge11/watercooler-werewolf`). Production branch: `main`; verify that this remains the Vercel Production Branch.
 - Vercel project: `watercooler-werewolf`, team scope: `dyl-edge`.
-- Read [the Vercel setup guide](../../../VERCEL_SETUP_GUIDE.md) for production configuration and migration operations.
+- Read [the setup and deployment guide](../../../docs/SETUP.md) for production configuration and migration operations.
 - Preview and Production use separate Turso databases and Vercel environment variables. Build a new Production deployment from `main`; never promote the Preview deployment.
 
 ## Verify the UAT handoff before merging

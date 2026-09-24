@@ -1,56 +1,56 @@
 # Technical reference
 
-Maintainer reference for the current Next.js/Vercel build. For user instructions, see [How to Use Watercooler Werewolf](HOW_TO_USE_WATERCOOLER_WEREWOLF.md); for installation, see [Operator setup](../VERCEL_SETUP_GUIDE.md).
+For developers. Installation is in [Setup](SETUP.md), verification in [Testing](TESTING.md), and player-facing rules in the in-app guide (`app/guide/page.tsx`).
 
-## Runtime and database
+## Stack
 
-Use Node.js 24.x LTS and npm. The package supports Node.js `>=24`; CI verifies Node 24.x. The application uses Next.js App Router, React, Drizzle, and libSQL. Local development uses a disposable SQLite file; deployed Vercel functions require a remote Turso/libSQL URL and token. Keep Preview and Production databases and secrets separate.
+- Next.js App Router with React, on Vercel's Node.js runtime (Node 24.x).
+- Turso/libSQL through `@libsql/client`. Routes use a small database contract (`db/contracts.ts`) implemented in `db/libsql.ts`; multi-statement writes go through `batch()`, which runs as one transaction.
+- Drizzle is used only for the schema (`db/schema.ts`) and for generating migrations. Queries are hand-written SQL with bound parameters.
+- Local development and tests use a SQLite file or in-memory database. Deployed functions refuse `file:` URLs.
 
-`npm run db:migrate` explicitly applies checked-in migrations. `ensureDatabase()` verifies the migration ledger; requests do not run DDL. `npm run owner:bootstrap` creates the first moderator from a trusted operator environment and displays recovery codes once. Public bootstrap is disabled. Do not put credentials or production values in the repository.
+Requests never change the schema. `ensureDatabase()` checks that every version in `db/readiness.ts` is recorded in `__app_migrations` and fails otherwise. Migrations run only through `npm run db:migrate` (see [Setup](SETUP.md#schema-changes)).
 
-The schema is `db/schema.ts`. After schema changes, run `npm run db:generate`, inspect the SQL and metadata under `drizzle/`, and run `npx drizzle-kit check`. Do not apply duplicate migrations or infer repairs for a partial schema. Legacy `DOCTOR` rows are migrated to canonical `BODYGUARD`; Doctor is not a separate role.
-
-## Rules and phase state
-
-Role behavior and user workflows are maintained in the [user guide](HOW_TO_USE_WATERCOOLER_WEREWOLF.md). The implementation sources are:
+## Where things live
 
 | Concern | Source |
 | --- | --- |
-| Role catalog and presets | `lib/game/catalog.ts`, `lib/game/balance.ts` |
-| Action eligibility and targets | `lib/game/actions.ts` |
-| Tallies, protection, Hunter, wins | `lib/game/engine.ts` |
-| Legal phase sequence | `lib/game/phase-policy.ts` |
-| Live review/publication | `app/api/games/[gameId]/phases/route.ts` |
-| Setup cancellation, Stop, Reset, restore | `app/api/games/[gameId]/operations/route.ts` |
+| Role catalog and default compositions | `lib/game/catalog.ts`, `lib/game/balance.ts` |
+| Who may act, and on whom | `lib/game/actions.ts` |
+| Tallies, protection, lovers, Hunter, win check | `lib/game/engine.ts` |
+| Legal phase order and Final showdown entry | `lib/game/phase-policy.ts` |
+| Deadlines and timezones | `lib/game/scheduling.ts` |
+| Phase open, lock, Hunter, publish | `app/api/games/[gameId]/phases/route.ts` |
+| Player submissions | `app/api/phases/[phaseId]/actions/route.ts` |
+| Player dashboard data | `app/api/player/route.ts` |
+| Stop, reset, restore, cancel, PIN reset | `app/api/games/[gameId]/operations/route.ts`, `lib/backup/` |
+| Sessions, hashing, authorization | `lib/auth/` |
+| Origin checks and rate limits | `lib/http/` |
 
-After release, Day is first; ordinary phases alternate Day/Night. Each opened phase snapshots its elimination slots: `max(1, ceil(living / divisor))`. New games use divisor 30 for both Day and Night, a 60-minute Hunter window, and seven-day chat retention. Seer, Apprentice Seer, Bodyguard, and Hunter special actions each allow one target; Cupid pairs two seats once, and Mayor ballots count double.
+## Game rules as implemented
 
-Only the latest revision per actor/action counts. Targets must be living, unique, and legal for the role. Boundary ties use recorded random draws. The engine retains `proposedOutcome`, any `reviewedOutcome` during Hunter follow-up, and authoritative `publishedOutcome` separately. Overrides retain their reason, reviewer, and timestamp.
+- After roles are released, the first phase is a Day; Day and Night then alternate. Each phase records its elimination slots when it opens: `max(1, ceil(living / divisor))`, with a default divisor of 30.
+- Only each player's latest saved response counts. Targets must be living, unique, and legal for the role.
+- The highest vote totals fill the slots. A tie across the last slot is resolved by a cryptographically random draw that is stored with the result.
+- The Mayor's Day and Final ballot votes count twice. Bodyguard protection blocks only the pack's attack. Cupid pairs once; when one lover is eliminated, the other is added to the same result.
+- If the result eliminates a Hunter, the phase waits for the Hunter's shot (60 minutes by default) before it can be published.
+- Each result is stored three ways: the engine's `proposedOutcome`, a `reviewedOutcome` after Hunter follow-up or override, and the authoritative `publishedOutcome`. Overrides record the reason, reviewer, and time.
+- Publishing applies eliminations, reveals roles, delivers Seer and lover notifications, updates room access, and checks for a winner in one transaction.
+- Final showdown requires the final cutoff to have passed and the latest phase to be published. After that, only Final ballots are allowed until a team wins.
+- Legacy `DOCTOR` rows are read as `BODYGUARD`.
 
-Publication applies eliminations, role reveals, private investigation and lover notices, room changes, timeline events, and victory evaluation. Apprentice Seers gain action access and the eliminated Seer's saved investigation history. Cupid pairings persist in game events after publication; a lover's elimination adds the partner to the same outcome. If that eliminates the Hunter, the normal Hunter follow-up still applies. Bodyguard protection blocks pack attacks only, and the public timeline reports a blocked attack without naming its protected target. Final showdown requires explicit entry after cutoff and a published ordinary phase; only Final ballots are then legal. A no-winner publication stays in showdown.
+## Time
 
-## Time and deadline monitoring
-
-Deadline inputs are interpreted in the game's IANA timezone, stored as UTC ISO timestamps, and displayed in the viewer's locale or the explicitly labelled game timezone. Impossible calendar values and DST-gap times are rejected; an ambiguous fall-back time uses the earlier occurrence.
-
-Weekday/day-night settings describe cadence. They do not automatically open phases, enforce weekdays, or publish results. Stored `AUTOMATIC` publication and final-round duration do not drive the review workflow.
-
-The Operations panel polls and reconciles due deadlines every ten seconds and offers **Check deadlines**. Submissions are deadline-enforced server-side even when the console is closed. Locking and publication are separate steps.
-
-An optional scheduler uses `CRON_SECRET` and `GET` or `POST /api/scheduler/deadlines` with `Authorization: Bearer <token>`. Without the secret, it returns HTTP 503. No Vercel Cron is configured in `vercel.json`; configure any external scheduler explicitly. The old `WATERCOOLER_SCHEDULER_TOKEN` name is not used by this build.
+Deadlines are entered in the game's IANA timezone and stored as UTC. Impossible dates and times that fall in a daylight-saving gap are rejected; an ambiguous fall-back time uses the earlier instant. The weekday cadence on a game is informational. Nothing opens or publishes phases automatically, and the stored `AUTOMATIC` publication mode is unused.
 
 ## Authentication and privacy
 
-Moderator and player sessions are opaque HTTP-only cookies stored as hashes in libSQL. Passwords and six-digit PINs use salted PBKDF2-SHA256 with 100,000 iterations. Mutations perform origin checks, authorization, and role/phase validation on the server.
+- Moderator and player sessions are random tokens in HTTP-only, SameSite=Lax cookies (`ww_mod_session`, `ww_player_session`), stored as SHA-256 hashes. They last seven days.
+- Passwords, PINs, and recovery codes are hashed with salted PBKDF2-SHA256 (100,000 iterations). Claim codes are 72-bit random tokens stored as SHA-256 hashes.
+- Every write checks the `Origin` header against `SITE_ORIGIN`, then authorization, then game state. The final write repeats the state checks inside the same statement, so concurrent requests cannot slip past them.
+- Players receive only their own role, permitted teammates and rooms, legal targets, their own private results, and published events. `e2e/readiness/browser-fixture.ts` lists the fields that must never reach a player.
+- Rate limits are stored in the database and return HTTP 429 with `Retry-After`: moderator login and recovery 5 per 15 minutes, player sign-in 8 per 15 minutes, seat claim 3 per hour, actions and chat 30 per 10 minutes each, feedback 3 per hour (players) or 10 per hour (moderators).
 
-Players receive their own role, permitted teammates/rooms, legal candidates, private results, and published events. Players sign in with invitation email and PIN, with the seat code retained as a fallback. Eliminated faction members become read-only in their former room and gain Afterlife. Moderators can inspect assignments and private rooms. Announcements include email-ready copy but no email provider sends it.
+## Polling
 
-Rate limits are stored in libSQL and updated atomically. HTTP 429 includes `Retry-After`. Current limits include moderator login (5/15 minutes), player sign-in (8/15 minutes), claiming (3/hour), actions/chat (30/10 minutes), player feedback (3/hour), and moderator feedback (10/hour). See route implementations for the exact bucket scope.
-
-Backups include private game state and audit evidence, exclude credential/session secrets, and carry a SHA-256 checksum. Restore rebuilds configuration, current roster, and composition in setup; it does not restore gameplay or credentials. See [Operations](OPERATIONS.md) for consequences.
-
-## Verification and deployment records
-
-`package.json` and `package-lock.json` are authoritative for installed dependencies. Use [Pilot testing](PILOT_TESTING.md#release-verification) for checks and [the hosted runbook](PLAYWRIGHT_HOSTED_RUNBOOK.md) for Preview verification. Audit counts are dated observations, not permanent properties.
-
-[Implementation progress](IMPLEMENTATION_PROGRESS.md) and [Hosted QA](PLAYWRIGHT_HOSTED_QA_REPORT.md) record the September 19 Preview checkpoint. [BUILD_STATUS.md](../BUILD_STATUS.md) retains older Sites/Cloudflare history; it is not current hosting guidance. A Preview pass does not certify Production or performance/load readiness.
+The player dashboard, open chat rooms, and moderator panels each refresh every ten seconds. There are no WebSockets.

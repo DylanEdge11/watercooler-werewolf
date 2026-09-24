@@ -12,7 +12,7 @@ test.afterAll(async () => {
   await closeSharedModerator();
 });
 
-const outputDirectory = resolve('docs/images/pilot-role-pages-2026-09-21');
+const outputDirectory = resolve('docs/archive/images/pilot-role-pages-2026-09-21');
 
 function reviewDeadline(): string {
   return formatZonedDateTimeLocal(new Date(Date.now() + 60 * 60_000), 'America/Regina');

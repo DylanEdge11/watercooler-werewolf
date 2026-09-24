@@ -51,6 +51,7 @@ export default function ClaimForm({ code }: { code: string }) {
           <p className="privacy-note">This invitation identifies only your private seat. Never forward it.</p>
         </>
       ) : error ? <p className="form-error" role="alert">{error}</p> : <p>Please wait a moment.</p>}
+      <a className="quiet-link" href="/guide">New to Werewolf? Read how to play →</a>
     </section>
   );
 }

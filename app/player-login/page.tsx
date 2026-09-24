@@ -34,7 +34,10 @@ export default function PlayerLoginPage() {
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="primary-button" type="submit">Enter the game</button>
         </form>
-        <a className="quiet-link" href="/moderator">Moderator console →</a>
+        <div className="button-row">
+          <a className="quiet-link" href="/guide">How to play →</a>
+          <a className="quiet-link" href="/moderator">Moderator console →</a>
+        </div>
       </section>
     </main>
   );
