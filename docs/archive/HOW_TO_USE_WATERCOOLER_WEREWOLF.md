@@ -1,6 +1,6 @@
 # How to Use Watercooler Werewolf
 
-For first-time players and moderators. Reviewed September 20, 2026 against current source and recorded Vercel Preview evidence. Screenshots use fictional players; your names, counts, and dates will differ. Use the game URL your organizer supplies. No installation or ChatGPT account is required.
+For first-time players and moderators. Updated September 22, 2026 against current source. Screenshots use fictional players; your names, counts, and dates will differ. Use the game URL your organizer supplies. No installation or ChatGPT account is required.
 
 [Basics](#game-basics) · [Join and play](#join-and-play) · [Every role](#every-role) · [Moderator setup](#moderator-setup) · [Run phases](#run-each-phase) · [Finish](#finish-the-game) · [Help](#help-and-recovery)
 
@@ -9,7 +9,7 @@ For first-time players and moderators. Reviewed September 20, 2026 against curre
 Werewolf is a game of discussion and hidden identities. Most players belong to the **Village**; a few are **Werewolves** pretending to be villagers. Discuss suspicions through the organizer's agreed channel, then record your choices in the app. Chat messages and spoken votes do not count as submissions.
 
 - **Day:** every living player, including Werewolves, votes to eliminate other players.
-- **Night:** living Werewolves choose attacks; the Seer investigates; the Bodyguard protects. Other roles wait.
+- **Night:** living Werewolves choose attacks; the Seer investigates; the Bodyguard protects; a living Apprentice Seer investigates after the Seer is eliminated; Cupid chooses two lovers once. Other roles wait.
 - **Moderator:** runs the schedule and publishes results. They can see all roles and private rooms, so should not also play a seat in that game.
 - **Village wins** when no Werewolves remain alive. **Werewolves win** when their living number equals or exceeds all living Village players combined. The app checks after each published result.
 
@@ -20,21 +20,21 @@ A *phase* is one response window: Day, Night, or Final ballot. A *seat* is your 
 ### Join once; sign in again later
 
 1. Open the private claim link sent by your moderator. Check your name and game name.
-2. Choose a **six-digit PIN**, then select **Claim my seat** → **Enter the game**. Keep the link/code and PIN private.
+2. Choose a **six-digit PIN**, then select **Claim my seat** → **Enter the game**. Keep the one-time link and PIN private.
 3. Wait for the moderator to release roles. Your dashboard will show **Your private role**.
-4. On later visits, open the same site's `/player-login` page. Enter **Seat code** (the invitation's `invite_code`) and **Six-digit PIN**, then **Enter the game**. Do not repeat the one-time claim step.
+4. On later visits, open the same site's `/player-login` page. Enter the **email address from your invitation** and **Six-digit PIN**, then **Enter the game**. Your seat code also works as a fallback. Do not repeat the one-time claim step.
 
-Lost the code? Ask the moderator for your own code from their saved invitation file. Forgotten PIN? Ask for a PIN reset. Never use another player's invitation.
+Forgot your PIN? Ask for a PIN reset. If email sign-in opens the wrong game or cannot find your seat, ask the moderator for your seat code. Never use another player's invitation.
 
 ### Submit a vote or action
 
 1. Open **Today**. Read the phase, **Response window**, and action heading below your role.
-2. Select player cards. Select a card again to deselect it. The **selected** counter shows the maximum; at least one target is required to save.
+2. Select player cards. For a single-target action, selecting someone new replaces your previous choice; select the current card again to clear it. For multi-target ballots, select up to the displayed maximum.
 3. Select **Save response** and wait for the success message. Selecting cards alone does not submit them.
 4. To revise, change the selection and **Save response** again before the deadline or moderator lock. Only your latest saved response counts.
 5. After publication, read **Official timeline** for eliminations and revealed roles. Announcements and Seer results also appear in **Private result history**; use **Load older updates** when available.
 
-You cannot target yourself, an eliminated player, or the same person twice. The app shows legal candidates. Missing a window means no action; there is no blank-response button to withdraw an already saved vote. Pages refresh about every ten seconds; **Check for updates** is available on the waiting screen.
+Most actions cannot target yourself or an eliminated player, and you cannot select the same person twice. Cupid may include themself in the pair. The app shows legal candidates. Missing a window means no action; there is no blank-response button to withdraw an already saved vote. Pages refresh about every ten seconds; **Check for updates** is available on the waiting screen.
 
 Default Day, Night attack, and Final ballot limits depend on the living count when the phase opens:
 
@@ -52,16 +52,21 @@ You may select fewer than the maximum. The Seer, Bodyguard, and Hunter always ch
 
 ## Every role
 
-All six roles vote during Day and Final ballots while alive. All except the Werewolf belong to the Village.
+All nine roles vote during Day and Final ballots while alive. The Mayor's vote counts twice in those ballots. All except the Werewolf belong to the Village.
 
 | Role | What to do beyond the shared voting steps | Private information and example |
 | --- | --- | --- |
 | **Villager** | Discuss suspicions and vote. No Night action; wait for the next Day. | Your role and published results. [Villager screen](images/how-to-use/role-villager.png). |
 | **Werewolf** | At Night, use **Choose the pack targets**, select up to the displayed limit, and **Save response**. Each living wolf submits their own ballot; the app combines the votes. You cannot attack another Werewolf. | **Your pack** lists fellow wolves; **Pack room** is for coordination. [Werewolf screen](images/how-to-use/role-werewolf.png). |
 | **Seer** | At Night, use **Choose a player to investigate** and save one other living player. After publication, read their **exact role** in **Private result history**. | Your investigation results are private to you and moderator access. [Seer screen](images/how-to-use/role-seer.png). |
-| **Bodyguard** | At Night, use **Choose a player to protect** and save one other living player. Protection blocks a Werewolf attack on that player for this Night. It does not prevent a Day elimination or Hunter shot. | Your role and saved choice; no Seer-style investigation result. [Bodyguard screen](images/how-to-use/role-bodyguard.png). |
-| **Hunter** | No ordinary Night action. If a reviewed result eliminates you, **Choose your final target** appears in a separate window. Save one living player not already being eliminated in that result. No response before its deadline means no shot. | Your final-target form appears only when required, before publication of your elimination. [Hunter screen before a phase](images/how-to-use/role-hunter.png). |
+| **Bodyguard** | At Night, use **Choose a player to protect** and save one other living player. Protection blocks a Werewolf attack on that player for this Night. It does not prevent a Day elimination or Hunter shot. The public timeline notes when protection stops a pack attack without naming the protected player. | Your role and saved choice; no Seer-style investigation result. [Bodyguard screen](images/how-to-use/role-bodyguard.png). |
+| **Hunter** | No ordinary Night action. If a reviewed result eliminates you, including through a lover bond, **Choose your final target** appears in a separate window. Save one living player not already being eliminated in that result. No response before its deadline means no shot. | Your final-target form appears only when required, before publication of your elimination. [Hunter screen before a phase](images/how-to-use/role-hunter.png). |
 | **Mason** | No Night power. Coordinate with fellow Masons and vote during Day. | **Fellow Masons** identifies teammates; **Mason room** provides chat. [Mason screen](images/how-to-use/role-mason.png). |
+| **Apprentice Seer** | Wait while the Seer is alive. After the Seer is eliminated, investigate one living player each Night. | Inherits the Seer's earlier investigation results and keeps new results in **Private result history**. |
+| **Mayor** | Vote during Day and Final ballots. Your submitted vote counts twice. | Your role card explains the double vote. |
+| **Cupid** | On a Night before a pair is chosen, select exactly two living players, including yourself if you wish, and save. | The linked players receive private notice. If either is eliminated, the other is eliminated too, regardless of faction. |
+
+Use **Hide role** on your role card when you are playing somewhere other people can see your screen. Use **Show role** to reveal it again. A new elimination opens a prominent game alert; the same event stays dismissed on that device after you close it. Selecting **View votes** in the timeline opens the public ballot in a centered, scrollable panel.
 
 Use **Private room**, choose a room tab if shown, type a message, and **Send**. Messages allow up to 1,000 characters. Moderators can read and moderate rooms. Keep role screenshots and room contents private; agree on discussion etiquette before play.
 
@@ -95,13 +100,13 @@ Blair Example,blair@example.test
 
 This illustrates the format only; supply 6–80 complete rows. Use real addresses only for your real game. For a rehearsal, use the [20-player fictional roster](../fixtures/roster-20.csv).
 
-Select **Create private seats** → **Download invite CSV** immediately. Codes are exported only once. Privately send each person **only their own** `claim_url` and `invite_code`. The app does not email invitations. Keep the full file private.
+Select **Create private seats** → **Download invite CSV** immediately. Privately send each person only their own `message_body`; it includes their private claim link. The app does not send invitations. Keep the full CSV private for the fallback seat codes.
 
 Wait until the claim meter shows everyone claimed. Re-importing replaces the unlaunched roster and invalidates old access; use it only to deliberately restart registration, then download and deliver new invitations.
 
 ### 3. Balance, randomize, and release
 
-In **Balance the roles**, use the suggested counts or edit them. Counts must total the roster, include at least one Werewolf, have no more than one each of Seer/Bodyguard/Hunter, and have either zero or at least two Masons. The balance score is guidance, not a guarantee of fairness.
+In **Balance the roles**, use the suggested counts or edit them. Counts must total the roster, include at least one Werewolf, have no more than one Seer, Bodyguard, Hunter, Apprentice Seer, Mayor, or Cupid, and have either zero or at least two Masons. The balance score is guidance, not a guarantee of fairness.
 
 The 20-player default is **12 Villagers, 3 Werewolves, 1 Seer, 1 Bodyguard, 1 Hunter, and 2 Masons**. Smaller presets add powers gradually: 6–8 players start with one wolf and Villagers; 9–11 add a Seer; 12–14 use two wolves and a Seer; 15–19 use three wolves, a Seer, and a Bodyguard.
 

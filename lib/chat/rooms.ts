@@ -42,7 +42,8 @@ export async function ensureGameRooms(gameId: string): Promise<void> {
           .prepare(
             `INSERT INTO chat_room_members (room_id, seat_id, access, granted_at, revoked_at)
              VALUES (?, ?, ?, ?, ?)
-             ON CONFLICT(room_id, seat_id) DO UPDATE SET access = excluded.access, revoked_at = excluded.revoked_at`,
+             ON CONFLICT(room_id, seat_id) DO UPDATE SET access = excluded.access, revoked_at = excluded.revoked_at
+             WHERE chat_room_members.access != excluded.access`,
           )
           .bind(roomId, seat.id, access, now, access === 'READ_ONLY' ? now : null),
       );

@@ -1,37 +1,39 @@
 # Watercooler Werewolf
 
-A browser-based Werewolf game for 6–80 players and a moderator. Players receive private roles, vote during Day, and use role powers at Night. The moderator opens each phase, reviews its result, and publishes it.
+A browser-based Werewolf game for offices and other busy groups. Six to eighty players each get a secret role on their own device, vote on their own time over days or weeks, and a moderator reviews and publishes every result.
 
-**New player or moderator? Start with [How to Use Watercooler Werewolf](docs/HOW_TO_USE_WATERCOOLER_WEREWOLF.md).** It covers joining, every role, running a complete game, and common problems, with screenshots from a fictional Vercel Preview game. No coding or ChatGPT account is needed to play. An [offline browser-readable copy](docs/HOW_TO_USE_WATERCOOLER_WEREWOLF.html) embeds the screenshots.
+**New players and moderators:** open `/guide` on your game's site for the rules, every role, and step-by-step instructions, with screenshots and a walkthrough video.
 
-## Choose your guide
+## Documentation
 
 | I want to… | Read |
 | --- | --- |
-| Play or moderate my first game | [How to Use Watercooler Werewolf](docs/HOW_TO_USE_WATERCOOLER_WEREWOLF.md) |
-| Recover access, back up, stop, or reset a game | [Operations and recovery](docs/OPERATIONS.md) |
-| Install locally or configure Vercel/Turso | [Setup guide](VERCEL_SETUP_GUIDE.md) |
-| Rehearse with fictional players | [Pilot testing](docs/PILOT_TESTING.md) |
-| Run automated browser tests | [Local browser checks](docs/PLAYWRIGHT_READINESS.md) · [Hosted Preview runbook](docs/PLAYWRIGHT_HOSTED_RUNBOOK.md) |
-| Understand the implementation | [Technical reference](docs/TECHNICAL.md) |
-| See dated verification evidence | [Implementation checkpoint](docs/IMPLEMENTATION_PROGRESS.md) · [Hosted QA report](docs/PLAYWRIGHT_HOSTED_QA_REPORT.md) |
-| See what this documentation review changed | [Documentation audit](docs/DOCUMENTATION_REVIEW_2026-09-20.md) |
+| Learn the rules or run a game | The in-app guide at `/guide` (source: [`app/guide/page.tsx`](app/guide/page.tsx)) |
+| Recover access, back up, stop, reset, or restore a game | [Operations and recovery](docs/OPERATIONS.md) |
+| Install locally, deploy to Vercel, or release a change | [Setup and deployment](docs/SETUP.md) |
+| Run tests, rehearse a game, or verify a Preview | [Testing](docs/TESTING.md) |
+| Understand the code | [Technical reference](docs/TECHNICAL.md) |
+| Read old reports and migration records | [Archive](docs/archive/README.md) |
 
-## Before the first game
+## Quick start (local)
 
-The site operator must configure the application and create the first moderator. Players then need their private invitation, seat code, and a six-digit PIN. Moderators use their own email and password.
+Requires Node.js 24.x.
 
-- Use the **exact game URL supplied by the organizer**. Preview and Production are separate environments.
-- The moderator must open phases and publish results manually. The displayed weekday schedule does not run the game automatically.
-- Invitations and announcements are not emailed by the app. Deliver each invitation privately; announcements appear in the game.
-- Keep invite exports, role assignments, private messages, and backups private.
+```powershell
+npm ci
+$env:SITE_ORIGIN = 'http://localhost:3000'
+$env:TURSO_DATABASE_URL = 'file:./work/watercooler.db'
+$env:WATERCOOLER_OWNER_EMAIL = 'owner@example.test'
+npm run db:migrate
+npm run owner:bootstrap   # prompts for a password and prints recovery codes once
+npm run dev
+```
 
-## Maintainer quick start
+Then open `http://localhost:3000`. See [Setup](docs/SETUP.md) for Preview and Production.
 
-From this `project` directory, use Node.js 22.x and follow the [local setup steps](VERCEL_SETUP_GUIDE.md#proof-a-run-everything-locally-with-dummy-data). Configure a disposable local database, then run `npm ci`, `npm run db:migrate`, `npm run owner:bootstrap`, and `npm run dev`, in that order. Bootstrap displays recovery codes once.
+## Before a real game
 
-Run the checks in [Pilot testing](docs/PILOT_TESTING.md#release-verification) before a release. Never run fictional-data helpers against Production.
-
-## Documentation status
-
-Reviewed September 20, 2026. The current stack is Next.js on Vercel with Turso/libSQL. The user guide is checked against the current source and recorded Vercel Preview evidence; it does not certify that Production matches Preview. Older migration plans, test prompts, and [BUILD_STATUS.md](BUILD_STATUS.md) retain historical context and are not first-time user instructions.
+- Use the exact site address your organizer gives you. Preview and Production are separate sites with separate data.
+- The app does not send email. Moderators deliver invitations and reminders themselves.
+- Phases never open or publish on their own. The moderator runs every step.
+- Keep invite files, role assignments, private rooms, and backups private.

@@ -9,6 +9,8 @@ import OperationsPanel from './operations-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
+import BrandMark from '../brand-mark';
+import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 
 const sampleRoster = [
   'display_name,email',
@@ -18,7 +20,7 @@ const sampleRoster = [
   }),
 ].join('\n');
 
-const roleOrder = ['VILLAGER', 'WEREWOLF', 'SEER', 'BODYGUARD', 'HUNTER', 'MASON'] as const;
+const roleOrder = ['VILLAGER', 'WEREWOLF', 'SEER', 'BODYGUARD', 'HUNTER', 'MASON', 'APPRENTICE_SEER', 'MAYOR', 'CUPID'] as const;
 const weekdayOptions = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -94,10 +96,7 @@ function BrandHeader() {
   return (
     <header className="setup-header">
       <a className="brand" href="/" aria-label="Watercooler Werewolf home">
-        <span className="brand-mark" aria-hidden="true">
-          <span className="brand-moon" />
-          <span className="brand-cup" />
-        </span>
+        <BrandMark />
         <span><strong>Watercooler</strong><small>Werewolf</small></span>
       </a>
       <span className="mode-chip">Moderator console</span>
@@ -196,10 +195,9 @@ export default function ModeratorPage() {
 
   useEffect(() => {
     if (!authenticated) return;
-    const poll = window.setInterval(() => {
+    return pollWhileVisible(() => {
       void loadGames(gameId).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.'));
     }, 10_000);
-    return () => window.clearInterval(poll);
   }, [authenticated, gameId, loadGames]);
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
@@ -413,14 +411,14 @@ export default function ModeratorPage() {
   const rosterById = useMemo(() => new Map(roster.map((seat) => [seat.id, seat])), [roster]);
   const gameDates = useMemo(() => defaultGameDates(), []);
   const balanceScore = composition
-    ? composition.VILLAGER - composition.WEREWOLF * 5 + composition.SEER * 3 + composition.BODYGUARD * 2 + composition.HUNTER + composition.MASON
+    ? composition.VILLAGER - composition.WEREWOLF * 5 + composition.SEER * 3 + composition.BODYGUARD * 2 + composition.HUNTER + composition.MASON + composition.APPRENTICE_SEER * 2 + composition.MAYOR * 2 + composition.CUPID
     : 0;
 
-  if (loading) return <main className="setup-shell"><BrandHeader /><p className="setup-loading">Opening the moderator console…</p></main>;
+  if (loading) return <main className="setup-shell backstage"><BrandHeader /><p className="setup-loading">Opening the moderator console…</p></main>;
 
   if (!authenticated) {
     return (
-      <main className="setup-shell">
+      <main className="setup-shell backstage">
         <BrandHeader />
         <section className="auth-card">
           <p className="eyebrow accent">Private game control</p>
@@ -444,7 +442,7 @@ export default function ModeratorPage() {
   }
 
   return (
-    <main className="setup-shell">
+    <main className="setup-shell backstage">
       <BrandHeader />
       <div className="console-layout">
         <aside className="setup-progress">
@@ -455,7 +453,8 @@ export default function ModeratorPage() {
             <li className={latestBatch ? 'done' : roster.length ? 'active' : ''}><span>3</span><div><strong>Role balance</strong><small>Compose and randomize</small></div></li>
             <li className={latestBatch?.releasedAt ? 'done' : latestBatch ? 'active' : ''}><span>4</span><div><strong>Release roles</strong><small>Irreversible launch</small></div></li>
           </ol>
-          <a className="quiet-link" href="/">View player preview →</a>
+          <a className="quiet-link" href="/">View current player session →</a>
+          <a className="quiet-link" href="/moderator/player-preview">Open Player View Studio →</a>
         </aside>
 
         <section className="console-main">
@@ -535,9 +534,9 @@ export default function ModeratorPage() {
                 <section className="setup-card">
                   <div className="setup-card-heading"><span>03</span><div><h2>Balance the roles</h2><p>Counts must equal the roster. Unique roles cap at one; Masons travel in groups. Small-game presets are editable before release.</p></div></div>
                   <div className="role-composer">
-                    {roleOrder.map((role) => (
-                      <label key={role}>{role.toLowerCase().replace(/^./u, (letter) => letter.toUpperCase())}
-                        <input type="number" min="0" max={role === 'SEER' || role === 'BODYGUARD' || role === 'HUNTER' ? 1 : roster.length} value={composition[role]} onChange={(event) => {
+                      {roleOrder.map((role) => (
+                        <label key={role}>{ROLE_CATALOG[role].name}
+                        <input type="number" min="0" max={ROLE_CATALOG[role].unique ? 1 : roster.length} value={composition[role]} onChange={(event) => {
                           const next = { ...composition, [role]: Number(event.target.value) };
                           markCompositionDraft(gameId, next);
                           setComposition(next);

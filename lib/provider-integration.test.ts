@@ -6,16 +6,24 @@ import { bootstrapPrimaryModerator } from './auth/bootstrap';
 import { authenticateModerator, redeemModeratorRecoveryCode } from './auth/moderators';
 import { sha256 } from './auth/crypto';
 
-const shared = vi.hoisted(() => ({ db: null as LibsqlDatabase | null }));
+const shared = vi.hoisted(() => ({
+  db: null as LibsqlDatabase | null,
+  currentPlayer: null as { seatId: string } | null,
+  ensureGameRooms: null as ((gameId: string) => Promise<void>) | null,
+}));
 
 vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
 vi.mock('../lib/auth/authorization', () => ({ requireGameModerator: async () => ({ id: 'mod' }) }));
 vi.mock('../lib/auth/session', () => ({
   createPlayerSession: async () => {},
-  getCurrentPlayer: async () => null,
+  getCurrentPlayer: async () => shared.currentPlayer,
 }));
-vi.mock('../lib/chat/rooms', () => ({ ensureGameRooms: async () => {} }));
+vi.mock('../lib/chat/rooms', () => ({
+  ensureGameRooms: async (gameId: string) => {
+    await shared.ensureGameRooms?.(gameId);
+  },
+}));
 vi.mock('../lib/http/rate-limit', () => {
   class TestRateLimitError extends Error {
     readonly retryAfterSeconds = 1;
@@ -30,7 +38,9 @@ vi.mock('../lib/http/rate-limit', () => {
 import { POST as claimPost } from '../app/api/seats/claim/[code]/route';
 import { POST as phasePost } from '../app/api/games/[gameId]/phases/route';
 import { GET as roomsGet } from '../app/api/games/[gameId]/rooms/route';
+import { POST as roomsPost } from '../app/api/games/[gameId]/rooms/route';
 import { GET as operationsGet } from '../app/api/games/[gameId]/operations/route';
+import { GET as playerGet } from '../app/api/player/route';
 
 let client: Client;
 let db: LibsqlDatabase;
@@ -106,21 +116,42 @@ beforeEach(async () => {
   await runMigrations(client, await loadMigrations());
   db = new LibsqlDatabase(client as unknown as LibsqlClient);
   shared.db = db;
+  shared.currentPlayer = null;
+  shared.ensureGameRooms = null;
 });
 
 afterEach(() => {
   shared.db = null;
+  shared.currentPlayer = null;
+  shared.ensureGameRooms = null;
   client.close();
 });
 
 describe('real libSQL provider integration', () => {
-  test('reconciles living and eliminated room access without replacing grant timestamps', async () => {
+  test('keeps membership timestamps stable across repeated player polling while reconciling elimination', async () => {
     await seedActiveGame();
     const { ensureGameRooms } = await vi.importActual<typeof import('./chat/rooms')>('./chat/rooms');
-    await ensureGameRooms('game');
+    shared.ensureGameRooms = ensureGameRooms;
+    shared.currentPlayer = { seatId: 'p17' };
+    const firstRead = await playerGet(new Request('http://localhost:3000/api/player'));
+    expect(firstRead.status).toBe(200);
+
     await client.execute("UPDATE chat_room_members SET granted_at = '2026-01-01' WHERE seat_id = 'p17'");
-    await client.execute("UPDATE seats SET alive = 0 WHERE id = 'p17'");
-    await ensureGameRooms('game');
+    await client.execute("UPDATE seats SET alive = 0 WHERE id IN ('p17', 'p18')");
+    const eliminationRead = await playerGet(new Request('http://localhost:3000/api/player'));
+    expect(eliminationRead.status).toBe(200);
+
+    const membershipsBeforePolling = await client.execute(`SELECT m.seat_id AS seatId, r.type, m.access,
+      m.granted_at AS grantedAt, m.revoked_at AS revokedAt
+      FROM chat_room_members m JOIN chat_rooms r ON r.id = m.room_id
+      WHERE m.seat_id IN ('p17', 'p18', 'p19') ORDER BY m.seat_id, r.type`);
+    const repeatedRead = await playerGet(new Request('http://localhost:3000/api/player'));
+    expect(repeatedRead.status).toBe(200);
+    const membershipsAfterPolling = await client.execute(`SELECT m.seat_id AS seatId, r.type, m.access,
+      m.granted_at AS grantedAt, m.revoked_at AS revokedAt
+      FROM chat_room_members m JOIN chat_rooms r ON r.id = m.room_id
+      WHERE m.seat_id IN ('p17', 'p18', 'p19') ORDER BY m.seat_id, r.type`);
+    expect(membershipsAfterPolling.rows).toEqual(membershipsBeforePolling.rows);
 
     const membership = await client.execute(`SELECT r.type, m.access, m.granted_at AS grantedAt, m.revoked_at AS revokedAt
       FROM chat_room_members m JOIN chat_rooms r ON r.id = m.room_id
@@ -129,8 +160,45 @@ describe('real libSQL provider integration', () => {
       { type: 'DEAD', access: 'WRITE', grantedAt: expect.any(String), revokedAt: null },
       { type: 'WEREWOLF', access: 'READ_ONLY', grantedAt: '2026-01-01', revokedAt: expect.any(String) },
     ]);
-    const living = await client.execute("SELECT access, revoked_at AS revokedAt FROM chat_room_members WHERE seat_id = 'p18'");
+    const secondEliminated = await client.execute(`SELECT r.type, m.access FROM chat_room_members m
+      JOIN chat_rooms r ON r.id = m.room_id WHERE m.seat_id = 'p18' ORDER BY r.type`);
+    expect(secondEliminated.rows).toEqual([
+      { type: 'DEAD', access: 'WRITE' },
+      { type: 'WEREWOLF', access: 'READ_ONLY' },
+    ]);
+    const living = await client.execute("SELECT access, revoked_at AS revokedAt FROM chat_room_members WHERE seat_id = 'p19'");
     expect(living.rows).toEqual([{ access: 'WRITE', revokedAt: null }]);
+  });
+
+  test('accepts only valid room statuses and reports when no room was updated', async () => {
+    await seedActiveGame();
+    await client.execute("INSERT INTO chat_rooms (id, game_id, type, status, created_at) VALUES ('wolf-room', 'game', 'WEREWOLF', 'OPEN', '2026-01-01')");
+    const context = { params: Promise.resolve({ gameId: 'game' }) };
+
+    for (const status of ['PURGED', 'CLOSED']) {
+      const invalid = await roomsPost(request('/api/games/game/rooms', {
+        action: 'SET_ROOM_STATUS', roomId: 'wolf-room', status,
+      }), context);
+      expect(invalid.status).toBe(400);
+    }
+
+    const unknownRoom = await roomsPost(request('/api/games/game/rooms', {
+      action: 'SET_ROOM_STATUS', roomId: 'missing-room', status: 'READ_ONLY',
+    }), context);
+    expect(unknownRoom.status).toBe(400);
+    const unchanged = await client.execute("SELECT status FROM chat_rooms WHERE id = 'wolf-room'");
+    expect(unchanged.rows).toEqual([{ status: 'OPEN' }]);
+
+    const readOnly = await roomsPost(request('/api/games/game/rooms', {
+      action: 'SET_ROOM_STATUS', roomId: 'wolf-room', status: 'READ_ONLY',
+    }), context);
+    expect(readOnly.status).toBe(200);
+    const open = await roomsPost(request('/api/games/game/rooms', {
+      action: 'SET_ROOM_STATUS', roomId: 'wolf-room', status: 'OPEN',
+    }), context);
+    expect(open.status).toBe(200);
+    const toggled = await client.execute("SELECT status FROM chat_rooms WHERE id = 'wolf-room'");
+    expect(toggled.rows).toEqual([{ status: 'OPEN' }]);
   });
 
   test('counts room members and messages independently, including empty rooms', async () => {

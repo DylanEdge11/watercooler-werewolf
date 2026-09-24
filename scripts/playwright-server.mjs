@@ -99,6 +99,10 @@ await app.prepare();
 // origin so API same-origin checks agree with the browser baseURL.
 process.env.SITE_ORIGIN = testServerOrigin;
 server = createServer((request, response) => handle(request, response));
+// Node closes idle keep-alive sockets after 5s by default, which races with
+// Playwright reusing them and surfaces as ECONNRESET. Outlast the client.
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
 await new Promise((resolveListen, rejectListen) => {
   server.once('error', rejectListen);
   server.listen(port, '127.0.0.1', resolveListen);

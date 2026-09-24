@@ -2,9 +2,9 @@
 
 - **Pilot date:** Tuesday, September 22, 2026
 - **Game timezone:** America/Regina
-- **Production site:** <https://watercooler-werewolf-dyl-edge.vercel.app>
-- **Moderator console:** <https://watercooler-werewolf-dyl-edge.vercel.app/moderator>
-- **Returning-player sign-in:** <https://watercooler-werewolf-dyl-edge.vercel.app/player-login>
+- **Production site:** <https://watercooler-werewolf.vercel.app>
+- **Moderator console:** <https://watercooler-werewolf.vercel.app/moderator>
+- **Returning-player sign-in:** <https://watercooler-werewolf.vercel.app/player-login>
 
 This is the moderator's start-to-finish checklist for the human pilot. Keep this page open on a private moderator device. Do not project or share the moderator console because it displays every player's role.
 
@@ -57,7 +57,7 @@ If fewer than six people are available, do not release roles. The supported rost
 
 ### 2. Sign in to the moderator console
 
-1. Open the [Production moderator console](https://watercooler-werewolf-dyl-edge.vercel.app/moderator).
+1. Open the [Production moderator console](https://watercooler-werewolf.vercel.app/moderator).
 2. Enter the moderator email and password.
 3. Select **Sign in**.
 4. Confirm the page shows the Production game workspace and no error banner.
@@ -94,7 +94,9 @@ Set the **Final cutoff** before releasing roles. Final showdown cannot begin unt
 3. Select **Create private seats**.
 4. Immediately select **Download invite CSV**.
 5. Store the downloaded file privately. It contains access information for every player.
-6. Send each player only their own `claim_url` and `invite_code`. The app does not send invitations automatically.
+6. Send each player only their own `claim_url` and `message_body`. The message includes the private link; the app does not send invitations automatically. Keep the fallback seat codes in the full CSV private.
+
+The app automatically generates a different private seat code for every player. There is no shared game code and moderators cannot replace a generated seat code with a custom memorable one. Players normally open their private claim link instead of typing the code; after claiming, they choose their own memorable six-digit PIN.
 
 Do not re-import the roster casually. Re-importing before launch replaces the seats and invalidates the invitations you already distributed.
 
@@ -109,9 +111,9 @@ Tell each player to do the following privately:
 3. Choose a six-digit PIN they can remember.
 4. Select **Claim my seat**.
 5. Select **Enter the game**.
-6. Keep the invite code and PIN private.
+6. Keep the invitation link and PIN private.
 
-For a later return, players use the [player sign-in page](https://watercooler-werewolf-dyl-edge.vercel.app/player-login) with their invite code and six-digit PIN. They should not repeat the one-time claim process.
+For a later return, players use the [player sign-in page](https://watercooler-werewolf.vercel.app/player-login) with their invitation email and six-digit PIN. They can use their seat code from the private CSV as a fallback. They should not repeat the one-time claim process.
 
 In the moderator console:
 
@@ -127,7 +129,7 @@ In the moderator console:
 4. Confirm the total exactly equals the number of players.
 5. If you changed any count, select **Save composition**.
 
-The app requires at least one Werewolf, permits at most one Seer, Bodyguard, and Hunter, and permits either zero Masons or at least two Masons.
+The app requires at least one Werewolf, permits at most one Seer, Bodyguard, Hunter, Apprentice Seer, Mayor, and Cupid, and permits either zero Masons or at least two Masons.
 
 ### 7. Randomize, privately review, and release
 
@@ -142,7 +144,7 @@ Role release is the launch point. The roster, schedule, and composition become l
 
 ## Read this briefing to the players
 
-> Most players belong to the Village; the Werewolf is hiding among you. During each open phase, use the app to select your target and press Save response. Discussion or selecting a card does not count as a vote. You may revise a saved response until I lock the phase, and only your latest saved response counts. Keep your role, invite code, PIN, private rooms, and private results secret. The Theme switch is optional—leave it off if you do not want your screen's styling to hint at your role. Ask me privately if your page does not match these instructions.
+> Most players belong to the Village; the Werewolf is hiding among you. During each open phase, use the app to select your target and press Save response. Discussion or selecting a card does not count as a vote. You may revise a saved response until I lock the phase, and only your latest saved response counts. Keep your role, seat code, PIN, private rooms, and private results secret. Use **Hide role** if other people can see your screen. The Theme switch is optional. Ask me privately if your page does not match these instructions.
 
 Then ask everyone to:
 
@@ -223,9 +225,10 @@ If the game did not end after Day 1:
 ### 12. Collect Night actions
 
 - Each living Werewolf submits a private attack ballot.
-- The Seer, if present and alive, selects one player to investigate.
+- The Seer, if present and alive, selects one player to investigate. If the Seer is eliminated, the Apprentice Seer can investigate and receives the Seer's earlier results.
 - The Bodyguard, if present and alive, selects one player to protect.
-- Villagers, Hunters, and Masons have no ordinary Night action.
+- Cupid selects two living players once, if no lover pair has already been set.
+- Villagers, Hunters, and Masons have no ordinary Night action; the Apprentice Seer waits while the Seer is alive.
 
 The Night **current responses** count will normally be lower than the number of living players. Do not wait for Villagers or other roles whose screens say to wait.
 
@@ -313,13 +316,13 @@ Suggested debrief questions:
 | --- | --- |
 | Fewer than six players arrive | Do not release roles. There are no live player bots. Reschedule or add real test participants. |
 | A player cannot claim | Verify they are using their own Production claim URL and that the roster was not re-imported. |
-| A player already claimed but cannot return | Use `/player-login` with their invite code and PIN. |
+| A player already claimed but cannot return | Use `/player-login` with their invitation email and PIN, or the seat code and PIN. |
 | A player forgot their PIN | In **Player access recovery**, choose that player, set a new six-digit PIN, add a reason, and deliver it privately. |
 | Randomize roles is disabled | Confirm every seat is claimed and any edited composition was saved. |
 | Role counts will not save | Confirm all counts are non-negative integers and total the roster. Masons must be zero or at least two. |
 | A player's role says not released | Confirm you selected **Release roles to players**, then have them refresh. |
 | A player cannot save | Confirm the phase is open, the target is legal, the player is alive, and they selected a target. |
-| Night responses seem too low | Only Werewolves, the Seer, and the Bodyguard normally act at Night. |
+| Night responses seem too low | Werewolves, the Seer, the Bodyguard, the Apprentice Seer after the Seer is eliminated, and an unpaired Cupid can act at Night. |
 | Phase deadline error | Enter a deadline in the future using the timezone printed beside the field. |
 | Hunter cannot be finalized | Wait for the Hunter's saved response or for the displayed Hunter deadline to pass. |
 | Final showdown is blocked | Wait for the final cutoff and publish the current ordinary phase first. |

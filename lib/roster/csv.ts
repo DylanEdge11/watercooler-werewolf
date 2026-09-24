@@ -87,7 +87,7 @@ export function createInviteExport(
     row.claimUrl,
     row.inviteCode,
     'Your Watercooler Werewolf seat',
-    `Hi ${row.displayName}, claim your private Watercooler Werewolf seat here: ${row.claimUrl}. Your one-time code is ${row.inviteCode}. Do not forward it.`,
+    `Hi ${row.displayName},\n\nClaim your private Watercooler Werewolf seat using this link:\n${row.claimUrl}\n\nChoose a six-digit PIN when you claim. Afterward, sign in with your invitation email and PIN. Do not forward this message.`,
   ]);
   return [header, ...data].map((values) => values.map(escapeCsv).join(',')).join('\r\n');
 }

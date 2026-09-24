@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 
 interface Operations {
   viewerRole: string | null;
@@ -79,12 +80,12 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     const timer = window.setTimeout(() => {
       void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load operations.'));
     }, 0);
-    const poll = window.setInterval(() => {
+    const stopPolling = pollWhileVisible(() => {
       void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh operations.'));
     }, 10_000);
     return () => {
       window.clearTimeout(timer);
-      window.clearInterval(poll);
+      stopPolling();
     };
   }, [refresh, refreshToken]);
 

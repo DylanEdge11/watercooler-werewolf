@@ -1,16 +1,5 @@
 # Rehearsal fixtures
 
-Use `roster-20.csv` for the standard multiplayer rehearsal. The application accepts 6–80 player seats; a six-player rehearsal should use one Werewolf and five Villagers as its initial preset.
+`roster-20.csv` is a fictional 20-player roster for rehearsals. `npm run pilot:setup` imports it automatically; see [Testing](../docs/TESTING.md#rehearse-a-game).
 
-Follow [How to Use Watercooler Werewolf](../docs/HOW_TO_USE_WATERCOOLER_WEREWOLF.md) for the actual button-by-button workflow and [Pilot testing](../docs/PILOT_TESTING.md) for environment setup. If `pilot:setup` already imported this roster, do not import it again unless deliberately replacing the invitations. Use separate browser profiles/contexts per seat; private windows may share sessions.
-
-Recommended rehearsal:
-
-1. Create a game in the moderator console with a short test schedule.
-2. Import the fixture and download the one-time invite export.
-3. Claim every seat with test-only PINs, review the default 12 Villagers / 3 Werewolves / 1 Seer / 1 Bodyguard / 1 Hunter / 2 Masons composition, and release roles.
-4. Run one Day phase, one Night phase, a Hunter follow-up when applicable, and a reasoned override.
-5. Post and moderate a private-room message, publish an announcement, and download a checksum backup.
-6. Confirm eliminated players receive the Afterlife room and that every room becomes read-only after victory.
-
-The fixture uses reserved `.test` addresses and must never be mixed with a production roster.
+It uses reserved `.test` addresses. Never mix it with a real roster.
