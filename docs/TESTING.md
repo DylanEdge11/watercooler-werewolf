@@ -4,7 +4,7 @@ How to verify a change, from fast unit tests to a full hosted Preview run. Use f
 
 ## Release checks
 
-These match the `Verify` workflow in `.github/workflows/ci.yml`, which runs on every push:
+The `Verify` workflow in `.github/workflows/ci.yml` runs on every push. Its `verify` job runs the fast gates:
 
 ```text
 npm test -- --run
@@ -14,7 +14,9 @@ npm run build
 npm audit --omit=dev --audit-level=moderate
 ```
 
-A candidate is ready for release when CI is green for its exact commit and the [hosted Preview run](#hosted-preview-runbook) has passed against its Preview deployment. Earlier results do not carry over to a new commit.
+Its `api` job runs the 20-player API suite, and its four `browser` jobs split the full 20-player Chromium browser suite between them. All of them use a disposable local server and database, so they need no secrets and never touch a Preview. The whole run takes about 15–20 minutes. A failed job uploads its Playwright report and traces as an artifact.
+
+A candidate is ready for release when every `Verify` job is green for its exact commit and the [hosted Preview run](#hosted-preview-runbook) has passed against its Preview deployment. Earlier results do not carry over to a new commit.
 
 ## Unit tests
 
@@ -46,6 +48,7 @@ All local suites start a disposable Next server on `http://localhost:3100` with 
 | `npm run test:e2e:random` | Bot farm with seeded random decisions (seeds 7, 21, 42). |
 | `npm run test:e2e:readiness` | **Browser suite.** 20 real browser sessions in Chromium through the full game, including privacy at the page and API level, mobile width, keyboard use, reloads, and console or network errors. Adds a smoke test in Firefox and WebKit. |
 | `npm run test:e2e:readiness:random` | Browser suite with seeds 7, 21, and 42. |
+| `npm run test:e2e:uat` | **UAT browser game.** One eight-player game from setup to a Village win in separate browser sessions, including a mobile-width player and privacy checks. This is the game the hosted Preview run plays. |
 
 Reports go to `playwright-report/<run-id>/<invocation-id>/`, and traces, screenshots, and videos to `test-results/`. Open a report with `npx playwright show-report <path>`. These artifacts can show roles, so keep them private.
 
@@ -71,15 +74,14 @@ In a Claude Code cloud session, these values are environment variables set in th
 
 ### Run
 
-Run the sequence **once per candidate commit**, with one `E2E_RUN_ID` for the whole run and a distinct `E2E_INVOCATION_ID` for each command:
+This checks that the deployed Preview, with its real Vercel functions and Turso database, works end to end. The full browser suite has already run in CI, so the hosted run is short, about 5–10 minutes. Run the sequence **once per candidate commit**, with one `E2E_RUN_ID` for the whole run and a distinct `E2E_INVOCATION_ID` for each command:
 
 | Invocation ID | Arguments after `node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote` |
 | --- | --- |
 | `01-chromium-smoke` | `--project=chromium --retries=0 e2e/readiness/browser-smoke.spec.ts` |
 | `02-edge-smoke` | `--project=edge --retries=0 e2e/readiness/browser-smoke.spec.ts` |
 | `03-api-suite` | `--project=api --retries=0` |
-| `04-readiness-suite` | `--project=chromium --retries=0 e2e/readiness` |
-| `05-setup-navigation` | `--project=chromium --retries=0 e2e/readiness/browser-setup-navigation.spec.ts` |
+| `04-browser-uat` | `--project=chromium --retries=0 e2e/readiness/browser-uat.spec.ts e2e/readiness/browser-setup-navigation.spec.ts` |
 
 PowerShell:
 
@@ -101,7 +103,9 @@ Notes:
 
 - The Edge smoke needs Microsoft Edge installed. If it isn't (for example on Linux), record it as not run rather than substituting another browser.
 - Firefox and WebKit are optional.
-- Repeat the sequence with a fresh `E2E_RUN_ID` only when the change affects persistence, isolation, or rerun safety.
+- The full browser suite (`--project=chromium --retries=0 e2e/readiness`) can still run against a Preview when you want it, for example from your own computer before a Production release. It takes much longer.
+- In a cloud session, the network proxy occasionally fails a browser read on its own with a short plain-text 502 or 504. Hosted browser runs re-send only those (GET or HEAD, without Vercel's `x-vercel-id` header), and print a `[cloud-proxy] retrying` line for each. Responses Vercel actually served, including errors, are never retried, and writes are never retried.
+- Playwright reports and traces can include request headers, so keep them private.
 - Use only run-owned fictional games. Never delete shared Preview data.
 
 Afterwards, check `vercel inspect <preview-url> --logs` for runtime errors. Logs supplement the Playwright results; they don't replace them.

@@ -31,3 +31,61 @@ jobs:
         with:
           name: npm-audit-full
           path: audit-full.json
+
+  # The full 20-player API and browser suites run against a disposable local
+  # server and database. Hosted UAT relies on these passing for the exact commit.
+  api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: npm
+      - run: npm ci
+      - name: Run the 20-player API suite
+        run: node scripts/run-playwright.mjs --project=api
+        env:
+          E2E_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
+          E2E_INVOCATION_ID: api
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-api
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  browser:
+    name: browser (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run shard ${{ matrix.shard }} of the Chromium browser suite
+        run: node scripts/run-playwright.mjs --project=chromium --fully-parallel --shard=${{ matrix.shard }}/4
+        env:
+          E2E_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
+          E2E_INVOCATION_ID: shard-${{ matrix.shard }}
+      - name: Upload Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-shard-${{ matrix.shard }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

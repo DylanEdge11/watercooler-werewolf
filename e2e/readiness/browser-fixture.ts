@@ -170,10 +170,10 @@ function csvValue(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
-function rosterCsv(suffix: string): string {
+function rosterCsv(suffix: string, playerCount: number): string {
   return [
     'display_name,email',
-    ...Array.from({ length: E2E_PLAYER_COUNT }, (_, index) => {
+    ...Array.from({ length: playerCount }, (_, index) => {
       const number = String(index + 1).padStart(2, '0');
       return `${csvValue(`Player ${number}`)},${csvValue(`player${number}-${suffix}@e2e.test`)}`;
     }),
@@ -468,6 +468,8 @@ export class BrowserPlayer {
 export interface BrowserGameOptions {
   name?: string;
   composition?: RoleComposition;
+  /** Roster size; must equal the composition total. Defaults to E2E_PLAYER_COUNT. */
+  playerCount?: number;
   setupThroughUi?: boolean;
   mobilePlayerIndex?: number;
 }
@@ -487,6 +489,7 @@ export class BrowserGame {
     const telemetry = moderator.telemetry;
     const gameName = options.name ?? `Browser Readiness ${E2E_RUN_ID} ${randomUUID().slice(0, 8)}`;
     const composition = options.composition ?? DEFAULT_COMPOSITION;
+    const playerCount = options.playerCount ?? E2E_PLAYER_COUNT;
     const suffix = `${Date.now()}-${randomUUID().slice(0, 6)}`;
     const useUiSetup = Boolean(options.setupThroughUi);
     let gameId = '';
@@ -509,7 +512,7 @@ export class BrowserGame {
         gameId = created.gameId;
         await expect(moderator.page.getByRole('heading', { name: gameName, exact: true })).toBeVisible();
         const rosterResponsePromise = moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/games/${gameId}/roster`);
-        await moderator.page.getByLabel('Roster CSV').fill(rosterCsv(suffix));
+        await moderator.page.getByLabel('Roster CSV').fill(rosterCsv(suffix, playerCount));
         await moderator.page.getByRole('button', { name: 'Create private seats', exact: true }).click();
         const rosterData = await json<{ invites: InviteRow[] }>(await rosterResponsePromise, 'import browser roster');
         invites = rosterData.invites;
@@ -524,7 +527,7 @@ export class BrowserGame {
           schedule: { dayCloses: '16:00', nightCloses: '09:00' },
         }, 'create browser game');
         gameId = created.gameId;
-        const rosterData = await post<{ invites: InviteRow[] }>(moderator.context, `/api/games/${gameId}/roster`, { csv: rosterCsv(suffix) }, 'import browser roster');
+        const rosterData = await post<{ invites: InviteRow[] }>(moderator.context, `/api/games/${gameId}/roster`, { csv: rosterCsv(suffix, playerCount) }, 'import browser roster');
         invites = rosterData.invites;
       }
 
@@ -572,7 +575,7 @@ export class BrowserGame {
         await post(moderator.context, `/api/games/${gameId}/assignments`, { action: 'RELEASE', batchId: preview.batchId }, 'release browser assignments');
       } else {
         await moderator.page.reload();
-        await expect(moderator.page.getByText(`${E2E_PLAYER_COUNT} of ${E2E_PLAYER_COUNT} claimed`, { exact: true })).toBeVisible({ timeout: 30_000 });
+        await expect(moderator.page.getByText(`${playerCount} of ${playerCount} claimed`, { exact: true })).toBeVisible({ timeout: 30_000 });
         for (const role of Object.keys(composition) as RoleKey[]) await moderator.page.getByRole('spinbutton', { name: ROLE_NAMES[role], exact: true }).fill(String(composition[role]));
         await moderator.page.getByRole('button', { name: 'Save composition', exact: true }).click();
         await expect(moderator.page.getByRole('status')).toContainText('Role composition saved');
@@ -593,7 +596,7 @@ export class BrowserGame {
       }
 
       const game = new BrowserGame(moderator, gameId, gameName, players, composition, telemetry);
-      testInfo.annotations.push({ type: 'scenario', description: `game=${gameId}; players=${E2E_PLAYER_COUNT}` });
+      testInfo.annotations.push({ type: 'scenario', description: `game=${gameId}; players=${playerCount}` });
       await Promise.all(players.map(async (player) => {
         await expect.poll(async () => (await player.dashboard()).player.role, { timeout: 30_000 }).toBe(player.account.role);
         await player.reload();

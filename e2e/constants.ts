@@ -15,7 +15,9 @@ export const E2E_REMOTE = process.env.E2E_REMOTE === '1';
 export const E2E_RUN_ID = (process.env.E2E_RUN_ID?.trim() || 'local').replace(/[^a-zA-Z0-9_-]/gu, '-').slice(0, 80);
 export const MODERATOR_EMAIL = (process.env.E2E_MODERATOR_EMAIL?.trim() || 'playwright-owner@e2e.test').toLowerCase();
 export const MODERATOR_PASSWORD = process.env.E2E_MODERATOR_PASSWORD || 'playwright-e2e-password-2026';
-export const VERCEL_AUTOMATION_BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() || '';
+// Only hosted runs need the bypass. Cloud sessions keep it in the environment,
+// so local runs would otherwise send it to localhost and into failure reports.
+export const VERCEL_AUTOMATION_BYPASS_SECRET = E2E_REMOTE ? process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() || '' : '';
 export const E2E_PLAYER_COUNT = 20;
 
 export const DEFAULT_COMPOSITION: RoleComposition = {

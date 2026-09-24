@@ -1,13 +1,13 @@
 ---
 name: werewolf-uat
-description: Comprehensively review an already published Watercooler Werewolf Vercel Preview candidate (exact SHA) and produce a UAT handoff. Never changes code, publishes, merges, or deploys Production.
+description: Review an already published Watercooler Werewolf Vercel Preview candidate (exact SHA) and produce a UAT handoff. Never changes code, publishes, merges, or deploys Production.
 argument-hint: "[branch, SHA, Preview URL, or Dev handoff]"
 disable-model-invocation: true
 ---
 
 # Watercooler Werewolf UAT
 
-Use this skill only for the UAT phase: comprehensively review one specific, already published Preview deployment and produce a handoff. Do not perform Dev or Production work, push code, or deploy from this skill, even if the request mentions those phases; the user starts each phase separately.
+Use this skill only for the UAT phase: review one specific, already published Preview deployment and produce a handoff. Do not perform Dev or Production work, push code, or deploy from this skill, even if the request mentions those phases; the user starts each phase separately.
 
 ## Project contract
 
@@ -27,7 +27,11 @@ If the candidate adds a migration (a new entry in `db/readiness.ts` versus the b
 
 ## CI gates
 
-If the required `Verify` workflow is green for the exact SHA, cite that run and do not repeat it. Otherwise run the same gates once from the repo root:
+The `Verify` workflow runs on every push. Its jobs are the fast gates (`verify`), the 20-player API suite (`api`), and the full 20-player Chromium browser suite split four ways (`browser (1/4)` to `browser (4/4)`), all against a disposable local server and database. UAT relies on these for depth, so **every job must be green for the exact SHA**. Cite the run.
+
+- If the run is still in progress, do the candidate checks and the hosted sequence meanwhile, then confirm the result before the handoff. The run usually takes about 15–20 minutes.
+- If a job failed, report the job and failing test with a link, and stop: `UAT: BLOCKED`. Fixes belong to Dev. Do not rerun the full browser suite against the Preview as a substitute.
+- If no run exists for the SHA (for example, Actions is unavailable), run the fast gates once from the repo root and record the missing browser jobs as a gap:
 
 ```sh
 npm test -- --run
@@ -37,19 +41,20 @@ npm run build
 npm audit --omit=dev --audit-level=moderate
 ```
 
-Run `npm ci` only if dependencies are missing or the lockfile changed. If a required gate fails, report it and stop; fixes belong to Dev.
+Run `npm ci` only if dependencies are missing or the lockfile changed.
 
 ## Hosted Preview sequence
 
-Follow the runbook's safety rules. Run the required sequence **once per candidate SHA** with one unique `E2E_RUN_ID` and a distinct `E2E_INVOCATION_ID` per command. Use `--retries=0`.
+This checks that the deployed Preview, with its real Vercel functions and Turso database, works end to end. It takes about 5–10 minutes. Follow the runbook's safety rules. Run it **once per candidate SHA** with one unique `E2E_RUN_ID` and a distinct `E2E_INVOCATION_ID` per command. Use `--retries=0`.
 
 | Invocation ID | Arguments after `node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote` |
 | --- | --- |
 | `01-chromium-smoke` | `--project=chromium --retries=0 e2e/readiness/browser-smoke.spec.ts` |
 | `02-edge-smoke` | `--project=edge --retries=0 e2e/readiness/browser-smoke.spec.ts` |
 | `03-api-suite` | `--project=api --retries=0` |
-| `04-readiness-suite` | `--project=chromium --retries=0 e2e/readiness` |
-| `05-setup-navigation` | `--project=chromium --retries=0 e2e/readiness/browser-setup-navigation.spec.ts` |
+| `04-browser-uat` | `--project=chromium --retries=0 e2e/readiness/browser-uat.spec.ts e2e/readiness/browser-setup-navigation.spec.ts` |
+
+`03-api-suite` plays full 20-player games, including privacy checks and concurrent submissions, against the Preview database. `04-browser-uat` plays one eight-player game from setup to a Village win through separate player browsers, with a mobile-width player and privacy checks, and then checks setup navigation.
 
 In bash, for example:
 
@@ -62,14 +67,15 @@ E2E_RUN_ID=$RUN_ID E2E_INVOCATION_ID=01-chromium-smoke \
 Environment requirements and fallbacks:
 
 - `.env.e2e.local` (ignored) holds the fictional moderator credentials, `VERCEL_AUTOMATION_BYPASS_SECRET`, and related values. Never print, paste, or commit its values. Supply the exact Preview origin as `E2E_BASE_URL` and the deployment ID as `E2E_VERCEL_DEPLOYMENT_ID`.
-- In cloud sessions the same values are environment variables (`E2E_MODERATOR_EMAIL`, `E2E_MODERATOR_PASSWORD`, `VERCEL_AUTOMATION_BYPASS_SECRET`, `VERCEL_TOKEN`) and there is no `.env.e2e.local`. Drop `--env-file=.env.e2e.local` from each command, because Node exits when that file is missing, and pass `E2E_BASE_URL` and `E2E_VERCEL_DEPLOYMENT_ID` inline.
+- In cloud sessions the same values are environment variables (`E2E_MODERATOR_EMAIL`, `E2E_MODERATOR_PASSWORD`, `VERCEL_AUTOMATION_BYPASS_SECRET`, `VERCEL_TOKEN`) and there is no `.env.e2e.local`. Drop `--env-file=.env.e2e.local` from each command, because Node exits when that file is missing, and pass `E2E_BASE_URL` and `E2E_VERCEL_DEPLOYMENT_ID` inline. The session's network proxy occasionally fails a browser read on its own. Hosted browser runs re-send only those (GET/HEAD, gateway error without Vercel's `x-vercel-id`) and print a `[cloud-proxy] retrying` line for each. Report the count; a failure after retries is a real failure.
+- Playwright reports and traces can contain request headers. Never paste them into chat or commits; cite their paths.
 - The remote preflight shells out to `vercel inspect`, so the Vercel CLI must be installed and authenticated for `dyl-edge` (or `VERCEL_TOKEN` set). If it is not, stop before any mutation and report it. Do not bypass or edit the preflight.
 - The Edge smoke needs the `msedge` channel. If Edge is not installed (typical on Linux or cloud containers), skip only that invocation and record "Edge smoke not run: msedge unavailable" as a known gap. Do not substitute another browser and label it Edge.
 - Firefox and WebKit are optional unless the change or the user requires them.
 
-Run a second full sequence with a fresh ID only when the change affects persistence, isolation, or rerun safety, or the user asks. If the SHA changes, earlier results no longer count.
+Run the full browser suite (`--project=chromium --retries=0 e2e/readiness`) against the Preview only when the user asks. If the SHA changes, earlier results no longer count.
 
-Also review the changed user-facing flow in a browser, including relevant mobile/desktop widths and console/network errors. Keep all mutations on Preview with run-owned fictional games and accounts. Never point hosted Playwright, pilot scripts, reset, seed, or cleanup at Production, and never delete shared Preview data. Keep reports and traces under `playwright-report/<run-id>/` and `test-results/<run-id>/`. Report actual counts; never claim a pass you did not observe.
+Also review the changed user-facing flow in a browser, including relevant mobile/desktop widths and console/network errors. Scroll long pages before judging images, because they load lazily. Keep all mutations on Preview with run-owned fictional games and accounts. Never point hosted Playwright, pilot scripts, reset, seed, or cleanup at Production, and never delete shared Preview data. Keep reports and traces under `playwright-report/<run-id>/` and `test-results/<run-id>/`. Report actual counts; never claim a pass you did not observe.
 
 ## UAT handoff and stop
 
@@ -79,8 +85,8 @@ Branch: <branch>
 Tested commit: <full SHA>
 Preview: <exact origin>
 Vercel deployment: <deployment ID, READY, preview>
-CI: <exact-SHA run link, or local gate results>
-Playwright: <run ID; per-invocation pass/fail/skip counts>
+CI: <exact-SHA Verify run link; verify, api, and browser 1–4 results>
+Playwright: <run ID; per-invocation pass/fail/skip counts; cloud-proxy retries, if any>
 Browser review: <flows, widths, console/network result>
 Artifacts: <report/trace paths>
 Migrations: <none, or versions and confirmed applied to Preview>

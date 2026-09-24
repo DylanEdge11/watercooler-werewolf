@@ -15,8 +15,27 @@ export function spkiFingerprint(certificatePem: string): string {
   return createHash('sha256').update(spki).digest('base64');
 }
 
+function cloudProxyCaPath(): string {
+  return process.env.E2E_PROXY_CA_CERT?.trim() || CLOUD_PROXY_CA_PATH;
+}
+
+/** True when this process runs behind the cloud session's proxy. */
+export function behindCloudProxy(caPath = cloudProxyCaPath()): boolean {
+  return existsSync(caPath);
+}
+
 /** Chromium launch arguments for the proxy CA, or none when no proxy CA exists. */
-export function proxyTrustArgs(caPath = process.env.E2E_PROXY_CA_CERT?.trim() || CLOUD_PROXY_CA_PATH): string[] {
-  if (!existsSync(caPath)) return [];
+export function proxyTrustArgs(caPath = cloudProxyCaPath()): string[] {
+  if (!behindCloudProxy(caPath)) return [];
   return [`--ignore-certificate-errors-spki-list=${spkiFingerprint(readFileSync(caPath, 'utf8'))}`];
+}
+
+/**
+ * The cloud proxy occasionally answers a browser request itself with a short
+ * plain-text 502/504 instead of forwarding Vercel's reply. Vercel stamps every
+ * response it serves with x-vercel-id, so a gateway error without that header
+ * came from the proxy, never from the application.
+ */
+export function isProxyGatewayError(status: number, headers: Record<string, string>): boolean {
+  return status >= 502 && status <= 504 && !('x-vercel-id' in headers);
 }
