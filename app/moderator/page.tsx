@@ -9,6 +9,7 @@ import OperationsPanel from './operations-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
+import BrandMark from '../brand-mark';
 
 const sampleRoster = [
   'display_name,email',
@@ -94,10 +95,7 @@ function BrandHeader() {
   return (
     <header className="setup-header">
       <a className="brand" href="/" aria-label="Watercooler Werewolf home">
-        <span className="brand-mark" aria-hidden="true">
-          <span className="brand-moon" />
-          <span className="brand-cup" />
-        </span>
+        <BrandMark />
         <span><strong>Watercooler</strong><small>Werewolf</small></span>
       </a>
       <span className="mode-chip">Moderator console</span>

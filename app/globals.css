@@ -34,17 +34,14 @@ button { color: inherit; }
 .role-theme .topbar { background: color-mix(in srgb, var(--panel) 92%, transparent); }
 .role-theme .role-card { background: linear-gradient(125deg, var(--role-deep), var(--role-deep-2)); box-shadow: 0 18px 48px color-mix(in srgb, var(--role-deep) 24%, transparent); }
 .role-theme .candidate.selected { background: var(--role-selection); border-color: var(--role-accent); box-shadow: inset 0 0 0 1px var(--role-accent); }
-.role-theme .sidebar-note, .role-theme .moon-card, .role-theme .brand-mark { background: var(--role-deep); }
-.role-theme .brand-moon::after { background: var(--role-deep); }
+.role-theme .sidebar-note, .role-theme .moon-card { background: var(--role-deep); }
 .topbar { align-items: center; background: rgba(255, 253, 250, .95); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 250px 1fr 250px; height: 76px; padding: 0 28px; position: sticky; top: 0; z-index: 20; }
 .brand { align-items: center; color: inherit; display: flex; gap: 11px; text-decoration: none; }
 .brand > span:last-child { display: grid; line-height: 1; }
 .brand strong { font-family: Georgia, serif; font-size: 18px; letter-spacing: -.03em; }
 .brand small { color: var(--mint-strong); font-size: 10px; font-weight: 800; letter-spacing: .18em; margin-top: 5px; text-transform: uppercase; }
-.brand-mark { background: var(--night); border-radius: 12px; display: block; height: 42px; overflow: hidden; position: relative; width: 42px; }
-.brand-moon { background: var(--amber); border-radius: 50%; height: 20px; left: 7px; position: absolute; top: 7px; width: 20px; }
-.brand-moon::after { background: var(--night); border-radius: 50%; content: ''; height: 17px; left: 7px; position: absolute; top: -2px; width: 17px; }
-.brand-cup { border: 2px solid var(--mint); border-radius: 3px 3px 7px 7px; bottom: 6px; height: 9px; position: absolute; right: 6px; width: 10px; }
+.brand-mark { display: block; filter: drop-shadow(0 2px 3px rgba(20, 12, 5, .35)); flex: 0 0 auto; height: 48px; width: 48px; }
+.brand-mark svg { display: block; height: 100%; width: 100%; }
 .game-switcher { align-items: center; background: #edf2ed; border: 1px solid #dde7df; border-radius: 999px; display: flex; font-size: 13px; font-weight: 700; gap: 9px; justify-self: center; padding: 9px 14px; }
 .status-dot { background: #50a67f; border-radius: 50%; box-shadow: 0 0 0 3px #d9ecdf; height: 7px; width: 7px; }
 .chevron { color: var(--muted); margin-left: 5px; }

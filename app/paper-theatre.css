@@ -22,6 +22,7 @@
   --pt-curtain: #b8323a;
   --pt-curtain-deep: #7d1f2a;
   --pt-curtain-shade: #1d0508;
+  --pt-valance: #5c2330;
   --pt-gold: #e3b04b;
   --pt-gold-soft: #ffd57c;
   --pt-backdrop: #efe3c8;
@@ -57,6 +58,7 @@
   --pt-note: #efe6c4;
   --pt-curtain: #8f2632;
   --pt-curtain-deep: #561520;
+  --pt-valance: #3a1a26;
   --pt-backdrop: #262748;
   --pt-backdrop-2: #16142a;
   --pt-stage-ink: #f3ecdc;
@@ -111,15 +113,15 @@
 .app-shell.role-theme .topbar {
   background:
     linear-gradient(180deg, rgba(0, 0, 0, 0.12), transparent 40%, rgba(0, 0, 0, 0.22)),
-    repeating-linear-gradient(90deg, var(--pt-curtain) 0 22px, color-mix(in srgb, var(--pt-curtain) 82%, black) 22px 34px, var(--pt-curtain) 34px 48px);
-  border-bottom: 3px solid var(--pt-gold);
+    repeating-linear-gradient(90deg, var(--pt-valance) 0 22px, color-mix(in srgb, var(--pt-valance) 90%, black) 22px 34px, var(--pt-valance) 34px 48px);
+  border-bottom: 2px solid color-mix(in srgb, var(--pt-gold) 75%, var(--pt-valance));
   box-shadow: 0 6px 16px -6px rgba(29, 5, 8, 0.6);
   color: #fff3d6;
   transition: background 0.8s var(--pt-ease);
 }
 .app-shell .topbar::after {
   background:
-    radial-gradient(circle at 50% 0, var(--pt-curtain-deep) 9px, var(--pt-gold) 9.5px 11px, transparent 11.5px) repeat-x 0 0 / 26px 12px;
+    radial-gradient(circle at 50% 0, color-mix(in srgb, var(--pt-valance) 88%, black) 9px, color-mix(in srgb, var(--pt-gold) 75%, var(--pt-valance)) 9.5px 10.5px, transparent 11px) repeat-x 0 0 / 26px 12px;
   bottom: -14px;
   content: '';
   filter: drop-shadow(0 3px 3px rgba(29, 5, 8, 0.35));
@@ -131,12 +133,6 @@
 }
 .app-shell .brand strong { color: #fff3d6; font-family: var(--ll-font-display), Georgia, serif; font-size: 20px; font-style: italic; font-variation-settings: 'SOFT' 100, 'WONK' 1; font-weight: 700; }
 .app-shell .brand small { color: var(--pt-gold-soft); font-family: var(--ll-font-type), monospace; font-weight: 400; letter-spacing: 0.3em; }
-.app-shell .brand-mark,
-.app-shell.role-theme .brand-mark { background: var(--pt-curtain-shade); border: 2px solid var(--pt-gold); border-radius: 50%; box-shadow: 0 0 0 2px var(--pt-curtain-deep), 0 2px 8px rgba(0, 0, 0, 0.4); }
-.app-shell .brand-moon { background: var(--pt-gold-soft); box-shadow: 0 0 10px rgba(255, 213, 124, 0.7); left: 6px; top: 6px; }
-.app-shell .brand-moon::after,
-.app-shell.role-theme .brand-moon::after { background: var(--pt-curtain-shade); }
-.app-shell .brand-cup { border-color: #fff3d6; bottom: 7px; right: 7px; }
 
 /* The game name hangs as a small marquee plaque. */
 .app-shell .game-switcher {
