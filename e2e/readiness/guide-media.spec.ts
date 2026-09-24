@@ -45,9 +45,9 @@ const OVERLAY_SCRIPT = `(() => {
     style.id = 'guide-overlay-style';
     style.textContent = [
       'nextjs-portal { display: none !important; }',
-      '#guide-cursor { position: fixed; left: 0; top: 0; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: rgba(232,111,81,.35); border: 2px solid #e86f51; z-index: 2147483647; pointer-events: none; transition: transform .45s cubic-bezier(.2,.8,.2,1); }',
-      '#guide-cursor.down { background: rgba(232,111,81,.75); }',
-      '#guide-caption { position: fixed; left: 24px; bottom: 24px; max-width: 470px; background: rgba(21,43,39,.94); color: #fffdfa; font: 600 21px/1.35 Georgia, serif; padding: 14px 26px; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.3); z-index: 2147483646; pointer-events: none; text-align: left; }',
+      '#guide-cursor { position: fixed; left: 0; top: 0; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: rgba(184,50,58,.3); border: 2px solid #b8323a; z-index: 2147483647; pointer-events: none; transition: transform .45s cubic-bezier(.2,.8,.2,1); }',
+      '#guide-cursor.down { background: rgba(184,50,58,.7); }',
+      '#guide-caption { position: fixed; left: 24px; bottom: 24px; max-width: 470px; background: linear-gradient(170deg, #fdf6e4, #f0e2c0); color: #2b2118; font: italic 600 21px/1.35 var(--ll-font-display), Georgia, serif; padding: 16px 28px; border-radius: 3px; outline: 3px double rgba(43,33,24,.45); outline-offset: -8px; box-shadow: 0 14px 36px rgba(20,12,5,.45); z-index: 2147483646; pointer-events: none; text-align: left; }',
       '#guide-caption:empty { display: none; }',
       '.guide-media-hidden #guide-cursor, .guide-media-hidden #guide-caption, .guide-media-hidden .preview-mode-banner { display: none !important; }',
     ].join('\\n');
