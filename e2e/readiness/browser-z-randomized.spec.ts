@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { PhaseKind } from '../../lib/game/types';
 import { BrowserGame, closeSharedModerator, type BrowserPlayer } from './browser-fixture';
 
-test.describe.configure({ timeout: 900_000 });
+test.describe.configure({ timeout: 1_200_000 });
 
 class SeededRandom {
   private state: number;

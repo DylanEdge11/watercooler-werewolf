@@ -14,7 +14,7 @@ npm run build
 npm audit --omit=dev --audit-level=moderate
 ```
 
-Its `api` job runs the 20-player API suite, and its four `browser` jobs split the full 20-player Chromium browser suite between them. All of them use a disposable local server and database, so they need no secrets and never touch a Preview. The whole run takes about 25 minutes. A failed job uploads its Playwright report and traces as an artifact.
+Its `api` job runs the 20-player API suite, and its four `browser` jobs split the full 20-player Chromium browser suite between them. All of them use a disposable local server and database, so they need no secrets and never touch a Preview. The whole run takes about 25–45 minutes; each browser job may run for up to 60 minutes and each 20-player browser game for up to 20. A failed job uploads its Playwright report and traces as an artifact.
 
 A candidate is ready for release when every `Verify` job is green for its exact commit and the [hosted Preview run](#hosted-preview-runbook) has passed against its Preview deployment. Earlier results do not carry over to a new commit.
 
@@ -118,10 +118,18 @@ The `/guide` screenshots and walkthrough video come from a fictional local game.
 CAPTURE_GUIDE_MEDIA=1 node scripts/run-playwright.mjs --project=chromium --retries=0 e2e/readiness/guide-media.spec.ts
 ```
 
-This writes screenshots to `public/guide/` and a raw recording to `work/guide-walkthrough-raw.webm`. Encode the published files with a full ffmpeg build (Playwright's bundled ffmpeg can't write MP4):
+This writes screenshots to `public/guide/` and a raw recording to `work/guide-walkthrough-raw.webm`. Encode the published files with a full ffmpeg build (Playwright's bundled ffmpeg can't write MP4; `pip install imageio-ffmpeg` provides a portable one). The paper grain is expensive to encode, so these settings are tuned for it:
 
 ```sh
-ffmpeg -y -i work/guide-walkthrough-raw.webm -c:v libx264 -preset slow -crf 26 -pix_fmt yuv420p -movflags +faststart -an public/guide/walkthrough.mp4
-ffmpeg -y -i work/guide-walkthrough-raw.webm -c:v libvpx-vp9 -b:v 0 -crf 38 -row-mt 1 -an public/guide/walkthrough.webm
+ffmpeg -y -i work/guide-walkthrough-raw.webm -c:v libx264 -preset slow -crf 30 -pix_fmt yuv420p -movflags +faststart -an public/guide/walkthrough.mp4
+ffmpeg -y -i work/guide-walkthrough-raw.webm -c:v libvpx-vp9 -b:v 0 -crf 44 -row-mt 1 -an public/guide/walkthrough.webm
 ffmpeg -y -ss 4 -i public/guide/walkthrough.mp4 -frames:v 1 -q:v 3 public/guide/walkthrough-poster.jpg
 ```
+
+Then shrink the screenshots to 256 colours, which is visually identical for these pages and roughly halves their size (needs `pip install pillow`):
+
+```sh
+python3 -c "import glob; from PIL import Image; [Image.open(f).convert('RGB').quantize(256, dither=Image.Dither.FLOYDSTEINBERG).save(f, optimize=True) for f in glob.glob('public/guide/*.png')]"
+```
+
+`public/og.png` (the link-preview card) is a static image; redraw it if the emblem or title styling changes.

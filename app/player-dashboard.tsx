@@ -1,10 +1,11 @@
 'use client';
 
-/* eslint-disable @next/next/no-html-link-for-pages -- the public entry links intentionally use full-page navigation. */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
+import BrandMark from './brand-mark';
 
 export type RoleKey = 'VILLAGER' | 'WEREWOLF' | 'SEER' | 'BODYGUARD' | 'HUNTER' | 'MASON' | 'APPRENTICE_SEER' | 'MAYOR' | 'CUPID';
 export type ActionKind = 'DAY_VOTE' | 'WOLF_VOTE' | 'INVESTIGATE' | 'PROTECT' | 'HUNTER_SHOT' | 'CUPID_PAIR';
@@ -109,27 +110,11 @@ function deathAlertKey(gameId: string, playerId: string): string {
   return `werewolf:v1:death-alert:${gameId}:${playerId}`;
 }
 
+// Only needed when a stored session has expired, so signed-in players never download it.
+const LandingShell = dynamic(() => import('./landing/landing-shell'));
+
 function PublicWelcome() {
-  return (
-    <main className="welcome-shell">
-      <div className="welcome-moon" aria-hidden="true">☾</div>
-      <section className="welcome-card">
-        <a className="brand" href="/" aria-label="Watercooler Werewolf home">
-          <span className="brand-mark" aria-hidden="true"><span className="brand-moon" /><span className="brand-cup" /></span>
-          <span><strong>Watercooler</strong><small>Werewolf</small></span>
-        </a>
-        <p className="eyebrow accent">A slow-burn social deduction game</p>
-        <h1>Suspicion fits neatly between meetings.</h1>
-        <p>Private roles, official ballots, and moderator-reviewed outcomes—designed for a month of office intrigue.</p>
-        <div className="button-row">
-          <a className="primary-link" href="/player-login">Player sign-in</a>
-          <a className="secondary-link" href="/moderator">Moderator console</a>
-        </div>
-        <a className="welcome-guide-link" href="/guide">New here? Learn how to play →</a>
-        <small>Have an invite link? Open it directly to claim your private seat.</small>
-      </section>
-    </main>
-  );
+  return <LandingShell />;
 }
 
 export default function PlayerDashboard({ previewData, previewMode = false, onExitPreview }: PlayerDashboardProps) {
@@ -147,6 +132,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
   const [roleThemeEnabled, setRoleThemeEnabled] = useState(false);
   const [roleHidden, setRoleHidden] = useState(false);
+  const [roleJustRevealed, setRoleJustRevealed] = useState(false);
   const [deathAlert, setDeathAlert] = useState<DashboardData['timeline'][number] | null>(null);
   const [selectedTimeline, setSelectedTimeline] = useState<DashboardData['timeline'][number] | null>(null);
   const activeModal = deathAlert ? 'death' : selectedTimeline ? 'votes' : null;
@@ -356,11 +342,11 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
 
   function toggleRoleVisibility() {
     if (!data?.player.id) return;
-    setRoleHidden((current) => {
-      const next = !current;
-      window.localStorage.setItem(roleVisibilityKey(data.player.id), String(next));
-      return next;
-    });
+    const next = !roleHidden;
+    window.localStorage.setItem(roleVisibilityKey(data.player.id), String(next));
+    setRoleHidden(next);
+    // The reveal flourish plays only when the player chooses to show the role.
+    setRoleJustRevealed(!next);
   }
 
   function dismissDeathAlert() {
@@ -403,9 +389,9 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     }
   }
 
-  if (loading) return <main className="setup-shell"><p className="setup-loading">Opening the village…</p></main>;
+  if (loading) return <main className="setup-shell front-of-house"><p className="setup-loading">Opening the village…</p></main>;
   if (unauthenticated) return <PublicWelcome />;
-  if (!data) return <main className="setup-shell centered"><section className="auth-card"><h1>The village is out of reach.</h1><p>{error}</p><a className="primary-link" href="/player-login">Try signing in</a></section></main>;
+  if (!data) return <main className="setup-shell centered front-of-house"><section className="auth-card"><h1>The village is out of reach.</h1><p>{error}</p><a className="primary-link" href="/player-login">Try signing in</a></section></main>;
 
   const selectedNames = selected.map((id) => data.candidates.find((candidate) => candidate.id === id)?.displayName).filter(Boolean);
   const role = data.player.roleDefinition;
@@ -423,17 +409,18 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       ? 'The campaign is complete.'
       : 'The village is between phases.';
 
+  const stageLight = data.phase?.kind === 'NIGHT' ? 'night' : 'day';
   const roleThemeClass = roleThemeEnabled && !roleHidden && data.player.role ? ` role-theme role-theme-${data.player.role.toLowerCase()}` : '';
 
   return (
-    <main className={`app-shell${roleThemeClass}${previewMode ? ' preview-player-shell' : ''}`}>
+    <main className={`app-shell${roleThemeClass}${previewMode ? ' preview-player-shell' : ''}`} data-stage-light={stageLight}>
       {previewMode && <div className="preview-mode-banner" role="status">
         <span><strong>Player View Studio.</strong> Synthetic sample data; actions, feedback, and chat stay in this page.</span>
         <button className="text-button" type="button" onClick={onExitPreview}>Back to studio controls</button>
       </div>}
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Watercooler Werewolf home">
-          <span className="brand-mark" aria-hidden="true"><span className="brand-moon" /><span className="brand-cup" /></span>
+          <BrandMark />
           <span><strong>Watercooler</strong><small>Werewolf</small></span>
         </a>
         <div className="game-switcher"><span className="status-dot" aria-hidden="true" />{data.game.name}<span className="chevron" aria-hidden="true">⌄</span></div>
@@ -490,7 +477,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           </div>
           {data.game.status === 'STOPPED' && <p className="notice warning" role="status">{data.game.stopReason ?? 'This game is stopped. Player actions and rooms are read-only.'}</p>}
 
-          <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`}>
+          <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`} data-just-revealed={roleJustRevealed || undefined}>
             {!data.player.alive && <span className="eliminated-banner" role="status">☠ Eliminated · spectator mode</span>}
             <div className="role-orbit"><span aria-hidden="true">{roleHidden ? '⌂' : roleGlyph(data.player.role)}</span></div>
             <div className="role-copy">
@@ -566,7 +553,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>
       </div>
-      {deathAlert && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dismissDeathAlert(); }}>
+      {deathAlert && <div className="modal-backdrop curtain-call" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dismissDeathAlert(); }}>
         <section className="game-modal death-modal" role="dialog" aria-modal="true" aria-labelledby="death-alert-title">
           <div className="modal-symbol" aria-hidden="true">☠</div>
           <p className="eyebrow accent">Official game update</p>

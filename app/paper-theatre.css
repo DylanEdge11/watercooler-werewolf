@@ -1,0 +1,683 @@
+/* Paper Theatre skin.
+
+   Scopes:
+   - .app-shell       the player dashboard (stage lighting, role gels)
+   - .front-of-house  player sign-in, seat claim, dashboard loading/error
+   - .guide-shell     the /guide programme
+   - .backstage       moderator console and Player View Studio, styled in
+                      paper-theatre-backstage.css
+
+   Loaded after globals.css, which keeps owning layout. This file re-skins the
+   same class names as cut paper on a toy-theatre stage, matching the landing
+   page in app/landing (fonts come from app/landing/fonts.ts via the root
+   layout).
+
+   Lighting model:
+   - The stage is lit for Day or Night from the current phase
+     (`data-stage-light` on .app-shell).
+   - The role theme becomes a coloured stage-light gel (`--pt-gel`) that
+     washes the backdrop and marks accents. Without a role theme the house
+     gel is theatre plum. */
+
+.app-shell,
+.front-of-house,
+.guide-shell,
+.backstage {
+  --pt-ink: #2b2118;
+  --pt-ink-soft: #6b5d4f;
+  --pt-paper: #fffaf0;
+  --pt-paper-2: #f8f0de;
+  --pt-paper-edge: #e4dccb;
+  --pt-note: #fff1c4;
+  --pt-curtain: #b8323a;
+  --pt-curtain-deep: #7d1f2a;
+  --pt-curtain-shade: #1d0508;
+  --pt-valance: #5c2330;
+  --pt-gold: #e3b04b;
+  --pt-gold-soft: #ffd57c;
+  --pt-backdrop: #efe3c8;
+  --pt-backdrop-2: #e2cfa8;
+  --pt-stage-ink: var(--pt-ink);
+  --pt-stage-ink-soft: var(--pt-ink-soft);
+  --pt-stage-rule: rgba(43, 33, 24, 0.2);
+  --pt-light: rgba(255, 213, 124, 0.5);
+  --pt-gel: #8e3b5c;
+  --pt-gel-wash: color-mix(in srgb, var(--pt-gel) 30%, transparent);
+  --pt-shadow: 0 1px 2px rgba(20, 12, 5, 0.12), 0 6px 12px -6px rgba(20, 12, 5, 0.3);
+  --pt-shadow-lift: 0 2px 4px rgba(20, 12, 5, 0.14), 0 10px 16px -8px rgba(20, 12, 5, 0.36);
+  --pt-ease: cubic-bezier(0.65, 0, 0.35, 1);
+  --pt-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .17 0 0 0 0 .13 0 0 0 0 .09 0 0 0 .1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  background:
+    var(--pt-grain),
+    radial-gradient(ellipse 55rem 38rem at 14% -6%, var(--pt-gel-wash), transparent 70%),
+    radial-gradient(ellipse 80rem 18rem at 50% 108%, var(--pt-light), transparent 70%),
+    linear-gradient(180deg, var(--pt-backdrop), var(--pt-backdrop-2));
+  color: var(--pt-ink);
+  font-family: var(--ll-font-display), Georgia, serif;
+}
+
+/* Moonlit set for Night phases: the backdrop goes indigo, paper cools. */
+.app-shell[data-stage-light='night'] {
+  --pt-ink: #221c2e;
+  --pt-ink-soft: #5d5670;
+  --pt-paper: #f1ecf6;
+  --pt-paper-2: #e6e0ee;
+  --pt-paper-edge: #d3cbe0;
+  --pt-note: #efe6c4;
+  --pt-curtain: #8f2632;
+  --pt-curtain-deep: #561520;
+  --pt-valance: #3a1a26;
+  --pt-backdrop: #262748;
+  --pt-backdrop-2: #16142a;
+  --pt-stage-ink: #f3ecdc;
+  --pt-stage-ink-soft: #c3bddb;
+  --pt-stage-rule: rgba(243, 236, 220, 0.2);
+  --pt-light: rgba(150, 160, 255, 0.22);
+  --pt-gel-wash: color-mix(in srgb, var(--pt-gel) 42%, transparent);
+  --pt-shadow: 0 1px 2px rgba(4, 4, 26, 0.3), 0 6px 12px -6px rgba(4, 4, 26, 0.55);
+  --pt-shadow-lift: 0 2px 4px rgba(4, 4, 26, 0.32), 0 10px 16px -8px rgba(4, 4, 26, 0.6);
+}
+
+/* Role themes become stage-light gels. globals.css still defines the
+   per-role --role-* values; only the accent is borrowed here. */
+.app-shell.role-theme {
+  --pt-gel: var(--role-accent);
+  background:
+    var(--pt-grain),
+    radial-gradient(ellipse 55rem 38rem at 14% -6%, var(--pt-gel-wash), transparent 70%),
+    radial-gradient(ellipse 80rem 18rem at 50% 108%, var(--pt-light), transparent 70%),
+    linear-gradient(180deg, var(--pt-backdrop), var(--pt-backdrop-2));
+}
+.app-shell[data-stage-light='night'].role-theme {
+  --pt-gel: color-mix(in srgb, var(--role-accent) 70%, white);
+}
+
+.app-shell :focus-visible { outline: 3px solid color-mix(in srgb, var(--pt-gel) 55%, transparent); outline-offset: 2px; }
+
+/* ---------- Shared type ---------- */
+
+.app-shell .eyebrow {
+  color: var(--pt-stage-ink-soft);
+  font-family: var(--ll-font-type), 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+}
+.app-shell .eyebrow.accent { color: var(--pt-stage-ink); }
+.app-shell .card-heading h2,
+.app-shell .rail-card h2,
+.app-shell .waiting-card h2,
+.app-shell .game-modal h2 {
+  font-family: var(--ll-font-display), Georgia, serif;
+  font-variation-settings: 'SOFT' 60;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- Topbar: the proscenium valance ---------- */
+
+.app-shell .topbar,
+.app-shell.role-theme .topbar {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.12), transparent 40%, rgba(0, 0, 0, 0.22)),
+    repeating-linear-gradient(90deg, var(--pt-valance) 0 22px, color-mix(in srgb, var(--pt-valance) 90%, black) 22px 34px, var(--pt-valance) 34px 48px);
+  border-bottom: 2px solid color-mix(in srgb, var(--pt-gold) 75%, var(--pt-valance));
+  box-shadow: 0 6px 16px -6px rgba(29, 5, 8, 0.6);
+  color: #fff3d6;
+  transition: background 0.8s var(--pt-ease);
+}
+.app-shell .topbar::after {
+  background:
+    radial-gradient(circle at 50% 0, color-mix(in srgb, var(--pt-valance) 88%, black) 9px, color-mix(in srgb, var(--pt-gold) 75%, var(--pt-valance)) 9.5px 10.5px, transparent 11px) repeat-x 0 0 / 26px 12px;
+  bottom: -14px;
+  content: '';
+  height: 12px;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
+.app-shell .brand strong { color: #fff3d6; font-family: var(--ll-font-display), Georgia, serif; font-size: 20px; font-style: italic; font-variation-settings: 'SOFT' 100, 'WONK' 1; font-weight: 700; }
+.app-shell .brand small { color: var(--pt-gold-soft); font-family: var(--ll-font-type), monospace; font-weight: 400; letter-spacing: 0.3em; }
+
+/* The game name hangs as a small marquee plaque. */
+.app-shell .game-switcher {
+  background: var(--pt-curtain-shade);
+  border: 2px solid var(--pt-gold);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 2px var(--pt-curtain-shade), inset 0 0 0 3px rgba(227, 176, 75, 0.45), 0 3px 10px rgba(0, 0, 0, 0.35);
+  color: var(--pt-gold-soft);
+  font-family: var(--ll-font-type), monospace;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.app-shell .status-dot { background: #fff2c4; box-shadow: 0 0 0 2px rgba(255, 213, 124, 0.25), 0 0 8px 2px rgba(255, 213, 124, 0.85); }
+.app-shell .chevron { color: var(--pt-gold); }
+.app-shell .profile-name { color: #fff3d6; font-weight: 600; }
+.app-shell .avatar { background: var(--pt-paper); border: 2px solid var(--pt-gold); color: var(--pt-ink); font-family: var(--ll-font-display), Georgia, serif; }
+.app-shell .icon-button { color: #fff3d6; }
+.app-shell .theme-toggle-label { color: var(--pt-gold-soft); font-family: var(--ll-font-type), monospace; font-weight: 400; letter-spacing: 0.08em; }
+.app-shell .theme-toggle-track { background: rgba(29, 5, 8, 0.55); border-color: rgba(227, 176, 75, 0.6); }
+.app-shell .theme-toggle-track > span { background: #fff3d6; }
+.app-shell .theme-toggle[aria-checked='true'] .theme-toggle-track { background: var(--pt-gold); border-color: var(--pt-gold); }
+.app-shell .theme-toggle:disabled { cursor: default; opacity: 0.55; }
+
+/* ---------- Sidebar: the stage manager's rail ---------- */
+
+.app-shell .sidebar { border-right: 2px dashed var(--pt-stage-rule); }
+.app-shell .nav-item { border-radius: 3px; color: var(--pt-stage-ink-soft); font-size: 14px; font-weight: 500; transition: background 0.2s ease; }
+.app-shell .nav-item > span { color: var(--pt-stage-ink-soft); }
+.app-shell .nav-item:hover { background: color-mix(in srgb, var(--pt-paper) 45%, transparent); }
+.app-shell .nav-item.active { background: var(--pt-paper); box-shadow: var(--pt-shadow); color: var(--pt-ink); transform: rotate(-1deg); }
+.app-shell .nav-item.active > span { color: var(--pt-gel); }
+.app-shell .nav-item b { background: var(--pt-curtain); }
+.app-shell .sidebar-rule { border-top: 2px dashed var(--pt-stage-rule); }
+.app-shell .mini-stat { border-bottom: 1px dotted var(--pt-stage-rule); color: var(--pt-stage-ink); font-size: 13px; }
+.app-shell .mini-stat span { color: var(--pt-stage-ink-soft); }
+.app-shell .mini-stat strong { font-family: var(--ll-font-display), Georgia, serif; font-size: 19px; font-style: italic; font-weight: 600; }
+.app-shell .stat-details { border-bottom: 1px dotted var(--pt-stage-rule); }
+.app-shell .stat-trigger::after { color: var(--pt-stage-ink-soft); }
+.app-shell .stat-details[open] .stat-trigger { background: color-mix(in srgb, var(--pt-paper) 55%, transparent); color: var(--pt-stage-ink); }
+.app-shell .stat-popover { background: var(--pt-paper); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: var(--pt-shadow); color: var(--pt-ink); }
+.app-shell .stat-player > strong,
+.app-shell .stat-player > span > strong { font-size: 12px; }
+.app-shell .stat-player small { color: var(--pt-ink-soft); font-size: 10px; }
+.app-shell .wolf-stat strong { color: var(--pt-curtain); }
+.app-shell[data-stage-light='night'] .wolf-stat strong { color: #ff8a8a; }
+
+/* A handwritten note taped to the rail. */
+.app-shell .sidebar-note,
+.app-shell.role-theme .sidebar-note {
+  background: var(--pt-note);
+  border-radius: 1px;
+  box-shadow: var(--pt-shadow);
+  color: var(--pt-ink);
+  font-family: var(--ll-font-hand), cursive;
+  position: relative;
+  transform: rotate(-2deg);
+}
+.app-shell .sidebar-note::before { background: rgba(255, 255, 255, 0.55); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); content: ''; height: 18px; left: 50%; position: absolute; top: -9px; transform: translateX(-50%) rotate(3deg); width: 70px; }
+.app-shell .sidebar-note > span { color: var(--pt-ink); }
+.app-shell .sidebar-note p { font-size: 17px; line-height: 1.2; }
+.app-shell .sidebar-note strong { color: var(--pt-ink); font-size: 19px; }
+
+/* ---------- Headline and the deadline ticket ---------- */
+
+.app-shell .welcome-row h1 {
+  color: var(--pt-stage-ink);
+  font-family: var(--ll-font-display), Georgia, serif;
+  font-size: clamp(32px, 4.4vw, 48px);
+  font-style: italic;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.app-shell .welcome-row > div:first-child > p:last-child { color: var(--pt-stage-ink-soft); font-size: 15px; }
+
+/* Ticket shape: a notch bitten out of each side. Masks clip box-shadow, so
+   tickets carry an inset rule instead of a drop shadow. */
+.app-shell .deadline-card,
+:is(.app-shell, .front-of-house, .guide-shell) .primary-button,
+:is(.app-shell, .front-of-house, .guide-shell) .primary-link {
+  -webkit-mask: radial-gradient(circle 7px at left center, transparent 96%, #000) left / 51% 100% no-repeat, radial-gradient(circle 7px at right center, transparent 96%, #000) right / 51% 100% no-repeat;
+  mask: radial-gradient(circle 7px at left center, transparent 96%, #000) left / 51% 100% no-repeat, radial-gradient(circle 7px at right center, transparent 96%, #000) right / 51% 100% no-repeat;
+}
+.app-shell .deadline-card {
+  background: linear-gradient(170deg, #fdf6e4, #f0e2c0);
+  border: 0;
+  border-radius: 3px;
+  box-shadow: none;
+  color: var(--pt-ink);
+  outline: 1px dashed rgba(122, 79, 44, 0.45);
+  outline-offset: -6px;
+  padding: 14px 20px;
+  transform: rotate(1.5deg);
+}
+.app-shell[data-stage-light='night'] .deadline-card { background: linear-gradient(170deg, #efe9f6, #d9d0ea); }
+.app-shell .deadline-card span,
+.app-shell .deadline-card small { color: #7a4f2c; font-family: var(--ll-font-type), monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+.app-shell .deadline-card strong { color: var(--pt-curtain); font-family: var(--ll-font-display), Georgia, serif; font-size: 24px; font-weight: 700; line-height: 1.05; }
+
+/* ---------- Role card: the playbill ---------- */
+
+.app-shell .role-card,
+.app-shell.role-theme .role-card {
+  background:
+    radial-gradient(ellipse 22rem 14rem at 9% 50%, var(--pt-gel-wash), transparent 70%),
+    linear-gradient(170deg, #fdf6e4, #f3e6c6);
+  border-radius: 3px;
+  box-shadow: var(--pt-shadow);
+  color: var(--pt-ink);
+  outline: 4px double rgba(43, 33, 24, 0.45);
+  outline-offset: -11px;
+  overflow: visible;
+}
+.app-shell[data-stage-light='night'] .role-card { background: radial-gradient(ellipse 22rem 14rem at 9% 50%, var(--pt-gel-wash), transparent 70%), linear-gradient(170deg, #f1ecf6, #ddd5ea); }
+/* The old decorative ring becomes a strip of tape holding the playbill up. */
+.app-shell .role-card::after {
+  background: rgba(255, 246, 220, 0.72);
+  border: 0;
+  border-radius: 1px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  height: 22px;
+  left: calc(50% - 50px);
+  top: -11px;
+  transform: rotate(-2.5deg);
+  width: 100px;
+}
+.app-shell .role-orbit {
+  background: var(--pt-gel);
+  border: 2px solid var(--pt-ink);
+  box-shadow: 0 0 0 4px var(--pt-paper), 0 0 0 5px rgba(43, 33, 24, 0.35), 0 6px 18px var(--pt-gel-wash);
+}
+.app-shell .role-orbit span { color: #fff6dc; }
+.app-shell .role-copy .eyebrow { color: var(--pt-ink-soft); }
+.app-shell .role-copy h2 { color: var(--pt-ink); font-family: var(--ll-font-display), Georgia, serif; font-size: 36px; font-style: italic; font-variation-settings: 'SOFT' 100, 'WONK' 1; font-weight: 700; letter-spacing: -0.02em; }
+.app-shell .role-copy > p:last-child { color: var(--pt-ink-soft); font-size: 14px; }
+.app-shell .role-visibility-toggle { background: var(--pt-paper); border: 1.5px solid var(--pt-ink); border-radius: 3px; color: var(--pt-ink); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; letter-spacing: 0.06em; }
+.app-shell .role-visibility-toggle:hover { background: var(--pt-note); }
+.app-shell .role-faction { border-color: rgba(43, 33, 24, 0.22); }
+.app-shell .role-faction span,
+.app-shell .role-faction small { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 10px; }
+.app-shell .role-faction strong { font-size: 15px; font-weight: 600; }
+
+/* Eliminated: the playbill fades, and a red rubber stamp goes on it. */
+.app-shell .eliminated-role { filter: grayscale(0.55) sepia(0.2); }
+.app-shell .eliminated-role .role-orbit { background: #5a4a44; border-color: var(--pt-ink); }
+.app-shell .eliminated-role .role-orbit span { color: #fff6dc; }
+.app-shell .eliminated-banner {
+  background: var(--pt-paper);
+  border: 3px double var(--pt-curtain);
+  border-radius: 3px;
+  box-shadow: 0 2px 6px rgba(20, 12, 5, 0.18);
+  color: var(--pt-curtain);
+  font-family: var(--ll-font-type), monospace;
+  font-size: 11px;
+  font-weight: 400;
+  right: 32px;
+  top: -16px;
+  transform: rotate(-3deg);
+  z-index: 2;
+}
+
+/* Reveal: when the player chooses Show role, the medallion spins on its rod
+   like the landing-page puppets. It does not replay on every page load. */
+.app-shell .role-card[data-just-revealed] .role-orbit { animation: pt-puppet-spin 0.9s cubic-bezier(0.45, -0.3, 0.3, 1.3) both; }
+.app-shell .role-card[data-just-revealed] .role-copy h2 { animation: pt-rise 0.6s var(--pt-ease) 0.25s both; }
+@keyframes pt-puppet-spin { from { transform: perspective(600px) rotateY(-540deg); } to { transform: perspective(600px) rotateY(0); } }
+@keyframes pt-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Paper cards ---------- */
+
+.app-shell .ballot-card,
+.app-shell .rail-card {
+  background: var(--pt-paper);
+  border: 1px solid var(--pt-paper-edge);
+  border-radius: 3px;
+  box-shadow: var(--pt-shadow);
+  color: var(--pt-ink);
+  transition: background-color 0.8s var(--pt-ease), box-shadow 0.25s ease;
+}
+/* Programme inserts in the rail sit very slightly askew. */
+.app-shell .right-rail > .rail-card:nth-child(odd) { transform: rotate(-0.4deg); }
+.app-shell .right-rail > .rail-card:nth-child(even) { transform: rotate(0.35deg); }
+.app-shell .rail-card > p:not(.eyebrow) { color: var(--pt-ink-soft); font-size: 13px; }
+.app-shell .rail-card > small { color: var(--pt-ink-soft); font-size: 11px; }
+.app-shell .rail-card .eyebrow { color: var(--pt-ink-soft); }
+.app-shell .rail-heading span {
+  background: var(--pt-gold-soft);
+  border: 1.5px solid #7a4f2c;
+  box-shadow: 0 0 8px 1px rgba(255, 213, 124, 0.7);
+  color: var(--pt-ink);
+  font-family: var(--ll-font-type), monospace;
+  font-weight: 400;
+}
+
+/* ---------- Ballot ---------- */
+
+.app-shell .submission-count { background: transparent; border: 1.5px dashed var(--pt-ink-soft); border-radius: 3px; color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; }
+.app-shell .selection-summary > span { font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; }
+.app-shell .selection-summary small { color: var(--pt-ink-soft); font-size: 12px; font-style: italic; }
+.app-shell .progress-track { background: repeating-linear-gradient(90deg, var(--pt-paper-edge) 0 6px, transparent 6px 10px); height: 6px; }
+.app-shell .progress-track span { background: var(--pt-gel); }
+
+/* Candidates are perforated admission tickets. */
+.app-shell .candidate {
+  background: var(--pt-paper-2);
+  border: 1px solid var(--pt-paper-edge);
+  border-radius: 3px;
+  box-shadow: 0 1px 2px rgba(20, 12, 5, 0.1), 0 4px 10px -4px rgba(20, 12, 5, 0.22);
+  color: var(--pt-ink);
+  position: relative;
+  transition: box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+.app-shell .candidate::after { border-left: 2px dashed var(--pt-paper-edge); bottom: 9px; content: ''; position: absolute; right: 46px; top: 9px; }
+/* Hover feedback never moves the element: automated clicks wait for a
+   still target, and a moving ticket under a resting pointer never settles. */
+.app-shell .candidate:hover:not(:disabled) { border-color: var(--pt-ink-soft); box-shadow: var(--pt-shadow-lift); }
+.app-shell .candidate.selected,
+.app-shell.role-theme .candidate.selected {
+  background: color-mix(in srgb, var(--pt-gel) 13%, var(--pt-paper));
+  border-color: var(--pt-gel);
+  box-shadow: inset 0 0 0 1px var(--pt-gel), var(--pt-shadow);
+  transform: rotate(0.5deg);
+}
+.app-shell .candidate strong { font-size: 14px; font-weight: 600; }
+.app-shell .candidate small { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 10px; letter-spacing: 0.06em; }
+.app-shell .candidate-avatar,
+.app-shell .candidate-avatar.small { background: var(--pt-paper); border: 1.5px solid var(--pt-ink); color: var(--pt-ink); font-family: var(--ll-font-display), Georgia, serif; font-weight: 700; }
+.app-shell .check { border: 1.5px dashed var(--pt-ink-soft); color: var(--pt-paper); }
+.app-shell .candidate.selected .check { background: var(--pt-gel); border: 1.5px solid var(--pt-gel); color: #fffaf0; }
+.app-shell .eliminated-player .candidate-avatar { background: #efe2dc; border-color: #9e4c3c; color: #9e4c3c; text-decoration: line-through; }
+
+.app-shell .ballot-footer { border-top: 2px dashed var(--pt-paper-edge); }
+.app-shell .ballot-footer p { color: var(--pt-ink-soft); font-size: 12px; font-style: italic; }
+.app-shell .ballot-footer p span { color: var(--pt-gel); }
+
+/* ---------- Buttons ---------- */
+
+/* ADMIT ONE: the primary action is a theatre ticket. */
+:is(.app-shell, .front-of-house, .guide-shell) .primary-button,
+:is(.app-shell, .front-of-house, .guide-shell) .primary-link {
+  background: var(--pt-curtain);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 3px var(--pt-curtain), inset 0 0 0 4px rgba(255, 243, 214, 0.55);
+  color: #fff3d6;
+  font-family: var(--ll-font-type), monospace;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  padding: 12px 22px;
+  text-transform: uppercase;
+  transition: background-color 0.2s ease;
+}
+:is(.app-shell, .front-of-house, .guide-shell) .primary-button:hover:not(:disabled),
+:is(.app-shell, .front-of-house, .guide-shell) .primary-link:hover { background: var(--pt-curtain-deep); box-shadow: inset 0 0 0 3px var(--pt-curtain-deep), inset 0 0 0 4px rgba(255, 243, 214, 0.55); }
+:is(.app-shell, .front-of-house, .guide-shell) .primary-button:active:not(:disabled) { transform: translateY(1px) scale(0.98); }
+:is(.app-shell, .front-of-house, .guide-shell) .primary-button:disabled { cursor: not-allowed; opacity: 0.5; }
+
+:is(.app-shell, .front-of-house, .guide-shell) .secondary-button {
+  background: var(--pt-paper);
+  border: 1.5px solid var(--pt-ink);
+  border-radius: 3px;
+  box-shadow: 2px 2px 0 rgba(43, 33, 24, 0.25);
+  color: var(--pt-ink);
+  font-family: var(--ll-font-type), monospace;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  transition: box-shadow 0.15s ease;
+}
+:is(.app-shell, .front-of-house, .guide-shell) .secondary-button:hover:not(:disabled) { box-shadow: 3px 3px 0 rgba(43, 33, 24, 0.4); }
+:is(.app-shell, .front-of-house, .guide-shell) .secondary-button:active:not(:disabled) { box-shadow: 0 0 0 rgba(43, 33, 24, 0.3); transform: translate(1px, 1px); }
+:is(.app-shell, .front-of-house, .guide-shell) .text-button { color: var(--pt-gel); font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; text-decoration: underline dotted; text-underline-offset: 3px; }
+
+/* ---------- Feedback: stamps and slips ---------- */
+
+/* A saved response lands like a rubber stamp. */
+.app-shell .action-success {
+  animation: pt-stamp 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  background: color-mix(in srgb, #2f6b4a 8%, transparent);
+  border: 2px solid #2f6b4a;
+  border-radius: 3px;
+  color: #2f6b4a;
+  font-family: var(--ll-font-type), monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  transform: rotate(-1deg);
+}
+@keyframes pt-stamp {
+  0% { opacity: 0; transform: scale(1.35) rotate(-4deg); }
+  60% { opacity: 1; transform: scale(0.97) rotate(-0.6deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-1deg); }
+}
+:is(.app-shell, .front-of-house, .guide-shell) .form-error { color: var(--pt-curtain); font-family: var(--ll-font-type), monospace; font-size: 12px; }
+.app-shell .notice { border-radius: 2px; box-shadow: var(--pt-shadow); font-size: 13px; position: relative; }
+.app-shell .notice.warning { background: var(--pt-note); color: #5c4214; }
+.app-shell .empty-note,
+.app-shell .field-help { color: var(--pt-ink-soft); font-size: 12px; font-style: italic; }
+
+/* ---------- Waiting between cues ---------- */
+
+.app-shell .waiting-card p { color: var(--pt-ink-soft); font-size: 13px; }
+.app-shell .waiting-icon { background: var(--pt-gold-soft); border: 2px solid #7a4f2c; box-shadow: 0 0 16px 2px rgba(255, 213, 124, 0.6); color: #7a4f2c; }
+
+/* ---------- Rail content ---------- */
+
+.app-shell .announcement { background: var(--pt-note); border-color: #ead9a8; }
+.app-shell .announcement::before { background: rgba(255, 255, 255, 0.6); border-radius: 1px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); height: 20px; left: 24px; top: -10px; transform: rotate(-4deg); width: 64px; }
+
+.app-shell .timeline-mini article,
+.app-shell .timeline-entry { border-left: 2px dotted color-mix(in srgb, var(--pt-ink-soft) 55%, transparent); }
+.app-shell .timeline-mini article::before,
+.app-shell .timeline-entry::before { background: var(--pt-gold-soft); border: 2px solid #7a4f2c; box-shadow: 0 0 6px rgba(255, 213, 124, 0.9); }
+.app-shell .timeline-mini strong,
+.app-shell .timeline-summary-copy strong { font-size: 13px; font-weight: 600; }
+.app-shell .timeline-mini h3 { font-size: 14px; }
+.app-shell .timeline-mini p,
+.app-shell .timeline-summary-copy span { color: var(--pt-ink-soft); font-size: 12px; }
+.app-shell .timeline-mini small,
+.app-shell .timeline-summary-copy small { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 10px; opacity: 0.85; }
+.app-shell .timeline-summary-hint { color: var(--pt-gel); font-family: var(--ll-font-type), monospace; font-size: 10px; font-weight: 400; }
+.app-shell .timeline-trigger:hover .timeline-summary-copy strong { color: var(--pt-gel); }
+
+.app-shell .player-row strong { font-size: 13px; font-weight: 600; }
+.app-shell .player-row small { color: var(--pt-ink-soft); font-size: 11px; }
+.app-shell .ready-dot { background: var(--pt-paper-edge); }
+.app-shell .ready-dot.ready { background: var(--pt-gold-soft); box-shadow: 0 0 6px rgba(255, 213, 124, 0.9); }
+
+/* Private room: notes passed backstage. */
+.app-shell .room-tabs button { background: var(--pt-paper-2); border: 1px solid var(--pt-paper-edge); border-radius: 3px 3px 0 0; color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 10px; }
+.app-shell .room-tabs button.active { background: var(--pt-paper); border-color: var(--pt-gel); color: var(--pt-ink); }
+.app-shell .chat-line { background: var(--pt-paper-2); border-left: 3px solid var(--pt-gel); border-radius: 2px; }
+.app-shell .chat-line:nth-child(even) { border-left-color: var(--pt-gold); }
+.app-shell .chat-line strong { font-size: 12px; font-weight: 600; }
+.app-shell .chat-line small { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 9px; }
+.app-shell .chat-line p { color: var(--pt-ink); font-size: 13px; }
+
+:is(.app-shell, .front-of-house, .guide-shell) input,
+:is(.app-shell, .front-of-house, .guide-shell) textarea,
+:is(.app-shell, .front-of-house, .guide-shell) select {
+  background: var(--pt-paper);
+  border: 1px solid var(--pt-paper-edge);
+  border-bottom: 2px solid color-mix(in srgb, var(--pt-ink-soft) 50%, transparent);
+  border-radius: 2px;
+  color: var(--pt-ink);
+  font-family: var(--ll-font-display), Georgia, serif;
+  font-size: 14px;
+}
+.app-shell .chat-compose textarea { font-size: 13px; }
+.app-shell .chat-compose label { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; }
+
+/* Night sky backdrop cut from dark card. */
+.app-shell .moon-card,
+.app-shell.role-theme .moon-card {
+  background:
+    radial-gradient(1.5px 1.5px at 18% 30%, #fff6dc 50%, transparent 51%),
+    radial-gradient(1px 1px at 38% 12%, #fff6dc 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 62% 42%, #fff6dc 50%, transparent 51%),
+    radial-gradient(1px 1px at 12% 70%, #fff6dc 50%, transparent 51%),
+    radial-gradient(1px 1px at 54% 78%, #fff6dc 50%, transparent 51%),
+    linear-gradient(170deg, #2e3048, #1c1726);
+  border-color: #1c1726;
+  color: #f3ecdc;
+}
+.app-shell .moon-card .eyebrow { color: var(--pt-gold-soft); }
+.app-shell .moon-card h2 { color: #f3ecdc; }
+.app-shell .moon-card p:not(.eyebrow) { color: #c3bddb; }
+.app-shell .moon-art { color: var(--pt-gold-soft); text-shadow: 0 0 18px rgba(255, 213, 124, 0.75); }
+
+/* ---------- Mobile tags ---------- */
+
+.app-shell .mobile-nav a { background: var(--pt-paper); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: 0 2px 5px rgba(20, 12, 5, 0.18); color: var(--pt-ink); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; }
+
+/* ---------- Preview banner ---------- */
+
+.app-shell .preview-mode-banner { background: var(--pt-note); border-bottom: 2px dashed #b89a4e; color: #5c4214; font-family: var(--ll-font-type), monospace; font-size: 11px; }
+
+/* ---------- Modals ---------- */
+
+.app-shell .modal-backdrop { background: rgba(29, 5, 8, 0.7); }
+.app-shell .game-modal {
+  background: linear-gradient(170deg, #fdf6e4, #f3e6c6);
+  border: 0;
+  border-radius: 3px;
+  box-shadow: 0 16px 32px rgba(9, 2, 4, 0.5);
+  color: var(--pt-ink);
+  outline: 4px double rgba(43, 33, 24, 0.4);
+  outline-offset: -12px;
+}
+.app-shell .modal-intro { color: var(--pt-ink-soft); font-size: 14px; }
+.app-shell .game-modal .eyebrow { color: var(--pt-ink-soft); }
+.app-shell .timeline-modal .vote-ledger { border: 1px solid var(--pt-paper-edge); border-radius: 2px; }
+.app-shell .timeline-modal .vote-ledger-row { border-bottom: 1px dotted var(--pt-paper-edge); }
+.app-shell .timeline-modal .vote-ledger-row:nth-child(odd) { background: rgba(255, 250, 240, 0.5); }
+.app-shell .timeline-privacy-note { color: var(--pt-ink-soft); font-size: 12px; font-style: italic; }
+
+/* Elimination: the curtain closes, then a proclamation is pinned to it. */
+.app-shell .curtain-call::before,
+.app-shell .curtain-call::after {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.25), transparent 30%, rgba(0, 0, 0, 0.35)),
+    repeating-linear-gradient(90deg, #b8323a 0 26px, #8f2632 26px 40px, #b8323a 40px 56px);
+  bottom: 0;
+  content: '';
+  position: fixed;
+  top: 0;
+  width: 51%;
+}
+.app-shell .curtain-call::before { animation: pt-curtain-left 0.75s var(--pt-ease) both; box-shadow: inset -18px 0 24px -12px rgba(0, 0, 0, 0.5); left: 0; }
+.app-shell .curtain-call::after { animation: pt-curtain-right 0.75s var(--pt-ease) both; box-shadow: inset 18px 0 24px -12px rgba(0, 0, 0, 0.5); right: 0; }
+/* The notice fades in rather than moving, so "I understand" is clickable
+   (by people and by automated tests) the moment it appears. */
+.app-shell .curtain-call .game-modal { animation: pt-notice-in 0.45s ease 0.4s both; transform: rotate(-0.6deg); z-index: 1; }
+@keyframes pt-curtain-left { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes pt-curtain-right { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes pt-notice-in { from { opacity: 0; } to { opacity: 1; } }
+.app-shell .death-modal h2 { font-family: var(--ll-font-story), Georgia, serif; font-size: 34px; font-weight: 400; }
+.app-shell .modal-symbol { background: var(--pt-curtain); border: 0; box-shadow: 0 0 0 4px color-mix(in srgb, var(--pt-curtain) 45%, transparent), 0 4px 10px rgba(0, 0, 0, 0.3); color: #fff3d6; }
+.app-shell .death-list article { background: var(--pt-paper); border: 1px solid var(--pt-paper-edge); border-radius: 2px; box-shadow: 0 2px 6px rgba(20, 12, 5, 0.12); }
+.app-shell .death-list strong { font-family: var(--ll-font-display), Georgia, serif; font-weight: 600; }
+.app-shell .death-list span { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 12px; }
+
+@media (max-width: 780px) {
+  .app-shell .role-card::after { left: calc(50% - 40px); width: 80px; }
+  .app-shell .role-copy h2 { font-size: 30px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell *,
+  .app-shell *::before,
+  .app-shell *::after { animation: none !important; }
+}
+
+/* ================= Front of house =================
+   Player sign-in, seat claim and the dashboard's loading and error states:
+   the same day-lit stage, with a playbill card sealed by the emblem. */
+
+.front-of-house .auth-card {
+  background: linear-gradient(170deg, #fdf6e4, #f3e6c6);
+  border: 0;
+  border-radius: 3px;
+  box-shadow: var(--pt-shadow-lift);
+  color: var(--pt-ink);
+  outline: 4px double rgba(43, 33, 24, 0.4);
+  outline-offset: -12px;
+}
+.front-of-house .auth-card h1 {
+  font-family: var(--ll-font-display), Georgia, serif;
+  font-style: italic;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.front-of-house .claim-card { text-align: center; }
+.front-of-house .claim-card .form-stack { text-align: left; }
+.front-of-house .auth-card > p:not(.eyebrow, .form-error, .privacy-note) { color: var(--pt-ink-soft); font-size: 15px; }
+.front-of-house .eyebrow { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; letter-spacing: 0.18em; }
+.front-of-house .form-stack label { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; letter-spacing: 0.06em; }
+.front-of-house .primary-button,
+.front-of-house .primary-link { width: 100%; }
+.front-of-house .primary-link { text-align: center; }
+.front-of-house .button-row { justify-content: center; margin-top: 16px; }
+.front-of-house .quiet-link { color: var(--pt-gel); display: inline-block; font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; margin-top: 14px; text-decoration: underline dotted; text-underline-offset: 3px; }
+.front-of-house .button-row .quiet-link { margin-top: 0; }
+.front-of-house .privacy-note { color: var(--pt-ink-soft); font-size: 12px; font-style: italic; }
+.front-of-house .claim-seal .brand-mark { animation: pt-puppet-spin 1s cubic-bezier(0.45, -0.3, 0.3, 1.3) both; }
+.front-of-house .setup-loading { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; letter-spacing: 0.08em; margin: 0 auto; padding-top: 120px; }
+
+/* ================= The programme (/guide) ================= */
+
+.guide-shell { color: var(--pt-ink); font-family: var(--ll-font-display), Georgia, serif; }
+.guide-shell .guide-header {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.12), transparent 40%, rgba(0, 0, 0, 0.22)),
+    repeating-linear-gradient(90deg, var(--pt-valance) 0 22px, color-mix(in srgb, var(--pt-valance) 90%, black) 22px 34px, var(--pt-valance) 34px 48px);
+  border-bottom: 2px solid color-mix(in srgb, var(--pt-gold) 75%, var(--pt-valance));
+  box-shadow: 0 6px 16px -6px rgba(29, 5, 8, 0.6);
+}
+.guide-shell .brand strong { color: #fff3d6; font-family: var(--ll-font-display), Georgia, serif; font-size: 20px; font-style: italic; font-variation-settings: 'SOFT' 100, 'WONK' 1; font-weight: 700; }
+.guide-shell .brand small { color: var(--pt-gold-soft); font-family: var(--ll-font-type), monospace; font-weight: 400; letter-spacing: 0.3em; }
+.guide-shell .guide-header-links a { color: var(--pt-gold-soft); font-family: var(--ll-font-type), monospace; font-weight: 400; letter-spacing: 0.06em; }
+.guide-shell .guide-header-links a:hover { color: #fff3d6; text-decoration: underline dotted; }
+
+/* The content is a printed programme on the stage. */
+.guide-shell .guide-main {
+  background: var(--pt-paper);
+  box-shadow: var(--pt-shadow-lift);
+  margin: 44px auto 80px;
+  outline: 4px double rgba(43, 33, 24, 0.35);
+  outline-offset: -14px;
+  padding: 56px 60px 64px;
+}
+.guide-shell .eyebrow { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; letter-spacing: 0.18em; }
+.guide-shell .guide-hero { text-align: center; }
+.guide-shell .guide-hero h1 { font-family: var(--ll-font-display), Georgia, serif; font-style: italic; font-variation-settings: 'SOFT' 100, 'WONK' 1; font-weight: 700; letter-spacing: -0.025em; }
+.guide-shell .guide-hero > p:not(.eyebrow) { color: var(--pt-ink-soft); margin: 0 auto; }
+.guide-shell .guide-toc { justify-content: center; }
+.guide-shell .guide-toc a { background: var(--pt-paper-2); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: 0 2px 5px rgba(20, 12, 5, 0.15); color: var(--pt-ink); font-family: var(--ll-font-type), monospace; font-weight: 400; transition: border-color 0.15s ease, color 0.15s ease; }
+.guide-shell .guide-toc a:hover,
+.guide-shell .guide-toc a:focus-visible { border-color: var(--pt-gel); color: var(--pt-gel); }
+/* The walkthrough plays inside a little proscenium. */
+.guide-shell .guide-video video { border: 10px solid var(--pt-valance); border-radius: 3px; box-shadow: 0 0 0 2px var(--pt-gold), 0 18px 40px rgba(29, 5, 8, 0.35); }
+.guide-shell .guide-video p,
+.guide-shell .guide-shot figcaption { color: var(--pt-ink-soft); font-style: italic; text-align: center; }
+.guide-shell .guide-section { border-top: 3px double var(--pt-paper-edge); }
+.guide-shell .guide-section h2,
+.guide-shell .guide-cta h2 { font-family: var(--ll-font-display), Georgia, serif; font-variation-settings: 'SOFT' 60; font-weight: 600; letter-spacing: -0.02em; }
+.guide-shell .guide-section h3 { font-weight: 600; }
+.guide-shell .guide-section a { color: var(--pt-gel); }
+.guide-shell .guide-section code { background: var(--pt-note); border-radius: 2px; font-family: var(--ll-font-type), monospace; }
+.guide-shell .guide-cards article,
+.guide-shell .guide-roles article { background: var(--pt-paper-2); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: 0 2px 6px rgba(20, 12, 5, 0.12); }
+.guide-shell .guide-cards h3,
+.guide-shell .guide-roles h3 { font-family: var(--ll-font-display), Georgia, serif; font-style: italic; font-weight: 700; }
+.guide-shell .guide-roles .guide-team { color: var(--pt-gel); font-family: var(--ll-font-type), monospace; font-weight: 400; }
+.guide-shell .guide-roles article.wolf { background: linear-gradient(170deg, #2e3048, #1c1726); border-color: #1c1726; color: #f3ecdc; }
+.guide-shell .guide-roles article.wolf .guide-team { color: var(--pt-gold-soft); }
+.guide-shell .guide-table th { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-weight: 400; }
+.guide-shell .guide-table th,
+.guide-shell .guide-table td { border-bottom: 1px dotted color-mix(in srgb, var(--pt-ink-soft) 45%, transparent); }
+.guide-shell .guide-shot img { background: #fffdf7; border: 0; border-radius: 2px; box-shadow: 0 0 0 7px #fffdf7, 0 0 0 8px var(--pt-paper-edge), 0 12px 28px rgba(20, 12, 5, 0.22); }
+.guide-shell .guide-shot { padding: 8px; }
+/* Closing curtain call. */
+.guide-shell .guide-cta {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.1), transparent 40%, rgba(0, 0, 0, 0.25)),
+    repeating-linear-gradient(90deg, var(--pt-valance) 0 26px, color-mix(in srgb, var(--pt-valance) 88%, black) 26px 40px, var(--pt-valance) 40px 56px);
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--pt-gold), var(--pt-shadow);
+  color: #fff3d6;
+}
+.guide-shell .guide-cta .secondary-link { background: #fff3d6; border: 1.5px solid var(--pt-ink); border-radius: 3px; color: var(--pt-ink); font-family: var(--ll-font-type), monospace; font-weight: 400; }
+
+@media (max-width: 700px) {
+  .guide-shell .guide-main { margin: 18px 10px 48px; outline-offset: -8px; padding: 36px 22px 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .front-of-house *,
+  .guide-shell * { animation: none !important; transition: none !important; }
+}

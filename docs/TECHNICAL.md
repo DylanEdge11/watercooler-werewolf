@@ -26,6 +26,11 @@ Requests never change the schema. `ensureDatabase()` checks that every version i
 | Stop, reset, restore, cancel, PIN reset | `app/api/games/[gameId]/operations/route.ts`, `lib/backup/` |
 | Sessions, hashing, authorization | `lib/auth/` |
 | Origin checks and rate limits | `lib/http/` |
+| Layout and base styles | `app/globals.css` |
+| Paper Theatre look (dashboard, sign-in, claim, `/guide`) | `app/paper-theatre.css` |
+| Backstage look (moderator console, Player View Studio) | `app/paper-theatre-backstage.css` |
+| Emblem and favicon | `app/brand-mark.tsx`, `public/favicon.svg` |
+| Signed-out landing page | `app/landing/` |
 
 ## Game rules as implemented
 

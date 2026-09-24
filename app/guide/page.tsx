@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
+import BrandMark from '../brand-mark';
 
 export const metadata: Metadata = {
   title: 'How to play · Watercooler Werewolf',
@@ -59,7 +60,7 @@ export default function GuidePage() {
     <div className="guide-shell">
       <header className="guide-header">
         <Link className="brand" href="/" aria-label="Watercooler Werewolf home">
-          <span className="brand-mark" aria-hidden="true"><span className="brand-moon" /><span className="brand-cup" /></span>
+          <BrandMark />
           <span><strong>Watercooler</strong><small>Werewolf</small></span>
         </Link>
         <nav className="guide-header-links" aria-label="Sign in">

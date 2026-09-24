@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import { ROLE_KEYS, type RoleKey } from '../../../lib/game/types';
 import PlayerDashboard from '../../player-dashboard';
+import BrandMark from '../../brand-mark';
 import { createPreviewData, PREVIEW_SCENARIOS, type PreviewScenarioId } from './scenarios';
 
 export default function PlayerViewStudio() {
@@ -17,10 +18,10 @@ export default function PlayerViewStudio() {
   }
 
   return (
-    <div className="setup-shell player-preview-studio">
+    <div className="setup-shell backstage player-preview-studio">
       <header className="setup-header">
         <Link className="brand" href="/moderator" aria-label="Back to moderator console">
-          <span className="brand-mark" aria-hidden="true"><span className="brand-moon" /><span className="brand-cup" /></span>
+          <BrandMark />
           <span><strong>Watercooler</strong><small>Werewolf</small></span>
         </Link>
         <span className="mode-chip">Player View Studio</span>

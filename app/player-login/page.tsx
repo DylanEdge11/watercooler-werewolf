@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import BrandMark from '../brand-mark';
 
 export default function PlayerLoginPage() {
   const router = useRouter();
@@ -22,9 +23,9 @@ export default function PlayerLoginPage() {
   }
 
   return (
-    <main className="setup-shell centered">
+    <main className="setup-shell centered front-of-house">
       <section className="auth-card claim-card">
-        <div className="claim-moon" aria-hidden="true">☾</div>
+        <div className="claim-seal"><BrandMark /></div>
         <p className="eyebrow accent">Return to the village</p>
         <h1>Player sign-in</h1>
         <p>Use the email address from your invitation and the PIN you chose. Your seat code also works if you need it.</p>

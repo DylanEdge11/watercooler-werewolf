@@ -34,17 +34,14 @@ button { color: inherit; }
 .role-theme .topbar { background: color-mix(in srgb, var(--panel) 92%, transparent); }
 .role-theme .role-card { background: linear-gradient(125deg, var(--role-deep), var(--role-deep-2)); box-shadow: 0 18px 48px color-mix(in srgb, var(--role-deep) 24%, transparent); }
 .role-theme .candidate.selected { background: var(--role-selection); border-color: var(--role-accent); box-shadow: inset 0 0 0 1px var(--role-accent); }
-.role-theme .sidebar-note, .role-theme .moon-card, .role-theme .brand-mark { background: var(--role-deep); }
-.role-theme .brand-moon::after { background: var(--role-deep); }
+.role-theme .sidebar-note, .role-theme .moon-card { background: var(--role-deep); }
 .topbar { align-items: center; background: rgba(255, 253, 250, .95); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 250px 1fr 250px; height: 76px; padding: 0 28px; position: sticky; top: 0; z-index: 20; }
 .brand { align-items: center; color: inherit; display: flex; gap: 11px; text-decoration: none; }
 .brand > span:last-child { display: grid; line-height: 1; }
 .brand strong { font-family: Georgia, serif; font-size: 18px; letter-spacing: -.03em; }
 .brand small { color: var(--mint-strong); font-size: 10px; font-weight: 800; letter-spacing: .18em; margin-top: 5px; text-transform: uppercase; }
-.brand-mark { background: var(--night); border-radius: 12px; display: block; height: 42px; overflow: hidden; position: relative; width: 42px; }
-.brand-moon { background: var(--amber); border-radius: 50%; height: 20px; left: 7px; position: absolute; top: 7px; width: 20px; }
-.brand-moon::after { background: var(--night); border-radius: 50%; content: ''; height: 17px; left: 7px; position: absolute; top: -2px; width: 17px; }
-.brand-cup { border: 2px solid var(--mint); border-radius: 3px 3px 7px 7px; bottom: 6px; height: 9px; position: absolute; right: 6px; width: 10px; }
+.brand-mark { display: block; flex: 0 0 auto; height: 48px; width: 48px; }
+.brand-mark svg { display: block; height: 100%; width: 100%; }
 .game-switcher { align-items: center; background: #edf2ed; border: 1px solid #dde7df; border-radius: 999px; display: flex; font-size: 13px; font-weight: 700; gap: 9px; justify-self: center; padding: 9px 14px; }
 .status-dot { background: #50a67f; border-radius: 50%; box-shadow: 0 0 0 3px #d9ecdf; height: 7px; width: 7px; }
 .chevron { color: var(--muted); margin-left: 5px; }
@@ -265,7 +262,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .assignment-grid > div { align-items: center; background: #f5f5ef; border-radius: 8px; display: flex; font-size: 10px; justify-content: space-between; padding: 9px 11px; }
 .assignment-grid strong { color: var(--mint-strong); font-size: 9px; }
 .claim-card { margin: 0; overflow: hidden; position: relative; width: 100%; }
-.claim-moon { color: var(--amber); font-size: 80px; line-height: 1; opacity: .7; position: absolute; right: -5px; top: -20px; transform: rotate(12deg); }
+.claim-seal { display: flex; justify-content: center; margin: -4px 0 14px; }
+.claim-seal .brand-mark { height: 72px; width: 72px; }
 .primary-link { background: var(--coral); border-radius: 10px; color: white; display: inline-block; font-size: 12px; font-weight: 800; margin-top: 12px; padding: 11px 18px; text-decoration: none; }
 @media (max-width: 800px) {
   .console-layout { display: block; padding: 28px 16px 70px; }
@@ -282,13 +280,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 
 /* Live player state */
-.welcome-shell { align-items: center; background: radial-gradient(circle at 75% 20%, #306c5a 0, var(--night) 42%, #10211e 100%); display: flex; min-height: 100vh; overflow: hidden; padding: 36px; position: relative; }
-.welcome-moon { color: var(--amber); font-size: min(38vw, 520px); line-height: .7; opacity: .12; position: absolute; right: -4vw; top: -5vw; transform: rotate(12deg); }
-.welcome-card { background: var(--panel); border-radius: 24px; box-shadow: 0 32px 90px rgba(0,0,0,.26); margin-left: max(2vw, 20px); max-width: 570px; padding: clamp(32px, 6vw, 62px); position: relative; z-index: 1; }
-.welcome-card .brand { margin-bottom: 56px; }
-.welcome-card h1 { font-family: Georgia, serif; font-size: clamp(38px, 5vw, 59px); letter-spacing: -.055em; line-height: .98; margin: 10px 0 20px; }
-.welcome-card > p:not(.eyebrow) { color: var(--muted); font-size: 14px; line-height: 1.7; }
-.welcome-card > small { color: #87928c; display: block; font-size: 9px; margin-top: 25px; }
 .secondary-link { border: 1px solid #ccd5d0; border-radius: 10px; color: var(--mint-strong); display: inline-block; font-size: 12px; font-weight: 800; margin-top: 12px; padding: 10px 17px; text-decoration: none; }
 .signout-button { color: #73847b; font-size: 15px; }
 .eliminated-role { background: linear-gradient(125deg, #3a302e, #5a3d37); border: 2px solid rgba(232, 111, 81, .7); filter: saturate(.65); }
@@ -348,9 +339,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .timeline-privacy-note { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 14px 0 0; }
 .modal-close { border-radius: 50%; flex: 0 0 auto; font-size: 28px; }
 @media (max-width: 650px) {
-  .welcome-shell { padding: 18px; }
-  .welcome-card { margin: 0; padding: 32px 27px; }
-  .welcome-card .brand { margin-bottom: 42px; }
   .waiting-card { grid-template-columns: 42px 1fr; }
   .waiting-card button { grid-column: 1 / -1; }
   .modal-backdrop { padding: 12px; }
@@ -519,7 +507,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .guide-cta { background: var(--night); border-radius: 20px; color: #f3efe6; margin-top: 64px; padding: 36px; text-align: center; }
 .guide-cta .button-row { justify-content: center; }
 .guide-cta .secondary-link { background: var(--panel); }
-.welcome-guide-link { color: var(--mint-strong); display: inline-block; font-size: 12px; font-weight: 800; margin-top: 18px; text-decoration: none; }
 @media (max-width: 700px) {
   .guide-header { padding: 12px 16px; }
   .guide-main { padding: 32px 16px 64px; }
