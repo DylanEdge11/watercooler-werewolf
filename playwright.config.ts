@@ -2,6 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 import { BASE_URL, E2E_REMOTE, E2E_RUN_ID, MODERATOR_EMAIL, MODERATOR_PASSWORD } from './e2e/constants';
 import { resolvePlaywrightArtifactPaths } from './e2e/artifact-paths';
 import { E2E_REQUEST_HEADERS } from './e2e/transport';
+import { proxyTrustArgs } from './e2e/proxy-trust';
+
+// Empty except in Claude Code cloud sessions; see e2e/proxy-trust.ts.
+const chromiumLaunchOptions = { args: proxyTrustArgs() };
 
 const artifacts = resolvePlaywrightArtifactPaths(
   E2E_RUN_ID || 'local',
@@ -34,12 +38,12 @@ export default defineConfig({
     {
       name: 'chromium',
       testMatch: /readiness\/.*\.spec\.ts$/u,
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], launchOptions: chromiumLaunchOptions },
     },
     {
       name: 'edge',
       testMatch: /readiness\/browser-smoke\.spec\.ts$/u,
-      use: { ...devices['Desktop Chrome'], channel: 'msedge' },
+      use: { ...devices['Desktop Chrome'], channel: 'msedge', launchOptions: chromiumLaunchOptions },
     },
     {
       name: 'firefox',
