@@ -62,6 +62,7 @@ E2E_RUN_ID=$RUN_ID E2E_INVOCATION_ID=01-chromium-smoke \
 Environment requirements and fallbacks:
 
 - `.env.e2e.local` (ignored) holds the fictional moderator credentials, `VERCEL_AUTOMATION_BYPASS_SECRET`, and related values. Never print, paste, or commit its values. Supply the exact Preview origin as `E2E_BASE_URL` and the deployment ID as `E2E_VERCEL_DEPLOYMENT_ID`.
+- In cloud sessions the same values are environment variables (`E2E_MODERATOR_EMAIL`, `E2E_MODERATOR_PASSWORD`, `VERCEL_AUTOMATION_BYPASS_SECRET`, `VERCEL_TOKEN`) and there is no `.env.e2e.local`. Drop `--env-file=.env.e2e.local` from each command, because Node exits when that file is missing, and pass `E2E_BASE_URL` and `E2E_VERCEL_DEPLOYMENT_ID` inline.
 - The remote preflight shells out to `vercel inspect`, so the Vercel CLI must be installed and authenticated for `dyl-edge` (or `VERCEL_TOKEN` set). If it is not, stop before any mutation and report it. Do not bypass or edit the preflight.
 - The Edge smoke needs the `msedge` channel. If Edge is not installed (typical on Linux or cloud containers), skip only that invocation and record "Edge smoke not run: msedge unavailable" as a known gap. Do not substitute another browser and label it Edge.
 - Firefox and WebKit are optional unless the change or the user requires them.

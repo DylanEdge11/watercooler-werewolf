@@ -121,6 +121,26 @@ Routine releases go through `main`:
 
 The migration runner records each version in `__app_migrations` and refuses to repair a partially applied initial schema.
 
+## Claude Code cloud sessions
+
+Cloud sessions start from a fresh container, so the environment needs this configuration. Set it from the cloud environment menu in the session's title bar, under **Edit**:
+
+- **Network access:** allow `*.vercel.app`, `vercel.com`, `api.vercel.com`, `*.turso.io`, and, for the Playwright browser download, `cdn.playwright.dev` and `playwright.download.prss.microsoft.com`.
+- **Environment variables:** `VERCEL_TOKEN`, `VERCEL_AUTOMATION_BYPASS_SECRET`, `E2E_MODERATOR_EMAIL`, `E2E_MODERATOR_PASSWORD`, `PREVIEW_TURSO_DATABASE_URL`, and `PREVIEW_TURSO_AUTH_TOKEN`. The `PREVIEW_` prefix keeps local test runs from picking up the real Preview database. Never add Production database credentials.
+- **Setup script:** install Node 24 and the Vercel CLI:
+
+  ```sh
+  set -euxo pipefail
+  # The image's Node 22 in /opt/node22/bin comes first on PATH, so upgrade it in place.
+  N_PREFIX=/opt/node22 npx -y n 24
+  node --version
+  npm install -g vercel
+  ```
+
+  The folder keeps its `node22` name but contains Node 24. The setup script does not run inside the repository, so project steps belong in the hook below.
+
+The repository's SessionStart hook (`.claude/settings.json`, `scripts/claude-session-start.sh`) runs `npm ci` when `node_modules` is missing or out of date, then installs the matching Playwright Chromium.
+
 ## Roll back
 
 Select an earlier deployment in Vercel, or redeploy a known-good commit. **A rollback does not undo database changes.** Take a backup (see [Operations](OPERATIONS.md#backups)) and check the migration ledger before changing a database.
