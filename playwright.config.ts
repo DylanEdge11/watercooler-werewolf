@@ -29,6 +29,10 @@ export default defineConfig({
     trace: E2E_REMOTE ? 'retain-on-failure' : 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    // Fail a blocked click or stalled page load quickly instead of letting it
+    // consume the whole test timeout.
+    actionTimeout: 30_000,
+    navigationTimeout: 60_000,
   },
   projects: [
     {

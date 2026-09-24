@@ -542,6 +542,11 @@ export class BrowserGame {
         contexts.push(context);
         const page = await context.newPage();
         telemetry.attach(page, `player-${String(index + 1).padStart(2, '0')}`);
+        // Each player sees a one-time "A player has been eliminated" notice after
+        // a published elimination. Acknowledge it whenever it covers the page.
+        await page.addLocatorHandler(page.getByRole('button', { name: 'I understand', exact: true }), async (button) => {
+          await button.click();
+        });
         if (options.mobilePlayerIndex === index) await page.setViewportSize({ width: 390, height: 844 });
         const seatId = seatByName.get(invite.displayName);
         if (!seatId) throw new Error(`Player seat ${index + 1} was not returned by the moderator roster.`);
