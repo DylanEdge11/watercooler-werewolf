@@ -132,6 +132,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
   const [roleThemeEnabled, setRoleThemeEnabled] = useState(false);
   const [roleHidden, setRoleHidden] = useState(false);
+  const [roleJustRevealed, setRoleJustRevealed] = useState(false);
   const [deathAlert, setDeathAlert] = useState<DashboardData['timeline'][number] | null>(null);
   const [selectedTimeline, setSelectedTimeline] = useState<DashboardData['timeline'][number] | null>(null);
   const activeModal = deathAlert ? 'death' : selectedTimeline ? 'votes' : null;
@@ -341,11 +342,11 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
 
   function toggleRoleVisibility() {
     if (!data?.player.id) return;
-    setRoleHidden((current) => {
-      const next = !current;
-      window.localStorage.setItem(roleVisibilityKey(data.player.id), String(next));
-      return next;
-    });
+    const next = !roleHidden;
+    window.localStorage.setItem(roleVisibilityKey(data.player.id), String(next));
+    setRoleHidden(next);
+    // The reveal flourish plays only when the player chooses to show the role.
+    setRoleJustRevealed(!next);
   }
 
   function dismissDeathAlert() {
@@ -476,7 +477,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           </div>
           {data.game.status === 'STOPPED' && <p className="notice warning" role="status">{data.game.stopReason ?? 'This game is stopped. Player actions and rooms are read-only.'}</p>}
 
-          <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`} data-concealed={roleHidden}>
+          <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`} data-just-revealed={roleJustRevealed || undefined}>
             {!data.player.alive && <span className="eliminated-banner" role="status">☠ Eliminated · spectator mode</span>}
             <div className="role-orbit"><span aria-hidden="true">{roleHidden ? '⌂' : roleGlyph(data.player.role)}</span></div>
             <div className="role-copy">

@@ -307,16 +307,12 @@
   z-index: 2;
 }
 
-/* Reveal: the medallion spins on its rod like the landing-page puppets.
-   Two identical keyframes let a Show/Hide toggle restart the animation. */
-.app-shell .role-card[data-concealed='false'] .role-orbit { animation: pt-puppet-spin-a 0.9s cubic-bezier(0.45, -0.3, 0.3, 1.3) both; }
-.app-shell .role-card[data-concealed='true'] .role-orbit { animation: pt-puppet-spin-b 0.9s cubic-bezier(0.45, -0.3, 0.3, 1.3) both; }
-.app-shell .role-card[data-concealed='false'] .role-copy h2 { animation: pt-rise-a 0.6s var(--pt-ease) 0.25s both; }
-.app-shell .role-card[data-concealed='true'] .role-copy h2 { animation: pt-rise-b 0.6s var(--pt-ease) 0.25s both; }
-@keyframes pt-puppet-spin-a { from { transform: rotateY(-540deg); } to { transform: rotateY(0); } }
-@keyframes pt-puppet-spin-b { from { transform: rotateY(-540deg); } to { transform: rotateY(0); } }
-@keyframes pt-rise-a { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes pt-rise-b { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* Reveal: when the player chooses Show role, the medallion spins on its rod
+   like the landing-page puppets. It does not replay on every page load. */
+.app-shell .role-card[data-just-revealed] .role-orbit { animation: pt-puppet-spin 0.9s cubic-bezier(0.45, -0.3, 0.3, 1.3) both; }
+.app-shell .role-card[data-just-revealed] .role-copy h2 { animation: pt-rise 0.6s var(--pt-ease) 0.25s both; }
+@keyframes pt-puppet-spin { from { transform: rotateY(-540deg); } to { transform: rotateY(0); } }
+@keyframes pt-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* ---------- Paper cards ---------- */
 
@@ -559,10 +555,12 @@
 }
 .app-shell .curtain-call::before { animation: pt-curtain-left 0.75s var(--pt-ease) both; box-shadow: inset -18px 0 24px -12px rgba(0, 0, 0, 0.5); left: 0; }
 .app-shell .curtain-call::after { animation: pt-curtain-right 0.75s var(--pt-ease) both; box-shadow: inset 18px 0 24px -12px rgba(0, 0, 0, 0.5); right: 0; }
-.app-shell .curtain-call .game-modal { animation: pt-notice-drop 0.7s cubic-bezier(0.5, -0.28, 0.25, 1.22) 0.55s both; z-index: 1; }
+/* The notice fades in rather than moving, so "I understand" is clickable
+   (by people and by automated tests) the moment it appears. */
+.app-shell .curtain-call .game-modal { animation: pt-notice-in 0.45s ease 0.4s both; transform: rotate(-0.6deg); z-index: 1; }
 @keyframes pt-curtain-left { from { transform: translateX(-100%); } to { transform: none; } }
 @keyframes pt-curtain-right { from { transform: translateX(100%); } to { transform: none; } }
-@keyframes pt-notice-drop { from { opacity: 0; transform: translateY(-40px) rotate(-3deg); } to { opacity: 1; transform: rotate(-0.6deg); } }
+@keyframes pt-notice-in { from { opacity: 0; } to { opacity: 1; } }
 .app-shell .death-modal h2 { font-family: var(--ll-font-story), Georgia, serif; font-size: 34px; font-weight: 400; }
 .app-shell .modal-symbol { background: var(--pt-curtain); border: 0; box-shadow: 0 0 0 4px color-mix(in srgb, var(--pt-curtain) 45%, transparent), 0 4px 10px rgba(0, 0, 0, 0.3); color: #fff3d6; }
 .app-shell .death-list article { background: var(--pt-paper); border: 1px solid var(--pt-paper-edge); border-radius: 2px; box-shadow: 0 2px 6px rgba(20, 12, 5, 0.12); }
@@ -614,7 +612,7 @@
 .front-of-house .quiet-link { color: var(--pt-gel); display: inline-block; font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; margin-top: 14px; text-decoration: underline dotted; text-underline-offset: 3px; }
 .front-of-house .button-row .quiet-link { margin-top: 0; }
 .front-of-house .privacy-note { color: var(--pt-ink-soft); font-size: 12px; font-style: italic; }
-.front-of-house .claim-seal .brand-mark { animation: pt-puppet-spin-a 1s cubic-bezier(0.45, -0.3, 0.3, 1.3) both; }
+.front-of-house .claim-seal .brand-mark { animation: pt-puppet-spin 1s cubic-bezier(0.45, -0.3, 0.3, 1.3) both; }
 .front-of-house .setup-loading { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; letter-spacing: 0.08em; margin: 0 auto; padding-top: 120px; }
 
 /* ================= The programme (/guide) ================= */
