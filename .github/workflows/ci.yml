@@ -2,10 +2,18 @@ name: Verify
 
 on:
   push:
+    branches: [main, version-1.1]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+# One run per PR (or per branch for pushes); a newer push cancels the older
+# run, except on main where every run finishes.
+concurrency:
+  group: verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   verify:
@@ -34,7 +42,10 @@ jobs:
 
   # The full 20-player API and browser suites run against a disposable local
   # server and database. Hosted UAT relies on these passing for the exact commit.
+  # To save Actions minutes they run only for PRs into main or when started by
+  # hand; otherwise run them locally (docs/TESTING.md).
   api:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -61,6 +72,7 @@ jobs:
 
   browser:
     name: browser (${{ matrix.shard }}/4)
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
