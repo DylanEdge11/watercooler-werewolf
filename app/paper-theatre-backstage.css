@@ -26,7 +26,8 @@
 
   background:
     var(--pt-grain),
-    radial-gradient(ellipse 70rem 30rem at 50% -10%, rgba(255, 240, 205, 0.55), transparent 70%),
+    /* tiled only where visible; same centre as a full-page 'at 50% -10%' (see paper-theatre.css) */
+    radial-gradient(ellipse 70rem 30rem at 50% 0, rgba(255, 240, 205, 0.55), transparent 70%) 0 calc(-10% - 2.1rem) / 100% 21rem no-repeat,
     linear-gradient(180deg, var(--bs-desk), var(--bs-desk-2));
   color: var(--bs-ink);
   font-family: var(--ll-font-display), Georgia, serif;
