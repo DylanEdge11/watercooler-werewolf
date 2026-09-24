@@ -43,8 +43,8 @@
   --pt-light: rgba(255, 213, 124, 0.5);
   --pt-gel: #8e3b5c;
   --pt-gel-wash: color-mix(in srgb, var(--pt-gel) 30%, transparent);
-  --pt-shadow: 0 1px 2px rgba(20, 12, 5, 0.12), 0 10px 22px -6px rgba(20, 12, 5, 0.32);
-  --pt-shadow-lift: 0 3px 6px rgba(20, 12, 5, 0.14), 0 16px 30px -6px rgba(20, 12, 5, 0.38);
+  --pt-shadow: 0 1px 2px rgba(20, 12, 5, 0.12), 0 6px 12px -6px rgba(20, 12, 5, 0.3);
+  --pt-shadow-lift: 0 2px 4px rgba(20, 12, 5, 0.14), 0 10px 16px -8px rgba(20, 12, 5, 0.36);
   --pt-ease: cubic-bezier(0.65, 0, 0.35, 1);
   --pt-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .17 0 0 0 0 .13 0 0 0 0 .09 0 0 0 .1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 
@@ -53,7 +53,6 @@
     radial-gradient(ellipse 55rem 38rem at 14% -6%, var(--pt-gel-wash), transparent 70%),
     radial-gradient(ellipse 80rem 18rem at 50% 108%, var(--pt-light), transparent 70%),
     linear-gradient(180deg, var(--pt-backdrop), var(--pt-backdrop-2));
-  background-attachment: scroll, fixed, fixed, fixed;
   color: var(--pt-ink);
   font-family: var(--ll-font-display), Georgia, serif;
 }
@@ -76,8 +75,8 @@
   --pt-stage-rule: rgba(243, 236, 220, 0.2);
   --pt-light: rgba(150, 160, 255, 0.22);
   --pt-gel-wash: color-mix(in srgb, var(--pt-gel) 42%, transparent);
-  --pt-shadow: 0 1px 2px rgba(4, 4, 26, 0.3), 0 12px 26px -6px rgba(4, 4, 26, 0.6);
-  --pt-shadow-lift: 0 3px 6px rgba(4, 4, 26, 0.32), 0 18px 32px -6px rgba(4, 4, 26, 0.66);
+  --pt-shadow: 0 1px 2px rgba(4, 4, 26, 0.3), 0 6px 12px -6px rgba(4, 4, 26, 0.55);
+  --pt-shadow-lift: 0 2px 4px rgba(4, 4, 26, 0.32), 0 10px 16px -8px rgba(4, 4, 26, 0.6);
 }
 
 /* Role themes become stage-light gels. globals.css still defines the
@@ -89,7 +88,6 @@
     radial-gradient(ellipse 55rem 38rem at 14% -6%, var(--pt-gel-wash), transparent 70%),
     radial-gradient(ellipse 80rem 18rem at 50% 108%, var(--pt-light), transparent 70%),
     linear-gradient(180deg, var(--pt-backdrop), var(--pt-backdrop-2));
-  background-attachment: scroll, fixed, fixed, fixed;
 }
 .app-shell[data-stage-light='night'].role-theme {
   --pt-gel: color-mix(in srgb, var(--role-accent) 70%, white);
@@ -134,7 +132,6 @@
     radial-gradient(circle at 50% 0, color-mix(in srgb, var(--pt-valance) 88%, black) 9px, color-mix(in srgb, var(--pt-gold) 75%, var(--pt-valance)) 9.5px 10.5px, transparent 11px) repeat-x 0 0 / 26px 12px;
   bottom: -14px;
   content: '';
-  filter: drop-shadow(0 3px 3px rgba(29, 5, 8, 0.35));
   height: 12px;
   left: 0;
   pointer-events: none;
@@ -228,7 +225,7 @@
   mask: radial-gradient(circle 7px at left center, transparent 96%, #000) left / 51% 100% no-repeat, radial-gradient(circle 7px at right center, transparent 96%, #000) right / 51% 100% no-repeat;
 }
 .app-shell .deadline-card {
-  background: var(--pt-grain), linear-gradient(170deg, #fdf6e4, #f0e2c0);
+  background: linear-gradient(170deg, #fdf6e4, #f0e2c0);
   border: 0;
   border-radius: 3px;
   box-shadow: none;
@@ -238,7 +235,7 @@
   padding: 14px 20px;
   transform: rotate(1.5deg);
 }
-.app-shell[data-stage-light='night'] .deadline-card { background: var(--pt-grain), linear-gradient(170deg, #efe9f6, #d9d0ea); }
+.app-shell[data-stage-light='night'] .deadline-card { background: linear-gradient(170deg, #efe9f6, #d9d0ea); }
 .app-shell .deadline-card span,
 .app-shell .deadline-card small { color: #7a4f2c; font-family: var(--ll-font-type), monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
 .app-shell .deadline-card strong { color: var(--pt-curtain); font-family: var(--ll-font-display), Georgia, serif; font-size: 24px; font-weight: 700; line-height: 1.05; }
@@ -248,7 +245,6 @@
 .app-shell .role-card,
 .app-shell.role-theme .role-card {
   background:
-    var(--pt-grain),
     radial-gradient(ellipse 22rem 14rem at 9% 50%, var(--pt-gel-wash), transparent 70%),
     linear-gradient(170deg, #fdf6e4, #f3e6c6);
   border-radius: 3px;
@@ -257,9 +253,8 @@
   outline: 4px double rgba(43, 33, 24, 0.45);
   outline-offset: -11px;
   overflow: visible;
-  perspective: 700px;
 }
-.app-shell[data-stage-light='night'] .role-card { background: var(--pt-grain), radial-gradient(ellipse 22rem 14rem at 9% 50%, var(--pt-gel-wash), transparent 70%), linear-gradient(170deg, #f1ecf6, #ddd5ea); }
+.app-shell[data-stage-light='night'] .role-card { background: radial-gradient(ellipse 22rem 14rem at 9% 50%, var(--pt-gel-wash), transparent 70%), linear-gradient(170deg, #f1ecf6, #ddd5ea); }
 /* The old decorative ring becomes a strip of tape holding the playbill up. */
 .app-shell .role-card::after {
   background: rgba(255, 246, 220, 0.72);
@@ -311,14 +306,14 @@
    like the landing-page puppets. It does not replay on every page load. */
 .app-shell .role-card[data-just-revealed] .role-orbit { animation: pt-puppet-spin 0.9s cubic-bezier(0.45, -0.3, 0.3, 1.3) both; }
 .app-shell .role-card[data-just-revealed] .role-copy h2 { animation: pt-rise 0.6s var(--pt-ease) 0.25s both; }
-@keyframes pt-puppet-spin { from { transform: rotateY(-540deg); } to { transform: rotateY(0); } }
+@keyframes pt-puppet-spin { from { transform: perspective(600px) rotateY(-540deg); } to { transform: perspective(600px) rotateY(0); } }
 @keyframes pt-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* ---------- Paper cards ---------- */
 
 .app-shell .ballot-card,
 .app-shell .rail-card {
-  background: var(--pt-grain), var(--pt-paper);
+  background: var(--pt-paper);
   border: 1px solid var(--pt-paper-edge);
   border-radius: 3px;
   box-shadow: var(--pt-shadow);
@@ -350,7 +345,7 @@
 
 /* Candidates are perforated admission tickets. */
 .app-shell .candidate {
-  background: var(--pt-grain), var(--pt-paper-2);
+  background: var(--pt-paper-2);
   border: 1px solid var(--pt-paper-edge);
   border-radius: 3px;
   box-shadow: 0 1px 2px rgba(20, 12, 5, 0.1), 0 4px 10px -4px rgba(20, 12, 5, 0.22);
@@ -364,7 +359,7 @@
 .app-shell .candidate:hover:not(:disabled) { border-color: var(--pt-ink-soft); box-shadow: var(--pt-shadow-lift); }
 .app-shell .candidate.selected,
 .app-shell.role-theme .candidate.selected {
-  background: var(--pt-grain), color-mix(in srgb, var(--pt-gel) 13%, var(--pt-paper));
+  background: color-mix(in srgb, var(--pt-gel) 13%, var(--pt-paper));
   border-color: var(--pt-gel);
   box-shadow: inset 0 0 0 1px var(--pt-gel), var(--pt-shadow);
   transform: rotate(0.5deg);
@@ -451,7 +446,7 @@
 
 /* ---------- Rail content ---------- */
 
-.app-shell .announcement { background: var(--pt-grain), var(--pt-note); border-color: #ead9a8; }
+.app-shell .announcement { background: var(--pt-note); border-color: #ead9a8; }
 .app-shell .announcement::before { background: rgba(255, 255, 255, 0.6); border-radius: 1px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); height: 20px; left: 24px; top: -10px; transform: rotate(-4deg); width: 64px; }
 
 .app-shell .timeline-mini article,
@@ -526,10 +521,10 @@
 
 .app-shell .modal-backdrop { background: rgba(29, 5, 8, 0.7); }
 .app-shell .game-modal {
-  background: var(--pt-grain), linear-gradient(170deg, #fdf6e4, #f3e6c6);
+  background: linear-gradient(170deg, #fdf6e4, #f3e6c6);
   border: 0;
   border-radius: 3px;
-  box-shadow: 0 30px 80px rgba(9, 2, 4, 0.55);
+  box-shadow: 0 16px 32px rgba(9, 2, 4, 0.5);
   color: var(--pt-ink);
   outline: 4px double rgba(43, 33, 24, 0.4);
   outline-offset: -12px;
@@ -568,8 +563,6 @@
 .app-shell .death-list span { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 12px; }
 
 @media (max-width: 780px) {
-  .app-shell,
-  .app-shell.role-theme { background-attachment: scroll; }
   .app-shell .role-card::after { left: calc(50% - 40px); width: 80px; }
   .app-shell .role-copy h2 { font-size: 30px; }
 }
@@ -585,7 +578,7 @@
    the same day-lit stage, with a playbill card sealed by the emblem. */
 
 .front-of-house .auth-card {
-  background: var(--pt-grain), linear-gradient(170deg, #fdf6e4, #f3e6c6);
+  background: linear-gradient(170deg, #fdf6e4, #f3e6c6);
   border: 0;
   border-radius: 3px;
   box-shadow: var(--pt-shadow-lift);
@@ -632,7 +625,7 @@
 
 /* The content is a printed programme on the stage. */
 .guide-shell .guide-main {
-  background: var(--pt-grain), var(--pt-paper);
+  background: var(--pt-paper);
   box-shadow: var(--pt-shadow-lift);
   margin: 44px auto 80px;
   outline: 4px double rgba(43, 33, 24, 0.35);
@@ -658,11 +651,11 @@
 .guide-shell .guide-section a { color: var(--pt-gel); }
 .guide-shell .guide-section code { background: var(--pt-note); border-radius: 2px; font-family: var(--ll-font-type), monospace; }
 .guide-shell .guide-cards article,
-.guide-shell .guide-roles article { background: var(--pt-grain), var(--pt-paper-2); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: 0 2px 6px rgba(20, 12, 5, 0.12); }
+.guide-shell .guide-roles article { background: var(--pt-paper-2); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: 0 2px 6px rgba(20, 12, 5, 0.12); }
 .guide-shell .guide-cards h3,
 .guide-shell .guide-roles h3 { font-family: var(--ll-font-display), Georgia, serif; font-style: italic; font-weight: 700; }
 .guide-shell .guide-roles .guide-team { color: var(--pt-gel); font-family: var(--ll-font-type), monospace; font-weight: 400; }
-.guide-shell .guide-roles article.wolf { background: var(--pt-grain), linear-gradient(170deg, #2e3048, #1c1726); border-color: #1c1726; color: #f3ecdc; }
+.guide-shell .guide-roles article.wolf { background: linear-gradient(170deg, #2e3048, #1c1726); border-color: #1c1726; color: #f3ecdc; }
 .guide-shell .guide-roles article.wolf .guide-team { color: var(--pt-gold-soft); }
 .guide-shell .guide-table th { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-weight: 400; }
 .guide-shell .guide-table th,

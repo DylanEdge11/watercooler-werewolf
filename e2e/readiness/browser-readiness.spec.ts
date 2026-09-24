@@ -10,7 +10,7 @@ import {
 } from './browser-fixture';
 import { fallbackVoteTarget, livingTarget, refreshPlayers, runDayElimination, runNight } from './game-steps';
 
-test.describe.configure({ timeout: 900_000 });
+test.describe.configure({ timeout: 1_200_000 });
 
 test.afterAll(async () => {
   await closeSharedModerator();

@@ -40,7 +40,7 @@ button { color: inherit; }
 .brand > span:last-child { display: grid; line-height: 1; }
 .brand strong { font-family: Georgia, serif; font-size: 18px; letter-spacing: -.03em; }
 .brand small { color: var(--mint-strong); font-size: 10px; font-weight: 800; letter-spacing: .18em; margin-top: 5px; text-transform: uppercase; }
-.brand-mark { display: block; filter: drop-shadow(0 2px 3px rgba(20, 12, 5, .35)); flex: 0 0 auto; height: 48px; width: 48px; }
+.brand-mark { display: block; flex: 0 0 auto; height: 48px; width: 48px; }
 .brand-mark svg { display: block; height: 100%; width: 100%; }
 .game-switcher { align-items: center; background: #edf2ed; border: 1px solid #dde7df; border-radius: 999px; display: flex; font-size: 13px; font-weight: 700; gap: 9px; justify-self: center; padding: 9px 14px; }
 .status-dot { background: #50a67f; border-radius: 50%; box-shadow: 0 0 0 3px #d9ecdf; height: 7px; width: 7px; }
