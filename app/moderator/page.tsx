@@ -10,6 +10,7 @@ import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
 import BrandMark from '../brand-mark';
+import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 
 const sampleRoster = [
   'display_name,email',
@@ -194,10 +195,9 @@ export default function ModeratorPage() {
 
   useEffect(() => {
     if (!authenticated) return;
-    const poll = window.setInterval(() => {
+    return pollWhileVisible(() => {
       void loadGames(gameId).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.'));
     }, 10_000);
-    return () => window.clearInterval(poll);
   }, [authenticated, gameId, loadGames]);
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {

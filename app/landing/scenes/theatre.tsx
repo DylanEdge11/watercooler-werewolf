@@ -134,14 +134,19 @@ export interface TheatreSceneProps {
 
 export default function TheatreScene({ night }: TheatreSceneProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const timers = useRef<number[]>([]);
   const talkTimer = useRef<number | undefined>(undefined);
 
   // Each new night deals a fresh pair of secret wolves (adjusting state during render, not in an effect).
   const [prevNight, setPrevNight] = useState(night);
   const [round, setRound] = useState(night ? 1 : 0);
+  // Which set of pieces has finished leaving the stage ('' while the scene changes).
+  // CSS pauses the swings, flaps and fireflies that are hidden in the flies.
+  const [offstage, setOffstage] = useState<'day' | 'night' | ''>(night ? 'day' : 'night');
   if (night !== prevNight) {
     setPrevNight(night);
+    setOffstage('');
     if (night) setRound((r) => r + 1);
   }
   const wolves = WOLF_ROTA[(Math.max(round, 1) - 1) % WOLF_ROTA.length];
@@ -149,6 +154,22 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
   const [talk, setTalk] = useState<{ id: string; line: string; n: number } | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [closed, setClosed] = useState(false);
+
+  // Everything has left the stage by ~3 s (the slowest hang drop is 1.6 s after a 1.2 s delay).
+  useEffect(() => {
+    const settle = window.setTimeout(() => setOffstage(night ? 'day' : 'night'), 3500);
+    return () => window.clearTimeout(settle);
+  }, [night]);
+
+  // Pause the stage's animations while it is scrolled out of view (portrait tablets).
+  const [stageInView, setStageInView] = useState(true);
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof IntersectionObserver === 'undefined') return undefined;
+    const observer = new IntersectionObserver(([entry]) => setStageInView(entry.isIntersecting));
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const pending = timers.current;
@@ -158,7 +179,7 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
     };
   }, []);
 
-  // Paper grain (procedural noise) + pointer / touch-drag parallax via CSS vars.
+  // Paper grain (procedural noise), generated once on mount.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return undefined;
@@ -188,46 +209,23 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
           ctx.stroke();
         }
         root.style.setProperty('--th-grain', `url(${canvas.toDataURL()})`);
+        // The full-screen overlay used to multiply this texture over the scene,
+        // and a blend mode makes the compositor redo the whole screen every frame.
+        // Multiplying by a colour c at alpha a darkens by a*(1-c), which is the same
+        // as laying black at alpha a*(1-c) over it with normal blending.
+        const paper = ctx.getImageData(0, 0, 200, 200);
+        for (let i = 0; i < paper.data.length; i += 4) {
+          paper.data[i + 3] = Math.round(paper.data[i + 3] * (1 - paper.data[i + 1] / 255));
+          paper.data[i] = 0;
+          paper.data[i + 1] = 0;
+          paper.data[i + 2] = 0;
+        }
+        ctx.putImageData(paper, 0, 0);
+        root.style.setProperty('--th-grain-overlay', `url(${canvas.toDataURL()})`);
       }
     } catch {
       /* grain is decoration only */
     }
-
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
-    let tx = 0;
-    let ty = 0;
-    let x = 0;
-    let y = 0;
-    let raf = 0;
-    const tick = () => {
-      x += (tx - x) * 0.07;
-      y += (ty - y) * 0.07;
-      root.style.setProperty('--px', x.toFixed(4));
-      root.style.setProperty('--py', y.toFixed(4));
-      raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.0008 ? requestAnimationFrame(tick) : 0;
-    };
-    const kick = () => {
-      if (!raf) raf = requestAnimationFrame(tick);
-    };
-    const onMove = (event: PointerEvent) => {
-      tx = Math.max(-1, Math.min(1, (event.clientX / window.innerWidth) * 2 - 1));
-      ty = Math.max(-1, Math.min(1, (event.clientY / window.innerHeight) * 2 - 1));
-      kick();
-    };
-    const onLeave = () => {
-      tx = 0;
-      ty = 0;
-      kick();
-    };
-    root.addEventListener('pointermove', onMove);
-    root.addEventListener('pointerleave', onLeave);
-    root.addEventListener('pointercancel', onLeave);
-    return () => {
-      cancelAnimationFrame(raf);
-      root.removeEventListener('pointermove', onMove);
-      root.removeEventListener('pointerleave', onLeave);
-      root.removeEventListener('pointercancel', onLeave);
-    };
   }, []);
 
   function speak(id: string, pool: string[]) {
@@ -248,7 +246,14 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
   const jumpOf = (id: string) => (talk?.id === id ? (talk.n % 2 ? 'a' : 'b') : undefined);
 
   return (
-    <div ref={rootRef} className={styles.scene} data-night={night} data-curtain={closed ? 'closed' : 'open'}>
+    <div
+      ref={rootRef}
+      className={styles.scene}
+      data-night={night}
+      data-curtain={closed ? 'closed' : 'open'}
+      data-offstage={offstage}
+      data-stage={stageInView ? 'on' : 'off'}
+    >
       <Defs />
       <div className={styles.wall} aria-hidden="true">
         <div className={styles.wallNight} />
@@ -261,12 +266,12 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
       </header>
 
       <div className={styles.stageWrap}>
-      <div className={styles.theatre}>
+      <div ref={stageRef} className={styles.theatre}>
         <div className={styles.box}>
-          <div className={`${styles.L} ${styles.clothDay}`} style={{ '--dx': 9, '--d': '0s' } as Vars}><DayBackcloth /></div>
-          <div className={`${styles.L} ${styles.clothNight}`} style={{ '--dx': 9 } as Vars}><NightBackcloth /></div>
+          <div className={`${styles.L} ${styles.clothDay}`} style={{ '--d': '0s' } as Vars}><DayBackcloth /></div>
+          <div className={`${styles.L} ${styles.clothNight}`}><NightBackcloth /></div>
 
-          <div className={`${styles.L} ${styles.fly}`} style={{ '--dx': 8 } as Vars} aria-hidden="true">
+          <div className={`${styles.L} ${styles.fly}`}  aria-hidden="true">
             {HANGERS.map((h) => (
               <div
                 key={h.key}
@@ -282,18 +287,18 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
             ))}
           </div>
 
-          <div className={`${styles.L} ${styles.forest} ${styles.forestL}`} style={{ '--dx': 6.5 } as Vars}><ForestFlat side="l" /></div>
-          <div className={`${styles.L} ${styles.forest} ${styles.forestR}`} style={{ '--dx': 6.5 } as Vars}><ForestFlat side="r" /></div>
-          <div className={`${styles.L} ${styles.cut}`} style={{ '--dx': 5.5, '--d': '0.1s', '--sh': 3 } as Vars}><CottageRow /></div>
-          <div className={styles.L} style={{ '--dx': 4.5, '--d': '0.2s' } as Vars}><StageFloor /></div>
-          <div className={`${styles.L} ${styles.cut}`} style={{ '--dx': 3.8, '--d': '0.3s', '--sh': 4 } as Vars}><Well /></div>
+          <div className={`${styles.L} ${styles.forest} ${styles.forestL}`}><ForestFlat side="l" /></div>
+          <div className={`${styles.L} ${styles.forest} ${styles.forestR}`}><ForestFlat side="r" /></div>
+          <div className={`${styles.L} ${styles.cut}`} style={{ '--d': '0.1s', '--sh': 3 } as Vars}><CottageRow /></div>
+          <div className={styles.L} style={{ '--d': '0.2s' } as Vars}><StageFloor /></div>
+          <div className={`${styles.L} ${styles.cut}`} style={{ '--d': '0.3s', '--sh': 4 } as Vars}><Well /></div>
           <div className={styles.moonbeam} aria-hidden="true" />
-          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayL}`} style={{ '--dx': 2.4, '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="l" /></div>
-          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayR}`} style={{ '--dx': 2.4, '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="r" /></div>
-          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightL}`} style={{ '--dx': 2.4, '--sh': 6 } as Vars}><NightWing side="l" /></div>
-          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightR}`} style={{ '--dx': 2.4, '--sh': 6 } as Vars}><NightWing side="r" /></div>
+          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayL}`} style={{ '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="l" /></div>
+          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayR}`} style={{ '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="r" /></div>
+          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightL}`} style={{ '--sh': 6 } as Vars}><NightWing side="l" /></div>
+          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightR}`} style={{ '--sh': 6 } as Vars}><NightWing side="r" /></div>
 
-          <div className={`${styles.L} ${styles.cast}`} style={{ '--dx': 1.2 } as Vars}>
+          <div className={`${styles.L} ${styles.cast}`}>
             {PUPPETS.map((p, i) => {
               const wolfIndex = wolves.indexOf(p.id);
               const isWolf = night && wolfIndex !== -1;
