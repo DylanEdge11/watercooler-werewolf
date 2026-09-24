@@ -13,7 +13,7 @@ Use this skill only for the UAT phase: comprehensively review a specific, alread
 - Git remote: `origin` (`DylanEdge11/watercooler-werewolf`). The production branch is `main`; use the appropriate development base for each candidate.
 - Vercel project: `watercooler-werewolf`, team scope: `dyl-edge`.
 - Use Node 24.x LTS, the verified baseline; the package supports Node.js `>=24`. Use the repository's existing scripts and CI workflow.
-- Read [the hosted Preview Playwright runbook](../../../docs/PLAYWRIGHT_HOSTED_RUNBOOK.md), [the Vercel setup guide](../../../VERCEL_SETUP_GUIDE.md), and `.github/workflows/ci.yml` as needed.
+- Read [the hosted Preview runbook](../../../docs/TESTING.md#hosted-preview-runbook), [the setup and deployment guide](../../../docs/SETUP.md), and `.github/workflows/ci.yml` as needed.
 - Resolve those references from the exact candidate checkout. If a referenced file is missing, locate the version that belongs to the candidate SHA or stop and report the gap; do not silently use stale instructions from another branch.
 - Preview and Production use separate Turso databases and Vercel environment variables. This skill only targets Preview.
 
@@ -37,7 +37,7 @@ Do not run `npm ci` unless dependencies are missing or the lockfile changed. If 
 
 ## Comprehensive Preview review
 
-Follow [the hosted Preview Playwright runbook](../../../docs/PLAYWRIGHT_HOSTED_RUNBOOK.md) for remote runner and safety checks. Run the comprehensive hosted sequence **once per candidate SHA** with a unique `E2E_RUN_ID`: Chromium smoke, Edge smoke, API scenarios, the full Chromium readiness directory (including seeded randomized scenarios), and the standalone setup-navigation regression. Do not run a second full sequence by default, even if the general runbook text suggests repeating it. A fresh-ID repeatability run is required only when the change affects persistence, isolation, or rerun safety, or when the user explicitly requests it. If the candidate SHA changes, the previous results no longer qualify; request a new Dev Preview and review that SHA.
+Follow [the hosted Preview runbook](../../../docs/TESTING.md#hosted-preview-runbook) for remote runner and safety checks. Run the comprehensive hosted sequence **once per candidate SHA** with a unique `E2E_RUN_ID`: Chromium smoke, Edge smoke, API scenarios, the full Chromium readiness directory (including seeded randomized scenarios), and the standalone setup-navigation regression. Do not run a second full sequence by default, even if the general runbook text suggests repeating it. A fresh-ID repeatability run is required only when the change affects persistence, isolation, or rerun safety, or when the user explicitly requests it. If the candidate SHA changes, the previous results no longer qualify; request a new Dev Preview and review that SHA.
 
 Use `.env.e2e.local` for fictional moderator credentials and any scoped Vercel deployment-protection bypass. It is ignored and may contain secrets: never print, paste, or commit its values. Supply the exact current Preview origin, deployment ID, and unique run ID. Use `node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote ...` as shown in the runbook. The remote preflight must confirm project `watercooler-werewolf`, target `preview`, state `READY`, and the expected deployment ID before test mutations.
 

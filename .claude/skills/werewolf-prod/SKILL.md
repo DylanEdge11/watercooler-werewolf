@@ -13,7 +13,7 @@ Use this skill only when the user separately asks to release a specific, already
 
 - Work in the `watercooler-werewolf` checkout and confirm the repository and branch before merging.
 - Git remote: `origin` (`DylanEdge11/watercooler-werewolf`). Production branch: `main`; verify it is still Vercel's Production Branch. Vercel project `watercooler-werewolf`, team `dyl-edge`.
-- Read [the Vercel setup guide](../../../VERCEL_SETUP_GUIDE.md) for Production configuration, migrations, and rollback. Its first-time-setup step using `vercel deploy --prod` does not apply to routine releases.
+- Read [the setup and deployment guide](../../../docs/SETUP.md) for Production configuration, migrations, and rollback. Follow its "Release a change" section for routine releases.
 - Preview and Production use separate Turso databases and environment variables. Production is built fresh from `main`; never promote a Preview deployment.
 
 ## Verify the UAT handoff

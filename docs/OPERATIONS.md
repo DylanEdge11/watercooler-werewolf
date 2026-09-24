@@ -1,70 +1,79 @@
-# Operations and Recovery
+# Operations and recovery
 
-Use this reference for recovery consequences. For button-by-button instructions and normal play, start with [How to Use Watercooler Werewolf](HOW_TO_USE_WATERCOOLER_WEREWOLF.md#help-and-recovery). Check **Selected game** before any operation; these controls are under **Communications & operations**.
+Reference for moderators and the site operator: what each operational control does and what it cannot undo. For how to play and run a normal game, see the in-app guide at `/guide`.
 
-## Rooms and announcements
+These controls are under **Communications & operations** in the moderator console. Check **Selected game** first; every action applies only to that game.
 
-Moderators can lock or reopen rooms, remove messages with a reason, purge messages beyond the configured retention period, and publish in-app announcements.
+## Who can do what
 
-Announcements store email-ready subject/body text, but the application does not send email.
+| Action | Any moderator of the game | Game owner only |
+| --- | --- | --- |
+| Run phases, publish, override | ✓ | |
+| Announcements, room moderation, backups | ✓ | |
+| Reset a player's PIN, sign out a player | ✓ | |
+| Stop the game | ✓ | |
+| Add co-moderators | | ✓ |
+| Reset, restore, cancel setup | | ✓ |
+
+## Quick reference
+
+| Need | Steps | Result |
+| --- | --- | --- |
+| Notify players | **Official announcement** → title and message → **Publish notice** | Appears in every player's updates. No email is sent. |
+| Add a helper | **Co-moderator access** → email and a 12+ character password → **Add co-moderator** | A new account shows one-time recovery codes; deliver access privately. An existing moderator keeps their password. |
+| Player forgot their PIN | **Player access recovery** → player, new six-digit PIN, reason (5+ characters) → **Reset player PIN** | The player's old sessions are signed out. Deliver the PIN privately. |
+| Moderator forgot their password | Sign-in page → **Forgot password? Use a recovery code** → email, unused code, new password → **Recover access** | The code is used up and old sessions end. Without a code, contact the operator. There is no email reset. |
+| Moderate chat | **Private rooms** → **Make read-only** / **Reopen**, or **Remove** a message with a reason | Removal and purges blank the message in the game. |
+| Clear old chat | **Purge expired** | Blanks messages older than the retention period (default seven days). |
+| Keep a record | **Download JSON backup** | A private file with roles and room contents. |
+| End play | **Stop game** → reason → confirm | Permanent. See [Stop](#stop). |
+| Start over | **Reset to setup** → exact game name → confirm | See [Reset](#reset). |
+| Recover setup | **Recovery restore** → snapshot → **Restore to setup** → exact game name → confirm | See [Restore](#restore). |
 
 ## Backups
 
-JSON backups contain recoverable game state, including configuration, roster, role assignments, phases, actions, proposals, events, rooms, announcements, notifications, pilot feedback, and operational events.
+A backup contains the game's configuration, roster, role assignments, phases, actions, results, events, rooms and messages, announcements, notifications, feedback, and operational log. It never contains PIN or password hashes, claim codes, or session tokens.
 
-Backups do **not** include PIN/password hashes, claim-code hashes, session tokens, or plaintext credentials.
-
-Each backup receives a SHA-256 checksum and is stored as a moderator-only backup record. Historical removed seat rows may remain as audit references; restore re-imports only the current non-removed roster.
-
-A local service restart retains the same SQLite file; Vercel uses persistent remote Turso/libSQL state. Export a backup before recovery operations.
+Each backup has a SHA-256 checksum and is stored with the game. A backup is taken automatically before every Reset and Restore. Chat text in a backup is kept even after the live messages are purged or removed, so treat backups as private.
 
 ## Stop
 
-**Stop** is available to an authorized game moderator.
+Stop requires confirmation and a reason of at least five characters. It:
 
-It requires explicit confirmation and a reason of at least five characters. Stop:
+- sets the game to `STOPPED`, closes every open or pending phase, and blocks player actions;
+- makes all rooms read-only; and
+- shows players a stopped message.
 
-- changes the game to `STOPPED`;
-- marks scheduled/open/review phases superseded;
-- makes rooms read-only;
-- blocks player actions and further gameplay; and
-- displays a clear stopped-state message to players.
-
-Stop is not a pause: there is no Resume control. Repeating Stop on an already stopped game has no additional effect. Completed and cancelled games cannot be stopped.
+There is no Resume. Stopping twice changes nothing. A completed or cancelled game cannot be stopped.
 
 ## Reset
 
-**Reset** is owner-only and requires explicit confirmation plus the exact game name.
+Owner only; requires the exact game name. A backup is taken first. Reset returns the selected game to `DRAFT` and:
 
-Before destructive changes, the application creates a recoverable backup. Reset is isolated to the selected game and:
+- signs out all players and invalidates every claim link;
+- removes role assignments, phases, submissions, results, notifications, room memberships, and messages; and
+- keeps the audit history and the backup.
 
-- invalidates player sessions and old claim codes;
-- returns seats to invited/living setup state;
-- removes role assignments/counts/batches;
-- removes phases, submissions, proposals, notifications, memberships, and chat messages;
-- reopens empty rooms; and
-- changes the game to `DRAFT`.
+Afterwards, import the roster again, send the new invitations, and release roles again. Resetting a clean draft is harmless; a cancelled game cannot be reset.
 
-Existing event/audit history and the pre-reset backup remain. Re-importing a roster archives old seat rows rather than deleting referenced identities.
+## Restore
 
-Reset does not resume the old game. Repeating Reset on a clean draft is harmless. Cancelled games cannot be reset. Re-import the roster before configuring roles again.
+Owner only; requires the exact game name. Restore rebuilds a game's **setup** (configuration, roster, and role counts) from a stored snapshot. It does not restore a game in progress, and there is no file upload.
 
-## Recovery Restore
+It verifies the snapshot's checksum, takes a safety backup, and returns the game to `DRAFT`. Every seat gets a new one-time claim link, so **select Download fresh invites immediately**: the codes are not shown again. PINs, sessions, and roles are never restored.
 
-Recovery Restore is an owner-only setup restore from a stored snapshot. It requires explicit confirmation and the exact game name.
+## Cancel setup
 
-The restore verifies checksum and game ID and creates a safety backup first. It restores the selected game's configuration, roster, and composition to `DRAFT`.
+Owner only, for games that were never released. **Cancel setup and start new game** permanently cancels the unfinished game and invalidates its invitations and player sessions.
 
-It deliberately clears active phases, role assignments, submissions, proposals, notifications, announcements, room memberships/messages, and player sessions. Existing audit/operational history and both backup records remain.
+## Credentials
 
-The UI selects an existing stored snapshot; it has no JSON-upload control. This restores setup, not a game in progress. Every restored seat receives a new one-time claim link. PINs, old claim links, role secrets, and sessions are never restored. Download the fresh invite CSV immediately because the codes are not shown again.
+- The first moderator account is created by the operator with `npm run owner:bootstrap` (see [Setup](SETUP.md)). There is no public sign-up.
+- Bootstrap and new co-moderator accounts show eight one-time recovery codes. Store them in a password manager; only hashes are kept.
+- Players sign in with their invitation email and PIN, or their seat code.
 
-## Credential recovery
+## Deadlines
 
-Bootstrap and co-moderator creation display eight one-time recovery codes exactly once. Store them in the operator's approved secret store; only salted hashes are kept in libSQL.
+Phases never open, close, or publish on their own. Server-side deadlines reject late submissions even when no moderator is watching. The Operations panel checks for expired phases every ten seconds while open and locks them; **Check deadlines** does the same on demand. Publishing is always a moderator action.
 
-A moderator who forgets a password can use **Forgot password? Use a recovery code** to redeem one unused code, set a new password, and receive a new session. The code is single-use, the request is rate-limited, and previous moderator sessions are invalidated.
-
-A forgotten player PIN is reset by an authorized moderator through **Player access recovery** in Operations. Deliver the new six-digit PIN privately. Previous player sessions are revoked.
-
-There is no automatic email reset or temporary-password expiry promise.
+An optional external scheduler can call `GET` or `POST /api/scheduler/deadlines` with `Authorization: Bearer <CRON_SECRET>` to lock expired phases. Without `CRON_SECRET`, the endpoint returns 503.

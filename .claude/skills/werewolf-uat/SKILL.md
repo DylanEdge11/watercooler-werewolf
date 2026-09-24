@@ -14,7 +14,7 @@ Use this skill only for the UAT phase: comprehensively review one specific, alre
 - Work in the checkout at the exact candidate SHA (`git rev-parse HEAD` must match). Never run tests from a different checkout or SHA against the Preview.
 - Git remote: `origin` (`DylanEdge11/watercooler-werewolf`). Production branch: `main`. Vercel project `watercooler-werewolf`, team `dyl-edge`.
 - Node 24.x. Use the repository's scripts and `.github/workflows/ci.yml`.
-- Read, from the candidate checkout: [the hosted Preview Playwright runbook](../../../docs/PLAYWRIGHT_HOSTED_RUNBOOK.md), [the Vercel setup guide](../../../VERCEL_SETUP_GUIDE.md), and `.github/workflows/ci.yml`. If one is missing at this SHA, report the gap instead of using another branch's copy.
+- Read, from the candidate checkout: [the hosted Preview runbook](../../../docs/TESTING.md#hosted-preview-runbook), [the setup and deployment guide](../../../docs/SETUP.md), and `.github/workflows/ci.yml`. If one is missing at this SHA, report the gap instead of using another branch's copy.
 - Preview and Production use separate Turso databases and environment variables. This skill only targets Preview.
 
 ## Confirm the candidate
@@ -51,7 +51,7 @@ Follow the runbook's safety rules. Run the required sequence **once per candidat
 | `04-readiness-suite` | `--project=chromium --retries=0 e2e/readiness` |
 | `05-setup-navigation` | `--project=chromium --retries=0 e2e/readiness/browser-setup-navigation.spec.ts` |
 
-The runbook shows PowerShell. In bash, set variables per command, for example:
+In bash, for example:
 
 ```sh
 RUN_ID="preview-qa-$(date +%Y%m%d-%H%M%S)"
