@@ -1,0 +1,1105 @@
+/* Paper Puppet Theatre: a Pollock's-style toy theatre in cut card. */
+
+.scene {
+  --px: 0;
+  --py: 0;
+  --shade: rgba(40, 20, 8, 0.42);
+  --edge: rgba(255, 246, 222, 0.5);
+  --rim: rgba(255, 200, 130, 0.55);
+  --swing-ease: cubic-bezier(0.5, -0.28, 0.25, 1.22);
+  color: var(--ll-ink);
+  inset: 0;
+  overflow: hidden;
+  position: absolute;
+}
+.scene[data-night='true'] {
+  --shade: rgba(4, 4, 26, 0.66);
+  --edge: rgba(176, 186, 255, 0.22);
+  --rim: rgba(170, 176, 255, 0.4);
+}
+
+/* every piece of card recolours with a staggered sweep (--d per layer) */
+.scene :global(svg) * {
+  transition: fill 1.25s cubic-bezier(0.55, 0.05, 0.3, 1) var(--d, 0s), stroke 1.25s ease var(--d, 0s),
+    stop-color 1.25s ease var(--d, 0s), opacity 1.1s ease var(--d, 0s);
+}
+.scene :global(.th-piece) { filter: url(#theatre-sh); }
+.scene :global(.th-svg) { display: block; height: 100%; width: 100%; }
+.scene :global(.th-fill) { display: block; height: 100%; width: 100%; }
+
+.defs { height: 0; position: absolute; width: 0; }
+.srOnly {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* ---------- the room ---------- */
+
+.wall {
+  background:
+    radial-gradient(52% 58% at 63% 44%, rgba(255, 214, 150, 0.3), transparent 72%),
+    repeating-linear-gradient(90deg, transparent 0 46px, rgba(231, 196, 120, 0.13) 46px 48px, transparent 48px 58px, rgba(231, 196, 120, 0.1) 58px 60px),
+    radial-gradient(circle, rgba(231, 196, 120, 0.12) 0 2.5px, transparent 3px) 23px 20px / 60px 44px,
+    linear-gradient(#3a5650, #24393a);
+  inset: -40px;
+  position: absolute;
+  translate: calc(var(--px) * -5px) calc(var(--py) * -3px);
+}
+.wallNight {
+  background:
+    radial-gradient(48% 55% at 63% 46%, rgba(130, 120, 230, 0.26), transparent 72%),
+    repeating-linear-gradient(90deg, transparent 0 46px, rgba(150, 150, 230, 0.07) 46px 48px, transparent 48px 58px, rgba(150, 150, 230, 0.05) 58px 60px),
+    linear-gradient(#1b1c46, #0d0e28);
+  inset: 0;
+  opacity: 0;
+  position: absolute;
+  transition: opacity var(--ll-day-night) var(--ll-ease) 0.05s;
+}
+.scene[data-night='true'] .wallNight { opacity: 1; }
+.wallGlow {
+  background: radial-gradient(40% 30% at 62% 92%, rgba(255, 200, 120, 0.22), transparent 70%);
+  inset: 0;
+  position: absolute;
+  transition: opacity 1.4s ease;
+}
+.scene[data-night='true'] .wallGlow { opacity: 0.6; }
+
+.scene::after {
+  box-shadow: inset 0 0 18vmin rgba(20, 8, 2, 0.5);
+  content: '';
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: box-shadow 1.4s ease;
+  z-index: 19;
+}
+.scene[data-night='true']::after { box-shadow: inset 0 0 22vmin rgba(2, 2, 20, 0.7); }
+
+.grain {
+  background-image: var(--th-grain, none);
+  background-size: 200px 200px;
+  inset: 0;
+  mix-blend-mode: multiply;
+  opacity: 0.6;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 1.4s ease;
+  z-index: 20;
+}
+.scene[data-night='true'] .grain { opacity: 0.35; }
+
+/* ---------- the toy theatre ---------- */
+
+.stageWrap { display: contents; }
+
+.theatre {
+  aspect-ratio: 1000 / 800;
+  container-type: size;
+  height: min(86dvh, calc((100vw - 480px) * 0.8));
+  position: absolute;
+  right: clamp(20px, 4vw, 64px);
+  top: 2.5dvh;
+  translate: calc(var(--px) * -14px) calc(var(--py) * -8px);
+  z-index: 1;
+}
+.theatre::before {
+  /* light spill from the stage onto the wall */
+  background: radial-gradient(closest-side, rgba(255, 210, 140, 0.35), transparent);
+  content: '';
+  inset: 10% 0 0;
+  position: absolute;
+  transition: background 1.4s ease;
+}
+.scene[data-night='true'] .theatre::before { background: radial-gradient(closest-side, rgba(140, 130, 255, 0.28), transparent); }
+
+.box {
+  background: #1a1210;
+  container-type: size;
+  height: 57.5%;
+  left: 15%;
+  overflow: hidden;
+  position: absolute;
+  top: 22.5%;
+  width: 70%;
+}
+
+.sheet { inset: 0; pointer-events: none; position: absolute; }
+.frame {
+  --d: 0.55s;
+  filter: drop-shadow(0 -1px 0 var(--edge)) drop-shadow(0 12px 14px var(--shade));
+  transition: filter 1.2s ease;
+}
+.lamps :global(.th-bulbs) { opacity: 0.8; transition: opacity 1.2s ease 0.6s; }
+.scene[data-night='true'] .lamps :global(.th-bulbs) { opacity: 1; }
+
+/* stacked flats inside the box, each with its own parallax depth (--dx) */
+.L {
+  inset: -5%;
+  pointer-events: none;
+  position: absolute;
+  translate: calc(var(--px) * var(--dx, 0) * 1.6px) calc(var(--py) * var(--dx, 0) * 0.8px);
+}
+.cut {
+  filter: drop-shadow(0 -1px 0 var(--edge)) drop-shadow(0 calc(var(--sh, 4) * 1px) calc(var(--sh, 4) * 1.5px) var(--shade));
+  transition: filter 1.2s ease var(--d, 0s);
+}
+
+.clothNight {
+  bottom: auto;
+  height: 82.6%;
+  transform: translateY(-104%);
+  transition: transform 1.3s cubic-bezier(0.6, 0, 0.3, 1) 0.5s;
+}
+.scene[data-night='true'] .clothNight { transform: none; transition-delay: 0.15s; }
+
+/* the fly system */
+.hang {
+  left: var(--x);
+  margin-left: calc(var(--size) / -2);
+  position: absolute;
+  top: 0;
+  transition: transform 1.6s var(--swing-ease) var(--hd-d);
+  width: var(--size);
+}
+.hang[data-when='night'],
+.scene[data-night='true'] .hang[data-when='day'] {
+  transform: translateY(calc(-1 * (var(--len) + var(--size) + 14cqh)));
+}
+.scene[data-night='true'] .hang { transition-delay: var(--hd-n); }
+.scene[data-night='true'] .hang[data-when='night'] { transform: none; }
+.swing {
+  animation: swing var(--sd) ease-in-out infinite alternate;
+  position: relative;
+  transform-origin: 50% 0;
+}
+.string {
+  background: linear-gradient(rgba(60, 40, 20, 0.25), rgba(60, 40, 20, 0.7));
+  height: calc(var(--len) + 7cqh);
+  left: 50%;
+  position: absolute;
+  top: 0;
+  width: 1px;
+}
+.scene[data-night='true'] .string { background: linear-gradient(rgba(220, 220, 255, 0.08), rgba(220, 220, 255, 0.4)); }
+.obj {
+  filter: drop-shadow(0 5px 5px var(--shade));
+  left: 0;
+  position: absolute;
+  top: calc(var(--len) + 6cqh);
+  width: var(--size);
+}
+.obj svg { display: block; height: auto; overflow: visible; width: 100%; }
+@keyframes swing { from { transform: rotate(-1.8deg); } to { transform: rotate(1.8deg); } }
+.scene :global(.th-spin) { animation: spin 60s linear infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.scene :global(.th-flap) { animation: flap 0.36s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+@keyframes flap { to { transform: scaleY(0.45); } }
+
+/* night forest flats slide in from the wings */
+.forest { transition: transform 1s cubic-bezier(0.6, 0, 0.3, 1) 0s; }
+.forestL { transform: translateX(-64%); }
+.forestR { transform: translateX(64%); }
+.scene[data-night='true'] .forest { transform: none; transition: transform 1.2s cubic-bezier(0.3, 0, 0.2, 1) 0.45s; }
+
+/* wings swap: day flats out first, night flats in after */
+.wing { transition: transform 1s cubic-bezier(0.55, 0, 0.25, 1) 0.65s; }
+.wingNightL,
+.wingNightR { transition-delay: 0s; }
+.wingNightL { transform: translateX(-60%); }
+.wingNightR { transform: translateX(60%); }
+.scene[data-night='true'] .wingDayL { transform: translateX(-52%); transition-delay: 0.1s; }
+.scene[data-night='true'] .wingDayR { transform: translateX(52%); transition-delay: 0.1s; }
+.scene[data-night='true'] .wingNightL,
+.scene[data-night='true'] .wingNightR { transform: none; transition-delay: 0.7s; }
+
+.scene :global(.th-winglow) { opacity: 0; }
+.scene[data-night='true'] :global(.th-winglow) { opacity: 1; }
+.scene :global(.th-jugglow) { opacity: 0; }
+.scene[data-night='true'] :global(.th-jugglow) { opacity: 0.8; }
+.scene :global(.th-set-text) { fill: #fbf3de; font-family: var(--ll-font-type), monospace; font-size: 8px; letter-spacing: 0.12em; }
+.scene :global(.th-set-big) { font-size: 10px; letter-spacing: 0.08em; }
+.scene :global(.th-set-hand) { fill: #fbf3de; font-family: var(--ll-font-hand), cursive; font-size: 13px; font-weight: 700; }
+.scene :global(.th-ribbon-text) {
+  fill: #6a1620;
+  font-family: var(--ll-font-type), monospace;
+  font-size: 15px;
+  letter-spacing: 0.14em;
+}
+.scene[data-night='true'] :global(.th-ribbon-text) { fill: #d8d2f0; }
+.scene :global(.th-blink) { animation: blink 4.2s steps(1) infinite; }
+@keyframes blink { 0%, 92% { opacity: 1; } 93%, 96% { opacity: 0; } }
+
+.moonbeam {
+  background: linear-gradient(170deg, rgba(210, 215, 255, 0.34), rgba(210, 215, 255, 0.04) 85%);
+  clip-path: polygon(66% 18%, 82% 18%, 70% 100%, 26% 100%);
+  inset: 0;
+  mix-blend-mode: screen;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 1.2s ease 0s;
+}
+.scene[data-night='true'] .moonbeam { opacity: 1; transition-delay: 1.3s; }
+
+/* ---------- the puppets ---------- */
+
+.cast { inset: 0; }
+.slot {
+  aspect-ratio: 100 / 170;
+  bottom: 12%;
+  left: var(--x);
+  margin-left: -6.6%;
+  position: absolute;
+  width: 13.2%;
+}
+.bob,
+.jump,
+.shake,
+.hop { height: 100%; position: relative; width: 100%; }
+.bob {
+  animation: bob var(--bd) ease-in-out var(--bl) infinite alternate;
+  transform-origin: 50% 130%;
+}
+@keyframes bob {
+  from { transform: translateY(0) rotate(-1.5deg); }
+  to { transform: translateY(-3%) rotate(1.5deg); }
+}
+.jump[data-jump='a'] { animation: jumpA 0.62s cubic-bezier(0.3, 1.4, 0.5, 1); }
+.jump[data-jump='b'] { animation: jumpB 0.62s cubic-bezier(0.3, 1.4, 0.5, 1); }
+@keyframes jumpA {
+  0%, 100% { transform: none; }
+  30% { transform: translateY(-22%) rotate(-5deg); }
+  60% { transform: translateY(0) rotate(2deg); }
+  78% { transform: translateY(-6%); }
+}
+@keyframes jumpB {
+  0%, 100% { transform: none; }
+  30% { transform: translateY(-22%) rotate(5deg); }
+  60% { transform: translateY(0) rotate(-2deg); }
+  78% { transform: translateY(-6%); }
+}
+.slot[data-scared='true'] .shake { animation: tremble 2.6s linear var(--gd) infinite; }
+@keyframes tremble {
+  0%, 4%, 12%, 20%, 28% { transform: translateX(-1.6%) rotate(-1deg); }
+  2%, 8%, 16%, 24%, 32% { transform: translateX(1.6%) rotate(1deg); }
+  36%, 100% { transform: none; }
+}
+.slot[data-wolf='true'] .hop { animation: hop 0.95s cubic-bezier(0.3, 0.8, 0.4, 1) var(--fd) both; }
+@keyframes hop {
+  0%, 100% { transform: none; }
+  40% { transform: translateY(-24%); }
+  72% { transform: translateY(2%); }
+  86% { transform: translateY(-3%); }
+}
+
+.rod {
+  background: linear-gradient(90deg, #5a3a1c, #c9955c 45%, #7a4f2a);
+  border-radius: 2px;
+  box-shadow: 2px 0 3px rgba(0, 0, 0, 0.35);
+  height: 90%;
+  left: 47.5%;
+  min-width: 3px;
+  position: absolute;
+  top: 82%;
+  width: 5%;
+}
+
+.card {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  inset: 0;
+  padding: 0;
+  perspective: 700px;
+  pointer-events: auto;
+  position: absolute;
+}
+.card:focus-visible { border-radius: 8px; outline: 2px dashed #ffe7a0; outline-offset: 3px; }
+.spinner {
+  display: block;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 1s cubic-bezier(0.45, -0.3, 0.3, 1.3) var(--fdd);
+  width: 100%;
+}
+.slot[data-wolf='true'] .spinner { transform: rotateY(540deg); transition: transform 1.05s cubic-bezier(0.45, -0.3, 0.3, 1.25) var(--fd); }
+.face {
+  backface-visibility: hidden;
+  filter: drop-shadow(0 -1px 0 var(--edge)) drop-shadow(2px 6px 4px var(--shade));
+  inset: 0;
+  position: absolute;
+  transition: filter 1.4s ease 0.3s;
+}
+.face svg { display: block; height: 100%; overflow: visible; width: 100%; }
+.back { transform: rotateY(180deg); }
+.scene[data-night='true'] .face {
+  filter: drop-shadow(0 -1px 0 var(--edge)) drop-shadow(2px 6px 4px var(--shade)) brightness(0.86) saturate(0.84);
+}
+.scene :global(.th-eyes) { animation: eyes 3.6s ease-in-out infinite; }
+@keyframes eyes { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
+
+.gasp {
+  align-items: center;
+  animation: none;
+  background: #fffaf0;
+  border-radius: 50%;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+  color: #b3262e;
+  display: flex;
+  font: 800 4cqw/1 var(--ll-font-display), serif;
+  height: 6.4cqw;
+  justify-content: center;
+  left: 64%;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  top: -8%;
+  width: 6.4cqw;
+}
+.slot[data-scared='true'] .gasp { animation: gasp 3.2s cubic-bezier(0.3, 1.6, 0.5, 1) var(--gd) both; }
+@keyframes gasp {
+  0% { opacity: 0; transform: scale(0) rotate(0); }
+  10% { opacity: 1; transform: scale(1.25) rotate(12deg); }
+  16%, 82% { opacity: 1; transform: scale(1) rotate(8deg); }
+  100% { opacity: 0; transform: scale(0.6) rotate(8deg) translateY(-30%); }
+}
+
+.bubble {
+  animation: pop 0.38s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+  background: #fffaf0;
+  border-radius: 16px;
+  bottom: calc(100% + 1.6cqh);
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.8), 0 8px 14px -4px rgba(10, 4, 0, 0.55);
+  color: #2b2118;
+  font-family: var(--ll-font-hand), cursive;
+  font-size: clamp(13px, 3.1cqw, 22px);
+  font-weight: 700;
+  left: 50%;
+  line-height: 1.05;
+  margin: 0;
+  max-width: 30cqw;
+  padding: 0.45em 0.75em 0.5em;
+  pointer-events: none;
+  position: absolute;
+  rotate: -2deg;
+  text-align: center;
+  translate: -50% 0;
+  width: max-content;
+  z-index: 5;
+}
+.bubble::after {
+  border: 9px solid transparent;
+  border-top-color: #fffaf0;
+  content: '';
+  left: calc(50% - 9px);
+  position: absolute;
+  top: 99%;
+}
+.bubble[data-align='l'] { left: 0; translate: 0 0; }
+.bubble[data-align='l']::after { left: 18%; }
+.bubble[data-align='r'] { left: auto; right: 0; rotate: 2deg; translate: 0 0; }
+.bubble[data-align='r']::after { left: auto; right: 18%; }
+/* the leaper perches high, so its bubble hangs below it, inside the opening */
+.bubble[data-align='below'] { bottom: auto; top: calc(100% + 1.4cqh); }
+.bubble[data-align='below']::after { border-bottom-color: #fffaf0; border-top-color: transparent; bottom: 99%; top: auto; }
+@keyframes pop { from { opacity: 0; scale: 0.4; } to { opacity: 1; scale: 1; } }
+
+/* the leaping wolf lands on the well roof */
+.leaper {
+  aspect-ratio: 150 / 96;
+  bottom: 57.5%;
+  left: 50%;
+  margin-left: -8.5%;
+  position: absolute;
+  width: 17%;
+}
+.leapX {
+  height: 100%;
+  transform: translateX(440%);
+  transition: transform 0.9s cubic-bezier(0.4, 0, 0.6, 1) 0s;
+  width: 100%;
+}
+.scene[data-night='true'] .leapX { transform: none; transition: transform 1.15s cubic-bezier(0.25, 0.1, 0.4, 1) 2s; }
+.leapY { animation: leapOut 0.9s ease-in-out both; height: 100%; width: 100%; }
+.scene[data-night='true'] .leapY { animation: leapIn 1.15s linear 2s both; }
+@keyframes leapIn {
+  0% { animation-timing-function: cubic-bezier(0.2, 0.6, 0.4, 1); transform: translateY(280%) rotate(24deg); }
+  55% { animation-timing-function: cubic-bezier(0.6, 0, 0.8, 0.4); transform: translateY(-80%) rotate(-4deg); }
+  84% { transform: translateY(6%) rotate(-10deg); }
+  100% { transform: none; }
+}
+@keyframes leapOut {
+  0% { transform: none; }
+  45% { transform: translateY(-70%) rotate(10deg); }
+  100% { transform: translateY(280%) rotate(24deg); }
+}
+.leaper .jump { height: 100%; width: 100%; }
+.rodLong { height: 420%; left: 50%; top: 62%; width: 3.6%; }
+.leapCard {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  filter: drop-shadow(0 -1px 0 var(--edge)) drop-shadow(2px 6px 4px var(--shade));
+  inset: 0;
+  padding: 0;
+  pointer-events: auto;
+  position: absolute;
+}
+.leapCard svg { display: block; height: 100%; overflow: visible; width: 100%; }
+.leapCard:focus-visible { border-radius: 8px; outline: 2px dashed #ffe7a0; outline-offset: 3px; }
+
+/* ---------- light & particles ---------- */
+
+.particles { inset: 0; pointer-events: none; position: absolute; }
+.dust {
+  animation: drift var(--du) linear var(--dl) infinite;
+  background: radial-gradient(circle, rgba(255, 243, 208, 0.9), rgba(255, 243, 208, 0) 70%);
+  border-radius: 50%;
+  bottom: var(--y);
+  height: var(--s);
+  left: var(--x);
+  opacity: 0;
+  position: absolute;
+  width: var(--s);
+}
+@keyframes drift {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0); }
+  15% { opacity: 0.5; }
+  80% { opacity: 0.3; }
+  100% { opacity: 0; transform: translate(3cqw, -46cqh) rotate(var(--r)); }
+}
+.firefly {
+  animation: wander var(--du) ease-in-out var(--dl) infinite alternate, glim 2.2s ease-in-out var(--dl) infinite;
+  background: #fff3a0;
+  border-radius: 50%;
+  box-shadow: 0 0 7px 3px rgba(255, 226, 110, 0.75);
+  height: 0.8cqw;
+  left: var(--x);
+  opacity: 0;
+  position: absolute;
+  top: var(--y);
+  transition: opacity 1.2s ease 0s;
+  width: 0.8cqw;
+}
+.scene[data-night='true'] .firefly { opacity: 1; transition-delay: 1.6s; }
+@keyframes wander { to { transform: translate(var(--fx), var(--fy)); } }
+@keyframes glim { 0%, 100% { scale: 1; } 50% { scale: 0.35; } }
+
+.haze {
+  background: radial-gradient(70% 100% at 50% 115%, rgba(255, 214, 140, 0.45), transparent 72%);
+  bottom: 0;
+  height: 50%;
+  left: 0;
+  mix-blend-mode: screen;
+  opacity: 0.6;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  transition: opacity 1.4s ease 0.4s;
+}
+.scene[data-night='true'] .haze { opacity: 0.9; }
+
+/* ---------- curtains ---------- */
+
+.curtain {
+  height: 100%;
+  position: absolute;
+  top: 0;
+  transition: transform 1.05s cubic-bezier(0.6, 0, 0.3, 1), clip-path 1.05s cubic-bezier(0.6, 0, 0.3, 1);
+  width: 51.5%;
+}
+.curtainL {
+  animation: openL 1.35s cubic-bezier(0.6, 0, 0.3, 1) 0.15s backwards;
+  clip-path: polygon(0 0, 100% 0, 100% 12%, 38% 57%, 100% 100%, 0 100%);
+  left: 0;
+  transform: scaleX(0.16);
+  transform-origin: 0 50%;
+}
+.curtainR {
+  animation: openR 1.35s cubic-bezier(0.6, 0, 0.3, 1) 0.15s backwards;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 62% 57%, 0 12%);
+  right: 0;
+  transform: scaleX(0.16);
+  transform-origin: 100% 50%;
+}
+@keyframes openL { from { clip-path: polygon(0 0, 100% 0, 100% 12%, 100% 57%, 100% 100%, 0 100%); transform: none; } }
+@keyframes openR { from { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 57%, 0 12%); transform: none; } }
+.scene[data-curtain='closed'] .curtainL { clip-path: polygon(0 0, 100% 0, 100% 12%, 100% 57%, 100% 100%, 0 100%); transform: none; }
+.scene[data-curtain='closed'] .curtainR { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 57%, 0 12%); transform: none; }
+.curtain :global(svg) * { transition-delay: 0.5s; }
+
+.valance {
+  --d: 0.5s;
+  filter: drop-shadow(0 6px 6px var(--shade));
+  height: 21.7%;
+  left: -5%;
+  pointer-events: none;
+  position: absolute;
+  top: -5%;
+  width: 110%;
+}
+
+.interval {
+  background-color: #fbf3de;
+  background-image: var(--th-grain, none), linear-gradient(170deg, #fdf6e4, #f0e2c0);
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.7), 0 12px 18px -6px rgba(0, 0, 0, 0.6);
+  color: #2b2118;
+  left: 0;
+  margin-inline: auto;
+  max-width: 64cqw;
+  right: 0;
+  padding: 2.2cqh 3.4cqw 2.4cqh;
+  pointer-events: none;
+  position: absolute;
+  rotate: -2deg;
+  text-align: center;
+  top: 24%;
+  transform: translateY(-70cqh);
+  transition: transform 0.7s cubic-bezier(0.5, -0.3, 0.3, 1.2) 0s;
+  width: max-content;
+}
+.interval p {
+  color: #9b2c2c;
+  font: 900 clamp(15px, 4cqw, 30px)/1 var(--ll-font-display), serif;
+  font-variation-settings: 'opsz' 144;
+  letter-spacing: 0.04em;
+  margin: 0.4cqh 0;
+  text-transform: uppercase;
+}
+.scene[data-night='true'] .interval p { color: #5b3a8e; }
+.intervalHand {
+  display: block;
+  font: 700 clamp(15px, 3.6cqw, 28px)/1.05 var(--ll-font-hand), cursive;
+  margin-bottom: 1cqh;
+  rotate: -1.5deg;
+}
+.intervalHouse { display: block; opacity: 0.75; text-transform: uppercase; }
+.interval small { display: block; font: clamp(8px, 1.6cqw, 12px) var(--ll-font-type), monospace; letter-spacing: 0.08em; }
+.reopen {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  inset: 0;
+  padding: 0;
+  position: absolute;
+}
+.reopen:focus-visible { outline: 2px dashed #ffe7a0; outline-offset: -6px; }
+.intervalStrings {
+  border-left: 1px solid rgba(40, 20, 10, 0.6);
+  border-right: 1px solid rgba(40, 20, 10, 0.6);
+  bottom: 100%;
+  height: 40cqh;
+  left: 18%;
+  position: absolute;
+  right: 18%;
+}
+.scene[data-curtain='closed'] .interval { transform: none; transition-delay: 0.8s; }
+
+
+.tassel {
+  animation: tasselSway 4.5s ease-in-out infinite alternate;
+  aspect-ratio: 40 / 110;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  filter: drop-shadow(1px 4px 3px rgba(0, 0, 0, 0.45));
+  padding: 0;
+  position: absolute;
+  right: 0.8%;
+  top: 53.5%;
+  transform-origin: 50% 8%;
+  width: 6%;
+}
+.tassel svg { display: block; height: 100%; width: 100%; }
+.tassel:hover { animation-duration: 0.8s; }
+.tassel:focus-visible { border-radius: 6px; outline: 2px dashed #ffe7a0; outline-offset: 2px; }
+@keyframes tasselSway { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+.scene[data-curtain='closed'] .tassel { animation: yank 0.6s cubic-bezier(0.3, 1.6, 0.5, 1); }
+@keyframes yank { 30% { transform: translateY(18%) rotate(0); } }
+
+/* ---------- audience ---------- */
+
+.audience {
+  --d: 0.75s;
+  bottom: -4px;
+  filter: drop-shadow(0 -2px 0 var(--rim)) drop-shadow(0 -8px 12px rgba(0, 0, 0, 0.35));
+  height: min(190px, calc((100vw + 80px) * 0.118));
+  left: -40px;
+  pointer-events: none;
+  position: absolute;
+  right: -40px;
+  transition: filter 1.4s ease;
+  translate: calc(var(--px) * -26px) calc(var(--py) * -6px);
+  z-index: 3;
+}
+.audience svg { display: block; height: 100%; width: 100%; }
+.audience :global(.th-wolf-ears) { transform: translateY(64px); transition: transform 0.4s ease 0s; }
+.scene[data-night='true'] .audience :global(.th-wolf-ears) {
+  transform: none;
+  transition: transform 0.55s cubic-bezier(0.3, 1.8, 0.5, 1) 2.3s;
+}
+.audience :global(.th-phone) { opacity: 0; transition: opacity 0.4s ease; }
+.scene[data-night='true'] .audience :global(.th-phone) { opacity: 1; transition-delay: 2.9s; }
+
+/* ---------- the playbill slot ----------
+   The scene owns position, size, tilt, shadow and parallax; the bill itself
+   comes from playbills/<id>.tsx and fills the slot's width (height is auto). */
+
+.playbill {
+  filter: drop-shadow(0 -1px 0 rgba(255, 246, 222, 0.35)) drop-shadow(0 12px 12px rgba(10, 6, 2, 0.5));
+  left: clamp(16px, 2.6vw, 44px);
+  position: absolute;
+  rotate: -1.8deg;
+  top: clamp(10px, 2.6dvh, 32px);
+  translate: calc(var(--px) * -8px) calc(var(--py) * -5px);
+  width: clamp(224px, 27vw, 400px);
+  z-index: 4;
+  container: playbill / inline-size;
+}
+
+.claws {
+  background: repeating-linear-gradient(104deg, transparent 0 9px, rgba(40, 14, 14, 0.85) 9px 12px, transparent 12px 19px);
+  height: 74px;
+  mask-image: linear-gradient(transparent, #000 25%, #000 70%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  right: -3%;
+  rotate: 8deg;
+  top: 3%;
+  transition: opacity 0.2s ease 0s;
+  width: 56px;
+}
+.scene[data-night='true'] .claws { opacity: 0.9; transition-delay: 2.2s; }
+
+/* ---------- the ticket (sign-in) ---------- */
+
+.ticket {
+  bottom: clamp(10px, 2.6dvh, 30px);
+  filter: drop-shadow(0 -1px 0 rgba(255, 246, 222, 0.45)) drop-shadow(0 14px 14px rgba(10, 6, 2, 0.6));
+  left: clamp(16px, 2.4vw, 40px);
+  position: absolute;
+  rotate: 1.4deg;
+  translate: calc(var(--px) * -18px) calc(var(--py) * -8px);
+  width: clamp(360px, 28vw, 410px);
+  z-index: 6;
+}
+.ticketPaper {
+  display: flex;
+  mask:
+    radial-gradient(circle 10px at 0 0, #0000 98%, #000) no-repeat,
+    radial-gradient(circle 10px at 100% 0, #0000 98%, #000) no-repeat,
+    radial-gradient(circle 10px at 0 100%, #0000 98%, #000) no-repeat,
+    radial-gradient(circle 10px at 100% 100%, #0000 98%, #000) no-repeat,
+    radial-gradient(circle 7px at 62px 0, #0000 98%, #000) no-repeat,
+    radial-gradient(circle 7px at 62px 100%, #0000 98%, #000) no-repeat;
+  mask-composite: intersect;
+}
+.stub {
+  align-items: center;
+  background-color: #e9b48a;
+  background-image: var(--th-grain, none), linear-gradient(#efc29c, #e2a878);
+  border-right: 2px dashed rgba(110, 50, 20, 0.5);
+  color: #6a1d12;
+  display: flex;
+  flex: 0 0 62px;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: center;
+  padding: 12px 0;
+  transition: background-color 1.4s ease;
+}
+/* At night the ticket takes the marquee's colours: purple stub, lavender
+   paper, gold rules. Gradients can't transition, so the night paper is an
+   overlay that fades in over the day paper. */
+.stub,
+.signin { isolation: isolate; position: relative; }
+.stub::before,
+.signin::before {
+  content: '';
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 1.4s var(--ll-ease, ease);
+  z-index: -1;
+}
+.stub::before { background-color: #5b3a8e; background-image: var(--th-grain, none), linear-gradient(#6a48a0, #4d3180); }
+.signin::before {
+  background-color: #d9d1e6;
+  background-image: var(--th-grain, none), linear-gradient(160deg, #e6e0f0, #c4b9d8);
+  box-shadow: inset 0 0 0 7px #d9d1e6, inset 0 0 0 8.5px #e8c268, inset 0 0 0 10px #d9d1e6, inset 0 0 0 11px rgba(232, 194, 104, 0.6);
+}
+.scene[data-night='true'] .stub::before,
+.scene[data-night='true'] .signin::before { opacity: 1; }
+.stub { transition: background-color 1.4s ease, border-color 1.4s ease, color 1.4s ease; }
+.scene[data-night='true'] .stub { border-right-color: rgba(232, 194, 104, 0.7); color: #efe9f6; }
+.admit {
+  font-family: var(--ll-font-display), serif;
+  font-size: 22px;
+  font-variation-settings: 'opsz' 144;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  rotate: 180deg;
+  writing-mode: vertical-rl;
+}
+.serial {
+  font-family: var(--ll-font-type), monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  rotate: 180deg;
+  writing-mode: vertical-rl;
+}
+.signin {
+  --ll-accent: #9b2c2c;
+  background-color: #f7e8c9;
+  background-image: var(--th-grain, none), linear-gradient(160deg, #fbf1da, #f0dcb4);
+  box-shadow: inset 0 0 0 7px #f7e8c9, inset 0 0 0 8.5px rgba(122, 79, 44, 0.45), inset 0 0 0 10px #f7e8c9, inset 0 0 0 11px rgba(122, 79, 44, 0.3);
+  flex: 1;
+  min-width: 0;
+  padding: 18px 22px 16px 20px;
+  transition: background-color 1.4s ease;
+  width: auto;
+}
+.scene[data-night='true'] .signin { --ll-accent: #5b3a8e; }
+.signin :global(.ll-signin-kicker) { font-size: 10px; letter-spacing: 0.14em; margin-bottom: 4px; }
+.signin :global(.ll-signin-title) {
+  font-size: 23px;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  margin-bottom: 8px;
+}
+.signin :global(.ll-signin-form) { gap: 7px; }
+.signin :global(.ll-signin-form input) { border-bottom-style: dotted; border-bottom-width: 2px; font-size: 21px; }
+.signin :global(.ll-signin-form label > span) { color: #6b5d4f; }
+.signin :global(.ll-stamp-button) { letter-spacing: 0.16em; margin-top: 6px; }
+.signin :global(.ll-signin-links) { font-size: 13px; margin-top: 10px; }
+
+/* ---- paper stock: day / night (generated table) ---- */
+.scene :global(.tf-cream) { fill: #f1e4c4; }
+.scene[data-night='true'] :global(.tf-cream) { fill: #57527f; }
+.scene :global(.tf-cream2) { fill: #fbf3de; }
+.scene[data-night='true'] :global(.tf-cream2) { fill: #8a86b0; }
+.scene :global(.tf-gold) { fill: #cf9f45; }
+.scene[data-night='true'] :global(.tf-gold) { fill: #8f7b58; }
+.scene :global(.tf-goldd) { fill: #8a6424; }
+.scene[data-night='true'] :global(.tf-goldd) { fill: #4a3d5a; }
+.scene :global(.tf-red) { fill: #962630; }
+.scene[data-night='true'] :global(.tf-red) { fill: #3f2050; }
+.scene :global(.tf-redd) { fill: #6a1620; }
+.scene[data-night='true'] :global(.tf-redd) { fill: #2a1438; }
+.scene :global(.tf-wood) { fill: #5e3a20; }
+.scene[data-night='true'] :global(.tf-wood) { fill: #231b3a; }
+.scene :global(.tf-ink) { fill: #3b2b1d; }
+.scene[data-night='true'] :global(.tf-ink) { fill: #15122c; }
+.scene :global(.tf-rose) { fill: #e0776a; }
+.scene[data-night='true'] :global(.tf-rose) { fill: #7a4a78; }
+.scene :global(.tf-bulb) { fill: #fff1c2; }
+.scene[data-night='true'] :global(.tf-bulb) { fill: #fff6d8; }
+.scene :global(.tf-hill1) { fill: #c3d3ae; }
+.scene[data-night='true'] :global(.tf-hill1) { fill: #3e4487; }
+.scene :global(.tf-hill2) { fill: #a3bf95; }
+.scene[data-night='true'] :global(.tf-hill2) { fill: #343a7c; }
+.scene :global(.tf-far) { fill: #dccfae; }
+.scene[data-night='true'] :global(.tf-far) { fill: #4a508f; }
+.scene :global(.tf-roof) { fill: #b5553a; }
+.scene[data-night='true'] :global(.tf-roof) { fill: #3b2f6a; }
+.scene :global(.tf-roof2) { fill: #8a5b3c; }
+.scene[data-night='true'] :global(.tf-roof2) { fill: #2e2a5e; }
+.scene :global(.tf-roof3) { fill: #6d8a5f; }
+.scene[data-night='true'] :global(.tf-roof3) { fill: #283064; }
+.scene :global(.tf-clock) { fill: #fbf5e8; }
+.scene[data-night='true'] :global(.tf-clock) { fill: #ffd57c; }
+.scene :global(.tf-wall1) { fill: #f1e2bf; }
+.scene[data-night='true'] :global(.tf-wall1) { fill: #4a4a86; }
+.scene :global(.tf-wall2) { fill: #e8cfa0; }
+.scene[data-night='true'] :global(.tf-wall2) { fill: #423f7c; }
+.scene :global(.tf-wall3) { fill: #efd9c4; }
+.scene[data-night='true'] :global(.tf-wall3) { fill: #4b4380; }
+.scene :global(.tf-win) { fill: #8fa6a8; }
+.scene[data-night='true'] :global(.tf-win) { fill: #ffd57c; }
+.scene :global(.tf-door) { fill: #6b4226; }
+.scene[data-night='true'] :global(.tf-door) { fill: #2a2150; }
+.scene :global(.tf-chim) { fill: #9a6a4a; }
+.scene[data-night='true'] :global(.tf-chim) { fill: #2e2a5e; }
+.scene :global(.tf-sign) { fill: #7a4f2c; }
+.scene[data-night='true'] :global(.tf-sign) { fill: #3a2e55; }
+.scene :global(.tf-flag1) { fill: #c7353a; }
+.scene[data-night='true'] :global(.tf-flag1) { fill: #6a3a70; }
+.scene :global(.tf-flag2) { fill: #e3b04b; }
+.scene[data-night='true'] :global(.tf-flag2) { fill: #7a6a5a; }
+.scene :global(.tf-flag3) { fill: #4f79a8; }
+.scene[data-night='true'] :global(.tf-flag3) { fill: #3d4a8a; }
+.scene :global(.tf-floor) { fill: #c9975e; }
+.scene[data-night='true'] :global(.tf-floor) { fill: #3b2f5c; }
+.scene :global(.tf-post) { fill: #7a4f2c; }
+.scene[data-night='true'] :global(.tf-post) { fill: #2f2650; }
+.scene :global(.tf-jug) { fill: #7ec3e6; }
+.scene[data-night='true'] :global(.tf-jug) { fill: #4a6fb0; }
+.scene :global(.tf-jugl) { fill: #dff4ff; }
+.scene[data-night='true'] :global(.tf-jugl) { fill: #bfe3ff; }
+.scene :global(.tf-stone) { fill: #b9ae9c; }
+.scene[data-night='true'] :global(.tf-stone) { fill: #4b4a78; }
+.scene :global(.tf-stoned) { fill: #8d8374; }
+.scene[data-night='true'] :global(.tf-stoned) { fill: #34335e; }
+.scene :global(.tf-winframe) { fill: #6b4226; }
+.scene[data-night='true'] :global(.tf-winframe) { fill: #2a2150; }
+.scene :global(.tf-bread) { fill: #d99a4e; }
+.scene[data-night='true'] :global(.tf-bread) { fill: #8a6a5a; }
+.scene :global(.tf-awn1) { fill: #c7353a; }
+.scene[data-night='true'] :global(.tf-awn1) { fill: #4a2a5a; }
+.scene :global(.tf-awn2) { fill: #fbf3de; }
+.scene[data-night='true'] :global(.tf-awn2) { fill: #6a6694; }
+.scene :global(.tf-trunk) { fill: #6b4a2e; }
+.scene[data-night='true'] :global(.tf-trunk) { fill: #2a2248; }
+.scene :global(.tf-leaf1) { fill: #6f9463; }
+.scene[data-night='true'] :global(.tf-leaf1) { fill: #283064; }
+.scene :global(.tf-leaf2) { fill: #5a7f52; }
+.scene[data-night='true'] :global(.tf-leaf2) { fill: #1f2758; }
+.scene :global(.tf-leafhi) { fill: #8fb07c; }
+.scene[data-night='true'] :global(.tf-leafhi) { fill: #353f7a; }
+.scene :global(.tf-apple) { fill: #c7353a; }
+.scene[data-night='true'] :global(.tf-apple) { fill: #4a2a5a; }
+.scene :global(.tf-fence) { fill: #e8dcc2; }
+.scene[data-night='true'] :global(.tf-fence) { fill: #4a4a7e; }
+.scene :global(.tf-cloud) { fill: #fbf5e8; }
+.scene[data-night='true'] :global(.tf-cloud) { fill: #fbf5e8; }
+.scene :global(.tf-cloudb) { fill: #c9d6d8; }
+.scene[data-night='true'] :global(.tf-cloudb) { fill: #c9d6d8; }
+.scene :global(.tf-aud) { fill: #241913; }
+.scene[data-night='true'] :global(.tf-aud) { fill: #0b0a1c; }
+.scene :global(.tf-seat) { fill: #5a1a20; }
+.scene[data-night='true'] :global(.tf-seat) { fill: #1a0f2a; }
+.scene :global(.ts-gold) { stroke: #d9aa4f; }
+.scene[data-night='true'] :global(.ts-gold) { stroke: #8f7b58; }
+.scene :global(.ts-goldd) { stroke: #8a6424; }
+.scene[data-night='true'] :global(.ts-goldd) { stroke: #3c3150; }
+.scene :global(.ts-cream) { stroke: #fbf3de; }
+.scene[data-night='true'] :global(.ts-cream) { stroke: #a9a3cc; }
+.scene :global(.ts-skyline) { stroke: #ffffff; }
+.scene[data-night='true'] :global(.ts-skyline) { stroke: #9a9ac0; }
+.scene :global(.ts-seam) { stroke: #b9a88a; }
+.scene[data-night='true'] :global(.ts-seam) { stroke: #3a3f7a; }
+.scene :global(.ts-ink) { stroke: #3b2b1d; }
+.scene[data-night='true'] :global(.ts-ink) { stroke: #3b2b1d; }
+.scene :global(.ts-mullion) { stroke: #6b5a48; }
+.scene[data-night='true'] :global(.ts-mullion) { stroke: #8a5a2a; }
+.scene :global(.ts-string) { stroke: #6b5a48; }
+.scene[data-night='true'] :global(.ts-string) { stroke: #8a86b0; }
+.scene :global(.ts-floord) { stroke: #8a5f32; }
+.scene[data-night='true'] :global(.ts-floord) { stroke: #231c40; }
+.scene :global(.ts-slot) { stroke: #2a1a0e; }
+.scene[data-night='true'] :global(.ts-slot) { stroke: #0d0a1e; }
+.scene :global(.ts-post) { stroke: #7a4f2c; }
+.scene[data-night='true'] :global(.ts-post) { stroke: #2f2650; }
+.scene :global(.ts-jugline) { stroke: #5aa3c8; }
+.scene[data-night='true'] :global(.ts-jugline) { stroke: #3a5a9a; }
+.scene :global(.ts-bubble) { stroke: #dff4ff; }
+.scene[data-night='true'] :global(.ts-bubble) { stroke: #bfe3ff; }
+.scene :global(.ts-shingle) { stroke: #7a3a24; }
+.scene[data-night='true'] :global(.ts-shingle) { stroke: #231c40; }
+.scene :global(.ts-iron) { stroke: #2b2118; }
+.scene[data-night='true'] :global(.ts-iron) { stroke: #0d0a1e; }
+.scene :global(.ts-aud) { stroke: #241913; }
+.scene[data-night='true'] :global(.ts-aud) { stroke: #0b0a1c; }
+.scene :global(.tst-sky1) { stop-color: #b7d3d2; }
+.scene[data-night='true'] :global(.tst-sky1) { stop-color: #2a2f6e; }
+.scene :global(.tst-sky2) { stop-color: #f5ead2; }
+.scene[data-night='true'] :global(.tst-sky2) { stop-color: #4a4f90; }
+.scene :global(.tst-fold-d) { stop-color: #5e0f17; }
+.scene[data-night='true'] :global(.tst-fold-d) { stop-color: #1e0c2c; }
+.scene :global(.tst-fold-m) { stop-color: #9a1f2a; }
+.scene[data-night='true'] :global(.tst-fold-m) { stop-color: #3a1850; }
+.scene :global(.tst-fold-h) { stop-color: #c8404a; }
+.scene[data-night='true'] :global(.tst-fold-h) { stop-color: #5a2a70; }
+
+/* ---------- short landscape screens ---------- */
+@media (max-height: 820px) and (min-width: 721px) {
+  .ticket { width: clamp(380px, 30vw, 420px); }
+  .signin { padding: 13px 20px 11px 18px; }
+  .signin :global(.ll-signin-title) { font-size: 20px; margin-bottom: 4px; }
+  .signin :global(.ll-signin-form) { gap: 4px; }
+  .signin :global(.ll-signin-form input) { font-size: 19px; }
+  .signin :global(.ll-stamp-button) { margin-top: 4px; padding: 8px 12px; }
+  .signin :global(.ll-signin-links) { margin-top: 6px; }
+}
+
+/* ---------- portrait & phones: recompose, don't just shrink ---------- */
+@media (max-width: 720px), (max-aspect-ratio: 4 / 5) {
+  .scene {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 18px 0 128px;
+    touch-action: pan-y;
+  }
+  .wall,
+  .grain { position: fixed; }
+  .scene::after { position: fixed; }
+
+  /* playbill becomes a wide poster pasted above the stage */
+  .playbill {
+    flex: none;
+    left: auto;
+    margin: 4px auto 18px;
+    position: relative;
+    rotate: -1.2deg;
+    top: auto;
+    width: min(360px, calc(100vw - 40px));
+  }
+
+
+  /* the theatre is zoomed so the stage opening fills the width; the pillars bleed off */
+  .stageWrap {
+    align-items: center;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    overflow: hidden;
+    padding-top: 6px;
+    width: 100%;
+  }
+  .theatre {
+    flex: none;
+    height: auto;
+    margin: 0 -17vw;
+    position: relative;
+    right: auto;
+    top: auto;
+    width: 134vw;
+  }
+  .audience {
+    flex: none;
+    height: calc(150vw * 0.132);
+    left: auto;
+    margin: -56px 0 0;
+    position: relative;
+    right: auto;
+    width: 150vw;
+  }
+  .ticket {
+    bottom: auto;
+    flex: none;
+    left: auto;
+    margin: -8px auto 0;
+    position: relative;
+    rotate: 0.8deg;
+    width: min(400px, calc(100vw - 28px));
+  }
+  .stub { flex-basis: 48px; }
+  .admit { font-size: 18px; }
+  .ticketPaper {
+    mask:
+      radial-gradient(circle 10px at 0 0, #0000 98%, #000) no-repeat,
+      radial-gradient(circle 10px at 100% 0, #0000 98%, #000) no-repeat,
+      radial-gradient(circle 10px at 0 100%, #0000 98%, #000) no-repeat,
+      radial-gradient(circle 10px at 100% 100%, #0000 98%, #000) no-repeat,
+      radial-gradient(circle 6px at 48px 0, #0000 98%, #000) no-repeat,
+      radial-gradient(circle 6px at 48px 100%, #0000 98%, #000) no-repeat;
+    mask-composite: intersect;
+  }
+  .signin { padding: 16px 18px 14px 16px; }
+  .bubble { font-size: 14px; max-width: 46cqw; }
+}
+.scene :global(.ts-timber) { stroke: #8a5a36; }
+.scene[data-night='true'] :global(.ts-timber) { stroke: #2a2150; }
+
+@media (prefers-reduced-motion: reduce) {
+  .scene *,
+  .scene *::before,
+  .scene *::after { animation-delay: 0s !important; transition-delay: 0s !important; }
+  .dust { display: none; }
+}
+.scene :global(.tf-elev) { fill: #d9c3a0; }
+.scene[data-night='true'] :global(.tf-elev) { fill: #4a508f; }
+.scene :global(.ts-elevline) { stroke: #b39a74; }
+.scene[data-night='true'] :global(.ts-elevline) { stroke: #3a3f7a; }
+.scene :global(.tf-canola) { fill: #e6c948; }
+.scene[data-night='true'] :global(.tf-canola) { fill: #3b407e; }
+.scene :global(.tf-monitor) { fill: #3a3a44; }
+.scene[data-night='true'] :global(.tf-monitor) { fill: #1c1a38; }
+.scene :global(.tf-screen) { fill: #8fd0f0; }
+.scene[data-night='true'] :global(.tf-screen) { fill: #bfe3ff; }
+
+/* ---------- phones: just the marquee and the ticket ----------
+   The stage needs more room than a phone has, so phones get the sign-in
+   essentials: the marquee as the title and the ADMIT ONE ticket. Portrait
+   stacks them; short landscape screens sit them side by side. Tablets keep
+   the portrait layout above. */
+@media (max-width: 720px), (max-height: 500px) {
+  .stageWrap,
+  .audience { display: none; }
+
+  .scene {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 12px 16px 112px;
+    touch-action: pan-y;
+  }
+  .wall,
+  .grain,
+  .scene::after { position: fixed; }
+
+  /* margin:auto on the first and last items centres the pair vertically
+     while still letting a short screen scroll from the top */
+  .playbill {
+    flex: none;
+    left: auto;
+    margin: auto auto 0;
+    position: relative;
+    rotate: -1.2deg;
+    top: auto;
+    width: min(400px, calc(100vw - 32px));
+  }
+  .ticket {
+    bottom: auto;
+    flex: none;
+    left: auto;
+    margin: 0 auto auto;
+    position: relative;
+    rotate: 0.8deg;
+    width: min(400px, calc(100vw - 28px));
+  }
+}
+
+@media (max-height: 500px) and (min-width: 560px) {
+  .scene {
+    flex-direction: row;
+    gap: clamp(20px, 4vw, 48px);
+    justify-content: center;
+    padding: 8px 24px 84px;
+  }
+  .playbill {
+    margin: auto 0;
+    width: min(360px, 42vw);
+  }
+  .ticket {
+    margin: auto 0;
+    width: min(400px, 46vw);
+  }
+}
+
+/* short phones (iPhone SE and friends): tighten so the Enter button clears
+   the day/night switch without scrolling */
+@media (max-width: 720px) and (max-height: 760px) {
+  .scene { gap: 12px; padding-bottom: 92px; }
+  .playbill { width: min(310px, calc(100vw - 48px)); }
+  .signin { padding: 12px 16px 10px 14px; }
+  .signin :global(.ll-signin-title) { font-size: 20px; margin-bottom: 4px; }
+  .signin :global(.ll-signin-form) { gap: 4px; }
+  .signin :global(.ll-signin-form input) { font-size: 19px; }
+  .signin :global(.ll-stamp-button) { margin-top: 4px; padding: 8px 12px; }
+  .signin :global(.ll-signin-links) { margin-top: 6px; }
+}
