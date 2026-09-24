@@ -388,9 +388,9 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     }
   }
 
-  if (loading) return <main className="setup-shell"><p className="setup-loading">Opening the village…</p></main>;
+  if (loading) return <main className="setup-shell front-of-house"><p className="setup-loading">Opening the village…</p></main>;
   if (unauthenticated) return <PublicWelcome />;
-  if (!data) return <main className="setup-shell centered"><section className="auth-card"><h1>The village is out of reach.</h1><p>{error}</p><a className="primary-link" href="/player-login">Try signing in</a></section></main>;
+  if (!data) return <main className="setup-shell centered front-of-house"><section className="auth-card"><h1>The village is out of reach.</h1><p>{error}</p><a className="primary-link" href="/player-login">Try signing in</a></section></main>;
 
   const selectedNames = selected.map((id) => data.candidates.find((candidate) => candidate.id === id)?.displayName).filter(Boolean);
   const role = data.player.roleDefinition;

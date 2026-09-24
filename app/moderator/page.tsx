@@ -414,11 +414,11 @@ export default function ModeratorPage() {
     ? composition.VILLAGER - composition.WEREWOLF * 5 + composition.SEER * 3 + composition.BODYGUARD * 2 + composition.HUNTER + composition.MASON + composition.APPRENTICE_SEER * 2 + composition.MAYOR * 2 + composition.CUPID
     : 0;
 
-  if (loading) return <main className="setup-shell"><BrandHeader /><p className="setup-loading">Opening the moderator console…</p></main>;
+  if (loading) return <main className="setup-shell backstage"><BrandHeader /><p className="setup-loading">Opening the moderator console…</p></main>;
 
   if (!authenticated) {
     return (
-      <main className="setup-shell">
+      <main className="setup-shell backstage">
         <BrandHeader />
         <section className="auth-card">
           <p className="eyebrow accent">Private game control</p>
@@ -442,7 +442,7 @@ export default function ModeratorPage() {
   }
 
   return (
-    <main className="setup-shell">
+    <main className="setup-shell backstage">
       <BrandHeader />
       <div className="console-layout">
         <aside className="setup-progress">

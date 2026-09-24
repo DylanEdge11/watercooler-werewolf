@@ -1,4 +1,11 @@
-/* Paper Theatre skin for the player dashboard.
+/* Paper Theatre skin.
+
+   Scopes:
+   - .app-shell       the player dashboard (stage lighting, role gels)
+   - .front-of-house  player sign-in, seat claim, dashboard loading/error
+   - .guide-shell     the /guide programme
+   - .backstage       moderator console and Player View Studio, styled in
+                      paper-theatre-backstage.css
 
    Loaded after globals.css, which keeps owning layout. This file re-skins the
    same class names as cut paper on a toy-theatre stage, matching the landing
@@ -12,7 +19,10 @@
      washes the backdrop and marks accents. Without a role theme the house
      gel is theatre plum. */
 
-.app-shell {
+.app-shell,
+.front-of-house,
+.guide-shell,
+.backstage {
   --pt-ink: #2b2118;
   --pt-ink-soft: #6b5d4f;
   --pt-paper: #fffaf0;
@@ -212,8 +222,8 @@
 /* Ticket shape: a notch bitten out of each side. Masks clip box-shadow, so
    tickets carry an inset rule instead of a drop shadow. */
 .app-shell .deadline-card,
-.app-shell .primary-button,
-.app-shell .primary-link {
+:is(.app-shell, .front-of-house, .guide-shell) .primary-button,
+:is(.app-shell, .front-of-house, .guide-shell) .primary-link {
   -webkit-mask: radial-gradient(circle 7px at left center, transparent 96%, #000) left / 51% 100% no-repeat, radial-gradient(circle 7px at right center, transparent 96%, #000) right / 51% 100% no-repeat;
   mask: radial-gradient(circle 7px at left center, transparent 96%, #000) left / 51% 100% no-repeat, radial-gradient(circle 7px at right center, transparent 96%, #000) right / 51% 100% no-repeat;
 }
@@ -376,8 +386,8 @@
 /* ---------- Buttons ---------- */
 
 /* ADMIT ONE: the primary action is a theatre ticket. */
-.app-shell .primary-button,
-.app-shell .primary-link {
+:is(.app-shell, .front-of-house, .guide-shell) .primary-button,
+:is(.app-shell, .front-of-house, .guide-shell) .primary-link {
   background: var(--pt-curtain);
   border-radius: 3px;
   box-shadow: inset 0 0 0 3px var(--pt-curtain), inset 0 0 0 4px rgba(255, 243, 214, 0.55);
@@ -390,12 +400,12 @@
   text-transform: uppercase;
   transition: background-color 0.2s ease, transform 0.15s ease;
 }
-.app-shell .primary-button:hover:not(:disabled),
-.app-shell .primary-link:hover { background: var(--pt-curtain-deep); box-shadow: inset 0 0 0 3px var(--pt-curtain-deep), inset 0 0 0 4px rgba(255, 243, 214, 0.55); transform: translateY(-1px); }
-.app-shell .primary-button:active:not(:disabled) { transform: translateY(1px) scale(0.98); }
-.app-shell .primary-button:disabled { cursor: not-allowed; opacity: 0.5; }
+:is(.app-shell, .front-of-house, .guide-shell) .primary-button:hover:not(:disabled),
+:is(.app-shell, .front-of-house, .guide-shell) .primary-link:hover { background: var(--pt-curtain-deep); box-shadow: inset 0 0 0 3px var(--pt-curtain-deep), inset 0 0 0 4px rgba(255, 243, 214, 0.55); transform: translateY(-1px); }
+:is(.app-shell, .front-of-house, .guide-shell) .primary-button:active:not(:disabled) { transform: translateY(1px) scale(0.98); }
+:is(.app-shell, .front-of-house, .guide-shell) .primary-button:disabled { cursor: not-allowed; opacity: 0.5; }
 
-.app-shell .secondary-button {
+:is(.app-shell, .front-of-house, .guide-shell) .secondary-button {
   background: var(--pt-paper);
   border: 1.5px solid var(--pt-ink);
   border-radius: 3px;
@@ -407,9 +417,9 @@
   letter-spacing: 0.05em;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.app-shell .secondary-button:hover:not(:disabled) { box-shadow: 3px 3px 0 rgba(43, 33, 24, 0.3); transform: translate(-1px, -1px); }
-.app-shell .secondary-button:active:not(:disabled) { box-shadow: 0 0 0 rgba(43, 33, 24, 0.3); transform: translate(1px, 1px); }
-.app-shell .text-button { color: var(--pt-gel); font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; text-decoration: underline dotted; text-underline-offset: 3px; }
+:is(.app-shell, .front-of-house, .guide-shell) .secondary-button:hover:not(:disabled) { box-shadow: 3px 3px 0 rgba(43, 33, 24, 0.3); transform: translate(-1px, -1px); }
+:is(.app-shell, .front-of-house, .guide-shell) .secondary-button:active:not(:disabled) { box-shadow: 0 0 0 rgba(43, 33, 24, 0.3); transform: translate(1px, 1px); }
+:is(.app-shell, .front-of-house, .guide-shell) .text-button { color: var(--pt-gel); font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; text-decoration: underline dotted; text-underline-offset: 3px; }
 
 /* ---------- Feedback: stamps and slips ---------- */
 
@@ -430,7 +440,7 @@
   60% { opacity: 1; transform: scale(0.97) rotate(-0.6deg); }
   100% { opacity: 1; transform: scale(1) rotate(-1deg); }
 }
-.app-shell .form-error { color: var(--pt-curtain); font-family: var(--ll-font-type), monospace; font-size: 12px; }
+:is(.app-shell, .front-of-house, .guide-shell) .form-error { color: var(--pt-curtain); font-family: var(--ll-font-type), monospace; font-size: 12px; }
 .app-shell .notice { border-radius: 2px; box-shadow: var(--pt-shadow); font-size: 13px; position: relative; }
 .app-shell .notice.warning { background: var(--pt-note); color: #5c4214; }
 .app-shell .empty-note,
@@ -474,9 +484,9 @@
 .app-shell .chat-line small { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 9px; }
 .app-shell .chat-line p { color: var(--pt-ink); font-size: 13px; }
 
-.app-shell input,
-.app-shell textarea,
-.app-shell select {
+:is(.app-shell, .front-of-house, .guide-shell) input,
+:is(.app-shell, .front-of-house, .guide-shell) textarea,
+:is(.app-shell, .front-of-house, .guide-shell) select {
   background: var(--pt-paper);
   border: 1px solid var(--pt-paper-edge);
   border-bottom: 2px solid color-mix(in srgb, var(--pt-ink-soft) 50%, transparent);
@@ -568,4 +578,113 @@
   .app-shell *,
   .app-shell *::before,
   .app-shell *::after { animation: none !important; }
+}
+
+/* ================= Front of house =================
+   Player sign-in, seat claim and the dashboard's loading and error states:
+   the same day-lit stage, with a playbill card sealed by the emblem. */
+
+.front-of-house .auth-card {
+  background: var(--pt-grain), linear-gradient(170deg, #fdf6e4, #f3e6c6);
+  border: 0;
+  border-radius: 3px;
+  box-shadow: var(--pt-shadow-lift);
+  color: var(--pt-ink);
+  outline: 4px double rgba(43, 33, 24, 0.4);
+  outline-offset: -12px;
+}
+.front-of-house .auth-card h1 {
+  font-family: var(--ll-font-display), Georgia, serif;
+  font-style: italic;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.front-of-house .claim-card { text-align: center; }
+.front-of-house .claim-card .form-stack { text-align: left; }
+.front-of-house .auth-card > p:not(.eyebrow, .form-error, .privacy-note) { color: var(--pt-ink-soft); font-size: 15px; }
+.front-of-house .eyebrow { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; letter-spacing: 0.18em; }
+.front-of-house .form-stack label { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; letter-spacing: 0.06em; }
+.front-of-house .primary-button,
+.front-of-house .primary-link { width: 100%; }
+.front-of-house .primary-link { text-align: center; }
+.front-of-house .button-row { justify-content: center; margin-top: 16px; }
+.front-of-house .quiet-link { color: var(--pt-gel); display: inline-block; font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; margin-top: 14px; text-decoration: underline dotted; text-underline-offset: 3px; }
+.front-of-house .button-row .quiet-link { margin-top: 0; }
+.front-of-house .privacy-note { color: var(--pt-ink-soft); font-size: 12px; font-style: italic; }
+.front-of-house .claim-seal .brand-mark { animation: pt-puppet-spin-a 1s cubic-bezier(0.45, -0.3, 0.3, 1.3) both; }
+.front-of-house .setup-loading { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; letter-spacing: 0.08em; margin: 0 auto; padding-top: 120px; }
+
+/* ================= The programme (/guide) ================= */
+
+.guide-shell { color: var(--pt-ink); font-family: var(--ll-font-display), Georgia, serif; }
+.guide-shell .guide-header {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.12), transparent 40%, rgba(0, 0, 0, 0.22)),
+    repeating-linear-gradient(90deg, var(--pt-valance) 0 22px, color-mix(in srgb, var(--pt-valance) 90%, black) 22px 34px, var(--pt-valance) 34px 48px);
+  border-bottom: 2px solid color-mix(in srgb, var(--pt-gold) 75%, var(--pt-valance));
+  box-shadow: 0 6px 16px -6px rgba(29, 5, 8, 0.6);
+}
+.guide-shell .brand strong { color: #fff3d6; font-family: var(--ll-font-display), Georgia, serif; font-size: 20px; font-style: italic; font-variation-settings: 'SOFT' 100, 'WONK' 1; font-weight: 700; }
+.guide-shell .brand small { color: var(--pt-gold-soft); font-family: var(--ll-font-type), monospace; font-weight: 400; letter-spacing: 0.3em; }
+.guide-shell .guide-header-links a { color: var(--pt-gold-soft); font-family: var(--ll-font-type), monospace; font-weight: 400; letter-spacing: 0.06em; }
+.guide-shell .guide-header-links a:hover { color: #fff3d6; text-decoration: underline dotted; }
+
+/* The content is a printed programme on the stage. */
+.guide-shell .guide-main {
+  background: var(--pt-grain), var(--pt-paper);
+  box-shadow: var(--pt-shadow-lift);
+  margin: 44px auto 80px;
+  outline: 4px double rgba(43, 33, 24, 0.35);
+  outline-offset: -14px;
+  padding: 56px 60px 64px;
+}
+.guide-shell .eyebrow { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; letter-spacing: 0.18em; }
+.guide-shell .guide-hero { text-align: center; }
+.guide-shell .guide-hero h1 { font-family: var(--ll-font-display), Georgia, serif; font-style: italic; font-variation-settings: 'SOFT' 100, 'WONK' 1; font-weight: 700; letter-spacing: -0.025em; }
+.guide-shell .guide-hero > p:not(.eyebrow) { color: var(--pt-ink-soft); margin: 0 auto; }
+.guide-shell .guide-toc { justify-content: center; }
+.guide-shell .guide-toc a { background: var(--pt-paper-2); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: 0 2px 5px rgba(20, 12, 5, 0.15); color: var(--pt-ink); font-family: var(--ll-font-type), monospace; font-weight: 400; transition: transform 0.15s ease; }
+.guide-shell .guide-toc a:hover,
+.guide-shell .guide-toc a:focus-visible { border-color: var(--pt-gel); color: var(--pt-gel); transform: translateY(-1px) rotate(-1deg); }
+/* The walkthrough plays inside a little proscenium. */
+.guide-shell .guide-video video { border: 10px solid var(--pt-valance); border-radius: 3px; box-shadow: 0 0 0 2px var(--pt-gold), 0 18px 40px rgba(29, 5, 8, 0.35); }
+.guide-shell .guide-video p,
+.guide-shell .guide-shot figcaption { color: var(--pt-ink-soft); font-style: italic; text-align: center; }
+.guide-shell .guide-section { border-top: 3px double var(--pt-paper-edge); }
+.guide-shell .guide-section h2,
+.guide-shell .guide-cta h2 { font-family: var(--ll-font-display), Georgia, serif; font-variation-settings: 'SOFT' 60; font-weight: 600; letter-spacing: -0.02em; }
+.guide-shell .guide-section h3 { font-weight: 600; }
+.guide-shell .guide-section a { color: var(--pt-gel); }
+.guide-shell .guide-section code { background: var(--pt-note); border-radius: 2px; font-family: var(--ll-font-type), monospace; }
+.guide-shell .guide-cards article,
+.guide-shell .guide-roles article { background: var(--pt-grain), var(--pt-paper-2); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: 0 2px 6px rgba(20, 12, 5, 0.12); }
+.guide-shell .guide-cards h3,
+.guide-shell .guide-roles h3 { font-family: var(--ll-font-display), Georgia, serif; font-style: italic; font-weight: 700; }
+.guide-shell .guide-roles .guide-team { color: var(--pt-gel); font-family: var(--ll-font-type), monospace; font-weight: 400; }
+.guide-shell .guide-roles article.wolf { background: var(--pt-grain), linear-gradient(170deg, #2e3048, #1c1726); border-color: #1c1726; color: #f3ecdc; }
+.guide-shell .guide-roles article.wolf .guide-team { color: var(--pt-gold-soft); }
+.guide-shell .guide-table th { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-weight: 400; }
+.guide-shell .guide-table th,
+.guide-shell .guide-table td { border-bottom: 1px dotted color-mix(in srgb, var(--pt-ink-soft) 45%, transparent); }
+.guide-shell .guide-shot img { background: #fffdf7; border: 0; border-radius: 2px; box-shadow: 0 0 0 7px #fffdf7, 0 0 0 8px var(--pt-paper-edge), 0 12px 28px rgba(20, 12, 5, 0.22); }
+.guide-shell .guide-shot { padding: 8px; }
+/* Closing curtain call. */
+.guide-shell .guide-cta {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.1), transparent 40%, rgba(0, 0, 0, 0.25)),
+    repeating-linear-gradient(90deg, var(--pt-valance) 0 26px, color-mix(in srgb, var(--pt-valance) 88%, black) 26px 40px, var(--pt-valance) 40px 56px);
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--pt-gold), var(--pt-shadow);
+  color: #fff3d6;
+}
+.guide-shell .guide-cta .secondary-link { background: #fff3d6; border: 1.5px solid var(--pt-ink); border-radius: 3px; color: var(--pt-ink); font-family: var(--ll-font-type), monospace; font-weight: 400; }
+
+@media (max-width: 700px) {
+  .guide-shell .guide-main { margin: 18px 10px 48px; outline-offset: -8px; padding: 36px 22px 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .front-of-house *,
+  .guide-shell * { animation: none !important; transition: none !important; }
 }

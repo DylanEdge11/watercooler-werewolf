@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { landingFontVariables } from './landing/fonts';
 import './globals.css';
 import './paper-theatre.css';
+import './paper-theatre-backstage.css';
 
 export const runtime = 'nodejs';
 

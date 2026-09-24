@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- use a reliable full-page transition after seat claim. */
 
 import { useEffect, useState, type FormEvent } from 'react';
+import BrandMark from '../../brand-mark';
 
 export default function ClaimForm({ code }: { code: string }) {
   const [seat, setSeat] = useState<{ displayName: string; gameName: string; status: string } | null>(null);
@@ -35,7 +36,7 @@ export default function ClaimForm({ code }: { code: string }) {
 
   return (
     <section className="auth-card claim-card">
-      <div className="claim-moon" aria-hidden="true">☾</div>
+      <div className="claim-seal"><BrandMark /></div>
       <p className="eyebrow accent">Private invitation</p>
       <h1>{claimed ? 'Your seat is ready.' : seat ? `Welcome, ${seat.displayName}.` : 'Checking your invitation…'}</h1>
       {claimed ? (

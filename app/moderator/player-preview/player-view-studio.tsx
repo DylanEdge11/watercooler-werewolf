@@ -18,7 +18,7 @@ export default function PlayerViewStudio() {
   }
 
   return (
-    <div className="setup-shell player-preview-studio">
+    <div className="setup-shell backstage player-preview-studio">
       <header className="setup-header">
         <Link className="brand" href="/moderator" aria-label="Back to moderator console">
           <BrandMark />
