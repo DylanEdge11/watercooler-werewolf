@@ -179,7 +179,7 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
     };
   }, []);
 
-  // Paper grain (procedural noise) + pointer / touch-drag parallax via CSS vars.
+  // Paper grain (procedural noise), generated once on mount.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return undefined;
@@ -226,54 +226,6 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
     } catch {
       /* grain is decoration only */
     }
-
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
-    // --px/--py are registered as non-inherited (theatre.module.css), so setting them
-    // on these layers restyles only the layers, not every SVG path inside them.
-    const layers = root.querySelectorAll<HTMLElement>(
-      [styles.wall, styles.theatre, styles.L, styles.audience, styles.playbill, styles.ticket].map((c) => `.${CSS.escape(c)}`).join(','),
-    );
-    let tx = 0;
-    let ty = 0;
-    let x = 0;
-    let y = 0;
-    let raf = 0;
-    const tick = () => {
-      x += (tx - x) * 0.07;
-      y += (ty - y) * 0.07;
-      const px = x.toFixed(4);
-      const py = y.toFixed(4);
-      layers.forEach((layer) => {
-        layer.style.setProperty('--px', px);
-        layer.style.setProperty('--py', py);
-      });
-      raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.0008 ? requestAnimationFrame(tick) : 0;
-      if (!raf) delete root.dataset.parallax;
-    };
-    const kick = () => {
-      // While the layers glide they get their own compositor layers (see .scene[data-parallax])
-      root.dataset.parallax = 'live';
-      if (!raf) raf = requestAnimationFrame(tick);
-    };
-    const onMove = (event: PointerEvent) => {
-      tx = Math.max(-1, Math.min(1, (event.clientX / window.innerWidth) * 2 - 1));
-      ty = Math.max(-1, Math.min(1, (event.clientY / window.innerHeight) * 2 - 1));
-      kick();
-    };
-    const onLeave = () => {
-      tx = 0;
-      ty = 0;
-      kick();
-    };
-    root.addEventListener('pointermove', onMove);
-    root.addEventListener('pointerleave', onLeave);
-    root.addEventListener('pointercancel', onLeave);
-    return () => {
-      cancelAnimationFrame(raf);
-      root.removeEventListener('pointermove', onMove);
-      root.removeEventListener('pointerleave', onLeave);
-      root.removeEventListener('pointercancel', onLeave);
-    };
   }, []);
 
   function speak(id: string, pool: string[]) {
@@ -316,10 +268,10 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
       <div className={styles.stageWrap}>
       <div ref={stageRef} className={styles.theatre}>
         <div className={styles.box}>
-          <div className={`${styles.L} ${styles.clothDay}`} style={{ '--dx': 9, '--d': '0s' } as Vars}><DayBackcloth /></div>
-          <div className={`${styles.L} ${styles.clothNight}`} style={{ '--dx': 9 } as Vars}><NightBackcloth /></div>
+          <div className={`${styles.L} ${styles.clothDay}`} style={{ '--d': '0s' } as Vars}><DayBackcloth /></div>
+          <div className={`${styles.L} ${styles.clothNight}`}><NightBackcloth /></div>
 
-          <div className={`${styles.L} ${styles.fly}`} style={{ '--dx': 8 } as Vars} aria-hidden="true">
+          <div className={`${styles.L} ${styles.fly}`}  aria-hidden="true">
             {HANGERS.map((h) => (
               <div
                 key={h.key}
@@ -335,18 +287,18 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
             ))}
           </div>
 
-          <div className={`${styles.L} ${styles.forest} ${styles.forestL}`} style={{ '--dx': 6.5 } as Vars}><ForestFlat side="l" /></div>
-          <div className={`${styles.L} ${styles.forest} ${styles.forestR}`} style={{ '--dx': 6.5 } as Vars}><ForestFlat side="r" /></div>
-          <div className={`${styles.L} ${styles.cut}`} style={{ '--dx': 5.5, '--d': '0.1s', '--sh': 3 } as Vars}><CottageRow /></div>
-          <div className={styles.L} style={{ '--dx': 4.5, '--d': '0.2s' } as Vars}><StageFloor /></div>
-          <div className={`${styles.L} ${styles.cut}`} style={{ '--dx': 3.8, '--d': '0.3s', '--sh': 4 } as Vars}><Well /></div>
+          <div className={`${styles.L} ${styles.forest} ${styles.forestL}`}><ForestFlat side="l" /></div>
+          <div className={`${styles.L} ${styles.forest} ${styles.forestR}`}><ForestFlat side="r" /></div>
+          <div className={`${styles.L} ${styles.cut}`} style={{ '--d': '0.1s', '--sh': 3 } as Vars}><CottageRow /></div>
+          <div className={styles.L} style={{ '--d': '0.2s' } as Vars}><StageFloor /></div>
+          <div className={`${styles.L} ${styles.cut}`} style={{ '--d': '0.3s', '--sh': 4 } as Vars}><Well /></div>
           <div className={styles.moonbeam} aria-hidden="true" />
-          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayL}`} style={{ '--dx': 2.4, '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="l" /></div>
-          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayR}`} style={{ '--dx': 2.4, '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="r" /></div>
-          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightL}`} style={{ '--dx': 2.4, '--sh': 6 } as Vars}><NightWing side="l" /></div>
-          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightR}`} style={{ '--dx': 2.4, '--sh': 6 } as Vars}><NightWing side="r" /></div>
+          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayL}`} style={{ '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="l" /></div>
+          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayR}`} style={{ '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="r" /></div>
+          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightL}`} style={{ '--sh': 6 } as Vars}><NightWing side="l" /></div>
+          <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightR}`} style={{ '--sh': 6 } as Vars}><NightWing side="r" /></div>
 
-          <div className={`${styles.L} ${styles.cast}`} style={{ '--dx': 1.2 } as Vars}>
+          <div className={`${styles.L} ${styles.cast}`}>
             {PUPPETS.map((p, i) => {
               const wolfIndex = wolves.indexOf(p.id);
               const isWolf = night && wolfIndex !== -1;

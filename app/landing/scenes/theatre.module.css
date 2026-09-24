@@ -1,15 +1,5 @@
 /* Paper Puppet Theatre: a Pollock's-style toy theatre in cut card. */
 
-/* Pointer parallax, -1..1. Not inherited: theatre.tsx writes them on each moving
-   layer, so a pointer move restyles those few boxes instead of every SVG path
-   in the scene (which all carry colour transitions). */
-@property --px { syntax: '<number>'; inherits: false; initial-value: 0; }
-@property --py { syntax: '<number>'; inherits: false; initial-value: 0; }
-/* Only while the parallax is gliding: moved layers slide on the compositor
-   instead of being repainted (filters and all) every frame. Kept off at rest
-   because the extra layers make every idle frame ~20% dearer to draw. */
-.scene[data-parallax='live'] :is(.wall, .theatre, .L, .audience, .playbill, .ticket) { will-change: translate; }
-
 .scene {
   --shade: rgba(40, 20, 8, 0.42);
   --edge: rgba(255, 246, 222, 0.5);
@@ -55,7 +45,6 @@
     linear-gradient(#3a5650, #24393a);
   inset: -40px;
   position: absolute;
-  translate: calc(var(--px) * -5px) calc(var(--py) * -3px);
 }
 .wallNight {
   background:
@@ -111,7 +100,6 @@
   position: absolute;
   right: clamp(20px, 4vw, 64px);
   top: 2.5dvh;
-  translate: calc(var(--px) * -14px) calc(var(--py) * -8px);
   z-index: 1;
 }
 .theatre::before {
@@ -144,12 +132,11 @@
 .lamps :global(.th-bulbs) { opacity: 0.8; transition: opacity 1.2s ease 0.6s; }
 .scene[data-night='true'] .lamps :global(.th-bulbs) { opacity: 1; }
 
-/* stacked flats inside the box, each with its own parallax depth (--dx) */
+/* stacked flats inside the box */
 .L {
   inset: -5%;
   pointer-events: none;
   position: absolute;
-  translate: calc(var(--px) * var(--dx, 0) * 1.6px) calc(var(--py) * var(--dx, 0) * 0.8px);
 }
 .cut {
   filter: drop-shadow(0 -1px 0 var(--edge)) drop-shadow(0 calc(var(--sh, 4) * 1px) calc(var(--sh, 4) * 1.5px) var(--shade));
@@ -658,7 +645,6 @@
   position: absolute;
   right: -40px;
   transition: filter 1.4s ease;
-  translate: calc(var(--px) * -26px) calc(var(--py) * -6px);
   z-index: 3;
 }
 .audience svg { display: block; height: 100%; width: 100%; }
@@ -671,7 +657,7 @@
 .scene[data-night='true'] .audience :global(.th-phone) { opacity: 1; transition-delay: 2.9s; }
 
 /* ---------- the playbill slot ----------
-   The scene owns position, size, tilt, shadow and parallax; the bill itself
+   The scene owns position, size, tilt and shadow; the bill itself
    comes from playbills/<id>.tsx and fills the slot's width (height is auto). */
 
 .playbill {
@@ -680,7 +666,6 @@
   position: absolute;
   rotate: -1.8deg;
   top: clamp(10px, 2.6dvh, 32px);
-  translate: calc(var(--px) * -8px) calc(var(--py) * -5px);
   width: clamp(224px, 27vw, 400px);
   z-index: 4;
   container: playbill / inline-size;
@@ -709,7 +694,6 @@
   left: clamp(16px, 2.4vw, 40px);
   position: absolute;
   rotate: 1.4deg;
-  translate: calc(var(--px) * -18px) calc(var(--py) * -8px);
   width: clamp(360px, 28vw, 410px);
   z-index: 6;
 }
