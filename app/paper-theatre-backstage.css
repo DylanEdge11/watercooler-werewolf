@@ -169,7 +169,7 @@
   background:
     linear-gradient(90deg, transparent 22px, var(--bs-margin) 22px, var(--bs-margin) 23.5px, transparent 23.5px),
     radial-gradient(circle at 11px 44px, var(--bs-desk-2) 4px, rgba(0, 0, 0, 0.18) 4.5px, transparent 5.5px),
-    radial-gradient(circle at 11px 112px, var(--bs-desk-2) 4px, rgba(0, 0, 0, 0.18) 4.5px, transparent 5.5px),
+    radial-gradient(circle at 11px calc(100% - 44px), var(--bs-desk-2) 4px, rgba(0, 0, 0, 0.18) 4.5px, transparent 5.5px),
     var(--pt-grain),
     var(--bs-page);
   border: 1px solid var(--bs-rule);
