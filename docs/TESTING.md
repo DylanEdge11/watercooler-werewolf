@@ -14,7 +14,7 @@ npm run build
 npm audit --omit=dev --audit-level=moderate
 ```
 
-Its `api` job runs the 20-player API suite, and its four `browser` jobs split the full 20-player Chromium browser suite between them. All of them use a disposable local server and database, so they need no secrets and never touch a Preview. The whole run takes about 15–20 minutes. A failed job uploads its Playwright report and traces as an artifact.
+Its `api` job runs the 20-player API suite, and its four `browser` jobs split the full 20-player Chromium browser suite between them. All of them use a disposable local server and database, so they need no secrets and never touch a Preview. The whole run takes about 25 minutes. A failed job uploads its Playwright report and traces as an artifact.
 
 A candidate is ready for release when every `Verify` job is green for its exact commit and the [hosted Preview run](#hosted-preview-runbook) has passed against its Preview deployment. Earlier results do not carry over to a new commit.
 
