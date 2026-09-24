@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
 import BrandMark from './brand-mark';
+import { pollWhileVisible } from '../lib/http/poll-while-visible';
 
 export type RoleKey = 'VILLAGER' | 'WEREWOLF' | 'SEER' | 'BODYGUARD' | 'HUNTER' | 'MASON' | 'APPRENTICE_SEER' | 'MAYOR' | 'CUPID';
 export type ActionKind = 'DAY_VOTE' | 'WOLF_VOTE' | 'INVESTIGATE' | 'PROTECT' | 'HUNTER_SHOT' | 'CUPID_PAIR';
@@ -227,14 +228,14 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
         setLoading(false);
       });
     }, 0);
-    const poll = window.setInterval(() => {
+    const stopPolling = pollWhileVisible(() => {
       void refresh(true).catch((caught) => {
         setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.');
       });
     }, 10_000);
     return () => {
       window.clearTimeout(timer);
-      window.clearInterval(poll);
+      stopPolling();
     };
   }, [previewMode, refresh]);
 

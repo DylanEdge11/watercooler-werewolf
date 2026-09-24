@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import { formatZonedDateTimeLocal } from '../../lib/game/scheduling';
+import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 
 interface Outcome {
   tally: Array<{ playerId: string; votes: number }>;
@@ -72,12 +73,12 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
     const timer = window.setTimeout(() => {
       void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load phases.'));
     }, 0);
-    const poll = window.setInterval(() => {
+    const stopPolling = pollWhileVisible(() => {
       void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh phases.'));
     }, 10_000);
     return () => {
       window.clearTimeout(timer);
-      window.clearInterval(poll);
+      stopPolling();
     };
   }, [refresh]);
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { LatestRoomRequest } from '../lib/chat/latest-room-request';
+import { pollWhileVisible } from '../lib/http/poll-while-visible';
 
 interface Room {
   id: string;
@@ -83,10 +84,10 @@ export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms:
     const initial = window.setTimeout(() => {
       void load().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load messages.'));
     }, 0);
-    const timer = window.setInterval(() => void load(), 10_000);
+    const stopPolling = pollWhileVisible(() => void load(), 10_000);
     return () => {
       window.clearTimeout(initial);
-      window.clearInterval(timer);
+      stopPolling();
     };
   }, [load, previewMode]);
 
