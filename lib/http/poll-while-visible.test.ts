@@ -33,6 +33,15 @@ describe('pollWhileVisible', () => {
     expect(run).not.toHaveBeenCalled();
     setHidden(false);
     expect(run).toHaveBeenCalledTimes(1);
+    setHidden(false);
+    expect(run).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('refreshes on return even if the browser suspended timers while hidden', () => {
+    const { doc, setHidden } = fakeDocument();
+    const run = vi.fn();
+    const stop = pollWhileVisible(run, 10_000, doc);
     setHidden(true);
     setHidden(false);
     expect(run).toHaveBeenCalledTimes(1);
