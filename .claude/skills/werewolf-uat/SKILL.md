@@ -27,7 +27,7 @@ If the candidate adds a migration (a new entry in `db/readiness.ts` versus the b
 
 ## CI gates
 
-The `Verify` workflow runs on every push. Its jobs are the fast gates (`verify`), the 20-player API suite (`api`), and the full 20-player Chromium browser suite split four ways (`browser (1/4)` to `browser (4/4)`), all against a disposable local server and database. UAT relies on these for depth, so **every job must be green for the exact SHA**. Cite the run.
+The `Verify` workflow runs on pushes to `main` and `version-1.1`, on pull requests, and by hand. Its `api` and `browser` jobs run only for pull requests into `main` or a manual run, so for other candidates they show as skipped: start the workflow by hand for the SHA, or cite a local run of those suites, rather than treating skipped as green. Its jobs are the fast gates (`verify`), the 20-player API suite (`api`), and the full 20-player Chromium browser suite split four ways (`browser (1/4)` to `browser (4/4)`), all against a disposable local server and database. UAT relies on these for depth, so **every job must be green for the exact SHA**. Cite the run.
 
 - If the run is still in progress, do the candidate checks and the hosted sequence meanwhile, then confirm the result before the handoff. The run usually takes about 25 minutes.
 - If a job failed, report the job and failing test with a link, and stop: `UAT: BLOCKED`. Fixes belong to Dev. Do not rerun the full browser suite against the Preview as a substitute.

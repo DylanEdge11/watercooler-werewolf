@@ -4,7 +4,7 @@ How to verify a change, from fast unit tests to a full hosted Preview run. Use f
 
 ## Release checks
 
-The `Verify` workflow in `.github/workflows/ci.yml` runs on every push. Its `verify` job runs the fast gates:
+The `Verify` workflow in `.github/workflows/ci.yml` runs on pushes to `main` and `version-1.1`, on every pull request, and when started by hand (a newer push cancels an older run, except on `main`). Its `verify` job runs the fast gates:
 
 ```text
 npm test -- --run
@@ -14,7 +14,7 @@ npm run build
 npm audit --omit=dev --audit-level=moderate
 ```
 
-Its `api` job runs the 20-player API suite, and its four `browser` jobs split the full 20-player Chromium browser suite between them. All of them use a disposable local server and database, so they need no secrets and never touch a Preview. The whole run takes about 25–45 minutes; each browser job may run for up to 60 minutes and each 20-player browser game for up to 20. A failed job uploads its Playwright report and traces as an artifact.
+Its `api` job runs the 20-player API suite, and its four `browser` jobs split the full 20-player Chromium browser suite between them. To save Actions minutes (2,000 a month), `api` and `browser` run only for pull requests into `main` or when the workflow is started by hand; for other changes, run those suites locally. All of them use a disposable local server and database, so they need no secrets and never touch a Preview. The whole run takes about 25–45 minutes; each browser job may run for up to 60 minutes and each 20-player browser game for up to 20. A failed job uploads its Playwright report and traces as an artifact.
 
 A candidate is ready for release when every `Verify` job is green for its exact commit and the [hosted Preview run](#hosted-preview-runbook) has passed against its Preview deployment. Earlier results do not carry over to a new commit.
 

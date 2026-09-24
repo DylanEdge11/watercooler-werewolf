@@ -22,6 +22,7 @@ For quick iteration, run only the relevant test file. Browser and API suites are
 - The owner names the working base (currently `version-1.1`); do not assume `main`.
 - Changes reach `main` through pull requests. Never push to `main`, never use `vercel deploy --prod`, and never promote a Preview deployment.
 - The release phases are the user-invoked skills `/werewolf-dev`, `/werewolf-uat`, and `/werewolf-prod` in `.claude/skills/`. Each phase stops at its handoff.
+- GitHub Actions minutes are limited (2,000/month). Don't add or expand jobs in .github/workflows without asking. Run the 20-player API and browser suites locally or in-session, not in Actions. Batch commits; don't push after every small fix.
 
 ## Safety rules
 
