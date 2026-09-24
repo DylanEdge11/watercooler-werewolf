@@ -1,8 +1,8 @@
 'use client';
 
-/* eslint-disable @next/next/no-html-link-for-pages -- the public entry links intentionally use full-page navigation. */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
 
@@ -109,27 +109,11 @@ function deathAlertKey(gameId: string, playerId: string): string {
   return `werewolf:v1:death-alert:${gameId}:${playerId}`;
 }
 
+// Only needed when a stored session has expired, so signed-in players never download it.
+const LandingShell = dynamic(() => import('./landing/landing-shell'));
+
 function PublicWelcome() {
-  return (
-    <main className="welcome-shell">
-      <div className="welcome-moon" aria-hidden="true">☾</div>
-      <section className="welcome-card">
-        <a className="brand" href="/" aria-label="Watercooler Werewolf home">
-          <span className="brand-mark" aria-hidden="true"><span className="brand-moon" /><span className="brand-cup" /></span>
-          <span><strong>Watercooler</strong><small>Werewolf</small></span>
-        </a>
-        <p className="eyebrow accent">A slow-burn social deduction game</p>
-        <h1>Suspicion fits neatly between meetings.</h1>
-        <p>Private roles, official ballots, and moderator-reviewed outcomes—designed for a month of office intrigue.</p>
-        <div className="button-row">
-          <a className="primary-link" href="/player-login">Player sign-in</a>
-          <a className="secondary-link" href="/moderator">Moderator console</a>
-        </div>
-        <a className="welcome-guide-link" href="/guide">New here? Learn how to play →</a>
-        <small>Have an invite link? Open it directly to claim your private seat.</small>
-      </section>
-    </main>
-  );
+  return <LandingShell />;
 }
 
 export default function PlayerDashboard({ previewData, previewMode = false, onExitPreview }: PlayerDashboardProps) {

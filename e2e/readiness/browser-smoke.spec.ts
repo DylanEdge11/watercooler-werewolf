@@ -28,12 +28,16 @@ test.describe('browser smoke', () => {
       await expect(page.getByRole('heading', { name: /Moderator sign-in|Owner setup required/u })).toBeVisible();
       await page.goto('/player-login');
       await expect(page.getByRole('heading', { name: 'Player sign-in', exact: true })).toBeVisible();
-      const unauthenticatedPlayer = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/player');
+      // Without a player session, proxy.ts serves the static landing page at /
+      // directly, so / no longer probes /api/player.
+      const playerProbes: string[] = [];
+      page.on('request', (request) => { if (new URL(request.url()).pathname === '/api/player') playerProbes.push(request.url()); });
       await page.goto('/');
-      expect((await unauthenticatedPlayer).status()).toBe(401);
       expect(unauthenticatedStatuses.length).toBeGreaterThan(0);
       expect(unauthenticatedStatuses.every((status) => status === 401)).toBe(true);
-      await expect(page.getByRole('heading', { name: 'Suspicion fits neatly between meetings.', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: 'Watercooler Werewolf' })).toBeVisible();
+      await expect(page.getByRole('button', { name: /enter the game/iu })).toBeVisible();
+      expect(playerProbes).toEqual([]);
       expect(page.url()).toBe(`${BASE_URL}/`);
       telemetry.assertHealthy();
     } finally {

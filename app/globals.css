@@ -282,13 +282,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 
 /* Live player state */
-.welcome-shell { align-items: center; background: radial-gradient(circle at 75% 20%, #306c5a 0, var(--night) 42%, #10211e 100%); display: flex; min-height: 100vh; overflow: hidden; padding: 36px; position: relative; }
-.welcome-moon { color: var(--amber); font-size: min(38vw, 520px); line-height: .7; opacity: .12; position: absolute; right: -4vw; top: -5vw; transform: rotate(12deg); }
-.welcome-card { background: var(--panel); border-radius: 24px; box-shadow: 0 32px 90px rgba(0,0,0,.26); margin-left: max(2vw, 20px); max-width: 570px; padding: clamp(32px, 6vw, 62px); position: relative; z-index: 1; }
-.welcome-card .brand { margin-bottom: 56px; }
-.welcome-card h1 { font-family: Georgia, serif; font-size: clamp(38px, 5vw, 59px); letter-spacing: -.055em; line-height: .98; margin: 10px 0 20px; }
-.welcome-card > p:not(.eyebrow) { color: var(--muted); font-size: 14px; line-height: 1.7; }
-.welcome-card > small { color: #87928c; display: block; font-size: 9px; margin-top: 25px; }
 .secondary-link { border: 1px solid #ccd5d0; border-radius: 10px; color: var(--mint-strong); display: inline-block; font-size: 12px; font-weight: 800; margin-top: 12px; padding: 10px 17px; text-decoration: none; }
 .signout-button { color: #73847b; font-size: 15px; }
 .eliminated-role { background: linear-gradient(125deg, #3a302e, #5a3d37); border: 2px solid rgba(232, 111, 81, .7); filter: saturate(.65); }
@@ -348,9 +341,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .timeline-privacy-note { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 14px 0 0; }
 .modal-close { border-radius: 50%; flex: 0 0 auto; font-size: 28px; }
 @media (max-width: 650px) {
-  .welcome-shell { padding: 18px; }
-  .welcome-card { margin: 0; padding: 32px 27px; }
-  .welcome-card .brand { margin-bottom: 42px; }
   .waiting-card { grid-template-columns: 42px 1fr; }
   .waiting-card button { grid-column: 1 / -1; }
   .modal-backdrop { padding: 12px; }
@@ -519,7 +509,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .guide-cta { background: var(--night); border-radius: 20px; color: #f3efe6; margin-top: 64px; padding: 36px; text-align: center; }
 .guide-cta .button-row { justify-content: center; }
 .guide-cta .secondary-link { background: var(--panel); }
-.welcome-guide-link { color: var(--mint-strong); display: inline-block; font-size: 12px; font-weight: 800; margin-top: 18px; text-decoration: none; }
 @media (max-width: 700px) {
   .guide-header { padding: 12px 16px; }
   .guide-main { padding: 32px 16px 64px; }
