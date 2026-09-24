@@ -170,7 +170,7 @@
 /* ---------- Sidebar: the stage manager's rail ---------- */
 
 .app-shell .sidebar { border-right: 2px dashed var(--pt-stage-rule); }
-.app-shell .nav-item { border-radius: 3px; color: var(--pt-stage-ink-soft); font-size: 14px; font-weight: 500; transition: background 0.2s ease, transform 0.2s ease; }
+.app-shell .nav-item { border-radius: 3px; color: var(--pt-stage-ink-soft); font-size: 14px; font-weight: 500; transition: background 0.2s ease; }
 .app-shell .nav-item > span { color: var(--pt-stage-ink-soft); }
 .app-shell .nav-item:hover { background: color-mix(in srgb, var(--pt-paper) 45%, transparent); }
 .app-shell .nav-item.active { background: var(--pt-paper); box-shadow: var(--pt-shadow); color: var(--pt-ink); transform: rotate(-1deg); }
@@ -360,10 +360,12 @@
   box-shadow: 0 1px 2px rgba(20, 12, 5, 0.1), 0 4px 10px -4px rgba(20, 12, 5, 0.22);
   color: var(--pt-ink);
   position: relative;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  transition: box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 .app-shell .candidate::after { border-left: 2px dashed var(--pt-paper-edge); bottom: 9px; content: ''; position: absolute; right: 46px; top: 9px; }
-.app-shell .candidate:hover:not(:disabled) { border-color: var(--pt-paper-edge); box-shadow: var(--pt-shadow-lift); transform: translateY(-2px) rotate(-0.6deg); }
+/* Hover feedback never moves the element: automated clicks wait for a
+   still target, and a moving ticket under a resting pointer never settles. */
+.app-shell .candidate:hover:not(:disabled) { border-color: var(--pt-ink-soft); box-shadow: var(--pt-shadow-lift); }
 .app-shell .candidate.selected,
 .app-shell.role-theme .candidate.selected {
   background: var(--pt-grain), color-mix(in srgb, var(--pt-gel) 13%, var(--pt-paper));
@@ -398,10 +400,10 @@
   letter-spacing: 0.14em;
   padding: 12px 22px;
   text-transform: uppercase;
-  transition: background-color 0.2s ease, transform 0.15s ease;
+  transition: background-color 0.2s ease;
 }
 :is(.app-shell, .front-of-house, .guide-shell) .primary-button:hover:not(:disabled),
-:is(.app-shell, .front-of-house, .guide-shell) .primary-link:hover { background: var(--pt-curtain-deep); box-shadow: inset 0 0 0 3px var(--pt-curtain-deep), inset 0 0 0 4px rgba(255, 243, 214, 0.55); transform: translateY(-1px); }
+:is(.app-shell, .front-of-house, .guide-shell) .primary-link:hover { background: var(--pt-curtain-deep); box-shadow: inset 0 0 0 3px var(--pt-curtain-deep), inset 0 0 0 4px rgba(255, 243, 214, 0.55); }
 :is(.app-shell, .front-of-house, .guide-shell) .primary-button:active:not(:disabled) { transform: translateY(1px) scale(0.98); }
 :is(.app-shell, .front-of-house, .guide-shell) .primary-button:disabled { cursor: not-allowed; opacity: 0.5; }
 
@@ -415,9 +417,9 @@
   font-size: 12px;
   font-weight: 400;
   letter-spacing: 0.05em;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: box-shadow 0.15s ease;
 }
-:is(.app-shell, .front-of-house, .guide-shell) .secondary-button:hover:not(:disabled) { box-shadow: 3px 3px 0 rgba(43, 33, 24, 0.3); transform: translate(-1px, -1px); }
+:is(.app-shell, .front-of-house, .guide-shell) .secondary-button:hover:not(:disabled) { box-shadow: 3px 3px 0 rgba(43, 33, 24, 0.4); }
 :is(.app-shell, .front-of-house, .guide-shell) .secondary-button:active:not(:disabled) { box-shadow: 0 0 0 rgba(43, 33, 24, 0.3); transform: translate(1px, 1px); }
 :is(.app-shell, .front-of-house, .guide-shell) .text-button { color: var(--pt-gel); font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; text-decoration: underline dotted; text-underline-offset: 3px; }
 
@@ -644,9 +646,9 @@
 .guide-shell .guide-hero h1 { font-family: var(--ll-font-display), Georgia, serif; font-style: italic; font-variation-settings: 'SOFT' 100, 'WONK' 1; font-weight: 700; letter-spacing: -0.025em; }
 .guide-shell .guide-hero > p:not(.eyebrow) { color: var(--pt-ink-soft); margin: 0 auto; }
 .guide-shell .guide-toc { justify-content: center; }
-.guide-shell .guide-toc a { background: var(--pt-paper-2); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: 0 2px 5px rgba(20, 12, 5, 0.15); color: var(--pt-ink); font-family: var(--ll-font-type), monospace; font-weight: 400; transition: transform 0.15s ease; }
+.guide-shell .guide-toc a { background: var(--pt-paper-2); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: 0 2px 5px rgba(20, 12, 5, 0.15); color: var(--pt-ink); font-family: var(--ll-font-type), monospace; font-weight: 400; transition: border-color 0.15s ease, color 0.15s ease; }
 .guide-shell .guide-toc a:hover,
-.guide-shell .guide-toc a:focus-visible { border-color: var(--pt-gel); color: var(--pt-gel); transform: translateY(-1px) rotate(-1deg); }
+.guide-shell .guide-toc a:focus-visible { border-color: var(--pt-gel); color: var(--pt-gel); }
 /* The walkthrough plays inside a little proscenium. */
 .guide-shell .guide-video video { border: 10px solid var(--pt-valance); border-radius: 3px; box-shadow: 0 0 0 2px var(--pt-gold), 0 18px 40px rgba(29, 5, 8, 0.35); }
 .guide-shell .guide-video p,

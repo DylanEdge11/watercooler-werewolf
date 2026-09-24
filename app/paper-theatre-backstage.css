@@ -112,7 +112,7 @@
   font-weight: 400;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.1s ease;
+  transition: background-color 0.15s ease;
 }
 .backstage .primary-button:hover:not(:disabled, .app-shell *),
 .backstage .primary-link:hover:not(.app-shell *) { background: #377a55; }
@@ -141,7 +141,7 @@
   font-weight: 400;
   letter-spacing: 0.04em;
 }
-.backstage .secondary-button:hover:not(:disabled, .app-shell *) { box-shadow: 3px 3px 0 rgba(35, 29, 24, 0.3); transform: translate(-1px, -1px); }
+.backstage .secondary-button:hover:not(:disabled, .app-shell *) { box-shadow: 3px 3px 0 rgba(35, 29, 24, 0.4); }
 .backstage :is(.text-button, .quiet-link):not(.app-shell *) { color: var(--bs-go); font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; text-decoration: underline dotted; text-underline-offset: 3px; }
 .backstage :is(.room-health-list, .moderation-line) button { color: var(--bs-stop); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; }
 
