@@ -67,6 +67,8 @@ VERCEL_AUTOMATION_BYPASS_SECRET=<scoped to this Preview>
 
 The preflight calls `vercel inspect`, so the Vercel CLI must be installed and signed in to `dyl-edge`, or `VERCEL_TOKEN` must be set.
 
+In a Claude Code cloud session, these values are environment variables set in the environment's settings (plus `VERCEL_TOKEN`), and there is no `.env.e2e.local`. Drop `--env-file=.env.e2e.local` from the commands below, because Node exits when the file is missing, and pass `E2E_BASE_URL` and `E2E_VERCEL_DEPLOYMENT_ID` inline.
+
 ### Run
 
 Run the sequence **once per candidate commit**, with one `E2E_RUN_ID` for the whole run and a distinct `E2E_INVOCATION_ID` for each command:
