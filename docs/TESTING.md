@@ -45,7 +45,7 @@ All local suites start a disposable Next server on `http://localhost:3100` with 
 | --- | --- |
 | `npm run test:e2e` | **API bot farm.** 20 players, each in its own request context: full Village and Werewolf wins, revisions, ties, protection, late and eliminated submissions, privacy boundaries, and concurrent submissions. |
 | `npm run test:e2e:random` | Bot farm with seeded random decisions (seeds 7, 21, 42). |
-| `npm run test:e2e:readiness` | **Browser suite.** 20 real browser sessions in Chromium through the full game, including privacy at the page and API level, mobile width, keyboard use, reloads, and console or network errors. Adds a smoke test in Firefox and WebKit. |
+| `npm run test:e2e:readiness` | **Browser suite.** 20 real browser sessions in Chromium through the full game, including privacy at the page and API level, mobile width, keyboard use, reloads, and console or network errors. Adds a smoke test in WebKit (Safari's engine). |
 | `npm run test:e2e:readiness:random` | Browser suite with seeds 7, 21, and 42. |
 | `npm run test:e2e:uat` | **UAT browser game.** One eight-player game from setup to a Village win in separate browser sessions, including a mobile-width player and privacy checks. This is the game the hosted Preview run plays. |
 
@@ -101,7 +101,7 @@ E2E_INVOCATION_ID=01-chromium-smoke \
 Notes:
 
 - The Edge smoke needs Microsoft Edge installed. If it isn't (for example on Linux), record it as not run rather than substituting another browser.
-- Firefox and WebKit are optional.
+- WebKit is optional.
 - The full browser suite (`--project=chromium --retries=0 e2e/readiness`) can still run against a Preview when you want it, for example from your own computer before a Production release. It takes much longer.
 - In a cloud session, the network proxy occasionally fails a browser read on its own with a short plain-text 502 or 504. Hosted browser runs re-send only those (GET or HEAD, without Vercel's `x-vercel-id` header), and print a `[cloud-proxy] retrying` line for each. Responses Vercel actually served, including errors, are never retried, and writes are never retried.
 - Playwright reports and traces can include request headers, so keep them private.
