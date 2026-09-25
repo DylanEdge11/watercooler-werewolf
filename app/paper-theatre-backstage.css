@@ -207,6 +207,14 @@
 .backstage .assignment-grid strong { font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; }
 .backstage .claim-meter { background: repeating-linear-gradient(90deg, var(--bs-rule) 0 6px, transparent 6px 10px); border-radius: 0; }
 .backstage .claim-meter strong { font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; }
+.backstage .invite-email { border-top: 1px dashed var(--bs-rule); display: grid; gap: 10px; margin-top: 40px; padding-top: 16px; }
+.backstage .invite-email p { margin: 0; }
+.backstage .invite-email summary { cursor: pointer; font-family: var(--ll-font-type), monospace; font-size: 12px; }
+.backstage .invite-list { display: grid; list-style: none; margin: 8px 0 0; padding: 0; }
+.backstage .invite-list li { align-items: center; border-bottom: 1px dotted #b9a988; display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; padding: 7px 0; }
+.backstage .invite-list li > span { display: grid; font-size: 13px; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.backstage .invite-list small { color: var(--bs-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 11px; }
+.backstage .invite-list .text-button { font-size: 12px; }
 .backstage .tally-row { border-bottom: 1px dotted #b9a988; font-size: 12px; }
 .backstage .moderation-line { border-top: 1px dotted #b9a988; }
 .backstage .tally-row strong { border-radius: 2px; font-family: var(--ll-font-type), monospace; font-weight: 400; }

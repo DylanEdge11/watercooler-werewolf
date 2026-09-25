@@ -167,7 +167,7 @@ export default function GuidePage() {
           </ol>
           <Shot src="/guide/player-day-ballot.png" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself about every ten seconds." />
           <h3>4. Follow the story</h3>
-          <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
+          <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page, with each Day’s vote tally. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
           <Shot src="/guide/player-timeline.png" alt="Player dashboard showing a published result in the timeline" caption="After a result is published, the timeline shows who was eliminated and their role." />
           <h3>Good to know</h3>
           <ul>
@@ -183,7 +183,7 @@ export default function GuidePage() {
           <h3>Set up a game</h3>
           <ol>
             <li><strong>Create the game.</strong> In the <Link href="/moderator">Moderator console</Link>, enter a name, timezone, dates, and a final cutoff, then select <strong>Create game</strong>.</li>
-            <li><strong>Add players.</strong> Paste a roster with the header <code>display_name,email</code>, select <strong>Create private seats</strong>, then <strong>Download invite CSV</strong>. Send each person only their own message; the app does not send email.</li>
+            <li><strong>Add players.</strong> Paste a roster with the header <code>display_name,email</code> and select <strong>Create private seats</strong>. Then select <strong>Email invites</strong> to send each player their own private link (if the site operator has turned email on), or <strong>Download invite CSV</strong> and send each person only their own message. <strong>Waiting on</strong> lists who hasn’t claimed yet, with <strong>Resend</strong> for a lost email. A resent link replaces the old one.</li>
             <li><strong>Balance the roles.</strong> Accept the suggested counts or edit them and select <strong>Save composition</strong>. A 20-player game defaults to 12 Villagers, 3 Werewolves, a Seer, a Bodyguard, a Hunter, and 2 Masons.</li>
             <li><strong>Release roles.</strong> When every seat is claimed, select <strong>Randomize roles</strong>, review the result privately, then <strong>Release roles to players</strong>. Setup is locked after release.</li>
           </ol>
