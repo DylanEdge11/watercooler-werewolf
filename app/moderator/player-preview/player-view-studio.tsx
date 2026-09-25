@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import { ROLE_KEYS, type RoleKey } from '../../../lib/game/types';
@@ -17,6 +17,13 @@ export default function PlayerViewStudio() {
   // Counts plays, so replaying the same scene restarts it.
   const [scenePlay, setScenePlay] = useState(0);
   const [sceneOpen, setSceneOpen] = useState(false);
+  // The live dashboard closes its own announcement on Escape; the replay does too.
+  useEffect(() => {
+    if (!sceneOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setSceneOpen(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [sceneOpen]);
 
   function scrollToControls() {
     document.getElementById('player-preview-controls')?.scrollIntoView({ behavior: 'smooth', block: 'start' });

@@ -368,8 +368,9 @@ export default function ModeratorPage() {
         method: 'POST',
         body: JSON.stringify({ seatIds: seats.map((seat) => seat.id) }),
       });
-      // The emailed links replace the ones in the downloaded file.
-      setInviteCsv('');
+      // Emailed links replace the ones in the downloaded file. Skipped test
+      // addresses keep their links, so the file stays valid if nothing else changed.
+      if (data.results.some((result) => result.status !== 'SKIPPED')) setInviteCsv('');
       // Reserved test addresses are skipped by design, so they are a note, not an error.
       const failed = data.results.filter((result) => result.status === 'FAILED');
       const skipped = data.results.filter((result) => result.status === 'SKIPPED').length;

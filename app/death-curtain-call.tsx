@@ -112,7 +112,7 @@ export default function DeathCurtainCall({ event, onDismiss }: DeathCurtainCallP
           })}
         </ul>
         {self && <p className="death-self-note">You can keep watching as a spectator. Please don’t pass information to living players.</p>}
-        <button className="primary-button" type="button" onClick={onDismiss}>I understand</button>
+        <button className="primary-button" type="button" onClick={onDismiss} autoFocus>I understand</button>
       </section>
     </div>
   );
