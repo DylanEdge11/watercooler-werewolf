@@ -529,17 +529,136 @@
 }
 .app-shell .curtain-call::before { animation: pt-curtain-left 0.75s var(--pt-ease) both; box-shadow: inset -18px 0 24px -12px rgba(0, 0, 0, 0.5); left: 0; }
 .app-shell .curtain-call::after { animation: pt-curtain-right 0.75s var(--pt-ease) both; box-shadow: inset 18px 0 24px -12px rgba(0, 0, 0, 0.5); right: 0; }
-/* The notice fades in rather than moving, so "I understand" is clickable
-   (by people and by automated tests) the moment it appears. */
-.app-shell .curtain-call .game-modal { animation: pt-notice-in 0.45s ease 0.4s both; transform: rotate(-0.6deg); z-index: 1; }
 @keyframes pt-curtain-left { from { transform: translateX(-100%); } to { transform: none; } }
 @keyframes pt-curtain-right { from { transform: translateX(100%); } to { transform: none; } }
-@keyframes pt-notice-in { from { opacity: 0; } to { opacity: 1; } }
-.app-shell .death-modal h2 { font-family: var(--ll-font-story), Georgia, serif; font-size: 34px; font-weight: 400; }
-.app-shell .modal-symbol { background: var(--pt-curtain); border: 0; box-shadow: 0 0 0 4px color-mix(in srgb, var(--pt-curtain) 45%, transparent), 0 4px 10px rgba(0, 0, 0, 0.3); color: #fff3d6; }
-.app-shell .death-list article { background: var(--pt-paper); border: 1px solid var(--pt-paper-edge); border-radius: 2px; box-shadow: 0 2px 6px rgba(20, 12, 5, 0.12); }
-.app-shell .death-list strong { font-family: var(--ll-font-display), Georgia, serif; font-weight: 600; }
-.app-shell .death-list span { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 12px; }
+
+/* Then a spotlight comes up on the closed curtain, and each eliminated
+   player's name card drops in, is stamped, and flips to show their role.
+   Resting styles are the final frame: reduced motion and skipping
+   (.settled) both land there. Only transform and opacity animate. */
+.app-shell .curtain-spotlight {
+  animation: pt-fade-in 0.6s ease 0.55s both;
+  background: radial-gradient(ellipse 34rem 26rem at 50% 44%, rgba(255, 226, 160, 0.32), rgba(255, 213, 124, 0.08) 55%, transparent 72%);
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: 1;
+}
+.app-shell .curtain-call .death-modal {
+  background: transparent;
+  box-shadow: none;
+  color: #fff3d6;
+  max-height: none;
+  max-width: min(720px, calc(100vw - 24px));
+  outline: 0;
+  overflow: visible;
+  position: relative;
+  width: auto;
+  z-index: 2;
+}
+.app-shell .curtain-call .death-modal > :is(.eyebrow, h2, .modal-intro) { animation: pt-fade-in 0.5s ease 0.5s both; }
+.app-shell .curtain-call .death-modal .eyebrow { color: var(--pt-gold-soft); }
+.app-shell .death-modal h2 { color: #fff3d6; font-family: var(--ll-font-story), Georgia, serif; font-size: 38px; font-weight: 400; text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55); }
+.app-shell .curtain-call .modal-intro { color: rgba(255, 243, 214, 0.82); font-family: var(--ll-font-type), monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
+/* Fades but never moves, so "I understand" is clickable (by people and by
+   automated tests) the moment it exists. */
+.app-shell .curtain-call .death-modal .primary-button { animation: pt-fade-in 0.4s ease 2.5s both; }
+.app-shell .death-self-note { animation: pt-fade-in 0.5s ease 2.3s both; color: rgba(255, 243, 214, 0.9); font-size: 15px; margin: 0 auto 18px; max-width: 42ch; }
+
+.app-shell .death-cards { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; list-style: none; margin: 24px 0 22px; padding: 0; perspective: 900px; }
+.app-shell .death-card { animation: pt-card-drop 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.1) calc(0.8s + var(--i) * 0.18s) both; height: 248px; position: relative; width: 190px; }
+.app-shell .death-card:nth-child(odd) { rotate: -1.5deg; }
+.app-shell .death-card:nth-child(even) { rotate: 1.5deg; }
+.app-shell .death-card-inner { animation: pt-card-flip 0.7s var(--pt-ease) calc(1.85s + var(--i) * 0.18s) both; inset: 0; position: absolute; transform: rotateY(180deg); transform-style: preserve-3d; }
+.app-shell .death-card-face {
+  align-content: center;
+  backface-visibility: hidden;
+  background: linear-gradient(170deg, #fdf6e4, #f3e6c6);
+  border-radius: 3px;
+  box-shadow: 0 10px 24px rgba(9, 2, 4, 0.55);
+  color: var(--pt-ink);
+  display: grid;
+  gap: 6px;
+  inset: 0;
+  justify-items: center;
+  outline: 3px double rgba(43, 33, 24, 0.4);
+  outline-offset: -8px;
+  padding: 16px 12px;
+  position: absolute;
+  text-align: center;
+}
+.app-shell .death-card-back { transform: rotateY(180deg); }
+.app-shell .death-card-front small { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+.app-shell .death-card-face strong { font-family: var(--ll-font-display), Georgia, serif; font-size: 20px; font-weight: 600; line-height: 1.1; overflow-wrap: anywhere; }
+.app-shell .death-card-front strong { font-size: 22px; }
+.app-shell .death-stamp {
+  animation: pt-stamp 0.28s cubic-bezier(0.3, 1.6, 0.6, 1) calc(1.4s + var(--i) * 0.18s) both;
+  border: 3px solid var(--pt-curtain);
+  border-radius: 3px;
+  color: var(--pt-curtain);
+  font-family: var(--ll-font-type), monospace;
+  font-size: 16px;
+  left: 50%;
+  letter-spacing: 0.14em;
+  opacity: 0.9;
+  padding: 4px 10px;
+  position: absolute;
+  text-transform: uppercase;
+  top: 70%;
+  transform: translate(-50%, -50%) rotate(-12deg);
+}
+.app-shell .death-card-medallion { background: var(--pt-gel); border: 2px solid var(--pt-ink); border-radius: 50%; box-shadow: 0 0 0 3px var(--pt-paper), 0 0 0 4px rgba(43, 33, 24, 0.35); display: grid; height: 66px; place-items: center; width: 66px; }
+.app-shell .death-card-back > span:not(.death-card-medallion) { font-family: var(--ll-font-type), monospace; font-size: 12px; letter-spacing: 0.06em; }
+.app-shell .death-card-back small { color: var(--pt-curtain); font-family: var(--ll-font-type), monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+/* How they died: a small mark pinned over the card's corner after the flip. */
+.app-shell .cause-mark { animation: pt-fade-in 0.2s ease calc(2.45s + var(--i) * 0.18s) both; height: 62px; overflow: visible; position: absolute; right: -16px; top: -16px; width: 62px; }
+.app-shell .claws { animation-name: pt-swipe; }
+.app-shell .claws path { fill: none; stroke: var(--pt-curtain); stroke-linecap: round; stroke-width: 5; }
+.app-shell .gavel-block { fill: #5c3a22; }
+.app-shell .gavel-handle { fill: none; stroke: #7a4f2c; stroke-linecap: round; stroke-width: 5; }
+.app-shell .gavel-head { fill: #7a4f2c; stroke: var(--pt-ink); stroke-width: 1.5; }
+.app-shell .gavel-swing { animation: pt-gavel 0.45s cubic-bezier(0.5, 0, 0.6, 1.4) calc(2.45s + var(--i) * 0.18s) both; transform-box: view-box; transform-origin: 38px 50px; }
+.app-shell .arrow-shaft { fill: none; stroke: #7a4f2c; stroke-linecap: round; stroke-width: 3; }
+.app-shell .arrow-head { fill: var(--pt-ink); }
+.app-shell .arrow-fletch { fill: none; stroke: var(--pt-curtain); stroke-linecap: round; stroke-width: 2.5; }
+.app-shell .arrow-flight { animation: pt-arrow 0.22s cubic-bezier(0.4, 0, 1, 1) calc(2.45s + var(--i) * 0.18s) both; }
+.app-shell .heart path { fill: #e46a7a; stroke: #fff6de; stroke-width: 0.8; transform-box: fill-box; transform-origin: 50% 100%; }
+.app-shell .heart-left { animation: pt-heart-left 0.5s var(--pt-ease) calc(2.55s + var(--i) * 0.18s) both; transform: translate(-5px, 3px) rotate(-14deg); }
+.app-shell .heart-right { animation: pt-heart-right 0.5s var(--pt-ease) calc(2.55s + var(--i) * 0.18s) both; transform: translate(5px, 3px) rotate(14deg); }
+
+/* The player's own card doesn't flip: it tears in two to reveal the role. */
+.app-shell .death-card.is-you .death-card-inner { animation: none; transform: none; transform-style: flat; }
+.app-shell .death-card.is-you .death-card-front { z-index: 1; }
+.app-shell .death-card.is-you .death-card-back { transform: none; }
+.app-shell .tear-left { animation: pt-tear-left 0.9s var(--pt-ease) calc(1.45s + var(--i) * 0.18s) both; clip-path: polygon(0 0, 52% 0, 46% 18%, 55% 34%, 45% 52%, 54% 70%, 47% 86%, 52% 100%, 0 100%); opacity: 0; transform: translate(-46px, 34px) rotate(-16deg); }
+.app-shell .tear-right { animation: pt-tear-right 0.9s var(--pt-ease) calc(1.45s + var(--i) * 0.18s) both; clip-path: polygon(52% 0, 100% 0, 100% 100%, 52% 100%, 47% 86%, 54% 70%, 45% 52%, 55% 34%, 46% 18%); opacity: 0; transform: translate(46px, 30px) rotate(14deg); }
+
+/* A tap on the backdrop, or the timer, jumps every animation to its end. */
+.app-shell .curtain-call.settled::before,
+.app-shell .curtain-call.settled::after,
+.app-shell .curtain-call.settled * { animation-delay: 0s !important; animation-duration: 1ms !important; }
+
+@keyframes pt-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pt-card-drop { from { opacity: 0; transform: translateY(-60vh) rotate(-10deg); } 60% { opacity: 1; transform: translateY(10px) rotate(3deg); } 80% { transform: translateY(-4px) rotate(-1deg); } to { opacity: 1; transform: none; } }
+@keyframes pt-card-flip { from { transform: rotateY(0); } to { transform: rotateY(180deg); } }
+@keyframes pt-stamp { from { opacity: 0; transform: translate(-50%, -50%) rotate(-4deg) scale(2.4); } to { opacity: 0.9; transform: translate(-50%, -50%) rotate(-12deg) scale(1); } }
+@keyframes pt-swipe { from { opacity: 0; transform: translate(-16px, -22px); } to { opacity: 1; transform: none; } }
+@keyframes pt-gavel { from { transform: rotate(-55deg); } 70% { transform: rotate(6deg); } to { transform: none; } }
+@keyframes pt-arrow { from { opacity: 0; transform: translate(-44px, 44px); } to { opacity: 1; transform: none; } }
+@keyframes pt-heart-left { from { transform: none; } }
+@keyframes pt-heart-right { from { transform: none; } }
+@keyframes pt-tear-left { from { opacity: 1; transform: none; } 45% { opacity: 1; transform: translate(-6px, 2px) rotate(-3deg); } }
+@keyframes pt-tear-right { from { opacity: 1; transform: none; } 45% { opacity: 1; transform: translate(6px, 2px) rotate(3deg); } }
+
+@media (max-width: 600px) {
+  .app-shell .death-modal h2 { font-size: 30px; }
+  .app-shell .death-cards { gap: 12px; }
+  .app-shell .death-card { height: 188px; width: 136px; }
+  .app-shell .death-card-face strong { font-size: 17px; }
+  .app-shell .death-card-front strong { font-size: 18px; }
+  .app-shell .cause-mark { height: 50px; right: -10px; top: -12px; width: 50px; }
+}
 
 @media (max-width: 780px) {
   .app-shell .role-card::after { left: calc(50% - 40px); width: 80px; }
