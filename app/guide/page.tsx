@@ -41,7 +41,8 @@ const HELP_ROWS = [
   ['My role says “Not released”', 'The moderator has not released roles yet. Every seat must be claimed first.'],
   ['Save response is unavailable', 'Select a legal player first. The phase may also be closed, your role may have no action this phase, or you may be eliminated.'],
   ['“Too many attempts”', 'Stop retrying and wait for the limit to reset (usually 15 minutes for sign-in).'],
-  ['Moderator: Randomize is disabled', 'Every seat must be claimed and any edited role counts must be saved.'],
+  ['Moderator: Randomize is disabled', 'Every seat must be claimed and any edited role counts must be saved. Remove anyone who has decided not to play.'],
+  ['Moderator: I can’t add or remove a player', 'The roster locks once roles are randomized. Select Save composition to discard the preview and unlock it. After release, the roster is final.'],
   ['Moderator: Hunter cannot be finalized', 'Wait for the Hunter to submit or for their window to expire, then try again.'],
   ['Moderator: an action shows an error', 'Refresh first. Another moderator may have completed it already.'],
 ] as const;
@@ -183,7 +184,7 @@ export default function GuidePage() {
           <h3>Set up a game</h3>
           <ol>
             <li><strong>Create the game.</strong> In the <Link href="/moderator">Moderator console</Link>, enter a name, timezone, dates, and a final cutoff, then select <strong>Create game</strong>.</li>
-            <li><strong>Add players.</strong> Paste a roster with the header <code>display_name,email</code>, one email address per player, and select <strong>Create private seats</strong>. Then select <strong>Email invites</strong> to send each player their own private link (if the site operator has turned email on), or <strong>Download invite CSV</strong> and send each person only their own message. <strong>Waiting on</strong> lists who hasn’t claimed yet, with <strong>Resend</strong> for a lost email. A resent link replaces the old one.</li>
+            <li><strong>Add players.</strong> Paste a roster with the header <code>display_name,email</code>, one email address per player, and select <strong>Create private seats</strong>. Then select <strong>Email invites</strong> to send each player their own private link (if the site operator has turned email on), or <strong>Download invite CSV</strong> and send each person only their own message. <strong>Waiting on</strong> lists who hasn’t claimed yet, with <strong>Resend</strong> for a lost email. A resent link replaces the old one. Before you randomize roles, use <strong>Change the roster</strong> to add a late joiner, or <strong>Remove</strong> beside someone who hasn’t claimed; everyone else keeps their seat, and each change adds or removes one Villager. Re-importing the CSV replaces every seat, so everyone would have to claim again.</li>
             <li><strong>Balance the roles.</strong> Accept the suggested counts or edit them and select <strong>Save composition</strong>. A 20-player game defaults to 12 Villagers, 3 Werewolves, a Seer, a Bodyguard, a Hunter, and 2 Masons.</li>
             <li><strong>Release roles.</strong> When every seat is claimed, select <strong>Randomize roles</strong>, review the result privately, then <strong>Release roles to players</strong>. Setup is locked after release.</li>
           </ol>

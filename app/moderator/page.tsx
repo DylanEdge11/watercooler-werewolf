@@ -11,6 +11,7 @@ import { ROLE_CATALOG } from '../../lib/game/catalog';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
 import BrandMark from '../brand-mark';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { createInviteExport } from '../../lib/roster/csv';
 
 const sampleRoster = [
   'display_name,email',
@@ -73,6 +74,19 @@ interface RosterSeat {
   invitationEmailedAt?: string | null;
 }
 
+interface InviteRow {
+  displayName: string;
+  email: string;
+  claimUrl: string;
+  inviteCode: string;
+}
+
+interface RosterChange {
+  playerCount: number;
+  composition: Composition;
+  resetToPreset: boolean;
+}
+
 interface InviteEmailResult {
   seatId: string;
   displayName: string;
@@ -124,9 +138,12 @@ export default function ModeratorPage() {
   const [roster, setRoster] = useState<RosterSeat[]>([]);
   const [composition, setComposition] = useState<Composition | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [inviteCsv, setInviteCsv] = useState('');
+  // Private links from this session's import and single-player adds, kept only in memory.
+  const [inviteRows, setInviteRows] = useState<InviteRow[]>([]);
   const [emailConfigured, setEmailConfigured] = useState(false);
   const [emailingInvites, setEmailingInvites] = useState(false);
+  const [editingRoster, setEditingRoster] = useState(false);
+  const [addedInvite, setAddedInvite] = useState<{ gameId: string; seatId: string; displayName: string; claimUrl: string } | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [liveRefreshToken, setLiveRefreshToken] = useState(0);
@@ -250,7 +267,7 @@ export default function ModeratorPage() {
         }),
       });
       setMessage('Game created. Import the player roster next.');
-      setInviteCsv('');
+      setInviteRows([]);
       setShowNewGameForm(false);
       setShowSchedulePanel(false);
       await loadGames(data.gameId);
@@ -263,7 +280,7 @@ export default function ModeratorPage() {
     if (!nextGameId) return;
     setShowNewGameForm(false);
     setShowSchedulePanel(false);
-    setInviteCsv('');
+    setInviteRows([]);
     setMessage('');
     setError('');
     selectedGameRef.current = nextGameId;
@@ -275,7 +292,7 @@ export default function ModeratorPage() {
     setShowSchedulePanel(false);
     setError('');
     setMessage('');
-    setInviteCsv('');
+    setInviteRows([]);
   }
 
   function openGameSchedule() {
@@ -326,7 +343,7 @@ export default function ModeratorPage() {
         body: JSON.stringify({ action: 'CANCEL_SETUP', confirmed: true, confirmationName: selectedGame.name }),
       });
       markCompositionDraft(gameId, null);
-      setInviteCsv('');
+      setInviteRows([]);
       setRoster([]);
       setComposition(null);
       setBatches([]);
@@ -343,17 +360,86 @@ export default function ModeratorPage() {
     setError('');
     const form = new FormData(event.currentTarget);
     try {
-      const data = await requestJson<{ inviteCsv: string; playerCount: number; composition: Composition }>(
+      const data = await requestJson<{ invites: InviteRow[]; playerCount: number; composition: Composition }>(
         `/api/games/${gameId}/roster`,
         { method: 'POST', body: JSON.stringify({ csv: form.get('csv') }) },
       );
-      setInviteCsv(data.inviteCsv);
+      setInviteRows(data.invites);
       markCompositionDraft(gameId, null);
       setComposition(data.composition);
       setMessage(`${data.playerCount} private seats created. Email the invitations below, or download the invite file now; codes are not shown again.`);
       await loadGame(gameId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to import the roster.');
+    }
+  }
+
+  function rosterChangeMessage(summary: string, data: RosterChange) {
+    const counts = data.resetToPreset
+      ? `Role counts were reset to the standard preset for ${data.playerCount} players.`
+      : `Role counts now have ${data.composition.VILLAGER} ${data.composition.VILLAGER === 1 ? 'Villager' : 'Villagers'}; other roles are unchanged.`;
+    return `${summary} The roster now has ${data.playerCount} players. ${counts}`;
+  }
+
+  async function addSeat(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (editingRoster) return;
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const editedGame = gameId;
+    setError('');
+    setMessage('');
+    setEditingRoster(true);
+    try {
+      const data = await requestJson<RosterChange & { seat: RosterSeat; claimUrl: string; inviteCode: string }>(`/api/games/${editedGame}/seats`, {
+        method: 'POST',
+        body: JSON.stringify({ displayName: form.get('displayName'), email: form.get('email') }),
+      });
+      if (selectedGameRef.current !== editedGame) return;
+      formElement.reset();
+      markCompositionDraft(editedGame, null);
+      setComposition(data.composition);
+      setInviteRows((current) => [...current, { displayName: data.seat.displayName, email: data.seat.email, claimUrl: data.claimUrl, inviteCode: data.inviteCode }]);
+      setAddedInvite({ gameId: editedGame, seatId: data.seat.id, displayName: data.seat.displayName, claimUrl: data.claimUrl });
+      setMessage(rosterChangeMessage(`${data.seat.displayName} was added.`, data));
+    } catch (caught) {
+      if (selectedGameRef.current === editedGame) setError(caught instanceof Error ? caught.message : 'Unable to add the player.');
+    } finally {
+      setEditingRoster(false);
+      if (selectedGameRef.current === editedGame) await loadGame(editedGame).catch(() => {});
+    }
+  }
+
+  async function removeSeat(seat: RosterSeat) {
+    if (editingRoster) return;
+    if (!window.confirm(`Remove ${seat.displayName} from the roster? Their invitation link stops working. You can add them again later.`)) return;
+    const editedGame = gameId;
+    setError('');
+    setMessage('');
+    setEditingRoster(true);
+    try {
+      const data = await requestJson<RosterChange>(`/api/games/${editedGame}/seats/${encodeURIComponent(seat.id)}`, { method: 'DELETE' });
+      if (selectedGameRef.current !== editedGame) return;
+      markCompositionDraft(editedGame, null);
+      setComposition(data.composition);
+      setAddedInvite((current) => current?.seatId === seat.id ? null : current);
+      setInviteRows((current) => current.filter((row) => row.email !== seat.email));
+      setMessage(rosterChangeMessage(`${seat.displayName} was removed.`, data));
+    } catch (caught) {
+      if (selectedGameRef.current === editedGame) setError(caught instanceof Error ? caught.message : 'Unable to remove the player.');
+    } finally {
+      setEditingRoster(false);
+      if (selectedGameRef.current === editedGame) await loadGame(editedGame).catch(() => {});
+    }
+  }
+
+  async function copyAddedInvite() {
+    if (!addedInvite) return;
+    try {
+      await navigator.clipboard.writeText(addedInvite.claimUrl);
+      setMessage(`Copied ${addedInvite.displayName}’s private link. Send it only to them.`);
+    } catch {
+      setError('Copy failed. Select the link and copy it by hand.');
     }
   }
 
@@ -374,7 +460,8 @@ export default function ModeratorPage() {
       if (!stillOnGame()) return;
       // Emailed links replace the ones in the downloaded file. Skipped test
       // addresses keep their links, so the file stays valid if nothing else changed.
-      if (data.results.some((result) => result.status !== 'SKIPPED')) setInviteCsv('');
+      if (data.results.some((result) => result.status !== 'SKIPPED')) setInviteRows([]);
+      setAddedInvite((current) => data.results.some((result) => result.seatId === current?.seatId && result.status !== 'SKIPPED') ? null : current);
       // Reserved test addresses are skipped by design, so they are a note, not an error.
       const failed = data.results.filter((result) => result.status === 'FAILED');
       const skipped = data.results.filter((result) => result.status === 'SKIPPED').length;
@@ -437,7 +524,7 @@ export default function ModeratorPage() {
   }
 
   function downloadInvites() {
-    const url = URL.createObjectURL(new Blob([inviteCsv], { type: 'text/csv;charset=utf-8' }));
+    const url = URL.createObjectURL(new Blob([createInviteExport(inviteRows)], { type: 'text/csv;charset=utf-8' }));
     const anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = 'watercooler-werewolf-invites.csv';
@@ -450,6 +537,9 @@ export default function ModeratorPage() {
   const canCancelSetup = setupEditable && selectedGame?.moderatorRole === 'OWNER';
   const claimed = roster.filter((seat) => seat.status === 'CLAIMED').length;
   const unclaimed = roster.filter((seat) => seat.status === 'INVITED');
+  // Single-seat edits close once roles are randomized (see lib/game/roster-edit.ts).
+  const rosterEditable = Boolean(selectedGame && ['DRAFT', 'REGISTRATION'].includes(selectedGame.status) && roster.length > 0);
+  const shownInvite = addedInvite?.gameId === gameId && unclaimed.some((seat) => seat.id === addedInvite.seatId) ? addedInvite : null;
   const latestBatch = batches[0];
   const rosterById = useMemo(() => new Map(roster.map((seat) => [seat.id, seat])), [roster]);
   const gameDates = useMemo(() => defaultGameDates(), []);
@@ -562,15 +652,28 @@ export default function ModeratorPage() {
                 {!setupEditable && <p className="notice warning schedule-lock-note">Schedule changes are locked for this {selectedGame.status.replaceAll('_', ' ').toLowerCase()} game.</p>}
               </section>}
               {setupEditable ? <section className="setup-card">
-                <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Re-importing replaces unlaunched seats. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
+                <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Re-importing replaces every seat, so everyone must claim again; to add or remove one player, use <strong>Change the roster</strong> below. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
                 <form className="form-stack" onSubmit={importRoster}>
                   <label>Roster CSV<textarea name="csv" defaultValue={sampleRoster} rows={8} spellCheck={false} required /></label>
                   <div className="button-row">
                     <button className="primary-button" type="submit">Create private seats</button>
-                    {inviteCsv && <button className="secondary-button" type="button" onClick={downloadInvites}>Download invite CSV</button>}
+                    {inviteRows.length > 0 && <button className="secondary-button" type="button" onClick={downloadInvites}>Download invite CSV</button>}
                   </div>
                 </form>
                 {roster.length > 0 && <div className="claim-meter"><span style={{ width: `${(claimed / roster.length) * 100}%` }} /><strong>{claimed} of {roster.length} claimed</strong></div>}
+                {rosterEditable ? <div className="invite-email roster-edit">
+                  <p><strong>Change the roster</strong></p>
+                  <p className="field-help">Add a late joiner, or remove someone who hasn’t claimed their seat. Everyone else keeps their seat. Each change adds or removes one Villager. This locks once you randomize roles.</p>
+                  <form className="setup-grid" onSubmit={addSeat} aria-label="Add a player">
+                    <label>Display name<input name="displayName" maxLength={80} autoComplete="off" required /></label>
+                    <label>Email<input name="email" type="email" autoComplete="off" required /></label>
+                    <div className="button-row wide"><button className="secondary-button" type="submit" disabled={editingRoster}>{editingRoster ? 'Saving…' : 'Add player'}</button></div>
+                  </form>
+                  {shownInvite && <div className="added-invite">
+                    <p className="field-help">{shownInvite.displayName}’s private link is shown only now. Copy it and send it only to them{emailConfigured ? ', or use Email in the waiting list below' : ''}.</p>
+                    <div className="button-row"><input readOnly value={shownInvite.claimUrl} aria-label={`${shownInvite.displayName}’s private link`} onFocus={(event) => event.currentTarget.select()} /><button className="text-button" type="button" onClick={() => void copyAddedInvite()}>Copy link</button></div>
+                  </div>}
+                </div> : roster.length > 0 && selectedGame?.status === 'ASSIGNMENT_PREVIEW' && <p className="field-help roster-lock-note">Roles have been randomized, so players can’t be added or removed. To change the roster, select <strong>Save composition</strong> to discard the preview.</p>}
                 {unclaimed.length > 0 && <div className="invite-email">
                   <div className="button-row">
                     <button className="primary-button" type="button" onClick={() => void emailInvites(unclaimed)} disabled={!emailConfigured || emailingInvites}>{emailingInvites ? 'Sending…' : `Email invites to ${unclaimed.length} unclaimed ${unclaimed.length === 1 ? 'player' : 'players'}`}</button>
@@ -581,7 +684,10 @@ export default function ModeratorPage() {
                     <ul className="invite-list">
                       {unclaimed.map((seat) => <li key={seat.id}>
                         <span><strong>{seat.displayName}</strong><small>{seat.email} · {seat.invitationEmailedAt ? `emailed ${new Date(seat.invitationEmailedAt).toLocaleString()}` : 'not emailed'}</small></span>
-                        {emailConfigured && <button className="text-button" type="button" onClick={() => void emailInvites([seat])} disabled={emailingInvites}>{seat.invitationEmailedAt ? 'Resend' : 'Email'}</button>}
+                        <span className="button-row">
+                          {emailConfigured && <button className="text-button" type="button" onClick={() => void emailInvites([seat])} disabled={emailingInvites}>{seat.invitationEmailedAt ? 'Resend' : 'Email'}</button>}
+                          {rosterEditable && <button className="text-button" type="button" onClick={() => void removeSeat(seat)} disabled={editingRoster || roster.length <= MIN_PLAYERS} aria-label={`Remove ${seat.displayName}`}>Remove</button>}
+                        </span>
                       </li>)}
                     </ul>
                   </details>

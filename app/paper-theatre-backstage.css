@@ -268,3 +268,8 @@
 .backstage .preview-scene-row label { display: grid; flex: 1 1 220px; gap: 7px; }
 .backstage .preview-scene-host.app-shell { background: transparent; inset: 0; margin: 0; min-height: 0; pointer-events: none; position: fixed; z-index: 200; }
 .preview-scene-host .modal-backdrop { pointer-events: auto; }
+.backstage .roster-edit .setup-grid { margin-top: 4px; }
+.backstage .invite-list li > span.button-row { display: flex; gap: 12px; }
+.backstage .added-invite { display: grid; gap: 6px; }
+.backstage .added-invite input { flex: 1 1 220px; font-family: var(--ll-font-type), monospace; font-size: 12px; min-width: 0; }
+.backstage .roster-lock-note { margin-top: 18px; }
