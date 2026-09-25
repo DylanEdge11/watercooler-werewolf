@@ -35,6 +35,32 @@ describe('roster CSV', () => {
     expect(result.errors).toContain('Line 21: email is duplicated.');
   });
 
+  // A cell holding several addresses would send one player's private claim
+  // link to every address in it.
+  it.each([
+    'ana@corp.test;bob@corp.test',
+    '"ana@corp.test,bob@corp.test"',
+    'Ana <ana@corp.test>',
+    '<ana@corp.test>',
+    'ana@corp.test;',
+    'ana@bob@corp.test',
+  ])('rejects %s as more than one plain address', (cell) => {
+    const result = parseRosterCsv(`${validCsv(20)}\nAna,${cell}`);
+    expect(result.errors).toContain('Line 22: email must be one plain address, like name@example.com.');
+    expect(result.entries.map((entry) => entry.displayName)).not.toContain('Ana');
+  });
+
+  it('accepts an apostrophe, which mail tools do not treat as a separator', () => {
+    const result = parseRosterCsv(`${validCsv(20)}\nSean,sean.o'brien@corp.test`);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('accepts ordinary addresses, including plus aliases and subdomains', () => {
+    const result = parseRosterCsv(`${validCsv(20)}\nAna,Ana.Lee+werewolf@mail.corp.test`);
+    expect(result.errors).toEqual([]);
+    expect(result.entries.at(-1)).toEqual({ displayName: 'Ana', email: 'ana.lee+werewolf@mail.corp.test' });
+  });
+
   it('creates a private mail-merge export without exposing roles', () => {
     const csv = createInviteExport([
       {

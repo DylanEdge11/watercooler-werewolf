@@ -1,4 +1,5 @@
 import { MAX_PLAYERS, MIN_PLAYERS } from '../game/player-count';
+import { isSingleEmailAddress } from './email-address';
 import { inviteMessage } from './invite-message';
 
 export interface RosterEntry {
@@ -61,9 +62,10 @@ export function parseRosterCsv(csv: string): RosterParseResult {
     const displayName = values[nameIndex]?.trim() ?? '';
     const email = values[emailIndex]?.trim().toLowerCase() ?? '';
     if (!displayName) errors.push(`Line ${line}: display_name is required.`);
-    if (!/^\S+@\S+\.\S+$/u.test(email)) errors.push(`Line ${line}: email is invalid.`);
+    const validEmail = isSingleEmailAddress(email);
+    if (!validEmail) errors.push(`Line ${line}: email must be one plain address, like name@example.com.`);
     if (seenEmails.has(email)) errors.push(`Line ${line}: email is duplicated.`);
-    if (displayName && /^\S+@\S+\.\S+$/u.test(email) && !seenEmails.has(email)) {
+    if (displayName && validEmail && !seenEmails.has(email)) {
       entries.push({ displayName, email });
       seenEmails.add(email);
     }
