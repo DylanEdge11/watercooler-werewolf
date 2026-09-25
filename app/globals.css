@@ -62,7 +62,7 @@ button { color: inherit; }
 .eyebrow { color: #7b847f; font-size: 10px; font-weight: 850; letter-spacing: .14em; margin: 0 0 10px; text-transform: uppercase; }
 .eyebrow.accent { color: var(--mint-strong); }
 .sidebar nav { display: grid; gap: 5px; margin: 0 0 28px; }
-.nav-item { align-items: center; border-radius: 10px; color: #52625a; display: flex; font-size: 13px; font-weight: 690; gap: 12px; padding: 11px 12px; text-decoration: none; }
+.nav-item { align-items: center; background: transparent; border: 0; border-radius: 10px; color: #52625a; cursor: pointer; display: flex; font: inherit; font-size: 13px; font-weight: 690; gap: 12px; padding: 11px 12px; text-align: left; text-decoration: none; width: 100%; }
 .nav-item > span { color: #778a80; font-size: 17px; width: 18px; }
 .nav-item b { align-items: center; background: var(--coral); border-radius: 999px; color: white; display: flex; font-size: 9px; height: 18px; justify-content: center; margin-left: auto; width: 18px; }
 .nav-item.active { background: #e2eee7; color: #214d40; }
@@ -165,7 +165,8 @@ button { color: inherit; }
   .workspace { display: block; padding: 24px 15px 54px; }
   .sidebar { display: none; }
   .mobile-nav { align-items: center; display: flex; gap: 7px; margin-bottom: 18px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
-  .mobile-nav a { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; color: var(--mint-strong); flex: 0 0 auto; font-size: 10px; font-weight: 800; padding: 8px 11px; text-decoration: none; }
+  .mobile-nav :is(a, button) { cursor: pointer; font: inherit; }
+  .mobile-nav :is(a, button) { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; color: var(--mint-strong); flex: 0 0 auto; font-size: 10px; font-weight: 800; padding: 8px 11px; text-decoration: none; }
   .right-rail { display: grid; gap: 18px; margin-top: 22px; }
   .welcome-row { align-items: flex-start; }
   .deadline-card { flex-basis: 125px; }
