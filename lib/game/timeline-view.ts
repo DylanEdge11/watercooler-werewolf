@@ -14,7 +14,7 @@ export interface PublicTimelineEvent {
     title?: string;
     body?: string;
     winner?: string | null;
-    eliminations?: Array<{ displayName: string; role: string; cause: string }>;
+    eliminations?: Array<{ displayName: string; role: string; cause: string; isYou?: boolean }>;
     votes?: Array<{ actorName: string; targetNames: string[] }>;
     protectedAttackBlocked?: boolean;
   };

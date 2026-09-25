@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
 import FullTimeline from './full-timeline';
 import RoleMedallion from './role-medallion';
+import DeathCurtainCall from './death-curtain-call';
 import BrandMark from './brand-mark';
 import { pollWhileVisible } from '../lib/http/poll-while-visible';
 import { describeTimelineEvent, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
@@ -497,16 +498,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>
       </div>
-      {deathAlert && <div className="modal-backdrop curtain-call" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dismissDeathAlert(); }}>
-        <section className="game-modal death-modal" role="dialog" aria-modal="true" aria-labelledby="death-alert-title">
-          <div className="modal-symbol" aria-hidden="true">☠</div>
-          <p className="eyebrow accent">Official game update</p>
-          <h2 id="death-alert-title">A player has been eliminated</h2>
-          <p className="modal-intro">{deathAlert.payload.kind?.replaceAll('_', ' ') ?? 'The latest phase'} · Cycle {deathAlert.payload.sequence ?? '—'}</p>
-          <div className="death-list">{deathAlert.payload.eliminations?.map((elimination) => <article key={`${deathAlert.id}-${elimination.displayName}`}><strong>{elimination.displayName}</strong><span>{readableRole(elimination.role)}{elimination.cause === 'LOVER_BOND' ? ' · lover bond' : elimination.cause === 'HUNTER_SHOT' ? ' · Hunter shot' : ''}</span></article>)}</div>
-          <button className="primary-button" type="button" onClick={dismissDeathAlert}>I understand</button>
-        </section>
-      </div>}
+      {deathAlert && <DeathCurtainCall key={deathAlert.id} event={deathAlert} onDismiss={dismissDeathAlert} />}
       {selectedTimeline && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTimeline(null); }}>
         <section className="game-modal timeline-modal" role="dialog" aria-modal="true" aria-labelledby="timeline-modal-title">
           <div className="modal-heading"><div><p className="eyebrow accent">Published ballot</p><h2 id="timeline-modal-title">{selectedTimeline.payload.kind}{selectedTimeline.payload.sequence ? ` · Cycle ${selectedTimeline.payload.sequence}` : ''}</h2><p className="modal-intro">{selectedTimeline.payload.eliminations?.length ? selectedTimeline.payload.eliminations.map((item) => `${item.displayName} · ${readableRole(item.role)}`).join(', ') : 'No elimination published.'}</p></div><button className="icon-button modal-close" type="button" aria-label="Close vote details" onClick={() => setSelectedTimeline(null)}>×</button></div>

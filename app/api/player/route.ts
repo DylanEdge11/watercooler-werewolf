@@ -262,6 +262,8 @@ export async function GET(request: Request) {
             displayName: elimination.displayName,
             role: elimination.role,
             cause: elimination.cause,
+            // Marks only the reader's own elimination; other players' seat IDs stay private.
+            isYou: elimination.playerId === player.id,
           };
         });
         const publishedOutcome = payload.publishedOutcome && typeof payload.publishedOutcome === 'object'

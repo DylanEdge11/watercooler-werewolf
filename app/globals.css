@@ -301,12 +301,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .game-modal h2 { font-family: Georgia, serif; font-size: 30px; letter-spacing: -.03em; line-height: 1.08; margin: 0; }
 .death-modal { text-align: center; }
 .death-modal .eyebrow { margin: 9px 0 8px; }
-.modal-symbol { align-items: center; background: #fae7df; border: 1px solid #ecc7b8; border-radius: 50%; color: #a34530; display: flex; font-size: 38px; height: 78px; justify-content: center; margin: 0 auto; width: 78px; }
 .modal-intro { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 11px 0 20px; }
-.death-list { display: grid; gap: 8px; margin: 20px 0 24px; text-align: left; }
-.death-list article { align-items: center; background: #fff7f2; border: 1px solid #eeded5; border-radius: 12px; display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; padding: 13px 15px; }
-.death-list strong { font-family: Georgia, serif; font-size: 18px; }
-.death-list span { color: var(--muted); font-size: 12px; }
 .modal-heading { align-items: flex-start; display: flex; gap: 24px; justify-content: space-between; margin-bottom: 18px; }
 .modal-heading .eyebrow { margin-bottom: 7px; }
 .modal-heading h2 { font-size: 27px; }
