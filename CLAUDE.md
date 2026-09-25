@@ -4,17 +4,15 @@ Next.js App Router app on Vercel with a Turso/libSQL database. A slow-burn Werew
 
 ## Commands
 
-Node 24 (`.nvmrc`). These are the CI gates in `.github/workflows/ci.yml`:
+Node 24 (`.nvmrc`).
 
 ```sh
-npm test -- --run                       # Vitest, lib/**/*.test.ts
-npm run lint
-npx tsc --noEmit --incremental false
-npm run build
-npm audit --omit=dev --audit-level=moderate
+npm test                 # Vitest, lib/**/*.test.ts
+npm run verify           # fast gates: tests, lint, types, build, audit. Run before every push.
+npm run verify:full      # verify + 20-player API and browser suites. Once per release candidate.
 ```
 
-For quick iteration, run only the relevant test file. Browser and API suites are in `docs/TESTING.md`.
+For quick iteration, run only the relevant test file. Suites and the hosted Preview runbook are in `docs/TESTING.md`.
 
 ## Branches and releases
 
@@ -23,7 +21,7 @@ For quick iteration, run only the relevant test file. Browser and API suites are
 - Feature branches start from the version branch and merge back into it. The version branch reaches `main` through one release pull request.
 - Changes reach `main` only through pull requests. Never push to `main`, never use `vercel deploy --prod`, and never promote a Preview deployment.
 - The release phases are the user-invoked skills `/werewolf-dev`, `/werewolf-uat`, and `/werewolf-prod` in `.claude/skills/`. Each phase stops at its handoff.
-- GitHub Actions minutes are limited (2,000/month). Don't add or expand jobs in .github/workflows without asking. Run the 20-player API and browser suites locally or in-session, not in Actions. Batch commits; don't push after every small fix.
+- GitHub Actions minutes are limited (2,000/month, spending limit $0). CI runs only the fast gates, only on pull requests into `main`. Checks run locally with `npm run verify` / `verify:full`. Don't add jobs or triggers to `.github/workflows`, or start the workflow by hand, without asking. Batch commits; don't push after every small fix.
 
 ## Safety rules
 

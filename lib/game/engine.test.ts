@@ -153,3 +153,126 @@ describe('Hunter and victory', () => {
     expect(evaluateWinner(smallPlayers.map((player) => ({ ...player, alive: ['small-wolf', 'small-v1'].includes(player.id) }))).winner).toBe('WEREWOLF');
   });
 });
+
+describe('Mayor, Cupid, and Apprentice Seer', () => {
+  const extendedPlayers: PlayerState[] = [
+    ...players.filter((player) => !['villager-2', 'mason-2'].includes(player.id)),
+    { id: 'mayor', displayName: 'Mayor', role: 'MAYOR', alive: true },
+    { id: 'cupid', displayName: 'Cupid', role: 'CUPID', alive: true },
+    { id: 'apprentice', displayName: 'Apprentice', role: 'APPRENTICE_SEER', alive: true },
+  ];
+  const lovers = { cupidId: 'cupid', playerIds: ['villager-1', 'hunter'] as [string, string] };
+
+  it('counts the Mayor twice in Day ballots only', () => {
+    const day = resolvePhase({
+      phaseId: 'day-mayor',
+      kind: 'DAY',
+      slots: 1,
+      players: extendedPlayers,
+      actions: [
+        action('m', 'mayor', 'DAY_VOTE', ['wolf-1']),
+        action('a', 'seer', 'DAY_VOTE', ['wolf-2']),
+        action('b', 'bodyguard', 'DAY_VOTE', ['wolf-2']),
+        action('c', 'villager-1', 'DAY_VOTE', ['wolf-1']),
+      ],
+    });
+    expect(day.tally).toEqual([
+      { playerId: 'wolf-1', votes: 3 },
+      { playerId: 'wolf-2', votes: 2 },
+    ]);
+    expect(day.eliminations).toEqual([{ playerId: 'wolf-1', cause: 'DAY_VOTE' }]);
+  });
+
+  it('links lovers from the Cupid action and eliminates the partner on the same night', () => {
+    const night = resolvePhase({
+      phaseId: 'night-cupid',
+      kind: 'NIGHT',
+      slots: 1,
+      players: extendedPlayers,
+      actions: [
+        action('pair', 'cupid', 'CUPID_PAIR', ['villager-1', 'mayor']),
+        action('w1', 'wolf-1', 'WOLF_VOTE', ['villager-1']),
+        action('protect', 'bodyguard', 'PROTECT', ['mayor']),
+      ],
+    });
+    expect(night.loverPair).toEqual({ cupidId: 'cupid', playerIds: ['villager-1', 'mayor'] });
+    // Protection stops the pack attack, not the lover bond.
+    expect(night.eliminations).toEqual([
+      { playerId: 'villager-1', cause: 'WEREWOLF_ATTACK' },
+      { playerId: 'mayor', cause: 'LOVER_BOND' },
+    ]);
+  });
+
+  it('gives a Hunter who dies of a broken heart the final shot', () => {
+    const day = resolvePhase({
+      phaseId: 'day-lovers',
+      kind: 'DAY',
+      slots: 1,
+      players: extendedPlayers,
+      loverPair: lovers,
+      actions: [action('v', 'seer', 'DAY_VOTE', ['villager-1'])],
+    });
+    expect(day.eliminations).toEqual([
+      { playerId: 'villager-1', cause: 'DAY_VOTE' },
+      { playerId: 'hunter', cause: 'LOVER_BOND' },
+    ]);
+    expect(day.hunterRequiredIds).toEqual(['hunter']);
+  });
+
+  it('eliminates the partner when the Hunter shoots a lover', () => {
+    const pair = { cupidId: 'cupid', playerIds: ['villager-1', 'mayor'] as [string, string] };
+    const initial = resolvePhase({
+      phaseId: 'day-hunter-lover',
+      kind: 'DAY',
+      slots: 1,
+      players: extendedPlayers,
+      loverPair: pair,
+      actions: [action('v', 'seer', 'DAY_VOTE', ['hunter'])],
+    });
+    const final = resolveHunterShot({
+      players: extendedPlayers,
+      resolution: initial,
+      hunterAction: action('shot', 'hunter', 'HUNTER_SHOT', ['mayor']),
+    });
+    expect(final.eliminations).toEqual([
+      { playerId: 'hunter', cause: 'DAY_VOTE' },
+      { playerId: 'mayor', cause: 'HUNTER_SHOT' },
+      { playerId: 'villager-1', cause: 'LOVER_BOND' },
+    ]);
+  });
+
+  it('ignores a Cupid action once lovers are already linked', () => {
+    const night = resolvePhase({
+      phaseId: 'night-second-pair',
+      kind: 'NIGHT',
+      slots: 1,
+      players: extendedPlayers,
+      loverPair: lovers,
+      actions: [action('pair', 'cupid', 'CUPID_PAIR', ['seer', 'mayor'])],
+    });
+    expect(night.loverPair).toEqual(lovers);
+  });
+
+  it('lets the Apprentice Seer investigate only after the Seer is eliminated', () => {
+    const apprenticeInspects = [action('inspect', 'apprentice', 'INVESTIGATE', ['wolf-1'])];
+    const whileSeerLives = resolvePhase({
+      phaseId: 'night-apprentice-1',
+      kind: 'NIGHT',
+      slots: 1,
+      players: extendedPlayers,
+      actions: apprenticeInspects,
+    });
+    expect(whileSeerLives.investigations).toEqual([]);
+
+    const afterSeer = resolvePhase({
+      phaseId: 'night-apprentice-2',
+      kind: 'NIGHT',
+      slots: 1,
+      players: extendedPlayers.map((player) => (player.id === 'seer' ? { ...player, alive: false } : player)),
+      actions: apprenticeInspects,
+    });
+    expect(afterSeer.investigations).toEqual([
+      { seerId: 'apprentice', targetId: 'wolf-1', role: 'WEREWOLF' },
+    ]);
+  });
+});

@@ -20,11 +20,11 @@ Project facts and safety rules are in `CLAUDE.md`. Vercel project `watercooler-w
 
 If anything is missing, stale, or unverifiable, stop with `UAT: BLOCKED` and say what's needed. Fixes belong to Dev.
 
-## CI
+## Local checks
 
-Every `Verify` job (`verify`, `api`, `browser 1–4`) must be green for the exact SHA; cite the run. The `api` and `browser` jobs run only on pull requests into `main` or when started by hand. If they show as skipped, start the workflow by hand on the branch (`gh workflow run Verify --ref <branch>`, about 25–45 minutes) or cite a local run of those suites for the same SHA. Skipped is not green.
+Run `npm run verify:full` once from the candidate checkout, in the background (see [Release checks](../../../docs/TESTING.md#release-checks)). It runs the fast gates, then the 20-player API and browser suites against a disposable local database. Run `npm ci` first only if dependencies are missing or the lockfile changed. Record the exit code, the pass/fail/flaky counts for each suite, and the elapsed time. A test that passed only on retry is flaky; list it as a risk.
 
-Do the hosted run while CI is in progress. If a job fails, report it and stop with `UAT: BLOCKED`. Don't run the full browser suite against the Preview as a substitute.
+Do the hosted run while it's in progress. If it fails, report the failing step and test and stop with `UAT: BLOCKED`. Don't run the full browser suite against the Preview as a substitute. Don't start the GitHub workflow by hand unless the user asks; it costs about 100 Actions minutes.
 
 ## Hosted Preview run
 
@@ -45,7 +45,7 @@ Branch: <branch>
 Tested commit: <full SHA>
 Preview: <exact origin>
 Vercel deployment: <deployment ID, READY, preview>
-CI: <exact-SHA Verify run link; verify, api, and browser 1–4 results>
+Local checks: <verify:full at this SHA; exit code; API and browser pass/fail/flaky counts; elapsed time>
 Playwright: <run ID; per-invocation pass/fail/skip counts; cloud-proxy retries, if any>
 Browser review: <flows, widths, console/network result>
 Artifacts: <report/trace paths>

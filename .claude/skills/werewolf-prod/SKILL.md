@@ -13,9 +13,9 @@ Project facts and safety rules are in `CLAUDE.md`. Vercel project `watercooler-w
 
 ## Verify the UAT handoff
 
-The handoff (in the request, the PR, or earlier conversation) must name the tested SHA, Preview URL and deployment ID, green CI, the hosted Playwright run ID with results, and known gaps. If anything is missing or belongs to another SHA, don't merge; ask for it or a new UAT run.
+The handoff (in the request, the PR, or earlier conversation) must name the tested SHA, Preview URL and deployment ID, a passing `npm run verify:full` at that SHA, the hosted Playwright run ID with results, and known gaps. If anything is missing or belongs to another SHA, don't merge; ask for it or a new UAT run.
 
-Fetch `origin/main` and the candidate. The candidate's remote SHA must equal the tested SHA, and CI must still be green. If the candidate changed, or `main` advanced in a way that changes the merge result, stop and ask for a new UAT run. Get the user to accept any known gaps (for example, Edge not run) before merging.
+Fetch `origin/main` and the candidate. The candidate's remote SHA must equal the tested SHA. Opening the release PR runs the fast `Verify` job (about 5 minutes); it must be green. If the candidate changed, or `main` advanced in a way that changes the merge result, stop and ask for a new UAT run. Get the user to accept any known gaps (for example, Edge not run) before merging.
 
 Preserve unrelated local edits; never reset, clean, force-push, or silently stash. Review the full candidate-to-`main` diff for `.env*`, credentials, database files, Playwright artifacts, or unrelated changes.
 
@@ -44,7 +44,7 @@ If anything fails, report the domain, deployment ID, commit, state, and error ev
 ```text
 PROD: RELEASED            (or PROD: BLOCKED / FAILED — <reason>)
 Candidate: <branch> @ <UAT-tested SHA>
-UAT evidence: <Preview deployment ID, Playwright run ID, CI link>
+UAT evidence: <Preview deployment ID, Playwright run ID, verify:full result>
 Migrations: <none, or versions applied to Production and when>
 Merge: <PR link, merge commit on main>
 Production: <domain, deployment ID, READY>

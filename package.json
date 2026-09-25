@@ -24,6 +24,8 @@
     "test:e2e:readiness:random": "node scripts/run-playwright.mjs --project=chromium e2e/readiness/browser-z-randomized.spec.ts",
     "test:e2e:uat": "node scripts/run-playwright.mjs --project=chromium e2e/readiness/browser-uat.spec.ts",
     "test": "vitest run --config vitest.config.ts",
+    "verify": "npm test && npm run lint && tsc --noEmit --incremental false && npm run build && npm audit --omit=dev --audit-level=moderate",
+    "verify:full": "npm run verify && npm run test:e2e && node scripts/run-playwright.mjs --project=chromium",
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {

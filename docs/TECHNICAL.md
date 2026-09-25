@@ -37,7 +37,7 @@ Requests never change the schema. `ensureDatabase()` checks that every version i
 - After roles are released, the first phase is a Day; Day and Night then alternate. Each phase records its elimination slots when it opens: `max(1, ceil(living / divisor))`, with a default divisor of 30.
 - Only each player's latest saved response counts. Targets must be living, unique, and legal for the role.
 - The highest vote totals fill the slots. A tie across the last slot is resolved by a cryptographically random draw that is stored with the result.
-- The Mayor's Day and Final ballot votes count twice. Bodyguard protection blocks only the pack's attack. Cupid pairs once; when one lover is eliminated, the other is added to the same result.
+- The Mayor's Day and Final ballot votes count twice. Bodyguard protection blocks only the pack's attack. Cupid pairs once; when one lover is eliminated, the other is added to the same result. The Apprentice Seer has no action while the Seer lives; afterwards they investigate each Night and see the Seer's past results.
 - If the result eliminates a Hunter, the phase waits for the Hunter's shot (60 minutes by default) before it can be published.
 - Each result is stored three ways: the engine's `proposedOutcome`, a `reviewedOutcome` after Hunter follow-up or override, and the authoritative `publishedOutcome`. Overrides record the reason, reviewer, and time.
 - Publishing applies eliminations, reveals roles, delivers Seer and lover notifications, updates room access, and checks for a winner in one transaction.

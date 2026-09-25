@@ -16,7 +16,7 @@ Local development (`npm run dev` with a `file:` database) is the only mode where
 
 ## Requirements
 
-- Node.js 24.x LTS and Git. `.nvmrc` pins 24; CI verifies 24.x.
+- Node.js 24.x LTS and Git. `.nvmrc` pins 24.
 - Access to the Vercel `dyl-edge` team and the Vercel CLI.
 - A Turso account and the Turso CLI ([quickstart](https://docs.turso.tech/quickstart)).
 - A password manager for recovery codes, which are shown once.

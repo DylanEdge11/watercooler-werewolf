@@ -315,4 +315,40 @@ describe('real libSQL provider integration', () => {
     const phase = await client.execute("SELECT status FROM phases WHERE id = 'phase'");
     expect(phase.rows[0]?.status).toBe('PUBLISHED');
   });
+
+  test('publishes a Cupid pairing, eliminates both lovers, and tells only the pair and Cupid', async () => {
+    await seedActiveGame();
+    await executeBatch([
+      { sql: "UPDATE phases SET kind = 'NIGHT' WHERE id = 'phase'" },
+      { sql: "UPDATE role_assignments SET role_key = 'CUPID' WHERE seat_id = 'p0'" },
+      {
+        sql: `INSERT INTO action_submissions (id,phase_id,actor_seat_id,kind,target_ids_json,version,submitted_at) VALUES
+          ('pair','phase','p0','CUPID_PAIR','["p1","p2"]',1,'2026-01-01'),
+          ('w17','phase','p17','WOLF_VOTE','["p1"]',1,'2026-01-01'),
+          ('w18','phase','p18','WOLF_VOTE','["p1"]',1,'2026-01-01')`,
+      },
+    ]);
+    const phaseContext = { params: Promise.resolve({ gameId: 'game' }) };
+    const proposed = await phasePost(request('/api/games/game/phases', { action: 'LOCK_AND_PROPOSE', phaseId: 'phase' }), phaseContext);
+    expect(proposed.status).toBe(200);
+    const published = await phasePost(request('/api/games/game/phases', { action: 'PUBLISH', phaseId: 'phase' }), phaseContext);
+    expect(published.status).toBe(200);
+
+    const eliminated = await client.execute("SELECT id FROM seats WHERE game_id = 'game' AND alive = 0 ORDER BY id");
+    expect(eliminated.rows.map((row) => row.id)).toEqual(['p1', 'p2']);
+    const pairEvents = await client.execute("SELECT payload_json AS payload FROM game_events WHERE event_type = 'CUPID_PAIR_SET'");
+    expect(pairEvents.rows.map((row) => JSON.parse(String(row.payload)))).toEqual([{ cupidId: 'p0', playerIds: ['p1', 'p2'] }]);
+    const loverNotices = await client.execute("SELECT seat_id AS seatId FROM notifications WHERE type = 'LOVER_BOND' ORDER BY seat_id");
+    expect(loverNotices.rows.map((row) => row.seatId)).toEqual(['p0', 'p1', 'p2']);
+
+    // A bystander sees both deaths and their causes, but nothing about Cupid.
+    shared.currentPlayer = { seatId: 'p5' };
+    const bystander = await playerGet(new Request('http://localhost:3000/api/player'));
+    expect(bystander.status).toBe(200);
+    const body = await bystander.text();
+    expect(body).toContain('LOVER_BOND');
+    expect(body).not.toContain('CUPID_PAIR');
+    expect(body).not.toContain('cupidId');
+    expect(body).not.toContain('Cupid has linked you');
+  });
 });
