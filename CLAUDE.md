@@ -17,10 +17,10 @@ For quick iteration, run only the relevant test file. Suites and the hosted Prev
 ## Branches and releases
 
 - `main` is Production. Vercel's Git integration builds a Preview for every pushed branch and deploys Production from `main`.
-- The working base is always a version branch named `version-X.Y`, never `main`. The current one is `version-1.2`. The owner creates the next version branch from `main` after a release.
-- Feature branches start from the version branch and merge back into it. The version branch reaches `main` through one release pull request.
+- The working base is always the one `version-X.Y` branch on origin (`git ls-remote --heads origin 'version-*'`), never `main`. A new one is created from `main` after each release.
+- Each change is a `feat/` or `fix/` branch from the version branch, merged back through a pull request. The version branch reaches `main` through one release pull request. Only an urgent Production fix (`hotfix/`) branches from and merges into `main`.
 - Changes reach `main` only through pull requests. Never push to `main`, never use `vercel deploy --prod`, and never promote a Preview deployment.
-- The release phases are the user-invoked skills `/werewolf-dev`, `/werewolf-uat`, and `/werewolf-prod` in `.claude/skills/`. Each phase stops at its handoff.
+- The workflow is three user-invoked skills in `.claude/skills/`: `/werewolf-dev` (one change, through to a PR and Preview), `/werewolf-uat` (certify the version branch), and `/werewolf-prod` (release it). Each stops at its handoff.
 - GitHub Actions minutes are limited (2,000/month, spending limit $0). CI runs only the fast gates, only on pull requests into `main`. Checks run locally with `npm run verify` / `verify:full`. Don't add jobs or triggers to `.github/workflows`, or start the workflow by hand, without asking. Batch commits; don't push after every small fix.
 
 ## Safety rules
