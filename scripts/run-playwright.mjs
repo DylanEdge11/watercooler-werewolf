@@ -110,6 +110,14 @@ async function runLocal() {
       PORT: String(port),
       SITE_ORIGIN: baseUrl,
       NODE_ENV: 'test',
+      // Guide capture shows the email-invite controls switched on. The .invalid
+      // host means nothing can be sent, and the recording never clicks send.
+      ...(process.env.CAPTURE_GUIDE_MEDIA === '1' ? {
+        SMTP_HOST: 'smtp.invalid',
+        SMTP_USER: 'guide@example.test',
+        SMTP_PASSWORD: 'guide-media-placeholder',
+        EMAIL_FROM: 'Watercooler Werewolf <guide@example.test>',
+      } : {}),
     },
     stdio: ['ignore', 'ignore', 'inherit'],
     windowsHide: true,

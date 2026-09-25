@@ -168,7 +168,7 @@ export default function GuidePage() {
           <Shot src="/guide/player-day-ballot.png" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself about every ten seconds." />
           <h3>4. Follow the story</h3>
           <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page, with each Day’s vote tally. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
-          <Shot src="/guide/player-timeline.png" alt="Player dashboard showing a published result in the timeline" caption="After a result is published, the timeline shows who was eliminated and their role." />
+          <Shot src="/guide/player-timeline.png" alt="Player dashboard showing the full Timeline of published results" caption="The full Timeline: each published result, who was eliminated and their role, and how everyone voted." />
           <h3>Good to know</h3>
           <ul>
             <li>Werewolves and Masons get a private room to chat with their team. Eliminated players can talk in the <strong>Afterlife</strong> room.</li>
