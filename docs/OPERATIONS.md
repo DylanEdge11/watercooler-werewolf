@@ -20,6 +20,8 @@ These controls are under **Communications & operations** in the moderator consol
 | Need | Steps | Result |
 | --- | --- | --- |
 | Notify players | **Official announcement** → title and message → **Publish notice** | Appears in every player's updates. No email is sent. |
+| Add a late player | **Import the roster** → **Change the roster** → name and email → **Add player** | A new unclaimed seat and one more Villager. Copy the private link shown once, or **Email** it from **Waiting on N players**. Locked once roles are randomized. |
+| Drop a no-show | **Import the roster** → **Waiting on N players** → **Remove** beside the player | Their link stops working and one Villager is removed. Only unclaimed players can be removed. Locked once roles are randomized. |
 | Re-send a lost invitation | **Import the roster** → **Waiting on N players** → **Resend** beside the player | The player gets a fresh link by email; their old link stops working. Needs [invite email](SETUP.md#invite-email). |
 | Add a helper | **Co-moderator access** → email and a 12+ character password → **Add co-moderator** | A new account shows one-time recovery codes; deliver access privately. An existing moderator keeps their password. |
 | Player forgot their PIN | **Player access recovery** → player, new six-digit PIN, reason (5+ characters) → **Reset player PIN** | The player's old sessions are signed out. Deliver the PIN privately. |
