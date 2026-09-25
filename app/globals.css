@@ -21,20 +21,6 @@ body { margin: 0; background: var(--paper); color: var(--ink); font-family: Aria
 button, a { font: inherit; }
 button { color: inherit; }
 .app-shell { background: var(--paper); min-height: 100vh; transition: background .25s ease; }
-.role-theme { background: radial-gradient(circle at 18% 9%, var(--role-glow) 0, transparent 31rem), linear-gradient(145deg, var(--paper), var(--role-wash)); --line: var(--role-line); --mint: var(--role-soft); --mint-strong: var(--role-accent); --night: var(--role-deep); --night-2: var(--role-deep-2); --coral: var(--role-action); --amber: var(--role-highlight); }
-.role-theme-villager { --paper: #f5f1e4; --panel: #fffdf7; --role-wash: #e8efe2; --role-glow: rgba(225, 194, 91, .24); --role-line: #dcd5bf; --role-soft: #d8e8c5; --role-accent: #356c49; --role-deep: #25483a; --role-deep-2: #3f6d55; --role-action: #bd6b35; --role-highlight: #f0c15f; --role-selection: #e4efdc; }
-.role-theme-werewolf { --paper: #eee9eb; --panel: #fffafb; --role-wash: #e5dde1; --role-glow: rgba(143, 42, 69, .2); --role-line: #d9cbd0; --role-soft: #e8bbc7; --role-accent: #8d304c; --role-deep: #211a24; --role-deep-2: #4b2432; --role-action: #b9424e; --role-highlight: #efb36f; --role-selection: #f3dfe5; }
-.role-theme-seer { --paper: #f0eef8; --panel: #fdfcff; --role-wash: #e4e0f1; --role-glow: rgba(111, 85, 183, .22); --role-line: #d9d3ea; --role-soft: #d8cef5; --role-accent: #6852a6; --role-deep: #272246; --role-deep-2: #4d3e7c; --role-action: #8655bc; --role-highlight: #e7c86b; --role-selection: #e9e3f7; }
-.role-theme-bodyguard { --paper: #eaf1f5; --panel: #fbfdff; --role-wash: #dcebf0; --role-glow: rgba(66, 147, 167, .22); --role-line: #cbdce5; --role-soft: #bee6e4; --role-accent: #267080; --role-deep: #173746; --role-deep-2: #245e70; --role-action: #327a9e; --role-highlight: #f0c36a; --role-selection: #dcecef; }
-.role-theme-hunter { --paper: #f5ede7; --panel: #fffcf9; --role-wash: #eadfd6; --role-glow: rgba(188, 89, 45, .2); --role-line: #e2d2c7; --role-soft: #ead4bb; --role-accent: #92542f; --role-deep: #352823; --role-deep-2: #70422f; --role-action: #bd4c2f; --role-highlight: #f0ae4a; --role-selection: #f3e2d6; }
-.role-theme-mason { --paper: #edf1f1; --panel: #fcfdfd; --role-wash: #dde8e6; --role-glow: rgba(70, 118, 110, .2); --role-line: #d2dcdb; --role-soft: #c6ded8; --role-accent: #44756e; --role-deep: #223b3f; --role-deep-2: #3f6764; --role-action: #966245; --role-highlight: #d7b06c; --role-selection: #e0ece9; }
-.role-theme-apprentice_seer { --paper: #f1eef8; --panel: #fdfcff; --role-wash: #e7e1f0; --role-glow: rgba(115, 92, 171, .2); --role-line: #d9d2e9; --role-soft: #dbd0f3; --role-accent: #6a55a4; --role-deep: #2d2549; --role-deep-2: #514176; --role-action: #805aba; --role-highlight: #e7c96f; --role-selection: #ece5f7; }
-.role-theme-mayor { --paper: #f4efe5; --panel: #fffdf8; --role-wash: #ebe1cf; --role-glow: rgba(171, 122, 44, .18); --role-line: #dfd4bf; --role-soft: #e8d9b4; --role-accent: #81632f; --role-deep: #463521; --role-deep-2: #75572e; --role-action: #a55c3f; --role-highlight: #f0c56f; --role-selection: #f2ead8; }
-.role-theme-cupid { --paper: #f7edef; --panel: #fffafb; --role-wash: #f0dfe4; --role-glow: rgba(177, 80, 115, .17); --role-line: #ead1d8; --role-soft: #f0ced9; --role-accent: #a24666; --role-deep: #492634; --role-deep-2: #78374f; --role-action: #bc5665; --role-highlight: #f1bd76; --role-selection: #f7e2e9; }
-.role-theme .topbar { background: color-mix(in srgb, var(--panel) 92%, transparent); }
-.role-theme .role-card { background: linear-gradient(125deg, var(--role-deep), var(--role-deep-2)); box-shadow: 0 18px 48px color-mix(in srgb, var(--role-deep) 24%, transparent); }
-.role-theme .candidate.selected { background: var(--role-selection); border-color: var(--role-accent); box-shadow: inset 0 0 0 1px var(--role-accent); }
-.role-theme .sidebar-note, .role-theme .moon-card { background: var(--role-deep); }
 .topbar { align-items: center; background: rgba(255, 253, 250, .95); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 250px 1fr 250px; height: 76px; padding: 0 28px; position: sticky; top: 0; z-index: 20; }
 .brand { align-items: center; color: inherit; display: flex; gap: 11px; text-decoration: none; }
 .brand > span:last-child { display: grid; line-height: 1; }
@@ -46,12 +32,6 @@ button { color: inherit; }
 .status-dot { background: #50a67f; border-radius: 50%; box-shadow: 0 0 0 3px #d9ecdf; height: 7px; width: 7px; }
 .chevron { color: var(--muted); margin-left: 5px; }
 .profile { align-items: center; display: flex; gap: 9px; justify-self: end; }
-.theme-toggle { align-items: center; background: transparent; border: 0; cursor: pointer; display: flex; gap: 7px; margin-right: 3px; padding: 4px; }
-.theme-toggle-track { background: #d7dbd8; border: 1px solid #c6ceca; border-radius: 999px; display: block; height: 22px; padding: 2px; transition: background .2s ease, border .2s ease; width: 38px; }
-.theme-toggle-track > span { background: white; border-radius: 50%; box-shadow: 0 1px 4px rgba(26, 40, 34, .2); display: block; height: 16px; transform: translateX(0); transition: transform .2s ease; width: 16px; }
-.theme-toggle[aria-checked='true'] .theme-toggle-track { background: var(--mint-strong); border-color: var(--mint-strong); }
-.theme-toggle[aria-checked='true'] .theme-toggle-track > span { transform: translateX(16px); }
-.theme-toggle-label { color: var(--muted); font-size: 10px; font-weight: 800; }
 .avatar, .candidate-avatar { align-items: center; background: #d9e9df; border: 1px solid #c7dace; border-radius: 50%; color: #245848; display: flex; font-size: 12px; font-weight: 800; height: 36px; justify-content: center; width: 36px; }
 .profile-name { font-size: 13px; font-weight: 700; }
 .icon-button { background: transparent; border: 0; cursor: pointer; font-size: 18px; height: 38px; position: relative; width: 38px; }
@@ -159,7 +139,7 @@ button { color: inherit; }
 }
 @media (max-width: 780px) {
   .topbar { grid-template-columns: 1fr auto; height: 68px; padding: 0 16px; }
-  .game-switcher, .profile-name, .theme-toggle-label { display: none; }
+  .game-switcher, .profile-name { display: none; }
   .workspace { display: block; padding: 24px 15px 54px; }
   .sidebar { display: none; }
   .mobile-nav { align-items: center; display: flex; gap: 7px; margin-bottom: 18px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
