@@ -56,6 +56,12 @@ describe('timeline wording', () => {
     expect(describeTimelineEvent(event(type, payload))).toMatchObject({ eyebrow, headline, tone, publicBallot: false });
   });
 
+  it('names the winner the same way in the rail and the full Timeline', () => {
+    const view = describeTimelineEvent(event('GAME_COMPLETED', { winner: 'WEREWOLF' }));
+    expect(view.title).toBe('Werewolf wins');
+    expect(view.headline).toBe('Werewolf wins');
+  });
+
   it('formats roles and causes', () => {
     expect(readableRole('APPRENTICE_SEER')).toBe('Apprentice Seer');
     expect(readableRole(null)).toBe('Role unavailable');
