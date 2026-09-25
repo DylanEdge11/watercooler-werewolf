@@ -78,7 +78,7 @@ button { color: inherit; }
 .role-card { align-items: center; background: linear-gradient(125deg, var(--night), var(--night-2)); border-radius: 20px; box-shadow: 0 18px 45px rgba(21, 43, 39, .14); color: white; display: grid; gap: 20px; grid-template-columns: 88px 1fr 130px; margin-bottom: 22px; overflow: hidden; padding: 25px 28px; position: relative; }
 .role-card::after { border: 1px solid rgba(184, 227, 207, .14); border-radius: 50%; content: ''; height: 180px; left: -60px; position: absolute; top: -80px; width: 180px; }
 .role-orbit { align-items: center; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.13); border-radius: 50%; display: flex; height: 72px; justify-content: center; position: relative; width: 72px; z-index: 1; }
-.role-orbit span { color: var(--amber); font-size: 42px; transform: rotate(-18deg); }
+.role-medallion { display: block; height: 82%; width: 82%; }
 .role-copy { position: relative; z-index: 1; }
 .role-copy-heading { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
 .role-copy .eyebrow { color: #98b7aa; margin-bottom: 5px; }
@@ -152,7 +152,6 @@ button { color: inherit; }
   .deadline-card { flex-basis: 125px; }
   .role-card { grid-template-columns: 58px 1fr; padding: 20px; }
   .role-orbit { height: 54px; width: 54px; }
-  .role-orbit span { font-size: 32px; }
   .role-faction { border-left: 0; border-top: 1px solid rgba(255,255,255,.14); grid-column: 1 / -1; grid-template-columns: auto auto 1fr; padding: 12px 0 0; }
 }
 @media (max-width: 560px) {
@@ -267,7 +266,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .signout-button { color: #73847b; font-size: 15px; }
 .eliminated-role { background: linear-gradient(125deg, #3a302e, #5a3d37); border: 2px solid rgba(232, 111, 81, .7); filter: saturate(.65); }
 .eliminated-role .role-orbit { border-color: rgba(232, 111, 81, .75); }
-.eliminated-role .role-orbit span { color: var(--coral); }
 .eliminated-banner { background: var(--coral); border-radius: 999px; box-shadow: 0 6px 15px rgba(0, 0, 0, .2); color: white; font-size: 9px; font-weight: 850; letter-spacing: .1em; padding: 7px 11px; position: absolute; right: 24px; text-transform: uppercase; top: 15px; z-index: 2; }
 .action-success { background: #e1f0e7; border-radius: 8px; color: #28634e; font-size: 10px; margin: 15px 0 0; padding: 10px 12px; }
 .waiting-card { align-items: center; display: grid; gap: 18px; grid-template-columns: 48px 1fr auto; min-height: 150px; }

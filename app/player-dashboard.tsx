@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
 import FullTimeline from './full-timeline';
+import RoleMedallion from './role-medallion';
 import BrandMark from './brand-mark';
 import { pollWhileVisible } from '../lib/http/poll-while-visible';
 import { describeTimelineEvent, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
@@ -59,18 +60,6 @@ interface PlayerDashboardProps {
 
 function initials(name: string): string {
   return name.split(/\s+/u).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-}
-
-function roleGlyph(role: RoleKey | null): string {
-  if (role === 'WEREWOLF') return '☾';
-  if (role === 'SEER') return '◉';
-  if (role === 'BODYGUARD') return '✚';
-  if (role === 'HUNTER') return '⌖';
-  if (role === 'MASON') return '◇';
-  if (role === 'APPRENTICE_SEER') return '◉';
-  if (role === 'MAYOR') return '♛';
-  if (role === 'CUPID') return '♥';
-  return '⌂';
 }
 
 function deadlineLabel(deadline: string | null): string {
@@ -456,7 +445,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
 
           <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`} data-just-revealed={roleJustRevealed || undefined}>
             {!data.player.alive && <span className="eliminated-banner" role="status">☠ Eliminated · spectator mode</span>}
-            <div className="role-orbit"><span aria-hidden="true">{roleHidden ? '⌂' : roleGlyph(data.player.role)}</span></div>
+            <div className="role-orbit"><RoleMedallion role={data.player.role} hidden={roleHidden} /></div>
             <div className="role-copy">
               <div className="role-copy-heading"><p className="eyebrow">{roleHidden ? 'Private role · concealed' : 'Your private role'}</p><button className="role-visibility-toggle" type="button" aria-pressed={roleHidden} onClick={toggleRoleVisibility}>{roleHidden ? 'Show role' : 'Hide role'}</button></div>
               <h2>{roleHidden ? 'Hidden' : role?.name ?? 'Not released'}</h2>

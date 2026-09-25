@@ -45,6 +45,7 @@ test('an eight-player game runs from setup to a Village win with private informa
         : [];
       expect(dashboard.player.teammates.map((teammate) => teammate.id).sort()).toEqual(expectedTeammates);
       await game.assertModeratorOnlyRoutes(player);
+      await expect(player.page.locator('.role-orbit .role-medallion')).toBeVisible();
     }
     const [first, other] = game.players;
     await first.page.goto(`${BASE_URL}/?seatId=${encodeURIComponent(other.account.seatId)}`);
