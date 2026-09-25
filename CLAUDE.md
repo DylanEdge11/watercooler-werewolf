@@ -19,8 +19,9 @@ For quick iteration, run only the relevant test file. Browser and API suites are
 ## Branches and releases
 
 - `main` is Production. Vercel's Git integration builds a Preview for every pushed branch and deploys Production from `main`.
-- The owner names the working base (currently `version-1.1`); do not assume `main`.
-- Changes reach `main` through pull requests. Never push to `main`, never use `vercel deploy --prod`, and never promote a Preview deployment.
+- The working base is always a version branch named `version-X.Y`, never `main`. The current one is `version-1.2`. The owner creates the next version branch from `main` after a release.
+- Feature branches start from the version branch and merge back into it. The version branch reaches `main` through one release pull request.
+- Changes reach `main` only through pull requests. Never push to `main`, never use `vercel deploy --prod`, and never promote a Preview deployment.
 - The release phases are the user-invoked skills `/werewolf-dev`, `/werewolf-uat`, and `/werewolf-prod` in `.claude/skills/`. Each phase stops at its handoff.
 - GitHub Actions minutes are limited (2,000/month). Don't add or expand jobs in .github/workflows without asking. Run the 20-player API and browser suites locally or in-session, not in Actions. Batch commits; don't push after every small fix.
 

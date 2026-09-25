@@ -4,7 +4,7 @@ How to verify a change, from fast unit tests to a full hosted Preview run. Use f
 
 ## Release checks
 
-The `Verify` workflow in `.github/workflows/ci.yml` runs on pushes to `main` and `version-1.1`, on every pull request, and when started by hand (a newer push cancels an older run, except on `main`). Its `verify` job runs the fast gates:
+The `Verify` workflow in `.github/workflows/ci.yml` runs on pushes to `main` and to `version-*` branches, on every pull request, and when started by hand (a newer push cancels an older run, except on `main`). Its `verify` job runs the fast gates:
 
 ```text
 npm test -- --run

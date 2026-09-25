@@ -105,6 +105,8 @@ If Deployment Protection is on, scripts need a **Protection Bypass for Automatio
 
 ## Release a change
 
+Work happens on a version branch named `version-X.Y`, never directly on `main`. Feature branches start from the version branch and merge back into it. After a release, the next version branch is created from `main`.
+
 Routine releases go through `main`:
 
 1. Verify the candidate on Preview. See [Testing](TESTING.md#release-checks).
