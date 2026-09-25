@@ -77,6 +77,21 @@ test('an eight-player game runs from setup to a Village win with private informa
       await player.expectCompleted();
       await player.expectReadOnly();
     }));
+    // The full Timeline replaces Today in the main column, on desktop and phone.
+    for (const viewer of [game.players[1], game.players[0]]) {
+      const timelineButton = viewer.page.getByRole('button', { name: 'Timeline', exact: true }).filter({ visible: true });
+      await timelineButton.click();
+      const timeline = viewer.page.locator('#full-timeline');
+      await expect(timeline.getByRole('heading', { name: 'Timeline', exact: true })).toBeVisible();
+      await expect(timeline.getByRole('heading', { name: 'Village wins', exact: true })).toBeVisible();
+      const firstDayEntry = timeline.locator('.timeline-full-entry').filter({ hasText: `${wolfOne.account.displayName} eliminated` });
+      await expect(firstDayEntry).toContainText('Werewolf · village vote');
+      await expect(timeline.locator('details.timeline-votes[open] .vote-ledger-row').first()).toBeVisible();
+      await timeline.getByRole('button', { name: 'Back to today', exact: true }).click();
+      await expect(viewer.page.locator('#full-timeline')).toHaveCount(0);
+      await expect(viewer.page.locator('#today')).toBeVisible();
+    }
+
     const livingPlayer = game.living()[0];
     await game.assertNoActionAfterCompletion(livingPlayer, finalDay.phaseId, game.chooseLiving((player) => player.account.seatId !== livingPlayer.account.seatId, livingPlayer));
     await game.assertHealthy();
