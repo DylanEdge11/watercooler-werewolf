@@ -39,7 +39,7 @@ For a manual rehearsal, give the moderator and each player a separate browser pr
 
 ## Local Playwright suites
 
-All local suites start a disposable Next server on `http://localhost:3100` with a fresh SQLite database, bootstrap a fictional moderator, and delete the database afterward. They run one worker at a time.
+All local suites start a disposable Next server on `http://localhost:3100` with a fresh SQLite database, bootstrap a fictional moderator, and delete the database afterward. They run one worker at a time. Each local moderator sign-in in the browser suites sends its own private client address, so a failed test's retries can't use up the moderator sign-in allowance (5 per 15 minutes) and fail the tests after it. Hosted runs keep the real limit.
 
 | Command | What it covers |
 | --- | --- |
