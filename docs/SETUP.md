@@ -30,6 +30,7 @@ Local development (`npm run dev` with a `file:` database) is the only mode where
 | `SITE_ORIGIN` | Yes | Exact origin players use, such as `https://watercooler-werewolf.vercel.app`, with no path. Browser writes from any other origin are rejected. |
 | `WATERCOOLER_OWNER_EMAIL` | For bootstrap | Email for the first moderator account. |
 | `CRON_SECRET` | Optional | Enables `/api/scheduler/deadlines` for an external scheduler. Without it, moderators use **Check deadlines**. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Optional | Turns on **Email invites**. `SMTP_PORT` defaults to 465. Without all of them, moderators use the invite CSV. See [Invite email](#invite-email). |
 
 Set variables separately for `preview` and `production` in Vercel. Never prefix database credentials with `NEXT_PUBLIC_`. See `.env.example` for local and test variables.
 
@@ -95,10 +96,38 @@ Do this once per fresh environment. Do not repeat migrations or bootstrap agains
 
 If Deployment Protection is on, scripts need a **Protection Bypass for Automation** secret (Vercel project **Settings → Deployment Protection**), sent as `VERCEL_AUTOMATION_BYPASS_SECRET`. Never use it with Production.
 
+## Invite email
+
+The moderator console can email each unclaimed player their private claim link. It sends through any SMTP account, so changing sender later is a settings change, not a code change. Set the variables for `preview` and `production` separately, and prefer a test account for Preview.
+
+**With a Gmail account (no domain needed):**
+
+1. Turn on 2-Step Verification for the Google account, then create an **App password** at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords). Google shows the 16-character password once.
+2. Add the variables (each command prompts for the value):
+
+   ```powershell
+   vercel env add SMTP_HOST production      # smtp.gmail.com
+   vercel env add SMTP_USER production      # the full Gmail address
+   vercel env add SMTP_PASSWORD production  # the app password
+   vercel env add EMAIL_FROM production     # Watercooler Werewolf <the same Gmail address>
+   ```
+
+3. Redeploy so the new values take effect. The console's **Email invites** button is enabled once all four are set.
+
+Gmail sends at most about 500 messages a day and always shows the Gmail address as the sender. Anyone holding the app password can send mail as that account; revoke it from the same Google page if it leaks.
+
+**Moving to your own domain later:** create an account with a sending provider (for example Resend), verify the domain with the DNS records the provider gives you, and replace the values. For Resend: `SMTP_HOST=smtp.resend.com`, `SMTP_USER=resend`, `SMTP_PASSWORD` = an API key, `EMAIL_FROM=Watercooler Werewolf <werewolf@your-domain>`. Redeploy, then remove the Gmail app password.
+
+**Behaviour to know:**
+
+- Sending gives the player a fresh link. Their previous link, including the one in the invite CSV, stops working.
+- The app signs in to the mail server before changing any links, so a wrong password changes nothing.
+- Addresses on reserved test domains (`.test`, `.example`, `.invalid`, `.localhost`, `example.com`) are never emailed, so rehearsal rosters don't bounce into the sender's inbox.
+
 ## Set up Production
 
 1. Create a separate database, such as `watercooler-werewolf-production`, and its own token.
-2. Add `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `SITE_ORIGIN`, `WATERCOOLER_OWNER_EMAIL`, and optionally `CRON_SECRET` to the `production` environment only.
+2. Add `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `SITE_ORIGIN`, `WATERCOOLER_OWNER_EMAIL`, and optionally `CRON_SECRET` and the [invite email](#invite-email) variables to the `production` environment only.
 3. Run `npm run db:migrate`, then `npm run owner:bootstrap` once, against the Production database. Store the recovery codes.
 4. Confirm `main` is the Vercel Production Branch. Production deploys are built from `main`; never promote a Preview deployment, because Preview uses a different database.
 5. Run a small fictional smoke test. Never copy Preview data into Production.
