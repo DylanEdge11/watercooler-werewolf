@@ -183,7 +183,7 @@ export default function GuidePage() {
           <h3>Set up a game</h3>
           <ol>
             <li><strong>Create the game.</strong> In the <Link href="/moderator">Moderator console</Link>, enter a name, timezone, dates, and a final cutoff, then select <strong>Create game</strong>.</li>
-            <li><strong>Add players.</strong> Paste a roster with the header <code>display_name,email</code>, select <strong>Create private seats</strong>, then <strong>Download invite CSV</strong>. Send each person only their own message; the app does not send email.</li>
+            <li><strong>Add players.</strong> Paste a roster with the header <code>display_name,email</code> and select <strong>Create private seats</strong>. Then select <strong>Email invites</strong> to send each player their own private link (if the site operator has turned email on), or <strong>Download invite CSV</strong> and send each person only their own message. <strong>Waiting on</strong> lists who hasn’t claimed yet, with <strong>Resend</strong> for a lost email. A resent link replaces the old one.</li>
             <li><strong>Balance the roles.</strong> Accept the suggested counts or edit them and select <strong>Save composition</strong>. A 20-player game defaults to 12 Villagers, 3 Werewolves, a Seer, a Bodyguard, a Hunter, and 2 Masons.</li>
             <li><strong>Release roles.</strong> When every seat is claimed, select <strong>Randomize roles</strong>, review the result privately, then <strong>Release roles to players</strong>. Setup is locked after release.</li>
           </ol>

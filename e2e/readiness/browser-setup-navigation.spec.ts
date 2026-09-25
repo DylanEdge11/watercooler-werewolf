@@ -44,6 +44,11 @@ test('keeps setup drafts scoped, supports safe restart, and exposes another game
   await moderator.page.getByRole('button', { name: 'Create private seats', exact: true }).click();
   expect((await rosterImport).status()).toBe(200);
   await expect(moderator.page.getByText(`0 of ${E2E_PLAYER_COUNT} claimed`, { exact: true })).toBeVisible();
+  await expect(moderator.page.getByRole('button', { name: 'Download invite CSV', exact: true })).toBeVisible();
+  // Enabled only where SMTP is configured; the .test roster is never emailed either way.
+  await expect(moderator.page.getByRole('button', { name: `Email invites to ${E2E_PLAYER_COUNT} unclaimed players`, exact: true })).toBeVisible();
+  await moderator.page.getByText(`Waiting on ${E2E_PLAYER_COUNT} players`, { exact: true }).click();
+  await expect(moderator.page.locator('.invite-list li').filter({ hasText: 'Setup Player 1' }).first()).toContainText('not emailed');
 
   const villager = moderator.page.getByRole('spinbutton', { name: 'Villager', exact: true });
   await villager.fill('11');
