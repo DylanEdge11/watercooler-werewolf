@@ -254,7 +254,6 @@
   border: 2px solid var(--pt-ink);
   box-shadow: 0 0 0 4px var(--pt-paper), 0 0 0 5px rgba(43, 33, 24, 0.35), 0 6px 18px var(--pt-gel-wash);
 }
-.app-shell .role-orbit span { color: #fff6dc; }
 .app-shell .role-copy .eyebrow { color: var(--pt-ink-soft); }
 .app-shell .role-copy h2 { color: var(--pt-ink); font-family: var(--ll-font-display), Georgia, serif; font-size: 36px; font-style: italic; font-variation-settings: 'SOFT' 100, 'WONK' 1; font-weight: 700; letter-spacing: -0.02em; }
 .app-shell .role-copy > p:last-child { color: var(--pt-ink-soft); font-size: 14px; }
@@ -268,7 +267,6 @@
 /* Eliminated: the playbill fades, and a red rubber stamp goes on it. */
 .app-shell .eliminated-role { filter: grayscale(0.55) sepia(0.2); }
 .app-shell .eliminated-role .role-orbit { background: #5a4a44; border-color: var(--pt-ink); }
-.app-shell .eliminated-role .role-orbit span { color: #fff6dc; }
 .app-shell .eliminated-banner {
   background: var(--pt-paper);
   border: 3px double var(--pt-curtain);
