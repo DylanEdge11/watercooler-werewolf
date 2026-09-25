@@ -6,7 +6,8 @@ interface FullTimelineProps {
 }
 
 /** The whole published record of the campaign, newest first. Public data only. */
-export default function FullTimeline({ events, onBack }: FullTimelineProps) {
+export default function FullTimeline({ events: unordered, onBack }: FullTimelineProps) {
+  const events = [...unordered].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const newestBallotId = events.find((event) => describeTimelineEvent(event).publicBallot)?.id;
   return (
     <section className="main-column timeline-view" id="full-timeline" aria-labelledby="full-timeline-title">
