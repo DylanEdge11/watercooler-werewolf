@@ -187,7 +187,7 @@ export default function GuidePage() {
             <li><strong>Balance the roles.</strong> Accept the suggested counts or edit them and select <strong>Save composition</strong>. A 20-player game defaults to 12 Villagers, 3 Werewolves, a Seer, a Bodyguard, a Hunter, and 2 Masons.</li>
             <li><strong>Release roles.</strong> When every seat is claimed, select <strong>Randomize roles</strong>, review the result privately, then <strong>Release roles to players</strong>. Setup is locked after release.</li>
           </ol>
-          <p>Want to see what a role looks like to players? <strong>View player preview</strong> opens the Player View Studio with sample data.</p>
+          <p>Want to see what a role looks like to players? <strong>View player preview</strong> opens the Player View Studio with sample data. <strong>Play elimination scene</strong> there replays the announcement players see when someone is eliminated.</p>
           <h3>Run each phase</h3>
           <p>Repeat this loop, starting with a Day and then alternating Night and Day:</p>
           <ol>
