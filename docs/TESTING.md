@@ -57,52 +57,54 @@ Use this to verify a specific Preview deployment. The runner refuses anything th
 
 ### Configure
 
-Put these in the ignored file `.env.e2e.local`, never in Git or chat:
+Put the values that don't change between runs in the ignored file `.env.e2e.local`, never in Git or chat:
 
 ```text
-E2E_BASE_URL=https://<exact-preview-origin>
-E2E_VERCEL_DEPLOYMENT_ID=dpl_<exact-deployment-id>
-E2E_MODERATOR_EMAIL=<fictional preview moderator>
+E2E_MODERATOR_EMAIL=<fictional Preview moderator, a .test address>
 E2E_MODERATOR_PASSWORD=<12+ characters>
-VERCEL_AUTOMATION_BYPASS_SECRET=<scoped to this Preview>
+VERCEL_AUTOMATION_BYPASS_SECRET=<Preview protection bypass>
 ```
 
-The preflight calls `vercel inspect`, so the Vercel CLI must be installed and signed in to `dyl-edge`, or `VERCEL_TOKEN` must be set.
+The test moderator is a normal account on the Preview database. To create one, sign in to any Preview as a moderator, open a game you own, and add a co-moderator under **Co-moderator access** with a `.test` email and a 12+ character password. Keep its recovery codes with the password.
 
-In a Claude Code cloud session, these values are environment variables set in the environment's settings (plus `VERCEL_TOKEN`), and there is no `.env.e2e.local`. Drop `--env-file=.env.e2e.local` from the commands below, because Node exits when the file is missing, and pass `E2E_BASE_URL` and `E2E_VERCEL_DEPLOYMENT_ID` inline. Chromium automatically trusts the session's network proxy (`e2e/proxy-trust.ts`), and hosted runs stub out Vercel's Preview toolbar, which tests don't use.
+The preflight calls `vercel inspect`, so the Vercel CLI must be installed and signed in to `dyl-edge` (`vercel whoami`), or `VERCEL_TOKEN` must be set.
+
+Each run also needs the exact Preview origin and deployment ID, which change with every commit. Pass them inline as `E2E_BASE_URL` and `E2E_VERCEL_DEPLOYMENT_ID` rather than editing the file.
+
+In a Claude Code cloud session, all of these are environment variables set in the environment's settings (plus `VERCEL_TOKEN`), and there is no `.env.e2e.local`. Drop `--env-file=.env.e2e.local` from the commands below, because Node exits when the file is missing. Chromium automatically trusts the session's network proxy (`e2e/proxy-trust.ts`), and hosted runs stub out Vercel's Preview toolbar, which tests don't use.
 
 ### Run
 
-This checks that the deployed Preview, with its real Vercel functions and Turso database, works end to end. The full browser suite has already run locally with `npm run verify:full`, so the hosted run is short, about 5–10 minutes. Run the sequence **once per candidate commit**, with one `E2E_RUN_ID` for the whole run and a distinct `E2E_INVOCATION_ID` for each command:
+This checks that the deployed Preview, with its real Vercel functions and Turso database, works end to end. Browsers were already covered locally by `npm run verify:full`, so the hosted run is short, about 5–10 minutes. Run the three steps **once per candidate commit**, with one `E2E_RUN_ID` for the whole run and a distinct `E2E_INVOCATION_ID` for each step:
 
 | Invocation ID | Arguments after `node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote` |
 | --- | --- |
-| `01-chromium-smoke` | `--project=chromium --retries=0 e2e/readiness/browser-smoke.spec.ts` |
-| `02-edge-smoke` | `--project=edge --retries=0 e2e/readiness/browser-smoke.spec.ts` |
-| `03-api-suite` | `--project=api --retries=0` |
-| `04-browser-uat` | `--project=chromium --retries=0 e2e/readiness/browser-uat.spec.ts e2e/readiness/browser-setup-navigation.spec.ts` |
+| `01-smoke` | `--project=chromium --retries=0 e2e/readiness/browser-smoke.spec.ts` |
+| `02-api-suite` | `--project=api --retries=0` |
+| `03-browser-uat` | `--project=chromium --retries=0 e2e/readiness/browser-uat.spec.ts e2e/readiness/browser-setup-navigation.spec.ts` |
 
 PowerShell:
 
 ```powershell
+$env:E2E_BASE_URL = 'https://<exact-preview-origin>'
+$env:E2E_VERCEL_DEPLOYMENT_ID = 'dpl_<exact-deployment-id>'
 $env:E2E_RUN_ID = "preview-qa-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-$env:E2E_INVOCATION_ID = '01-chromium-smoke'
+$env:E2E_INVOCATION_ID = '01-smoke'
 node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote --project=chromium --retries=0 e2e/readiness/browser-smoke.spec.ts
 ```
 
 bash:
 
 ```sh
+export E2E_BASE_URL='https://<exact-preview-origin>' E2E_VERCEL_DEPLOYMENT_ID='dpl_<exact-deployment-id>'
 export E2E_RUN_ID="preview-qa-$(date +%Y%m%d-%H%M%S)"
-E2E_INVOCATION_ID=01-chromium-smoke \
+E2E_INVOCATION_ID=01-smoke \
   node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote --project=chromium --retries=0 e2e/readiness/browser-smoke.spec.ts
 ```
 
 Notes:
 
-- The Edge smoke needs Microsoft Edge installed. If it isn't (for example on Linux), record it as not run rather than substituting another browser.
-- WebKit is optional.
-- The full browser suite (`--project=chromium --retries=0 e2e/readiness`) can still run against a Preview when you want it, for example from your own computer before a Production release. It takes much longer.
+- The full browser suite (`--project=chromium --retries=0 e2e/readiness`) can still run against a Preview when you want it. It takes much longer.
 - In a cloud session, the network proxy occasionally fails a browser read on its own with a short plain-text 502 or 504. Hosted browser runs re-send only those (GET or HEAD, without Vercel's `x-vercel-id` header), and print a `[cloud-proxy] retrying` line for each. Responses Vercel actually served, including errors, are never retried, and writes are never retried.
 - Playwright reports and traces can include request headers, so keep them private.
 - Use only run-owned fictional games. Never delete shared Preview data.
