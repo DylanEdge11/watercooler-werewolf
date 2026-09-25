@@ -191,6 +191,17 @@ describe('emailing invitations', () => {
     expect(await seatHash('cy')).toBe(await sha256('original-cy'));
   });
 
+  test('never emails a seat whose stored email holds more than one address', async () => {
+    await seed();
+    // Imported before rosters were limited to one address per player.
+    await client.execute({ sql: 'UPDATE seats SET email = ? WHERE id = ?', args: ['ben@pilot.test;mallory@pilot.test', 'ben'] });
+    const body = await (await sendInvites()).json();
+    expect(body.results.find((result: { seatId: string }) => result.seatId === 'ben')).toMatchObject({ status: 'FAILED', reason: 'Not a single email address; fix it in the roster.' });
+    expect(shared.sent.map((email) => email.to)).not.toContain('ben@pilot.test;mallory@pilot.test');
+    expect(shared.sent).toHaveLength(2);
+    expect(await seatHash('ben')).toBe(await sha256('original-ben'));
+  });
+
   test('is unavailable until email is configured', async () => {
     await seed();
     vi.stubEnv('SMTP_PASSWORD', '');

@@ -7,6 +7,7 @@ import { openMailer } from '../../../../../lib/email/smtp';
 import { MAX_PLAYERS } from '../../../../../lib/game/player-count';
 import { enforceRateLimit, RateLimitError } from '../../../../../lib/http/rate-limit';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
 import { inviteMessage } from '../../../../../lib/roster/invite-message';
 
 // Up to 80 invitations over three SMTP connections.
@@ -74,6 +75,12 @@ export async function POST(request: Request, context: RouteContext) {
 
     const results: InviteResult[] = [];
     const deliverable = targets.filter((seat) => {
+      // Seats imported before this check, or restored from a backup, may hold
+      // an address list; never send a private link to more than one recipient.
+      if (!isSingleEmailAddress(seat.email)) {
+        results.push({ seatId: seat.id, displayName: seat.displayName, status: 'FAILED', reason: 'Not a single email address; fix it in the roster.' });
+        return false;
+      }
       if (!isReservedTestAddress(seat.email)) return true;
       results.push({ seatId: seat.id, displayName: seat.displayName, status: 'SKIPPED', reason: 'Test address; not sent.' });
       return false;
