@@ -22,15 +22,6 @@ async function refreshPlayers(players: BrowserPlayer[]): Promise<void> {
   await Promise.all(players.map((player) => player.reload()));
 }
 
-async function enableRoleTheme(player: BrowserPlayer): Promise<void> {
-  const theme = player.page.getByRole('switch', { name: /Role theme/u });
-  await expect(theme).toHaveAttribute('aria-checked', 'false');
-  await theme.click();
-  await expect(theme).toHaveAttribute('aria-checked', 'true');
-  await expect(player.page.locator('main.role-theme')).toHaveCount(1);
-  await player.page.waitForTimeout(350);
-}
-
 async function capture(page: Page, fileName: string): Promise<void> {
   await page.addStyleTag({ content: 'html { scroll-behavior: auto !important; } * { animation: none !important; transition: none !important; }' });
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -75,10 +66,8 @@ test('captures every role with the important special-role interactions visible',
     const openingDay = await game.openPhase('DAY', reviewDeadline());
     await refreshPlayers([villager, mason]);
     await villager.prepareTarget(wolf.account);
-    await enableRoleTheme(villager);
     await capture(villager.page, 'villager-day-vote.png');
     await mason.prepareTarget(wolf.account);
-    await enableRoleTheme(mason);
     await capture(mason.page, 'mason-day-vote.png');
     if (captureMode === 'mason') {
       await game.assertHealthy();
@@ -91,10 +80,8 @@ test('captures every role with the important special-role interactions visible',
     await refreshPlayers([...wolves, seer, bodyguard]);
     const protectedTarget = game.chooseLiving((player) => player.account.role === 'VILLAGER', bodyguard);
     await wolf.prepareTarget(protectedTarget.account);
-    await enableRoleTheme(wolf);
     await capture(wolf.page, 'werewolf-night-target.png');
     await bodyguard.prepareTarget(protectedTarget.account);
-    await enableRoleTheme(bodyguard);
     await capture(bodyguard.page, 'bodyguard-night-protection.png');
 
     await game.submitConcurrently([
@@ -113,7 +100,6 @@ test('captures every role with the important special-role interactions visible',
     const secondNight = await game.openPhase('NIGHT', reviewDeadline());
     await seer.reload();
     await seer.prepareTarget(wolf.account);
-    await enableRoleTheme(seer);
     await expect(seer.page.getByRole('heading', { name: 'Private result history', exact: true })).toBeVisible();
     await capture(seer.page, 'seer-investigation-and-history.png');
     await game.lockAndPropose(secondNight.phaseId);
@@ -131,7 +117,6 @@ test('captures every role with the important special-role interactions visible',
     await hunter.reload();
     const shotTarget = game.chooseLiving((player) => player.account.seatId !== hunter.account.seatId, hunter);
     await hunter.prepareTarget(shotTarget.account);
-    await enableRoleTheme(hunter);
     await expect(hunter.page.getByRole('heading', { name: /final target/iu })).toBeVisible();
     await capture(hunter.page, 'hunter-final-shot.png');
 

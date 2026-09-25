@@ -112,7 +112,6 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const [submitting, setSubmitting] = useState(false);
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
-  const [roleThemeEnabled, setRoleThemeEnabled] = useState(false);
   const [roleHidden, setRoleHidden] = useState(false);
   const [view, setView] = useState<'today' | 'timeline'>('today');
   const [roleJustRevealed, setRoleJustRevealed] = useState(false);
@@ -318,11 +317,6 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     router.push('/');
   }
 
-  function toggleRoleTheme() {
-    if (!data?.player.role) return;
-    setRoleThemeEnabled((current) => !current);
-  }
-
   function showView(next: 'today' | 'timeline') {
     setView(next);
     document.getElementById('top')?.scrollIntoView({ block: 'start' });
@@ -398,10 +392,9 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       : 'The village is between phases.';
 
   const stageLight = data.phase?.kind === 'NIGHT' ? 'night' : 'day';
-  const roleThemeClass = roleThemeEnabled && !roleHidden && data.player.role ? ` role-theme role-theme-${data.player.role.toLowerCase()}` : '';
 
   return (
-    <main className={`app-shell${roleThemeClass}${previewMode ? ' preview-player-shell' : ''}`} data-stage-light={stageLight}>
+    <main className={`app-shell${previewMode ? ' preview-player-shell' : ''}`} data-stage-light={stageLight}>
       {previewMode && <div className="preview-mode-banner" role="status">
         <span><strong>Player View Studio.</strong> Synthetic sample data; actions, feedback, and chat stay in this page.</span>
         <button className="text-button" type="button" onClick={onExitPreview}>Back to studio controls</button>
@@ -413,10 +406,6 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
         </a>
         <div className="game-switcher"><span className="status-dot" aria-hidden="true" />{data.game.name}<span className="chevron" aria-hidden="true">⌄</span></div>
         <div className="profile">
-          <button className="theme-toggle" type="button" role="switch" aria-checked={roleThemeEnabled} aria-label={`Role theme ${roleThemeEnabled ? 'on' : 'off'}`} onClick={toggleRoleTheme} disabled={!data.player.role}>
-            <span className="theme-toggle-track" aria-hidden="true"><span /></span>
-            <span className="theme-toggle-label">Theme</span>
-          </button>
           <div className="avatar">{initials(data.player.displayName)}</div>
           <span className="profile-name">{data.player.displayName}</span>
           <button className="icon-button signout-button" type="button" aria-label={previewMode ? 'Back to studio controls' : 'Sign out'} onClick={signOut}>↗</button>

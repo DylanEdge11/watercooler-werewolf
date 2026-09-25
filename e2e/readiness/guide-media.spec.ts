@@ -105,12 +105,6 @@ async function shot(page: Page, fileName: string, clip?: { x: number; y: number;
   await page.evaluate(() => document.documentElement.classList.remove('guide-media-hidden'));
 }
 
-async function enableRoleTheme(page: Page): Promise<void> {
-  const theme = page.getByRole('switch', { name: /Role theme/u });
-  if ((await theme.getAttribute('aria-checked')) !== 'true') await click(page, theme, 500);
-  await expect(theme).toHaveAttribute('aria-checked', 'true');
-}
-
 async function post<T>(context: APIRequestContext, path: string, data: unknown): Promise<T> {
   const response = await context.post(path, { data });
   const body = await response.json() as T & { error?: string };
@@ -227,7 +221,6 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await caption(page, '4 · Each player sees only their own role');
   await expect(page.getByText('Your private role', { exact: true })).toBeVisible({ timeout: 30_000 });
   await pause(page, 1500);
-  await enableRoleTheme(page);
   await pause(page, 2500);
 
   // 5. The moderator opens the first Day.
@@ -318,7 +311,6 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   for (const [role, scenario, fileName] of roleShots) {
     await studioPage.getByLabel('Player role').selectOption({ label: role });
     await studioPage.getByLabel('Game moment').selectOption(scenario);
-    await enableRoleTheme(studioPage);
     await pause(studioPage, 400);
     await studioPage.locator('.app-shell').evaluate((element) => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
     await pause(studioPage, 400);
