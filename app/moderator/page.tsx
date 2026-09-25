@@ -363,11 +363,15 @@ export default function ModeratorPage() {
     setError('');
     setMessage('');
     setEmailingInvites(true);
+    // A send can take a while; the result belongs only to the game it came from.
+    const sentFrom = gameId;
+    const stillOnGame = () => selectedGameRef.current === sentFrom;
     try {
-      const data = await requestJson<{ sent: number; results: InviteEmailResult[] }>(`/api/games/${gameId}/invites`, {
+      const data = await requestJson<{ sent: number; results: InviteEmailResult[] }>(`/api/games/${sentFrom}/invites`, {
         method: 'POST',
         body: JSON.stringify({ seatIds: seats.map((seat) => seat.id) }),
       });
+      if (!stillOnGame()) return;
       // Emailed links replace the ones in the downloaded file. Skipped test
       // addresses keep their links, so the file stays valid if nothing else changed.
       if (data.results.some((result) => result.status !== 'SKIPPED')) setInviteCsv('');
@@ -377,10 +381,10 @@ export default function ModeratorPage() {
       setMessage(`Emailed ${data.sent} of ${data.results.length} ${data.results.length === 1 ? 'player' : 'players'}.${skipped ? ` Skipped ${skipped} test ${skipped === 1 ? 'address' : 'addresses'}, which can’t receive mail.` : ''}`);
       if (failed.length) setError(`Not sent: ${failed.map((result) => `${result.displayName} (${result.reason ?? 'not sent'})`).join('; ')}`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to email invitations.');
+      if (stillOnGame()) setError(caught instanceof Error ? caught.message : 'Unable to email invitations.');
     } finally {
       setEmailingInvites(false);
-      await loadGame(gameId).catch(() => {});
+      if (stillOnGame()) await loadGame(sentFrom).catch(() => {});
     }
   }
 
