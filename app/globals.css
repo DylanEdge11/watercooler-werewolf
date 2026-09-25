@@ -101,8 +101,9 @@ button { color: inherit; }
 .progress-track { background: #e4e7e2; border-radius: 999px; height: 5px; overflow: hidden; }
 .progress-track span { background: var(--mint-strong); border-radius: inherit; display: block; height: 100%; transition: width .2s ease; }
 .candidate-grid { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
-.candidate { align-items: center; background: #fbfaf6; border: 1px solid #e5e5df; border-radius: 12px; cursor: pointer; display: grid; gap: 10px; grid-template-columns: 38px 1fr 26px; min-height: 64px; padding: 9px 11px; text-align: left; transition: border .15s ease, background .15s ease, transform .15s ease; }
-.candidate:hover { border-color: #a8c6b7; transform: translateY(-1px); }
+.candidate { align-items: center; background: #fbfaf6; border: 1px solid #e5e5df; border-radius: 12px; cursor: pointer; display: grid; gap: 10px; grid-template-columns: 38px 1fr 26px; min-height: 64px; padding: 9px 11px; text-align: left; transition: border .15s ease, background .15s ease; }
+/* Hover never moves a ticket: a lift can slide it out from under a resting pointer and make it jitter. */
+.candidate:hover { border-color: #a8c6b7; }
 .candidate.selected { background: #eaf3ee; border-color: #76a992; box-shadow: inset 0 0 0 1px #76a992; }
 .candidate strong, .candidate small, .player-row strong, .player-row small { display: block; }
 .candidate strong, .player-row strong { font-size: 12px; }
