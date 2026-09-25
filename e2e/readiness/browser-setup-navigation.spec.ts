@@ -50,6 +50,29 @@ test('keeps setup drafts scoped, supports safe restart, and exposes another game
   await moderator.page.getByText(`Waiting on ${E2E_PLAYER_COUNT} players`, { exact: true }).click();
   await expect(moderator.page.locator('.invite-list li').filter({ hasText: 'Setup Player 1' }).first()).toContainText('not emailed');
 
+  // One late joiner is added without touching the other seats, then removed again.
+  const addForm = moderator.page.getByRole('form', { name: 'Add a player' });
+  await addForm.getByLabel('Display name').fill('Late Joiner');
+  await addForm.getByLabel('Email').fill(`late-${E2E_RUN_ID}@e2e.test`);
+  const seatAdd = moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/games/${firstGameId}/seats`);
+  await addForm.getByRole('button', { name: 'Add player', exact: true }).click();
+  expect((await seatAdd).status()).toBe(200);
+  await expect(moderator.page.getByText(`0 of ${E2E_PLAYER_COUNT + 1} claimed`, { exact: true })).toBeVisible();
+  await expect(moderator.page.getByLabel('Late Joiner’s private link')).toHaveValue(/\/claim\//u);
+  await expect(moderator.page.getByText(`Late Joiner was added. The roster now has ${E2E_PLAYER_COUNT + 1} players.`, { exact: false })).toBeVisible();
+  moderator.page.once('dialog', (dialog) => dialog.accept());
+  const seatRemove = moderator.page.waitForResponse((response) => response.request().method() === 'DELETE' && new URL(response.url()).pathname.startsWith(`/api/games/${firstGameId}/seats/`));
+  await moderator.page.getByRole('button', { name: 'Remove Late Joiner', exact: true }).click();
+  expect((await seatRemove).status()).toBe(200);
+  await expect(moderator.page.getByText(`0 of ${E2E_PLAYER_COUNT} claimed`, { exact: true })).toBeVisible();
+  await expect(moderator.page.getByLabel('Late Joiner’s private link')).toHaveCount(0);
+  // The invite file keeps everyone else's links after an edit.
+  const download = moderator.page.waitForEvent('download');
+  await moderator.page.getByRole('button', { name: 'Download invite CSV', exact: true }).click();
+  const csv = await (await (await download).createReadStream()).toArray().then((chunks) => Buffer.concat(chunks).toString('utf8'));
+  expect(csv).toContain('Setup Player 1');
+  expect(csv).not.toContain('Late Joiner');
+
   const villager = moderator.page.getByRole('spinbutton', { name: 'Villager', exact: true });
   await villager.fill('11');
   await expect.poll(() => villager.inputValue(), { timeout: 15_000 }).toBe('11');
