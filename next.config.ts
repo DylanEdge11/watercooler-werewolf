@@ -3,6 +3,14 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   agentRules: false,
   serverExternalPackages: ['@libsql/client'],
+  experimental: {
+    // Vercel restores the previous deployment's build cache. With Turbopack's
+    // filesystem cache on, a branch's first build served stale globals.css
+    // under a chunk name another deployment had already published to the
+    // shared immutable asset store, so the page got the wrong styles. Compile
+    // from source every time; the build is under a minute either way.
+    turbopackFileSystemCacheForBuild: false,
+  },
   async headers() {
     return [
       {
