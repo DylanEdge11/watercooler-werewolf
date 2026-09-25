@@ -370,9 +370,11 @@ export default function ModeratorPage() {
       });
       // The emailed links replace the ones in the downloaded file.
       setInviteCsv('');
-      const problems = data.results.filter((result) => result.status !== 'SENT');
-      setMessage(`Emailed ${data.sent} of ${data.results.length} ${data.results.length === 1 ? 'player' : 'players'}.`);
-      if (problems.length) setError(`Not sent: ${problems.map((result) => `${result.displayName} (${result.reason ?? 'not sent'})`).join('; ')}`);
+      // Reserved test addresses are skipped by design, so they are a note, not an error.
+      const failed = data.results.filter((result) => result.status === 'FAILED');
+      const skipped = data.results.filter((result) => result.status === 'SKIPPED').length;
+      setMessage(`Emailed ${data.sent} of ${data.results.length} ${data.results.length === 1 ? 'player' : 'players'}.${skipped ? ` Skipped ${skipped} test ${skipped === 1 ? 'address' : 'addresses'}, which can’t receive mail.` : ''}`);
+      if (failed.length) setError(`Not sent: ${failed.map((result) => `${result.displayName} (${result.reason ?? 'not sent'})`).join('; ')}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to email invitations.');
     } finally {

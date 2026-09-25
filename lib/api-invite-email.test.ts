@@ -185,7 +185,8 @@ describe('emailing invitations', () => {
     await seed();
     shared.reserved.add('cy@pilot.test');
     const body = await (await sendInvites()).json();
-    expect(body.results.find((result: { seatId: string }) => result.seatId === 'cy')).toMatchObject({ status: 'SKIPPED' });
+    expect(body.results.find((result: { seatId: string }) => result.seatId === 'cy')).toMatchObject({ status: 'SKIPPED', reason: 'Test address; not sent.' });
+    expect(body.results.filter((result: { status: string }) => result.status === 'SKIPPED')).toHaveLength(1);
     expect(shared.sent.map((email) => email.to)).not.toContain('cy@pilot.test');
     expect(await seatHash('cy')).toBe(await sha256('original-cy'));
   });

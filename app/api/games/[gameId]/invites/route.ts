@@ -121,7 +121,7 @@ export async function POST(request: Request, context: RouteContext) {
       }
       for (const invite of invites) {
         if (!ready.includes(invite)) {
-          results.push({ seatId: invite.seat.id, displayName: invite.seat.displayName, status: 'SKIPPED', reason: 'Changed during sending; refresh and retry.' });
+          results.push({ seatId: invite.seat.id, displayName: invite.seat.displayName, status: 'FAILED', reason: 'Changed during sending; refresh and retry.' });
         }
       }
 
