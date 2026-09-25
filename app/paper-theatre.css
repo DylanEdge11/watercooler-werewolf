@@ -566,7 +566,7 @@
 .app-shell .death-self-note { animation: pt-fade-in 0.5s ease 2.3s both; color: rgba(255, 243, 214, 0.9); font-size: 15px; margin: 0 auto 18px; max-width: 42ch; }
 
 .app-shell .death-cards { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; list-style: none; margin: 24px 0 22px; padding: 0; perspective: 900px; }
-.app-shell .death-card { animation: pt-card-drop 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.1) calc(0.8s + var(--i) * 0.18s) both; height: 220px; position: relative; width: 170px; }
+.app-shell .death-card { animation: pt-card-drop 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.1) calc(0.8s + var(--i) * 0.18s) both; height: 248px; position: relative; width: 190px; }
 .app-shell .death-card:nth-child(odd) { rotate: -1.5deg; }
 .app-shell .death-card:nth-child(even) { rotate: 1.5deg; }
 .app-shell .death-card-inner { animation: pt-card-flip 0.7s var(--pt-ease) calc(1.85s + var(--i) * 0.18s) both; inset: 0; position: absolute; transform: rotateY(180deg); transform-style: preserve-3d; }
@@ -628,7 +628,8 @@
 .app-shell .heart-right { animation: pt-heart-right 0.5s var(--pt-ease) calc(2.55s + var(--i) * 0.18s) both; transform: translate(5px, 3px) rotate(14deg); }
 
 /* The player's own card doesn't flip: it tears in two to reveal the role. */
-.app-shell .death-card.is-you .death-card-inner { animation: none; transform: none; }
+.app-shell .death-card.is-you .death-card-inner { animation: none; transform: none; transform-style: flat; }
+.app-shell .death-card.is-you .death-card-front { z-index: 1; }
 .app-shell .death-card.is-you .death-card-back { transform: none; }
 .app-shell .tear-left { animation: pt-tear-left 0.9s var(--pt-ease) calc(1.45s + var(--i) * 0.18s) both; clip-path: polygon(0 0, 52% 0, 46% 18%, 55% 34%, 45% 52%, 54% 70%, 47% 86%, 52% 100%, 0 100%); opacity: 0; transform: translate(-46px, 34px) rotate(-16deg); }
 .app-shell .tear-right { animation: pt-tear-right 0.9s var(--pt-ease) calc(1.45s + var(--i) * 0.18s) both; clip-path: polygon(52% 0, 100% 0, 100% 100%, 52% 100%, 47% 86%, 54% 70%, 45% 52%, 55% 34%, 46% 18%); opacity: 0; transform: translate(46px, 30px) rotate(14deg); }
