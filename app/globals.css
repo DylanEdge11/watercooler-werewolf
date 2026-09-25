@@ -36,7 +36,7 @@ button { color: inherit; }
 /* Long names shorten instead of squeezing the avatar into an oval. */
 .profile-name { font-size: 13px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-button { background: transparent; border: 0; cursor: pointer; flex: none; font-size: 18px; height: 38px; position: relative; width: 38px; }
-.workspace { display: grid; grid-template-columns: 220px minmax(460px, 760px) 290px; gap: 28px; justify-content: center; padding: 32px 28px 72px; }
+.workspace { display: grid; grid-template-columns: 220px minmax(460px, 760px) 290px; gap: 28px; justify-content: center; padding: 32px 28px 72px; scroll-margin-top: 76px; }
 .mobile-nav { display: none; }
 .sidebar { border-right: 1px solid var(--line); min-height: calc(100vh - 140px); padding: 10px 25px 0 0; }
 .eyebrow { color: #7b847f; font-size: 10px; font-weight: 850; letter-spacing: .14em; margin: 0 0 10px; text-transform: uppercase; }
@@ -141,6 +141,7 @@ button { color: inherit; }
 }
 @media (max-width: 780px) {
   .topbar { grid-template-columns: 1fr auto; height: 68px; padding: 0 16px; }
+  .workspace { scroll-margin-top: 68px; }
   .game-switcher, .profile-name { display: none; }
   .workspace { display: block; padding: 24px 15px 54px; }
   .sidebar { display: none; }
