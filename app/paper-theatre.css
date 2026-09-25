@@ -572,6 +572,7 @@
 .app-shell .death-card-inner { animation: pt-card-flip 0.7s var(--pt-ease) calc(1.85s + var(--i) * 0.18s) both; inset: 0; position: absolute; transform: rotateY(180deg); transform-style: preserve-3d; }
 .app-shell .death-card-face {
   align-content: center;
+  -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   background: linear-gradient(170deg, #fdf6e4, #f3e6c6);
   border-radius: 3px;
@@ -588,11 +589,16 @@
   text-align: center;
 }
 .app-shell .death-card-back { transform: rotateY(180deg); }
+/* Safari can ignore backface-visibility here and show the front mirrored, so
+   the faces also swap by opacity at the flip's midpoint, when the card is
+   edge-on. The flip easing is symmetric, so 90 degrees falls at 50%. */
+.app-shell .death-card-front { animation: pt-face-out 0.7s linear calc(1.85s + var(--i) * 0.18s) both; opacity: 0; }
+.app-shell .death-card-back { animation: pt-face-in 0.7s linear calc(1.85s + var(--i) * 0.18s) both; }
 .app-shell .death-card-front small { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
 .app-shell .death-card-face strong { font-family: var(--ll-font-display), Georgia, serif; font-size: 20px; font-weight: 600; line-height: 1.1; overflow-wrap: anywhere; }
 .app-shell .death-card-front strong { font-size: 22px; }
 .app-shell .death-stamp {
-  animation: pt-stamp 0.28s cubic-bezier(0.3, 1.6, 0.6, 1) calc(1.4s + var(--i) * 0.18s) both;
+  animation: pt-eliminated-stamp 0.28s cubic-bezier(0.3, 1.6, 0.6, 1) calc(1.4s + var(--i) * 0.18s) both;
   border: 3px solid var(--pt-curtain);
   border-radius: 3px;
   color: var(--pt-curtain);
@@ -630,7 +636,7 @@
 /* The player's own card doesn't flip: it tears in two to reveal the role. */
 .app-shell .death-card.is-you .death-card-inner { animation: none; transform: none; transform-style: flat; }
 .app-shell .death-card.is-you .death-card-front { z-index: 1; }
-.app-shell .death-card.is-you .death-card-back { transform: none; }
+.app-shell .death-card.is-you .death-card-back { animation: none; opacity: 1; transform: none; }
 .app-shell .tear-left { animation: pt-tear-left 0.9s var(--pt-ease) calc(1.45s + var(--i) * 0.18s) both; clip-path: polygon(0 0, 52% 0, 46% 18%, 55% 34%, 45% 52%, 54% 70%, 47% 86%, 52% 100%, 0 100%); opacity: 0; transform: translate(-46px, 34px) rotate(-16deg); }
 .app-shell .tear-right { animation: pt-tear-right 0.9s var(--pt-ease) calc(1.45s + var(--i) * 0.18s) both; clip-path: polygon(52% 0, 100% 0, 100% 100%, 52% 100%, 47% 86%, 54% 70%, 45% 52%, 55% 34%, 46% 18%); opacity: 0; transform: translate(46px, 30px) rotate(14deg); }
 
@@ -642,7 +648,9 @@
 @keyframes pt-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pt-card-drop { from { opacity: 0; transform: translateY(-60vh) rotate(-10deg); } 60% { opacity: 1; transform: translateY(10px) rotate(3deg); } 80% { transform: translateY(-4px) rotate(-1deg); } to { opacity: 1; transform: none; } }
 @keyframes pt-card-flip { from { transform: rotateY(0); } to { transform: rotateY(180deg); } }
-@keyframes pt-stamp { from { opacity: 0; transform: translate(-50%, -50%) rotate(-4deg) scale(2.4); } to { opacity: 0.9; transform: translate(-50%, -50%) rotate(-12deg) scale(1); } }
+@keyframes pt-face-out { from, 49.9% { opacity: 1; } 50%, to { opacity: 0; } }
+@keyframes pt-face-in { from, 49.9% { opacity: 0; } 50%, to { opacity: 1; } }
+@keyframes pt-eliminated-stamp { from { opacity: 0; transform: translate(-50%, -50%) rotate(-4deg) scale(2.4); } to { opacity: 0.9; transform: translate(-50%, -50%) rotate(-12deg) scale(1); } }
 @keyframes pt-swipe { from { opacity: 0; transform: translate(-16px, -22px); } to { opacity: 1; transform: none; } }
 @keyframes pt-gavel { from { transform: rotate(-55deg); } 70% { transform: rotate(6deg); } to { transform: none; } }
 @keyframes pt-arrow { from { opacity: 0; transform: translate(-44px, 44px); } to { opacity: 1; transform: none; } }
