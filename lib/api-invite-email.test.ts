@@ -45,7 +45,7 @@ let client: Client;
 
 const params = { params: Promise.resolve({ gameId: 'game' }) };
 
-function sendInvites(body: Record<string, unknown> = {}, origin = 'http://localhost:3000'): Promise<Response> {
+function sendInvites(body: unknown = {}, origin = 'http://localhost:3000'): Promise<Response> {
   return invitesPost(
     new Request('http://localhost:3000/api/games/game/invites', {
       method: 'POST',
@@ -200,6 +200,25 @@ describe('emailing invitations', () => {
     expect(shared.sent.map((email) => email.to)).not.toContain('ben@pilot.test;mallory@pilot.test');
     expect(shared.sent).toHaveLength(2);
     expect(await seatHash('ben')).toBe(await sha256('original-ben'));
+  });
+
+  test.each([null, [], 'ben'])('rejects a malformed request body (%j) cleanly', async (body) => {
+    await seed();
+    const response = await sendInvites(body);
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe('Send a JSON object with seatIds.');
+    expect(shared.sent).toEqual([]);
+  });
+
+  test('single-player resends have their own allowance and never use up the bulk one', async () => {
+    await seed();
+    for (let send = 1; send <= 30; send += 1) expect((await sendInvites()).status).toBe(200);
+    expect((await sendInvites()).status).toBe(429);
+    // The bulk allowance is spent, but one player can still be resent to.
+    for (let resend = 1; resend <= 5; resend += 1) expect((await sendInvites({ seatIds: ['ben'] })).status).toBe(200);
+    // Each player's own allowance stops an accidental flood of one inbox.
+    expect((await sendInvites({ seatIds: ['ben'] })).status).toBe(429);
+    expect((await sendInvites({ seatIds: ['ana'] })).status).toBe(200);
   });
 
   test('is unavailable until email is configured', async () => {

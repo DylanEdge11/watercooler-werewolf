@@ -35,16 +35,27 @@ export async function POST(request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     const moderator = await requireGameModerator(gameId);
-    const body = (await request.json().catch(() => ({}))) as { seatIds?: unknown };
-    const requested = body.seatIds;
-    if (requested !== undefined && (!Array.isArray(requested) || requested.length > MAX_PLAYERS || requested.some((id) => typeof id !== 'string'))) {
+    // Anything but a JSON object is refused; unreadable input must never fall
+    // through to "email every unclaimed player".
+    const body: unknown = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return jsonError('Send a JSON object with seatIds.', 400);
+    }
+    const requested = (body as { seatIds?: unknown }).seatIds;
+    if (requested !== undefined && (!Array.isArray(requested) || requested.length > MAX_PLAYERS || requested.some((id) => typeof id !== 'string' || id.length > 64))) {
       return jsonError('seatIds must be a list of seat IDs.', 400);
     }
     const settings = readSmtpSettings();
     if (!settings) {
       return jsonError('Invite email is not set up for this site. Download the invite CSV instead, or ask the site operator to configure email.', 503);
     }
-    await enforceRateLimit(`invite-email:${gameId}`, 30, 60 * 60_000);
+    // A single-player Resend has its own allowance per player, so fixing one
+    // lost invitation never uses up the game's allowance for bulk sends.
+    if (Array.isArray(requested) && requested.length === 1) {
+      await enforceRateLimit(`invite-email:${gameId}:seat:${requested[0]}`, 5, 60 * 60_000);
+    } else {
+      await enforceRateLimit(`invite-email:${gameId}`, 30, 60 * 60_000);
+    }
 
     const db = getDb();
     const game = await db

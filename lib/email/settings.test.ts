@@ -39,7 +39,10 @@ describe('reserved test addresses', () => {
     (email) => expect(isReservedTestAddress(email)).toBe(true),
   );
 
-  it.each(['player@gmail.com', 'player@contest.com', 'player@examples.com', 'player@test.co'])('sends to %s', (email) => {
+  // These must be ordinary, non-reserved domains (that is what they test), so
+  // they can't end in .test. They are made up and each targets one rule: a
+  // "test" substring, an "example" lookalike, and ".test" not at the end.
+  it.each(['player@werewolf-pilot.co', 'player@contest.werewolf-pilot.co', 'player@examples.werewolf-pilot.co', 'player@test.werewolf-pilot.co'])('sends to %s', (email) => {
     expect(isReservedTestAddress(email)).toBe(false);
   });
 });

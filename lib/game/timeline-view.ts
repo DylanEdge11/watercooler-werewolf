@@ -67,11 +67,12 @@ export function describeTimelineEvent(event: PublicTimelineEvent): TimelineEntry
     };
   }
   if (event.eventType === 'GAME_COMPLETED') {
+    const winner = `${payload.winner ? readableRole(payload.winner) : 'A team'} wins`;
     return {
       eyebrow: 'Campaign complete',
-      title: `${payload.winner} wins`,
+      title: winner,
       description: 'The campaign is complete. Review the official timeline and your private results.',
-      headline: `${payload.winner ? readableRole(payload.winner) : 'A team'} wins`,
+      headline: winner,
       tone: 'milestone',
       publicBallot: false,
     };
