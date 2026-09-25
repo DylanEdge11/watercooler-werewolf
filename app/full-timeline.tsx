@@ -2,17 +2,19 @@ import { describeTimelineEvent, eliminationCause, readableRole, tallyVotes, type
 
 interface FullTimelineProps {
   events: PublicTimelineEvent[];
+  /** The server returned only the latest updates; older ones exist. */
+  hasMore?: boolean;
   onBack: () => void;
 }
 
 /** The whole published record of the campaign, newest first. Public data only. */
-export default function FullTimeline({ events: unordered, onBack }: FullTimelineProps) {
+export default function FullTimeline({ events: unordered, hasMore = false, onBack }: FullTimelineProps) {
   const events = [...unordered].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const newestBallotId = events.find((event) => describeTimelineEvent(event).publicBallot)?.id;
   return (
     <section className="main-column timeline-view" id="full-timeline" aria-labelledby="full-timeline-title">
       <div className="welcome-row">
-        <div><p className="eyebrow accent">Official record</p><h1 id="full-timeline-title">Timeline</h1><p>Everything the moderator has published in this campaign, newest first.</p></div>
+        <div><p className="eyebrow accent">Official record</p><h1 id="full-timeline-title">Timeline</h1><p>Everything the moderator has published in this campaign, newest first.</p>{hasMore && <p className="timeline-cap-note">Showing the latest {events.length} updates; older ones aren’t shown.</p>}</div>
         <button className="secondary-button" type="button" onClick={onBack}>Back to today</button>
       </div>
       {events.length ? <ol className="timeline-full">

@@ -8,6 +8,8 @@ import { jsonError } from '../../../lib/http/security';
 import { ensureGameRooms } from '../../../lib/chat/rooms';
 import { loadCurrentLoverPair } from '../../../lib/game/relationships';
 
+const TIMELINE_LIMIT = 100;
+
 interface PublicVoteRow {
   id: string;
   phaseId: string;
@@ -170,7 +172,7 @@ export async function GET(request: Request) {
          WHERE ge.game_id = ?
            AND (ge.created_at > COALESCE(?, '') OR (ge.created_at = ? AND ge.event_type NOT IN ('GAME_RESET', 'GAME_RESTORED')))
            AND ge.event_type IN ('PHASE_PUBLISHED', 'GAME_COMPLETED', 'ANNOUNCEMENT', 'GAME_STOPPED', 'FINAL_SHOWDOWN_ENTERED')
-           ORDER BY ge.created_at DESC LIMIT 100`,
+           ORDER BY ge.created_at DESC LIMIT ${TIMELINE_LIMIT + 1}`,
       )
       .bind(player.gameId, runBoundary?.createdAt ?? null, runBoundary?.createdAt ?? null)
       .all<{ id: string; eventType: string; phaseId: string | null; phaseSequence: number | null; payloadJson: string; createdAt: string }>();
@@ -252,7 +254,9 @@ export async function GET(request: Request) {
       participation = { submitted: Number(submitted?.count ?? 0), eligible };
     }
 
-    const publicTimeline = timelineRows.results.map((event) => {
+    // One extra row tells the full Timeline that older updates were left out.
+    const timelineHasMore = timelineRows.results.length > TIMELINE_LIMIT;
+    const publicTimeline = timelineRows.results.slice(0, TIMELINE_LIMIT).map((event) => {
       const payload = JSON.parse(event.payloadJson) as Record<string, unknown>;
       if (event.eventType === 'PHASE_PUBLISHED') {
         const rawEliminations = Array.isArray(payload.eliminations) ? payload.eliminations : [];
@@ -353,6 +357,7 @@ export async function GET(request: Request) {
         : null,
       participation,
       timeline: publicTimeline,
+      timelineHasMore,
       notifications: notificationRows.results,
       notificationsHasMore,
       notificationsNextCursor: notificationsHasMore && lastNotification ? { createdAt: lastNotification.createdAt, id: lastNotification.id } : null,

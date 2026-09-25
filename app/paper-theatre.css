@@ -791,6 +791,8 @@
 /* ---------- Full timeline: the prompt book's record of every published scene ---------- */
 
 .app-shell .timeline-see-all { margin-top: 12px; }
+.app-shell .timeline-view .welcome-row > div:first-child > p:not(.eyebrow) { color: var(--pt-stage-ink-soft); font-size: 15px; margin: 0; }
+.app-shell .timeline-view .welcome-row .timeline-cap-note { font-family: var(--ll-font-type), monospace; font-size: 12px; margin-top: 6px; }
 .app-shell .timeline-full { display: grid; gap: 18px; list-style: none; margin: 0; padding: 0; }
 .app-shell .timeline-full-entry { background: var(--pt-paper); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: var(--pt-shadow); color: var(--pt-ink); padding: 20px 24px; }
 .app-shell .timeline-full-entry.announcement { background: var(--pt-note); }

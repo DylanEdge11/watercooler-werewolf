@@ -47,6 +47,7 @@ export interface DashboardData {
   currentAction: null | { targetIds: string[]; version: number; submittedAt: string };
   participation: { submitted: number; eligible: number };
   timeline: PublicTimelineEvent[];
+  timelineHasMore?: boolean;
   notifications: Array<{ id: string; type: string; title: string; body: string; createdAt: string }>;
   notificationsHasMore?: boolean;
   notificationsNextCursor?: { createdAt: string; id: string } | null;
@@ -437,7 +438,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           <div className="sidebar-note"><span aria-hidden="true">☾</span><p><strong>Keep it quiet.</strong>Your role is private until you are eliminated.</p></div>
         </aside>
 
-        {view === 'timeline' ? <FullTimeline events={data.timeline} onBack={() => showView('today')} /> : <section className="main-column" id="today">
+        {view === 'timeline' ? <FullTimeline events={data.timeline} hasMore={Boolean(data.timelineHasMore)} onBack={() => showView('today')} /> : <section className="main-column" id="today">
           <div className="welcome-row">
             <div><p className="eyebrow accent">{data.phase ? `${data.phase.kind.replaceAll('_', ' ')} · Cycle ${data.phase.sequence}` : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{data.permission.label}</p></div>
             <div className="deadline-card"><span>Response window</span><strong>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : deadlineLabel(data.phase?.deadline ?? null)}</strong><small>{data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>
