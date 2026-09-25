@@ -35,26 +35,27 @@ button { color: inherit; }
 .role-theme .role-card { background: linear-gradient(125deg, var(--role-deep), var(--role-deep-2)); box-shadow: 0 18px 48px color-mix(in srgb, var(--role-deep) 24%, transparent); }
 .role-theme .candidate.selected { background: var(--role-selection); border-color: var(--role-accent); box-shadow: inset 0 0 0 1px var(--role-accent); }
 .role-theme .sidebar-note, .role-theme .moon-card { background: var(--role-deep); }
-.topbar { align-items: center; background: rgba(255, 253, 250, .95); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 250px 1fr 250px; height: 76px; padding: 0 28px; position: sticky; top: 0; z-index: 20; }
+.topbar { align-items: center; background: rgba(255, 253, 250, .95); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 250px minmax(0, 1fr) minmax(250px, 340px); height: 76px; padding: 0 28px; position: sticky; top: 0; z-index: 20; }
 .brand { align-items: center; color: inherit; display: flex; gap: 11px; text-decoration: none; }
 .brand > span:last-child { display: grid; line-height: 1; }
 .brand strong { font-family: Georgia, serif; font-size: 18px; letter-spacing: -.03em; }
 .brand small { color: var(--mint-strong); font-size: 10px; font-weight: 800; letter-spacing: .18em; margin-top: 5px; text-transform: uppercase; }
 .brand-mark { display: block; flex: 0 0 auto; height: 48px; width: 48px; }
 .brand-mark svg { display: block; height: 100%; width: 100%; }
-.game-switcher { align-items: center; background: #edf2ed; border: 1px solid #dde7df; border-radius: 999px; display: flex; font-size: 13px; font-weight: 700; gap: 9px; justify-self: center; padding: 9px 14px; }
+.game-switcher { align-items: center; background: #edf2ed; border: 1px solid #dde7df; border-radius: 999px; display: flex; font-size: 13px; font-weight: 700; gap: 9px; justify-self: center; max-width: 100%; min-width: 0; overflow: hidden; padding: 9px 14px; white-space: nowrap; }
 .status-dot { background: #50a67f; border-radius: 50%; box-shadow: 0 0 0 3px #d9ecdf; height: 7px; width: 7px; }
 .chevron { color: var(--muted); margin-left: 5px; }
-.profile { align-items: center; display: flex; gap: 9px; justify-self: end; }
-.theme-toggle { align-items: center; background: transparent; border: 0; cursor: pointer; display: flex; gap: 7px; margin-right: 3px; padding: 4px; }
+.profile { align-items: center; display: flex; gap: 9px; justify-self: end; max-width: 100%; min-width: 0; }
+.theme-toggle { align-items: center; background: transparent; border: 0; cursor: pointer; display: flex; flex: none; gap: 7px; margin-right: 3px; padding: 4px; }
 .theme-toggle-track { background: #d7dbd8; border: 1px solid #c6ceca; border-radius: 999px; display: block; height: 22px; padding: 2px; transition: background .2s ease, border .2s ease; width: 38px; }
 .theme-toggle-track > span { background: white; border-radius: 50%; box-shadow: 0 1px 4px rgba(26, 40, 34, .2); display: block; height: 16px; transform: translateX(0); transition: transform .2s ease; width: 16px; }
 .theme-toggle[aria-checked='true'] .theme-toggle-track { background: var(--mint-strong); border-color: var(--mint-strong); }
 .theme-toggle[aria-checked='true'] .theme-toggle-track > span { transform: translateX(16px); }
 .theme-toggle-label { color: var(--muted); font-size: 10px; font-weight: 800; }
-.avatar, .candidate-avatar { align-items: center; background: #d9e9df; border: 1px solid #c7dace; border-radius: 50%; color: #245848; display: flex; font-size: 12px; font-weight: 800; height: 36px; justify-content: center; width: 36px; }
-.profile-name { font-size: 13px; font-weight: 700; }
-.icon-button { background: transparent; border: 0; cursor: pointer; font-size: 18px; height: 38px; position: relative; width: 38px; }
+.avatar, .candidate-avatar { align-items: center; background: #d9e9df; border: 1px solid #c7dace; border-radius: 50%; color: #245848; display: flex; flex: none; font-size: 12px; font-weight: 800; height: 36px; justify-content: center; width: 36px; }
+/* Long names shorten instead of squeezing the avatar into an oval. */
+.profile-name { font-size: 13px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon-button { background: transparent; border: 0; cursor: pointer; flex: none; font-size: 18px; height: 38px; position: relative; width: 38px; }
 .workspace { display: grid; grid-template-columns: 220px minmax(460px, 760px) 290px; gap: 28px; justify-content: center; padding: 32px 28px 72px; }
 .mobile-nav { display: none; }
 .sidebar { border-right: 1px solid var(--line); min-height: calc(100vh - 140px); padding: 10px 25px 0 0; }
@@ -67,13 +68,14 @@ button { color: inherit; }
 .nav-item.active { background: #e2eee7; color: #214d40; }
 .nav-item.active > span { color: var(--mint-strong); }
 .sidebar-rule { border-top: 1px solid var(--line); margin: 8px 0 26px; }
-.mini-stat { align-items: center; border-bottom: 1px solid #e7e7e1; display: flex; font-size: 12px; justify-content: space-between; padding: 9px 2px; }
+/* Every row reserves the chevron gutter so all the numbers share one right edge. */
+.mini-stat { align-items: center; border-bottom: 1px solid #e7e7e1; display: flex; font-size: 12px; justify-content: space-between; padding: 9px 20px 9px 2px; position: relative; }
 .mini-stat span { color: var(--muted); }
 .mini-stat strong { font-family: Georgia, serif; font-size: 17px; }
 .stat-details { border-bottom: 1px solid #e7e7e1; position: relative; }
 .stat-trigger { border-bottom: 0; cursor: pointer; list-style: none; width: 100%; }
 .stat-trigger::-webkit-details-marker { display: none; }
-.stat-trigger::after { color: var(--mint-strong); content: '⌄'; font-size: 12px; margin-left: 7px; }
+.stat-trigger::after { color: var(--mint-strong); content: '⌄'; font-size: 12px; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
 .stat-details[open] .stat-trigger { background: #eaf3ee; color: #214d40; }
 .stat-details[open] .stat-trigger::after { content: '⌃'; }
 .stat-popover { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 25px rgba(45, 58, 52, .12); display: grid; gap: 7px; left: 0; margin: 4px 0 8px; max-height: 220px; overflow: auto; padding: 10px; position: relative; z-index: 2; }
@@ -153,7 +155,7 @@ button { color: inherit; }
 .moon-card p:not(.eyebrow) { color: #a9c1b7; }
 .moon-art { color: var(--amber); font-size: 55px; position: absolute; right: 12px; top: -15px; transform: rotate(14deg); }
 @media (max-width: 1120px) {
-  .topbar { grid-template-columns: 210px 1fr 160px; }
+  .topbar { grid-template-columns: 210px minmax(0, 1fr) minmax(220px, 300px); }
   .workspace { grid-template-columns: 190px minmax(460px, 760px); }
   .right-rail { display: grid; grid-column: 2; }
 }
