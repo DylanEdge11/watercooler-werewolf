@@ -592,7 +592,7 @@
 .app-shell .death-card-face strong { font-family: var(--ll-font-display), Georgia, serif; font-size: 20px; font-weight: 600; line-height: 1.1; overflow-wrap: anywhere; }
 .app-shell .death-card-front strong { font-size: 22px; }
 .app-shell .death-stamp {
-  animation: pt-stamp 0.28s cubic-bezier(0.3, 1.6, 0.6, 1) calc(1.4s + var(--i) * 0.18s) both;
+  animation: pt-eliminated-stamp 0.28s cubic-bezier(0.3, 1.6, 0.6, 1) calc(1.4s + var(--i) * 0.18s) both;
   border: 3px solid var(--pt-curtain);
   border-radius: 3px;
   color: var(--pt-curtain);
@@ -642,7 +642,7 @@
 @keyframes pt-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pt-card-drop { from { opacity: 0; transform: translateY(-60vh) rotate(-10deg); } 60% { opacity: 1; transform: translateY(10px) rotate(3deg); } 80% { transform: translateY(-4px) rotate(-1deg); } to { opacity: 1; transform: none; } }
 @keyframes pt-card-flip { from { transform: rotateY(0); } to { transform: rotateY(180deg); } }
-@keyframes pt-stamp { from { opacity: 0; transform: translate(-50%, -50%) rotate(-4deg) scale(2.4); } to { opacity: 0.9; transform: translate(-50%, -50%) rotate(-12deg) scale(1); } }
+@keyframes pt-eliminated-stamp { from { opacity: 0; transform: translate(-50%, -50%) rotate(-4deg) scale(2.4); } to { opacity: 0.9; transform: translate(-50%, -50%) rotate(-12deg) scale(1); } }
 @keyframes pt-swipe { from { opacity: 0; transform: translate(-16px, -22px); } to { opacity: 1; transform: none; } }
 @keyframes pt-gavel { from { transform: rotate(-55deg); } 70% { transform: rotate(6deg); } to { transform: none; } }
 @keyframes pt-arrow { from { opacity: 0; transform: translate(-44px, 44px); } to { opacity: 1; transform: none; } }
