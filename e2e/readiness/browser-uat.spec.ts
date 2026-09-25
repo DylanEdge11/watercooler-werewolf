@@ -45,6 +45,7 @@ test('an eight-player game runs from setup to a Village win with private informa
         : [];
       expect(dashboard.player.teammates.map((teammate) => teammate.id).sort()).toEqual(expectedTeammates);
       await game.assertModeratorOnlyRoutes(player);
+      await expect(player.page.locator('.role-orbit .role-medallion')).toBeVisible();
     }
     const [first, other] = game.players;
     await first.page.goto(`${BASE_URL}/?seatId=${encodeURIComponent(other.account.seatId)}`);
@@ -77,6 +78,36 @@ test('an eight-player game runs from setup to a Village win with private informa
       await player.expectCompleted();
       await player.expectReadOnly();
     }));
+    // The full Timeline replaces Today in the main column, on desktop and phone.
+    for (const viewer of [game.players[1], game.players[0]]) {
+      const timelineButton = viewer.page.getByRole('button', { name: 'Timeline', exact: true }).filter({ visible: true });
+      await timelineButton.click();
+      const timeline = viewer.page.locator('#full-timeline');
+      await expect(timeline.getByRole('heading', { name: 'Timeline', exact: true })).toBeVisible();
+      await expect(timeline.getByRole('heading', { name: 'Village wins', exact: true })).toBeVisible();
+      const firstDayEntry = timeline.locator('.timeline-full-entry').filter({ hasText: `${wolfOne.account.displayName} eliminated` });
+      await expect(firstDayEntry).toContainText('Werewolf · village vote');
+      await expect(timeline.locator('details.timeline-votes[open] .vote-ledger-row').first()).toBeVisible();
+      await expect(timeline.locator('.timeline-cap-note')).toHaveCount(0);
+      await timeline.getByRole('button', { name: 'Back to today', exact: true }).click();
+      await expect(viewer.page.locator('#full-timeline')).toHaveCount(0);
+      await expect(viewer.page.locator('#today')).toBeVisible();
+    }
+
+    // A long campaign holds more than the latest 100 updates; the Timeline says so.
+    {
+      const viewer = game.players[1];
+      await viewer.page.route('**/api/player', async (route) => {
+        const response = await route.fetch();
+        await route.fulfill({ response, json: { ...(await response.json()), timelineHasMore: true } });
+      });
+      await viewer.reload();
+      await viewer.page.getByRole('button', { name: 'Timeline', exact: true }).filter({ visible: true }).click();
+      await expect(viewer.page.locator('#full-timeline .timeline-cap-note')).toHaveText(/^Showing the latest \d+ updates; older ones aren’t shown\.$/u);
+      await viewer.page.unroute('**/api/player');
+      await viewer.page.getByRole('button', { name: 'Back to today', exact: true }).click();
+    }
+
     const livingPlayer = game.living()[0];
     await game.assertNoActionAfterCompletion(livingPlayer, finalDay.phaseId, game.chooseLiving((player) => player.account.seatId !== livingPlayer.account.seatId, livingPlayer));
     await game.assertHealthy();

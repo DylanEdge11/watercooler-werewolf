@@ -316,6 +316,18 @@ describe('real libSQL provider integration', () => {
     expect(phase.rows[0]?.status).toBe('PUBLISHED');
   });
 
+  test.each([[100, false], [101, true]])('with %i published updates, says whether older ones were left out', async (count, hasMore) => {
+    await seedActiveGame();
+    await executeBatch(Array.from({ length: count }, (_, index) => ({
+      sql: "INSERT INTO game_events (id, game_id, event_type, payload_json, created_at) VALUES (?, 'game', 'ANNOUNCEMENT', ?, ?)",
+      args: [`notice-${index}`, JSON.stringify({ title: `Notice ${index}`, body: 'Fictional update.' }), `2026-02-01T00:${String(Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}.000Z`],
+    })));
+    shared.currentPlayer = { seatId: 'p5' };
+    const body = await (await playerGet(new Request('http://localhost:3000/api/player'))).json() as { timeline: unknown[]; timelineHasMore: boolean };
+    expect(body.timeline).toHaveLength(100);
+    expect(body.timelineHasMore).toBe(hasMore);
+  });
+
   test('publishes a Cupid pairing, eliminates both lovers, and tells only the pair and Cupid', async () => {
     await seedActiveGame();
     await executeBatch([
@@ -350,5 +362,15 @@ describe('real libSQL provider integration', () => {
     expect(body).not.toContain('CUPID_PAIR');
     expect(body).not.toContain('cupidId');
     expect(body).not.toContain('Cupid has linked you');
+    const bystanderDeaths = (JSON.parse(body) as { timeline: Array<{ eventType: string; payload: { eliminations?: Array<Record<string, unknown>> } }> })
+      .timeline.find((event) => event.eventType === 'PHASE_PUBLISHED')?.payload.eliminations ?? [];
+    expect(bystanderDeaths.map((item) => item.isYou)).toEqual([false, false]);
+    expect(bystanderDeaths.some((item) => 'playerId' in item)).toBe(false);
+
+    // Each eliminated lover is told which entry is their own.
+    shared.currentPlayer = { seatId: 'p1' };
+    const lover = await (await playerGet(new Request('http://localhost:3000/api/player'))).json() as { timeline: Array<{ eventType: string; payload: { eliminations?: Array<{ displayName: string; isYou: boolean }> } }> };
+    const loverDeaths = lover.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED')?.payload.eliminations ?? [];
+    expect(loverDeaths.filter((item) => item.isYou).map((item) => item.displayName)).toEqual(['Player 1']);
   });
 });

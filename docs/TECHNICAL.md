@@ -8,6 +8,7 @@ For developers. Installation is in [Setup](SETUP.md), verification in [Testing](
 - Turso/libSQL through `@libsql/client`. Routes use a small database contract (`db/contracts.ts`) implemented in `db/libsql.ts`; multi-statement writes go through `batch()`, which runs as one transaction.
 - Drizzle is used only for the schema (`db/schema.ts`) and for generating migrations. Queries are hand-written SQL with bound parameters.
 - Local development and tests use a SQLite file or in-memory database. Deployed functions refuse `file:` URLs.
+- Builds compile from source every time (`experimental.turbopackFileSystemCacheForBuild: false` in `next.config.ts`). With Turbopack's build cache on, a Vercel build restored from an older deployment served stale `globals.css` under a chunk name already published to Vercel's shared immutable asset store, so the page got the wrong styles. Don't turn it back on.
 
 Requests never change the schema. `ensureDatabase()` checks that every version in `db/readiness.ts` is recorded in `__app_migrations` and fails otherwise. Migrations run only through `npm run db:migrate` (see [Setup](SETUP.md#schema-changes)).
 
@@ -52,9 +53,11 @@ Deadlines are entered in the game's IANA timezone and stored as UTC. Impossible 
 
 - Moderator and player sessions are random tokens in HTTP-only, SameSite=Lax cookies (`ww_mod_session`, `ww_player_session`), stored as SHA-256 hashes. They last seven days.
 - Passwords, PINs, and recovery codes are hashed with salted PBKDF2-SHA256 (100,000 iterations). Claim codes are 72-bit random tokens stored as SHA-256 hashes.
+- Roster emails must be one plain address (`lib/roster/email-address.ts`): lists like `a@x.com;b@y.com` and `Name <a@x.com>` are rejected at import, because mail libraries split them and would send one player's claim link to several recipients. The invite route re-checks each stored address and reports any older or restored seat that fails as "Not a single email address" without changing its link.
+- Invite email (`POST /api/games/[gameId]/invites`, optional `seatIds`) works only before roles are released and only on `INVITED` seats. It signs in to SMTP first, then replaces each seat's claim hash with a compare-and-swap on the old hash, emails the new link, and records an `INVITE_EMAILED` event (`{ seatId }`) only while that link is still current. The response never contains a claim link. The roster reports `invitationEmailedAt` from events newer than the seat's `updated_at`, so a later send, reset, or restore clears it. Settings are in `lib/email/settings.ts`.
 - Every write checks the `Origin` header against `SITE_ORIGIN`, then authorization, then game state. The final write repeats the state checks inside the same statement, so concurrent requests cannot slip past them.
 - Players receive only their own role, permitted teammates and rooms, legal targets, their own private results, and published events. `e2e/readiness/browser-fixture.ts` lists the fields that must never reach a player.
-- Rate limits are stored in the database and return HTTP 429 with `Retry-After`: moderator login and recovery 5 per 15 minutes, player sign-in 8 per 15 minutes, seat claim 3 per hour, actions and chat 30 per 10 minutes each, feedback 3 per hour (players) or 10 per hour (moderators).
+- Rate limits are stored in the database and return HTTP 429 with `Retry-After`: moderator login and recovery 5 per 15 minutes, player sign-in 8 per 15 minutes, seat claim 3 per hour, actions and chat 30 per 10 minutes each, feedback 3 per hour (players) or 10 per hour (moderators), invite email 30 bulk sends per hour per game plus 5 single-player resends per hour per player.
 
 ## Polling
 

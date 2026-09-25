@@ -39,7 +39,7 @@ For a manual rehearsal, give the moderator and each player a separate browser pr
 
 ## Local Playwright suites
 
-All local suites start a disposable Next server on `http://localhost:3100` with a fresh SQLite database, bootstrap a fictional moderator, and delete the database afterward. They run one worker at a time.
+All local suites start a disposable Next server on `http://localhost:3100` with a fresh SQLite database, bootstrap a fictional moderator, and delete the database afterward. They run one worker at a time. Each local moderator sign-in in the browser suites sends its own private client address, so a failed test's retries can't use up the moderator sign-in allowance (5 per 15 minutes) and fail the tests after it. Hosted runs keep the real limit.
 
 | Command | What it covers |
 | --- | --- |
@@ -119,7 +119,7 @@ The `/guide` screenshots and walkthrough video come from a fictional local game.
 CAPTURE_GUIDE_MEDIA=1 node scripts/run-playwright.mjs --project=chromium --retries=0 e2e/readiness/guide-media.spec.ts
 ```
 
-This writes screenshots to `public/guide/` and a raw recording to `work/guide-walkthrough-raw.webm`. Encode the published files with a full ffmpeg build (Playwright's bundled ffmpeg can't write MP4; `pip install imageio-ffmpeg` provides a portable one). The paper grain is expensive to encode, so these settings are tuned for it:
+This writes screenshots to `public/guide/` and a raw recording to `work/guide-walkthrough-raw.webm`. With `CAPTURE_GUIDE_MEDIA=1`, the runner gives the local server placeholder email settings (an `.invalid` host), so **Email invites** appears switched on. The recording only hovers it, and nothing can be sent. Encode the published files with a full ffmpeg build (Playwright's bundled ffmpeg can't write MP4; `pip install imageio-ffmpeg` provides a portable one). The paper grain is expensive to encode, so these settings are tuned for it:
 
 ```sh
 ffmpeg -y -i work/guide-walkthrough-raw.webm -c:v libx264 -preset slow -crf 30 -pix_fmt yuv420p -movflags +faststart -an public/guide/walkthrough.mp4
@@ -127,10 +127,18 @@ ffmpeg -y -i work/guide-walkthrough-raw.webm -c:v libvpx-vp9 -b:v 0 -crf 44 -row
 ffmpeg -y -ss 4 -i public/guide/walkthrough.mp4 -frames:v 1 -q:v 3 public/guide/walkthrough-poster.jpg
 ```
 
+On Windows, `winget install Gyan.FFmpeg` installs a full build.
+
 Then shrink the screenshots to 256 colours, which is visually identical for these pages and roughly halves their size (needs `pip install pillow`):
 
 ```sh
 python3 -c "import glob; from PIL import Image; [Image.open(f).convert('RGB').quantize(256, dither=Image.Dither.FLOYDSTEINBERG).save(f, optimize=True) for f in glob.glob('public/guide/*.png')]"
+```
+
+Without Python, ffmpeg does the same (run it in bash, for example Git Bash):
+
+```sh
+for f in public/guide/*.png; do ffmpeg -y -loglevel error -i "$f" -vf "split[a][b];[a]palettegen=max_colors=256[p];[b][p]paletteuse=dither=floyd_steinberg" "work/q.png" && mv work/q.png "$f"; done
 ```
 
 `public/og.png` (the link-preview card) is a static image; redraw it if the emblem or title styling changes.

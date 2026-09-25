@@ -1,4 +1,6 @@
 import { MAX_PLAYERS, MIN_PLAYERS } from '../game/player-count';
+import { isSingleEmailAddress } from './email-address';
+import { inviteMessage } from './invite-message';
 
 export interface RosterEntry {
   displayName: string;
@@ -60,9 +62,10 @@ export function parseRosterCsv(csv: string): RosterParseResult {
     const displayName = values[nameIndex]?.trim() ?? '';
     const email = values[emailIndex]?.trim().toLowerCase() ?? '';
     if (!displayName) errors.push(`Line ${line}: display_name is required.`);
-    if (!/^\S+@\S+\.\S+$/u.test(email)) errors.push(`Line ${line}: email is invalid.`);
+    const validEmail = isSingleEmailAddress(email);
+    if (!validEmail) errors.push(`Line ${line}: email must be one plain address, like name@example.com.`);
     if (seenEmails.has(email)) errors.push(`Line ${line}: email is duplicated.`);
-    if (displayName && /^\S+@\S+\.\S+$/u.test(email) && !seenEmails.has(email)) {
+    if (displayName && validEmail && !seenEmails.has(email)) {
       entries.push({ displayName, email });
       seenEmails.add(email);
     }
@@ -81,14 +84,10 @@ export function createInviteExport(
   rows: Array<RosterEntry & { claimUrl: string; inviteCode: string }>,
 ): string {
   const header = ['display_name', 'email', 'claim_url', 'invite_code', 'message_subject', 'message_body'];
-  const data = rows.map((row) => [
-    row.displayName,
-    row.email,
-    row.claimUrl,
-    row.inviteCode,
-    'Your Watercooler Werewolf seat',
-    `Hi ${row.displayName},\n\nClaim your private Watercooler Werewolf seat using this link:\n${row.claimUrl}\n\nChoose a six-digit PIN when you claim. Afterward, sign in with your invitation email and PIN. Do not forward this message.`,
-  ]);
+  const data = rows.map((row) => {
+    const message = inviteMessage(row.displayName, row.claimUrl);
+    return [row.displayName, row.email, row.claimUrl, row.inviteCode, message.subject, message.text];
+  });
   return [header, ...data].map((values) => values.map(escapeCsv).join(',')).join('\r\n');
 }
 

@@ -20,6 +20,7 @@ These controls are under **Communications & operations** in the moderator consol
 | Need | Steps | Result |
 | --- | --- | --- |
 | Notify players | **Official announcement** → title and message → **Publish notice** | Appears in every player's updates. No email is sent. |
+| Re-send a lost invitation | **Import the roster** → **Waiting on N players** → **Resend** beside the player | The player gets a fresh link by email; their old link stops working. Needs [invite email](SETUP.md#invite-email). |
 | Add a helper | **Co-moderator access** → email and a 12+ character password → **Add co-moderator** | A new account shows one-time recovery codes; deliver access privately. An existing moderator keeps their password. |
 | Player forgot their PIN | **Player access recovery** → player, new six-digit PIN, reason (5+ characters) → **Reset player PIN** | The player's old sessions are signed out. Deliver the PIN privately. |
 | Moderator forgot their password | Sign-in page → **Forgot password? Use a recovery code** → email, unused code, new password → **Recover access** | The code is used up and old sessions end. Without a code, contact the operator. There is no email reset. |
@@ -60,7 +61,7 @@ Afterwards, import the roster again, send the new invitations, and release roles
 
 Owner only; requires the exact game name. Restore rebuilds a game's **setup** (configuration, roster, and role counts) from a stored snapshot. It does not restore a game in progress, and there is no file upload.
 
-It verifies the snapshot's checksum, takes a safety backup, and returns the game to `DRAFT`. Every seat gets a new one-time claim link, so **select Download fresh invites immediately**: the codes are not shown again. PINs, sessions, and roles are never restored.
+It verifies the snapshot's checksum, takes a safety backup, and returns the game to `DRAFT`. Every seat gets a new one-time claim link, so **select Download fresh invites immediately** (the codes are not shown again) or use **Email invites** in the roster card. PINs, sessions, and roles are never restored.
 
 ## Cancel setup
 

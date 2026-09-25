@@ -70,6 +70,14 @@ interface RosterSeat {
   displayName: string;
   email: string;
   status: string;
+  invitationEmailedAt?: string | null;
+}
+
+interface InviteEmailResult {
+  seatId: string;
+  displayName: string;
+  status: 'SENT' | 'FAILED' | 'SKIPPED';
+  reason?: string;
 }
 
 interface Batch {
@@ -117,6 +125,8 @@ export default function ModeratorPage() {
   const [composition, setComposition] = useState<Composition | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [inviteCsv, setInviteCsv] = useState('');
+  const [emailConfigured, setEmailConfigured] = useState(false);
+  const [emailingInvites, setEmailingInvites] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [liveRefreshToken, setLiveRefreshToken] = useState(0);
@@ -142,11 +152,12 @@ export default function ModeratorPage() {
   const loadGame = useCallback(async (selectedGameId: string) => {
     const requestId = ++gameDetailRequest.current;
     const [rosterData, assignmentData] = await Promise.all([
-      requestJson<{ roster: RosterSeat[] }>(`/api/games/${selectedGameId}/roster`),
+      requestJson<{ roster: RosterSeat[]; emailConfigured?: boolean }>(`/api/games/${selectedGameId}/roster`),
       requestJson<{ composition: Composition; batches: Batch[]; game?: { status: string } }>(`/api/games/${selectedGameId}/assignments`),
     ]);
     if (requestId !== gameDetailRequest.current || selectedGameRef.current !== selectedGameId) return;
     setRoster(rosterData.roster);
+    setEmailConfigured(Boolean(rosterData.emailConfigured));
     setComposition(compositionDrafts.current.get(selectedGameId) ?? assignmentData.composition);
     setBatches(assignmentData.batches);
     if (assignmentData.game?.status) {
@@ -339,10 +350,41 @@ export default function ModeratorPage() {
       setInviteCsv(data.inviteCsv);
       markCompositionDraft(gameId, null);
       setComposition(data.composition);
-      setMessage(`${data.playerCount} private seats created. Download the invite file now; codes are not shown again.`);
+      setMessage(`${data.playerCount} private seats created. Email the invitations below, or download the invite file now; codes are not shown again.`);
       await loadGame(gameId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to import the roster.');
+    }
+  }
+
+  async function emailInvites(seats: RosterSeat[]) {
+    if (!seats.length || emailingInvites) return;
+    if (seats.length > 1 && !window.confirm(`Email a new private link to ${seats.length} players who haven’t claimed a seat? Any earlier link for them, including the invite CSV, stops working.`)) return;
+    setError('');
+    setMessage('');
+    setEmailingInvites(true);
+    // A send can take a while; the result belongs only to the game it came from.
+    const sentFrom = gameId;
+    const stillOnGame = () => selectedGameRef.current === sentFrom;
+    try {
+      const data = await requestJson<{ sent: number; results: InviteEmailResult[] }>(`/api/games/${sentFrom}/invites`, {
+        method: 'POST',
+        body: JSON.stringify({ seatIds: seats.map((seat) => seat.id) }),
+      });
+      if (!stillOnGame()) return;
+      // Emailed links replace the ones in the downloaded file. Skipped test
+      // addresses keep their links, so the file stays valid if nothing else changed.
+      if (data.results.some((result) => result.status !== 'SKIPPED')) setInviteCsv('');
+      // Reserved test addresses are skipped by design, so they are a note, not an error.
+      const failed = data.results.filter((result) => result.status === 'FAILED');
+      const skipped = data.results.filter((result) => result.status === 'SKIPPED').length;
+      setMessage(`Emailed ${data.sent} of ${data.results.length} ${data.results.length === 1 ? 'player' : 'players'}.${skipped ? ` Skipped ${skipped} test ${skipped === 1 ? 'address' : 'addresses'}, which can’t receive mail.` : ''}`);
+      if (failed.length) setError(`Not sent: ${failed.map((result) => `${result.displayName} (${result.reason ?? 'not sent'})`).join('; ')}`);
+    } catch (caught) {
+      if (stillOnGame()) setError(caught instanceof Error ? caught.message : 'Unable to email invitations.');
+    } finally {
+      setEmailingInvites(false);
+      if (stillOnGame()) await loadGame(sentFrom).catch(() => {});
     }
   }
 
@@ -407,6 +449,7 @@ export default function ModeratorPage() {
   const setupEditable = Boolean(selectedGame && SETUP_STATUSES.has(selectedGame.status));
   const canCancelSetup = setupEditable && selectedGame?.moderatorRole === 'OWNER';
   const claimed = roster.filter((seat) => seat.status === 'CLAIMED').length;
+  const unclaimed = roster.filter((seat) => seat.status === 'INVITED');
   const latestBatch = batches[0];
   const rosterById = useMemo(() => new Map(roster.map((seat) => [seat.id, seat])), [roster]);
   const gameDates = useMemo(() => defaultGameDates(), []);
@@ -528,6 +571,21 @@ export default function ModeratorPage() {
                   </div>
                 </form>
                 {roster.length > 0 && <div className="claim-meter"><span style={{ width: `${(claimed / roster.length) * 100}%` }} /><strong>{claimed} of {roster.length} claimed</strong></div>}
+                {unclaimed.length > 0 && <div className="invite-email">
+                  <div className="button-row">
+                    <button className="primary-button" type="button" onClick={() => void emailInvites(unclaimed)} disabled={!emailConfigured || emailingInvites}>{emailingInvites ? 'Sending…' : `Email invites to ${unclaimed.length} unclaimed ${unclaimed.length === 1 ? 'player' : 'players'}`}</button>
+                  </div>
+                  <p className="field-help">{emailConfigured ? 'Each email holds a new private link. Any earlier link for that player, including the one in the invite CSV, stops working.' : 'Invite email is not set up for this site, so use Download invite CSV. The site operator can turn email on in Vercel.'}</p>
+                  <details>
+                    <summary>Waiting on {unclaimed.length} {unclaimed.length === 1 ? 'player' : 'players'}</summary>
+                    <ul className="invite-list">
+                      {unclaimed.map((seat) => <li key={seat.id}>
+                        <span><strong>{seat.displayName}</strong><small>{seat.email} · {seat.invitationEmailedAt ? `emailed ${new Date(seat.invitationEmailedAt).toLocaleString()}` : 'not emailed'}</small></span>
+                        {emailConfigured && <button className="text-button" type="button" onClick={() => void emailInvites([seat])} disabled={emailingInvites}>{seat.invitationEmailedAt ? 'Resend' : 'Email'}</button>}
+                      </li>)}
+                    </ul>
+                  </details>
+                </div>}
               </section> : <section className="setup-card"><p className="notice warning">This game is {selectedGame?.status.replaceAll('_', ' ').toLowerCase()}. Setup changes are locked. Select another game or start a new setup.</p></section>}
 
               {setupEditable && composition && (

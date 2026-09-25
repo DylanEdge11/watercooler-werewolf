@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { expect, type APIResponse, type Browser, type BrowserContext, type Page, type Response as PageResponse } from '@playwright/test';
 import type { ActionKind, PhaseKind, PhaseResolution, RoleComposition, RoleKey } from '../../lib/game/types';
 import type { TestInfo } from '@playwright/test';
-import { BASE_URL, DEFAULT_COMPOSITION, E2E_PLAYER_COUNT, E2E_RUN_ID, MODERATOR_EMAIL, MODERATOR_PASSWORD } from '../constants';
+import { BASE_URL, DEFAULT_COMPOSITION, E2E_PLAYER_COUNT, E2E_REMOTE, E2E_RUN_ID, MODERATOR_EMAIL, MODERATOR_PASSWORD } from '../constants';
 import { E2E_REQUEST_HEADERS, newBrowserContext } from '../transport';
 
 const ROLE_NAMES: Record<RoleKey, string> = {
@@ -307,13 +307,21 @@ export interface SharedModerator {
   readonly telemetry: BrowserTelemetry;
 }
 
+function localClientAddress(): string {
+  return `10.${randomInt(1, 255)}.${randomInt(1, 255)}.${randomInt(1, 255)}`;
+}
+
 let sharedModerator: SharedModerator | null = null;
 let sharedModeratorPromise: Promise<SharedModerator> | null = null;
 
 export async function getSharedModerator(browser: Browser): Promise<SharedModerator> {
   if (sharedModerator) return sharedModerator;
   sharedModeratorPromise ??= (async () => {
-    const context = await newBrowserContext(browser);
+    // Locally every browser otherwise looks like one client, so the sign-ins
+    // of a failed test's retries used up the moderator allowance (5 per 15
+    // minutes) and failed every later test. Each local sign-in gets its own
+    // private client address. Hosted runs keep the real per-client limit.
+    const context = await newBrowserContext(browser, E2E_REMOTE ? {} : { extraHTTPHeaders: { 'x-forwarded-for': localClientAddress() } });
     const page = await context.newPage();
     const telemetry = new BrowserTelemetry();
     telemetry.attach(page, 'moderator');

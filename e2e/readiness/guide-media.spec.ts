@@ -105,12 +105,6 @@ async function shot(page: Page, fileName: string, clip?: { x: number; y: number;
   await page.evaluate(() => document.documentElement.classList.remove('guide-media-hidden'));
 }
 
-async function enableRoleTheme(page: Page): Promise<void> {
-  const theme = page.getByRole('switch', { name: /Role theme/u });
-  if ((await theme.getAttribute('aria-checked')) !== 'true') await click(page, theme, 500);
-  await expect(theme).toHaveAttribute('aria-checked', 'true');
-}
-
 async function post<T>(context: APIRequestContext, path: string, data: unknown): Promise<T> {
   const response = await context.post(path, { data });
   const body = await response.json() as T & { error?: string };
@@ -174,9 +168,25 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await page.mouse.move(520, 620);
   await pause(page, 1500);
 
+  // 1. The moderator signs in; the roster card offers to email each unclaimed player.
+  await page.goto('/moderator');
+  await caption(page, '1 · The moderator signs in and imports the player list');
+  await pause(page, 1200);
+  await type(page, page.getByLabel('Email'), MODERATOR_EMAIL);
+  await type(page, page.getByLabel('Password'), MODERATOR_PASSWORD);
+  await click(page, page.getByRole('button', { name: 'Sign in', exact: true }), 1500);
+  await expect(page.getByRole('heading', { name: gameName, exact: true })).toBeVisible({ timeout: 30_000 });
+  await caption(page, 'Email invites sends each player their own private link');
+  await page.locator('.invite-email').evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  await pause(page, 1500);
+  await click(page, page.getByText('Waiting on 1 player', { exact: true }), 900);
+  // Hover only: the capture server's email settings are placeholders.
+  await page.getByRole('button', { name: 'Email invites to 1 unclaimed player', exact: true }).hover();
+  await pause(page, 2600);
+
   // 2. The narrator claims a seat.
   await page.goto(narratorInvite.claimUrl);
-  await caption(page, '1 · Each player claims a private seat from their invitation');
+  await caption(page, '2 · Each player claims a private seat from their invitation');
   await expect(page.getByRole('heading', { name: `Welcome, ${NARRATOR}.` })).toBeVisible();
   await pause(page, 1500);
   await type(page, page.getByLabel('Six-digit PIN'), '482913');
@@ -193,11 +203,6 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
 
   // 3. The moderator balances and releases roles.
   await page.goto('/moderator');
-  await caption(page, '2 · The moderator signs in to run the game');
-  await pause(page, 1200);
-  await type(page, page.getByLabel('Email'), MODERATOR_EMAIL);
-  await type(page, page.getByLabel('Password'), MODERATOR_PASSWORD);
-  await click(page, page.getByRole('button', { name: 'Sign in', exact: true }), 1500);
   await expect(page.getByRole('heading', { name: gameName, exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText('7 of 7 claimed', { exact: true })).toBeVisible({ timeout: 30_000 });
   await caption(page, '3 · Everyone has claimed a seat. Choose the roles for this game');
@@ -227,7 +232,6 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await caption(page, '4 · Each player sees only their own role');
   await expect(page.getByText('Your private role', { exact: true })).toBeVisible({ timeout: 30_000 });
   await pause(page, 1500);
-  await enableRoleTheme(page);
   await pause(page, 2500);
 
   // 5. The moderator opens the first Day.
@@ -286,15 +290,20 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
 
   // 8. The result reaches the players.
   await page.goto('/');
-  await caption(page, '8 · Everyone sees who was eliminated, their role, and how people voted');
+  await caption(page, '8 · The curtain falls: everyone sees who was eliminated and their role');
   const alert = page.getByRole('button', { name: 'I understand', exact: true });
   await expect(alert).toBeVisible({ timeout: 30_000 });
-  await pause(page, 3000);
-  await click(page, alert, 1500);
+  // Let the whole curtain call play (about three seconds), then hold on it.
+  await pause(page, 5200);
+  await click(page, alert, 1200);
+
+  // 9. The full Timeline.
+  await caption(page, '9 · Timeline shows every result and how everyone voted');
+  await click(page, page.getByRole('button', { name: 'Timeline', exact: true }).filter({ visible: true }), 1500);
+  await expect(page.locator('#full-timeline')).toBeVisible();
+  await pause(page, 2600);
   await shot(page, 'player-timeline.png');
-  const votes = page.getByRole('button', { name: /View votes for/u }).first();
-  await click(page, votes, 3500);
-  await click(page, page.getByRole('button', { name: 'Close vote details', exact: true }), 800);
+  await click(page, page.getByRole('button', { name: 'Back to today', exact: true }), 900);
   await caption(page, 'Then the next phase begins. Full rules at /guide');
   await pause(page, 3000);
 
@@ -318,7 +327,6 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   for (const [role, scenario, fileName] of roleShots) {
     await studioPage.getByLabel('Player role').selectOption({ label: role });
     await studioPage.getByLabel('Game moment').selectOption(scenario);
-    await enableRoleTheme(studioPage);
     await pause(studioPage, 400);
     await studioPage.locator('.app-shell').evaluate((element) => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
     await pause(studioPage, 400);

@@ -1,3 +1,4 @@
+import type { PublicTimelineEvent } from '../../../lib/game/timeline-view';
 import { permissionForRole } from '../../../lib/game/actions';
 import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import type { DashboardData } from '../../player-dashboard';
@@ -175,5 +176,39 @@ export function createPreviewData(roleKey: RoleKey, scenario: PreviewScenarioId)
     notificationsHasMore: false,
     notificationsNextCursor: null,
     rooms,
+  };
+}
+
+export const PREVIEW_ELIMINATIONS = [
+  { id: 'night-attack', label: 'Night · pack attack' },
+  { id: 'day-vote', label: 'Day · village vote' },
+  { id: 'hunter-shot', label: 'Day · vote and Hunter shot' },
+  { id: 'lovers', label: 'Night · attack and lover bond' },
+  { id: 'you', label: 'You are eliminated' },
+] as const;
+
+export type PreviewEliminationId = (typeof PREVIEW_ELIMINATIONS)[number]['id'];
+
+/** A synthetic published phase for replaying the elimination announcement. */
+export function createPreviewElimination(scene: PreviewEliminationId, roleKey: RoleKey): PublicTimelineEvent {
+  const night = scene === 'night-attack' || scene === 'lovers';
+  const eliminations = {
+    'night-attack': [{ displayName: 'Jordan Blake', role: 'SEER', cause: 'WEREWOLF_ATTACK' }],
+    'day-vote': [{ displayName: 'Casey Rivera', role: 'WEREWOLF', cause: 'DAY_VOTE' }],
+    'hunter-shot': [
+      { displayName: 'Taylor Reed', role: 'HUNTER', cause: 'DAY_VOTE' },
+      { displayName: 'Riley Chen', role: 'WEREWOLF', cause: 'HUNTER_SHOT' },
+    ],
+    lovers: [
+      { displayName: 'Morgan Lee', role: 'MASON', cause: 'WEREWOLF_ATTACK' },
+      { displayName: 'Jamie Park', role: 'CUPID', cause: 'LOVER_BOND' },
+    ],
+    you: [{ displayName: 'Alex Morgan', role: roleKey, cause: 'DAY_VOTE', isYou: true }],
+  }[scene];
+  return {
+    id: `preview-elimination-${scene}`,
+    eventType: 'PHASE_PUBLISHED',
+    createdAt: new Date().toISOString(),
+    payload: { kind: night ? 'NIGHT' : 'DAY', sequence: 4, eliminations },
   };
 }
