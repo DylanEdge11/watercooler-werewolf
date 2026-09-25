@@ -8,6 +8,7 @@ For developers. Installation is in [Setup](SETUP.md), verification in [Testing](
 - Turso/libSQL through `@libsql/client`. Routes use a small database contract (`db/contracts.ts`) implemented in `db/libsql.ts`; multi-statement writes go through `batch()`, which runs as one transaction.
 - Drizzle is used only for the schema (`db/schema.ts`) and for generating migrations. Queries are hand-written SQL with bound parameters.
 - Local development and tests use a SQLite file or in-memory database. Deployed functions refuse `file:` URLs.
+- Builds compile from source every time (`experimental.turbopackFileSystemCacheForBuild: false` in `next.config.ts`). With Turbopack's build cache on, a Vercel build restored from an older deployment served stale `globals.css` under a chunk name already published to Vercel's shared immutable asset store, so the page got the wrong styles. Don't turn it back on.
 
 Requests never change the schema. `ensureDatabase()` checks that every version in `db/readiness.ts` is recorded in `__app_migrations` and fails otherwise. Migrations run only through `npm run db:migrate` (see [Setup](SETUP.md#schema-changes)).
 
