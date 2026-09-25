@@ -35,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={landingFontVariables}>
+    <html lang="en" className={landingFontVariables} data-scroll-behavior="smooth">
       <body
         className="antialiased"
       >

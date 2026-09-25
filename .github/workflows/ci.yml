@@ -1,19 +1,21 @@
 name: Verify
 
+# GitHub Actions minutes are limited, so the full suites run locally with
+# `npm run verify:full` (docs/TESTING.md). Automatically, only the fast gates
+# run, and only on pull requests into main. Start the workflow by hand to run
+# the API and browser suites here too.
 on:
-  push:
-    branches: [main, version-1.1]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# One run per PR (or per branch for pushes); a newer push cancels the older
-# run, except on main where every run finishes.
+# One run per PR or branch; a newer push cancels the older run.
 concurrency:
   group: verify-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -40,12 +42,11 @@ jobs:
           name: npm-audit-full
           path: audit-full.json
 
-  # The full 20-player API and browser suites run against a disposable local
-  # server and database. Hosted UAT relies on these passing for the exact commit.
-  # To save Actions minutes they run only for PRs into main or when started by
-  # hand; otherwise run them locally (docs/TESTING.md).
+  # The full 20-player API and browser suites, against a disposable local
+  # server and database. Manual runs only; `npm run verify:full` runs the same
+  # suites locally.
   api:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -72,7 +73,7 @@ jobs:
 
   browser:
     name: browser (${{ matrix.shard }}/4)
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:

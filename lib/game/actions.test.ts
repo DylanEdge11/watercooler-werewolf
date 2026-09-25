@@ -72,3 +72,30 @@ describe('action target validation', () => {
     })).toContain('Choose between 1 and 1 target.');
   });
 });
+
+describe('Cupid and Apprentice Seer permissions', () => {
+  it('gives Cupid one pairing and the Apprentice Seer a night action only after the Seer dies', () => {
+    expect(permissionForRole('CUPID', 'NIGHT', 1)).toMatchObject({ actionKind: 'CUPID_PAIR', maxTargets: 2 });
+    expect(permissionForRole('CUPID', 'NIGHT', 1, false, { cupidPairExists: true }).actionKind).toBeNull();
+    expect(permissionForRole('APPRENTICE_SEER', 'NIGHT', 1, false, { seerAlive: true }).actionKind).toBeNull();
+    expect(permissionForRole('APPRENTICE_SEER', 'NIGHT', 1, false, { seerAlive: false }))
+      .toMatchObject({ actionKind: 'INVESTIGATE', maxTargets: 1 });
+    expect(permissionForRole('MAYOR', 'NIGHT', 1).actionKind).toBeNull();
+    expect(permissionForRole('MAYOR', 'DAY', 1).actionKind).toBe('DAY_VOTE');
+  });
+
+  it('requires exactly two living lovers and allows Cupid to choose themself', () => {
+    const cupid: PlayerState = { id: 'cupid', displayName: 'Cupid', role: 'CUPID', alive: true };
+    const withCupid = [...players, cupid];
+    const pair = (targetIds: string[]) => validateActionTargets({
+      actor: cupid,
+      players: withCupid,
+      actionKind: 'CUPID_PAIR',
+      targetIds,
+      maxTargets: 2,
+    });
+    expect(pair(['cupid', 'villager'])).toEqual([]);
+    expect(pair(['villager'])).toContain('Choose exactly two players to link as lovers.');
+    expect(pair(['villager', 'gone'])).toContain('Every target must be a living player.');
+  });
+});

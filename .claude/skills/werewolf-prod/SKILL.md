@@ -7,56 +7,50 @@ disable-model-invocation: true
 
 # Watercooler Werewolf Production release
 
-Use this skill only when the user separately asks to release a specific, already UAT-verified candidate. That request is the release authorization once the UAT evidence checks out. Do not perform Dev or UAT from this skill, even if the request mentions them.
+Use only when the user separately asks to release a specific, UAT-verified candidate. That request authorizes the release once the UAT evidence checks out. Do not perform Dev or UAT.
 
-## Project contract
-
-- Work in the `watercooler-werewolf` checkout and confirm the repository and branch before merging.
-- Git remote: `origin` (`DylanEdge11/watercooler-werewolf`). Production branch: `main`; verify it is still Vercel's Production Branch. Vercel project `watercooler-werewolf`, team `dyl-edge`.
-- Read [the setup and deployment guide](../../../docs/SETUP.md) for Production configuration, migrations, and rollback. Follow its "Release a change" section for routine releases.
-- Preview and Production use separate Turso databases and environment variables. Production is built fresh from `main`; never promote a Preview deployment.
+Project facts and safety rules are in `CLAUDE.md`. Vercel project `watercooler-werewolf`, team `dyl-edge`. Follow [Release a change](../../../docs/SETUP.md#release-a-change) and, if needed, [Roll back](../../../docs/SETUP.md#roll-back). The candidate is normally the version branch (`version-X.Y`), released through one pull request into `main`.
 
 ## Verify the UAT handoff
 
-Find the handoff in the request, the PR, or earlier conversation. It must name the exact tested SHA, Preview URL and deployment ID, passing CI, the hosted Playwright run ID with results, and known gaps. If anything is missing, unclear, or belongs to another SHA, do not merge; ask for the handoff or a new UAT run.
+The handoff (in the request, the PR, or earlier conversation) must name the tested SHA, Preview URL and deployment ID, a passing `npm run verify:full` at that SHA, the hosted Playwright run ID with results, and known gaps. If anything is missing or belongs to another SHA, don't merge; ask for it or a new UAT run.
 
-Fetch `origin/main` and the candidate. Confirm the candidate's remote SHA equals the tested SHA and CI is still green. If the candidate changed, or `main` advanced in a way that changes the merge result, stop and ask for a new UAT run. Surface any known gaps from the handoff (for example, Edge smoke not run) and confirm the user accepts them before merging.
+Fetch `origin/main` and the candidate. The candidate's remote SHA must equal the tested SHA. Opening the release PR runs the fast `Verify` job (about 5 minutes); it must be green. If the candidate changed, or `main` advanced in a way that changes the merge result, stop and ask for a new UAT run. Get the user to accept any known gaps (for example, Edge not run) before merging.
 
-Preserve unrelated local edits. Never reset, clean, force-push, or silently stash. Review the full candidate-to-`main` diff and make sure no `.env*`, credentials, database files, Playwright artifacts, or unrelated changes are included.
+Preserve unrelated local edits; never reset, clean, force-push, or silently stash. Review the full candidate-to-`main` diff for `.env*`, credentials, database files, Playwright artifacts, or unrelated changes.
 
 ## Production migrations come first
 
-Every API route refuses to serve if the database lacks a migration listed in `db/readiness.ts`. So if the candidate adds migrations, the Production database must be migrated **before** the merge deploys, or Production goes down between the deploy and the migration.
+If the candidate adds migrations, Production must be migrated **before** the merge deploys, or every API route fails until it is.
 
-1. List the new migration versions and their SQL. Confirm they are additive and compatible with the code currently on `main`. If not, stop and discuss a staged plan with the user.
-2. Confirm a recent Production backup or snapshot exists, per the setup guide and `docs/OPERATIONS.md`.
-3. Explain exactly what will run and get the user's explicit go-ahead for this specific Production migration. The release authorization alone is not enough.
-4. Running it needs Production database credentials that you should not hold. Either the user runs `npm run db:migrate` with Production credentials, or they provide an ignored credentials file for this step only. Never print the values, and never run bootstrap, seed, or pilot scripts against Production.
-5. Confirm the migration completed before merging: the command reports the database is current, and anonymous `GET /api/games` on the Production domain still returns 401 (routes check the schema before authentication, so a 5xx means trouble).
+1. List the new migrations and their SQL. Confirm they're additive and work with the code on `main`. If not, stop and plan a staged release with the user.
+2. Confirm a recent Production backup exists (`docs/OPERATIONS.md`).
+3. Explain exactly what will run and get the user's explicit go-ahead for this migration. The release request alone is not enough.
+4. The user runs `npm run db:migrate` with Production credentials, or provides an ignored credentials file for this step only. Never print the values or run bootstrap, seed, or pilot scripts against Production.
+5. Confirm the command reports the database is current and anonymous `GET /api/games` on Production still returns 401.
 
-Database state is not rolled back by an application rollback.
+An application rollback does not roll back the database.
 
-## Merge and deploy
+## Merge and verify
 
-Merge through the repository's pull request process into `main`. Do not bypass branch protection or rewrite shared history. If policy requires a human review or merge, prepare the PR and wait.
+Merge through a pull request into `main`. Never bypass branch protection, rewrite history, promote a Preview, or use `vercel deploy --prod`. If a human review or merge is required, prepare the PR and wait.
 
-Let the Vercel Git integration build `main` for Production. Do not use `vercel deploy --prod` unless the user explicitly asks and the Git flow is unavailable.
+Wait for the Production deployment of the merge commit to reach `READY`. Then run read-only checks only: the landing page returns 200 HTML, `/player-login` loads, anonymous `GET /api/games` returns 401, and runtime logs show no new errors. Never point hosted Playwright or pilot scripts at Production.
 
-Wait for the Production deployment to reach `READY` (Vercel CLI, Vercel MCP tools, or GitHub deployment status). Confirm its commit is the merge result. Then run read-only smoke checks only: the landing page returns 200 HTML, `/player-login` loads, anonymous `GET /api/games` returns 401, and runtime logs show no new errors. The hosted Playwright runbook is Preview-only; never point it or any pilot mutation at Production.
-
-If deployment or smoke checks fail, report the domain, deployment ID, commit, state, and error evidence. Do not roll back or change Production data automatically; offer the rollback steps from the setup guide and ask how to proceed.
+If anything fails, report the domain, deployment ID, commit, state, and error evidence, and offer the rollback steps. Don't roll back or change Production data on your own.
 
 ## Completion report
 
 ```text
 PROD: RELEASED            (or PROD: BLOCKED / FAILED — <reason>)
 Candidate: <branch> @ <UAT-tested SHA>
-UAT evidence: <Preview deployment ID, Playwright run ID, CI link>
+UAT evidence: <Preview deployment ID, Playwright run ID, verify:full result>
 Migrations: <none, or versions applied to Production and when>
 Merge: <PR link, merge commit on main>
 Production: <domain, deployment ID, READY>
 Smoke checks: <each check and result>
 Logs: <runtime errors observed or none>
+Next: the owner creates the next version branch (`version-X.Y`) from `main`.
 ```
 
-Keep UAT verification, merge, and Production verification clearly separate. Never claim a check passed without observing it.
+Never claim a check passed without observing it.

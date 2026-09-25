@@ -4,19 +4,18 @@ How to verify a change, from fast unit tests to a full hosted Preview run. Use f
 
 ## Release checks
 
-The `Verify` workflow in `.github/workflows/ci.yml` runs on pushes to `main` and `version-1.1`, on every pull request, and when started by hand (a newer push cancels an older run, except on `main`). Its `verify` job runs the fast gates:
+The checks run locally, because GitHub Actions minutes are limited (2,000 a month):
 
-```text
-npm test -- --run
-npm run lint
-npx tsc --noEmit --incremental false
-npm run build
-npm audit --omit=dev --audit-level=moderate
-```
+| Command | What it runs | When |
+| --- | --- | --- |
+| `npm run verify` | The fast gates: unit tests, lint, type check, production build, and the production dependency audit. A few minutes. | Before every push. |
+| `npm run verify:full` | `verify`, then the 20-player API suite, then the full 20-player Chromium browser suite, one game at a time. About 20 minutes; run it in the background. | Once per release candidate, during UAT. |
 
-Its `api` job runs the 20-player API suite, and its four `browser` jobs split the full 20-player Chromium browser suite between them. To save Actions minutes (2,000 a month), `api` and `browser` run only for pull requests into `main` or when the workflow is started by hand; for other changes, run those suites locally. All of them use a disposable local server and database, so they need no secrets and never touch a Preview. The whole run takes about 25–45 minutes; each browser job may run for up to 60 minutes and each 20-player browser game for up to 20. A failed job uploads its Playwright report and traces as an artifact.
+The API and browser suites use a disposable local server and database, so they need no secrets and never touch a Preview. Each 20-player browser game may run for up to 20 minutes.
 
-A candidate is ready for release when every `Verify` job is green for its exact commit and the [hosted Preview run](#hosted-preview-runbook) has passed against its Preview deployment. Earlier results do not carry over to a new commit.
+The `Verify` workflow in `.github/workflows/ci.yml` runs only the fast gates, and only on pull requests into `main`. Starting it by hand from the Actions tab also runs the API suite and the browser suite split across four machines. That costs about 100 minutes, so do it only when a local run isn't possible.
+
+A candidate is ready for release when `npm run verify:full` has passed on its exact commit and the [hosted Preview run](#hosted-preview-runbook) has passed against its Preview deployment. Earlier results do not carry over to a new commit.
 
 ## Unit tests
 
@@ -74,7 +73,7 @@ In a Claude Code cloud session, these values are environment variables set in th
 
 ### Run
 
-This checks that the deployed Preview, with its real Vercel functions and Turso database, works end to end. The full browser suite has already run in CI, so the hosted run is short, about 5–10 minutes. Run the sequence **once per candidate commit**, with one `E2E_RUN_ID` for the whole run and a distinct `E2E_INVOCATION_ID` for each command:
+This checks that the deployed Preview, with its real Vercel functions and Turso database, works end to end. The full browser suite has already run locally with `npm run verify:full`, so the hosted run is short, about 5–10 minutes. Run the sequence **once per candidate commit**, with one `E2E_RUN_ID` for the whole run and a distinct `E2E_INVOCATION_ID` for each command:
 
 | Invocation ID | Arguments after `node --env-file=.env.e2e.local scripts/run-playwright.mjs --remote` |
 | --- | --- |
