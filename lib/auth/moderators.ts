@@ -44,6 +44,18 @@ export async function createModeratorAccountInDatabase(db: Database, email: stri
   return { id, email: normalizedEmail, recoveryCodes };
 }
 
+let dummyHash: Promise<string> | undefined;
+
+/**
+ * Verifying against a throwaway hash when no account matches makes an unknown
+ * email take as long as a wrong password, so timing doesn't reveal which
+ * emails have moderator accounts.
+ */
+async function spendVerifyTime(secret: string): Promise<void> {
+  dummyHash ??= hashSecret('no-account-for-this-email');
+  await verifySecret(secret, await dummyHash);
+}
+
 export async function authenticateModerator(
   email: string,
   password: string,
@@ -53,7 +65,11 @@ export async function authenticateModerator(
     .prepare('SELECT id, email, password_hash AS passwordHash FROM moderator_accounts WHERE email = ? LIMIT 1')
     .bind(normalizeModeratorEmail(email))
     .first<{ id: string; email: string; passwordHash: string }>();
-  if (!row || !(await verifySecret(password, row.passwordHash))) return null;
+  if (!row) {
+    await spendVerifyTime(password);
+    return null;
+  }
+  if (!(await verifySecret(password, row.passwordHash))) return null;
   return { id: row.id, email: row.email };
 }
 
@@ -77,7 +93,10 @@ export async function redeemModeratorRecoveryCode(
     .prepare('SELECT id, email, recovery_codes_json AS recoveryCodesJson FROM moderator_accounts WHERE email = ? LIMIT 1')
     .bind(normalizedEmail)
     .first<{ id: string; email: string; recoveryCodesJson: string }>();
-  if (!account) return null;
+  if (!account) {
+    await spendVerifyTime(recoveryCode);
+    return null;
+  }
 
   let hashes: string[];
   try {

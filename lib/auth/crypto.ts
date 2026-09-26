@@ -1,7 +1,9 @@
 const encoder = new TextEncoder();
-// Keep the work factor compatible with the Node/Vercel runtime and existing
-// stored hashes. Changing it would make old accounts impossible to verify.
-// Keep the encoded count explicit so stored hashes remain self-describing.
+// Work factor for new hashes. Each stored hash records its own count and
+// verifySecret reads it, so this can be raised (OWASP suggests 600,000 for
+// PBKDF2-SHA256) without breaking existing accounts; only sign-in latency
+// rises. PINs are six digits, so their strength comes from the per-seat
+// lockout, not from this count.
 const ITERATIONS = 100_000;
 
 function bytesToBase64Url(bytes: Uint8Array): string {
