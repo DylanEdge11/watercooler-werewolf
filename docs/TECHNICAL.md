@@ -81,7 +81,7 @@ Deadlines are entered in the game's IANA timezone and stored as UTC. Impossible 
 
 ## Polling
 
-The player dashboard, open chat rooms, and moderator panels each refresh every ten seconds. There are no WebSockets.
+The player dashboard, open chat rooms, and moderator panels each refresh every ten seconds. There are no WebSockets. The moderator console loads and refreshes with one request: `GET /api/games` returns the games list plus the selected game's roster and assignments (`?gameId=`, or the newest game; `lib/game/setup-view.ts`), and its signed-out 401 carries `needsBootstrap`. The Communications & operations panel refreshes operations and rooms on every tick, and the co-moderator list, announcements, and feedback at most once a minute and after the moderator's own changes.
 
 ## Reserved fields
 

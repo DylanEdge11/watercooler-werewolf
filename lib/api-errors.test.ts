@@ -55,17 +55,25 @@ async function migrateAndSeed(): Promise<void> {
 describe('route status codes', () => {
   // Runs first: readiness is cached for the module once it succeeds.
   test('an unmigrated database answers 503, so "5xx means not migrated" holds', async () => {
-    expect((await read(await gamesGet())).status).toBe(503);
+    expect((await read(await gamesGet(new Request('http://localhost:3000/api/games')))).status).toBe(503);
   });
 
   test('a signed-out request is 401 and a moderator of another game is 403', async () => {
     await migrateAndSeed();
     const context = { params: Promise.resolve({ gameId: 'game' }) };
     shared.moderator = null;
-    expect((await read(await gamesGet())).status).toBe(401);
+    // The console's first request also learns whether the first account still has to be created.
+    expect(await (await gamesGet(new Request('http://localhost:3000/api/games'))).json()).toMatchObject({ ok: false, needsBootstrap: false });
     shared.moderator = { id: 'other', email: 'other@pilot.test' };
     expect(await read(await feedbackGet(new Request('http://localhost:3000/api/games/game/feedback'), context)))
       .toEqual({ status: 403, body: { ok: false, error: 'You are not a moderator for this game.' } });
+  });
+
+  test('before any moderator account exists, the signed-out 401 says setup is needed', async () => {
+    await runMigrations(client, await loadMigrations());
+    shared.moderator = null;
+    const response = await gamesGet(new Request('http://localhost:3000/api/games'));
+    expect({ status: response.status, body: await response.json() }).toMatchObject({ status: 401, body: { needsBootstrap: true } });
   });
 
   test('a body that is not JSON is a 400 with a plain message', async () => {

@@ -17,6 +17,10 @@ const shared = vi.hoisted(() => ({ db: null as TestDatabase | null }));
 
 vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
+vi.mock('../lib/auth/session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./auth/session')>()),
+  getCurrentModerator: async () => ({ id: 'mod', email: 'owner@pilot.test' }),
+}));
 vi.mock('../lib/auth/authorization', () => ({
   requireModerator: async () => ({ id: 'mod' }),
   requireGameModerator: async () => ({ id: 'mod' }),
@@ -28,6 +32,7 @@ import { POST as operationsPost } from '../app/api/games/[gameId]/operations/rou
 import { POST as rosterPost } from '../app/api/games/[gameId]/roster/route';
 import { PATCH as schedulePatch } from '../app/api/games/[gameId]/schedule/route';
 import { GET as gamesGet, POST as gamesPost } from '../app/api/games/route';
+import { loadAssignmentsView, loadRosterView } from './game/setup-view';
 import { GET as phaseGet, POST as phasePost } from '../app/api/games/[gameId]/phases/route';
 
 let sqlite: DatabaseSync;
@@ -182,8 +187,19 @@ describe('setup and publication invariants', () => {
     expect(created.status).toBe(201);
     const { gameId } = await created.json() as { gameId: string };
     expect(gameSettings(gameId)).toEqual({ hunterWindowMinutes: 480, dayDivisor: 30, nightDivisor: 30 });
-    const listed = await (await gamesGet()).json() as { games: Array<Record<string, unknown>> };
+    const listed = await (await gamesGet(new Request('http://localhost:3000/api/games'))).json() as { games: Array<Record<string, unknown>> };
     expect(listed.games.find((game) => game.id === gameId)).toMatchObject({ hunterWindowMinutes: 480, dayDivisor: 30, nightDivisor: 30 });
+  });
+
+  test('the games list carries the selected game’s roster and assignments, so the console needs one request', async () => {
+    const { gameId } = await (await gamesPost(request(launchSchedule))).json() as { gameId: string };
+    type Listed = { selected: { gameId: string; roster: unknown; assignments: unknown } | null };
+    const list = async (query = '') => await (await gamesGet(new Request(`http://localhost:3000/api/games${query}`))).json() as Listed;
+    // With no choice, or an unknown one, the newest game is selected.
+    expect((await list()).selected?.gameId).toBe(gameId);
+    expect((await list('?gameId=unknown')).selected?.gameId).toBe(gameId);
+    const chosen = await list('?gameId=game');
+    expect(chosen.selected).toEqual(JSON.parse(JSON.stringify({ gameId: 'game', roster: await loadRosterView('game'), assignments: await loadAssignmentsView('game') })));
   });
 
   test('a new game uses moderator review unless the moderator opts in to automatic results', async () => {
@@ -197,7 +213,7 @@ describe('setup and publication invariants', () => {
     // A game created before this version keeps moderator review.
     expect(automation('game')).toEqual({ mode: 'REVIEW', minutes: 60, paused: null });
     expect((await gamesPost(request({ ...launchSchedule, reviewWindowMinutes: 5000 }))).status).toBe(400);
-    const listed = await (await gamesGet()).json() as { games: Array<Record<string, unknown>> };
+    const listed = await (await gamesGet(new Request('http://localhost:3000/api/games'))).json() as { games: Array<Record<string, unknown>> };
     expect(listed.games.find((game) => game.id === automatic.gameId)).toMatchObject({ publicationMode: 'AUTOMATIC', reviewWindowMinutes: 60, automationPaused: false });
   });
 
