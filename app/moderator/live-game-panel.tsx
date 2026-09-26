@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { nudgeMessage } from '../../lib/game/moderator-copy';
+import { phaseName } from '../../lib/game/timeline-view';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import AutomationControls, { type NextAutomaticStep } from './automation-controls';
 import CopyButton from './copy-button';
@@ -222,7 +223,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
 
       {latest && (
         <div className="phase-review">
-          <div className="phase-status-row"><div><p className="eyebrow accent">Cycle {latest.sequence} · {latest.kind.replaceAll('_', ' ')}</p><h3>{latest.status.replaceAll('_', ' ')}</h3></div><div><strong>{latest.currentSubmissions}</strong><small>current responses</small></div><div><strong>{latest.slots}</strong><small>elimination slots</small></div></div>
+          <div className="phase-status-row"><div><p className="eyebrow accent">{phaseName(latest.kind, latest.sequence)}</p><h3>{latest.status.replaceAll('_', ' ')}</h3></div><div><strong>{latest.currentSubmissions}</strong><small>current responses</small></div><div><strong>{latest.slots}</strong><small>elimination slots</small></div></div>
           {latest.status === 'OPEN' && <OutstandingBlock phase={latest} timeZone={gameTimeZone} />}
           {['OPEN', 'LOCKED'].includes(latest.status) && <button className="danger-button" type="button" onClick={() => void run('LOCK_AND_PROPOSE', latest.id)}>{latest.status === 'LOCKED' ? 'Calculate locked responses' : 'Lock responses & calculate'}</button>}
           {latest.status === 'PENDING_HUNTER' && (
@@ -255,7 +256,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
         </div>
       )}
 
-      {phases.filter((phase) => phase.status === 'PUBLISHED').length > 0 && <p className="field-help">Published cycles: {phases.filter((phase) => phase.status === 'PUBLISHED').map((phase) => phase.sequence).join(', ')}</p>}
+      {phases.filter((phase) => phase.status === 'PUBLISHED').length > 0 && <p className="field-help">Published: {phases.filter((phase) => phase.status === 'PUBLISHED').map((phase) => phaseName(phase.kind, phase.sequence)).join(', ')}</p>}
     </section>
   );
 }

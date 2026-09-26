@@ -78,3 +78,14 @@ export const ROLE_CATALOG: Record<RoleKey, RoleDefinition> = {
     unique: true,
   },
 };
+
+/** "the Seer" for a one-of-a-kind role, "a Werewolf" for the rest. */
+export function roleWithArticle(role: RoleKey): string {
+  const definition = ROLE_CATALOG[role];
+  return `${definition.unique ? 'the' : 'a'} ${definition.name}`;
+}
+
+/** The private message a Seer or Apprentice Seer receives when their investigation is published. */
+export function investigationMessage(targetName: string, role: RoleKey): string {
+  return `${targetName} is ${roleWithArticle(role)}.`;
+}

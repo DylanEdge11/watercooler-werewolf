@@ -88,6 +88,14 @@ export function slotTable(divisor: number, maxPlayers = MAX_PLAYERS): SlotTableR
   return rows;
 }
 
+/** More eliminations than this in one phase gets a warning in the form (the default of 30 never does). */
+export const HEAVY_SLOT_THRESHOLD = 3;
+
+/** The first slot-table row that eliminates more than the threshold in one phase, if any. */
+export function heavySlotWarning(rows: SlotTableRow[]): SlotTableRow | null {
+  return rows.find((row) => row.slots > HEAVY_SLOT_THRESHOLD) ?? null;
+}
+
 /** "8 hours", "1.5 hours", or "45 minutes" for the guide, console, and form. */
 export function formatHunterWindow(minutes: number): string {
   if (minutes < 60) return `${minutes} minutes`;

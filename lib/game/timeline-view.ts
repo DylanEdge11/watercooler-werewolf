@@ -23,7 +23,7 @@ export interface PublicTimelineEvent {
 }
 
 export interface TimelineEntryView {
-  /** Short label above the headline, e.g. "Day · Cycle 3". */
+  /** Short label above the headline, e.g. "Day 2" or "Final ballot". */
   eyebrow: string;
   /** One-line summary used in the rail. */
   title: string;
@@ -54,6 +54,21 @@ function phaseLabel(kind: string | undefined): string {
   if (kind === 'NIGHT') return 'Night';
   if (kind === 'FINAL_BALLOT') return 'Final ballot';
   return kind ? readableRole(kind) : 'Phase';
+}
+
+/**
+ * Phases are numbered one by one (Day 1 is 1, Night 1 is 2, Day 2 is 3), and
+ * the game always starts with a Day and alternates, so a Day and the Night
+ * after it share one cycle number.
+ */
+export function cycleNumber(sequence: number): number {
+  return Math.max(1, Math.ceil(sequence / 2));
+}
+
+/** "Day 2", "Night 2", or "Final ballot": the one name players and moderators see for a phase. */
+export function phaseName(kind: string | undefined, sequence?: number | null): string {
+  if ((kind === 'DAY' || kind === 'NIGHT') && sequence) return `${phaseLabel(kind)} ${cycleNumber(sequence)}`;
+  return phaseLabel(kind);
 }
 
 export function describeTimelineEvent(event: PublicTimelineEvent): TimelineEntryView {
@@ -111,19 +126,11 @@ export function describeTimelineEvent(event: PublicTimelineEvent): TimelineEntry
     ? 'No one was eliminated'
     : `${names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`} eliminated`;
   return {
-    eyebrow: `${phaseLabel(payload.kind)}${payload.sequence ? ` · Cycle ${payload.sequence}` : ''}`,
-    title: `${payload.kind}${payload.sequence ? ` · Cycle ${payload.sequence}` : ''} resolved`,
+    eyebrow: phaseName(payload.kind, payload.sequence),
+    title: `${phaseName(payload.kind, payload.sequence)} resolved`,
     description,
     headline,
     tone: 'phase',
     publicBallot: ['DAY', 'FINAL_BALLOT'].includes(payload.kind ?? ''),
   };
-}
-
-/** Votes per target, most first; ties keep name order. */
-export function tallyVotes(votes: Array<{ targetNames: string[] }>): Array<{ name: string; count: number }> {
-  const counts = new Map<string, number>();
-  for (const vote of votes) for (const name of vote.targetNames) counts.set(name, (counts.get(name) ?? 0) + 1);
-  return [...counts].map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }

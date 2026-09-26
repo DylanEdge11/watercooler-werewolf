@@ -3,6 +3,7 @@ import { sha256 } from '../auth/crypto';
 import { ensureGameRooms } from '../chat/rooms';
 import { evaluateWinner, resolveHunterShot, resolvePhase } from './engine';
 import { applyEliminationOverride, changes, loadActions, loadPlayers, overrideIdsFromJson } from './phase-store';
+import { investigationMessage } from './catalog';
 import { createSecureRandomRolls } from './random';
 import { loadCurrentLoverPair } from './relationships';
 import type { PhaseKind, PhaseResolution } from './types';
@@ -453,7 +454,7 @@ export async function runPhaseAction(
             `INSERT INTO notifications (id, seat_id, type, title, body, created_at)
              SELECT ?, ?, 'INVESTIGATION_RESULT', 'Your vision is clear', ?, ? WHERE ${publicationGuard}`,
           )
-          .bind(crypto.randomUUID(), investigation.seerId, `${target?.displayName ?? 'That player'} is the ${investigation.role}.`, now, phase.id, gameId, claimedVersion),
+          .bind(crypto.randomUUID(), investigation.seerId, investigationMessage(target?.displayName ?? 'That player', investigation.role), now, phase.id, gameId, claimedVersion),
       );
     }
     if (win.winner) {

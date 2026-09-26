@@ -25,7 +25,7 @@ const ROLES = [
   { name: 'Hunter', team: 'Village', text: 'When you are eliminated, you get a short window to take one living player with you.' },
   { name: 'Mason', team: 'Village', text: 'You know the other Masons and share a private Mason room. There are always zero or at least two.' },
   { name: 'Apprentice Seer', team: 'Village', text: 'Waits while the Seer lives. After the Seer is eliminated, inherit their past results and investigate each Night.' },
-  { name: 'Mayor', team: 'Village', text: 'Your Day and Final ballot votes count twice. The published ballot shows your vote once, so your role stays hidden.' },
+  { name: 'Mayor', team: 'Village', text: 'Your Day and Final ballot votes count twice. The published ballot lists your vote once, like everyone else’s, and shows no vote totals.' },
   { name: 'Cupid', team: 'Village', text: 'Once, on a Night, link two living players as lovers (yourself included). If one is eliminated, so is the other, whatever their team.' },
 ] as const;
 
@@ -168,7 +168,7 @@ export default function GuidePage() {
           </ol>
           <Shot src="/guide/player-day-ballot.png" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself about every ten seconds." />
           <h3>4. Follow the story</h3>
-          <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page (the latest 100 updates), with each Day’s vote tally. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
+          <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page (the latest 100 updates), with who voted for whom each Day. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
           <Shot src="/guide/player-timeline.png" alt="Player dashboard showing the full Timeline of published results" caption="The full Timeline: each published result, who was eliminated and their role, and how everyone voted." />
           <h3>Good to know</h3>
           <ul>
@@ -205,7 +205,7 @@ export default function GuidePage() {
           <h3>Moderator tools</h3>
           <ul>
             <li><strong>Announcements</strong> appear in every player’s updates. <strong>Announcement copy</strong> then shows each one ready to paste into an email or a group chat, with <strong>Copy email</strong> and <strong>Copy for chat</strong>.</li>
-            <li><strong>Feedback</strong> lists the ratings and comments players and moderators send from the feedback card, with the average. It shows whether each came from a player or a moderator, never who.</li>
+            <li><strong>Feedback</strong> lists the ratings and comments players and moderators send from the feedback card, with the average. It shows whether each came from a player or a moderator. The list doesn’t name the sender, but the audit log and backups record who sent each one.</li>
             <li><strong>Player access recovery</strong> sets a new PIN for a player who forgot theirs.</li>
             <li><strong>Private rooms</strong> can be made read-only, and individual messages removed with a reason.</li>
             <li><strong>Co-moderators</strong> can be added by the game owner.</li>
