@@ -480,6 +480,8 @@ export interface BrowserGameOptions {
   /** Roster size; must equal the composition total. Defaults to E2E_PLAYER_COUNT. */
   playerCount?: number;
   setupThroughUi?: boolean;
+  /** UI setup only: choose automatic results in the create form instead of the review default. */
+  automaticResults?: boolean;
   mobilePlayerIndex?: number;
 }
 
@@ -515,6 +517,7 @@ export class BrowserGame {
         }
         await expect(gameNameField).toBeVisible();
         await gameNameField.fill(gameName);
+        if (options.automaticResults) await moderator.page.getByLabel('Publish automatically after a review window').check();
         const createResponsePromise = moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/games');
         await moderator.page.getByRole('button', { name: 'Create game', exact: true }).click();
         const created = await json<{ gameId: string }>(await createResponsePromise, 'create browser game');
@@ -534,6 +537,9 @@ export class BrowserGame {
           finalCutoffAt: '2000-01-01T00:00',
           activeWeekdays: [1, 2, 3, 4, 5],
           schedule: { dayCloses: '16:00', nightCloses: '09:00' },
+          // These scripted games drive every lock, Hunter follow-up, and publish by hand, so automatic results stay off.
+          // The UI-created UAT game opts in to automatic results and checks them.
+          publicationMode: 'REVIEW',
         }, 'create browser game');
         gameId = created.gameId;
         const rosterData = await post<{ invites: InviteRow[] }>(moderator.context, `/api/games/${gameId}/roster`, { csv: rosterCsv(suffix, playerCount) }, 'import browser roster');

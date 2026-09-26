@@ -76,7 +76,7 @@ export async function runDayElimination(
 
 export async function runNight(
   game: BrowserGame,
-  options: { attackTarget?: BrowserPlayer; protectAttack?: boolean; protectTarget?: BrowserPlayer; afterOpen?: (phaseId: string) => Promise<void> } = {},
+  options: { attackTarget?: BrowserPlayer; protectAttack?: boolean; protectTarget?: BrowserPlayer; afterOpen?: (phaseId: string) => Promise<void>; afterLock?: (phaseId: string) => Promise<void> } = {},
 ): Promise<{ phaseId: string; proposal: { outcome: PhaseResolution; hunterDeadline?: string | null }; published: { outcome: PhaseResolution; winner: 'VILLAGE' | 'WEREWOLF' | null } }> {
   const phase = await game.openPhase('NIGHT');
   await refreshPlayers(game);
@@ -98,6 +98,7 @@ export async function runNight(
   }
   await game.submitConcurrently(decisions);
   const proposal = await game.lockAndPropose(phase.phaseId);
+  await options.afterLock?.(phase.phaseId);
   const published = await game.publish(phase.phaseId);
   await game.updateAlive(published.outcome);
   await refreshPlayers(game);

@@ -407,6 +407,16 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .outstanding-block { background: #f8f7f2; border: 1px solid #e2e3dc; border-radius: 12px; display: grid; gap: 10px; margin: 12px 0; padding: 14px; }
 .outstanding-list { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .outstanding-list li { background: #fff; border: 1px solid #d9ddd8; border-radius: 999px; font-size: 12px; padding: 4px 10px; }
+.automation-block { background: #f8f7f2; border: 1px solid #e2e3dc; border-radius: 12px; display: grid; gap: 8px; margin: 12px 0; padding: 14px; }
+.automation-block.paused { border-color: #d9a441; }
+.automation-status { font-size: 13px; margin: 4px 0 0; }
+.automation-settings summary { cursor: pointer; font-size: 12px; font-weight: 800; }
+.automation-form, .results-choice { display: grid; gap: 8px; margin-top: 8px; }
+.automation-form label:has(input[type="radio"]), .results-choice label:has(input[type="radio"]) { align-items: center; display: flex; gap: 8px; }
+.automation-form input[type="radio"], .results-choice input[type="radio"] { margin: 0; width: auto; }
+.automation-form .secondary-button { justify-self: start; }
+.results-choice { border: 0; margin: 0; padding: 0; }
+.results-choice legend { color: #485950; font-size: 11px; font-weight: 800; margin-bottom: 4px; }
 .announcement-copy { border-top: 1px solid #e2e3dc; padding-top: 8px; }
 .announcement-copy summary { cursor: pointer; font-size: 12px; }
 .announcement-copy summary small { color: var(--muted); margin-left: 6px; }

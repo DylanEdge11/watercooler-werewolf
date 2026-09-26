@@ -32,6 +32,7 @@ test('an eight-player game runs from setup to a Village win with private informa
     composition: UAT_COMPOSITION,
     playerCount: UAT_PLAYER_COUNT,
     setupThroughUi: true,
+    automaticResults: true,
     mobilePlayerIndex: 0,
   });
   try {
@@ -78,11 +79,30 @@ test('an eight-player game runs from setup to a Village win with private informa
     });
     expect(firstDay.published.winner).toBeNull();
 
+    // This game opted in to automatic results at setup: it publishes 60 minutes after calculation unless paused.
+    const automation = moderatorPage.locator('.automation-block');
+    await moderatorPage.reload();
+    await expect(automation.getByRole('status')).toHaveText('Automatic: each phase you open locks at its deadline and publishes 60 minutes later unless you act.', { timeout: 30_000 });
+    await automation.getByRole('button', { name: 'Pause automation', exact: true }).click();
+    await expect(automation.getByRole('status')).toHaveText(/^Paused\. Nothing locks, calculates, or publishes on its own/u);
+    const watcher = game.living().at(-1)!;
+    await watcher.reload();
+    await expect(watcher.page.locator('.deadline-card')).toContainText('The schedule is paused');
+    await automation.getByRole('button', { name: 'Resume automation', exact: true }).click();
+    await expect(automation.getByRole('button', { name: 'Pause automation', exact: true })).toBeVisible();
+
     // Night 1: the Bodyguard blocks the attack and the Seer finds the last Werewolf.
     const protectedTarget = livingTarget(game, (player) => player.account.role === 'VILLAGER');
     const firstNight = await runNight(game, {
       attackTarget: protectedTarget,
       protectAttack: true,
+      afterLock: async () => {
+        // While the calculated result waits for review, the console and players see when it will publish.
+        await moderatorPage.reload();
+        await expect(moderatorPage.locator('.automation-block').getByRole('status')).toHaveText(/^Publishes automatically at .+ unless you publish, override, or pause first\.$/u, { timeout: 30_000 });
+        await watcher.reload();
+        await expect(watcher.page.locator('.deadline-card')).toContainText(/Results publish by .+ unless the moderator reviews them first\./u);
+      },
       afterOpen: async () => {
         const nightActors = game.living().filter((player) => ['WEREWOLF', 'SEER', 'BODYGUARD'].includes(player.account.role));
         const nudge = await copiedNudge(nightActors.length, nightActors);

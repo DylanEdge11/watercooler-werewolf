@@ -115,7 +115,7 @@ function providerCompatible(): TestDatabase {
 }
 
 function seedSetupGame(playerCount = 20): void {
-  for (const file of ['0000_dashing_smiling_tiger.sql', '0001_bodyguard_and_lifecycle.sql', '0002_pilot_hardening.sql', '0003_reviewed_outcome.sql']) {
+  for (const file of ['0000_dashing_smiling_tiger.sql', '0001_bodyguard_and_lifecycle.sql', '0002_pilot_hardening.sql', '0003_reviewed_outcome.sql', '0004_operator_bootstrap.sql', '0005_game_automation.sql']) {
     sqlite.exec(readFileSync(new URL('../drizzle/' + file, import.meta.url), 'utf8'));
   }
   sqlite.exec("INSERT INTO moderator_accounts (id,email,password_hash,recovery_codes_json,created_at,updated_at) VALUES ('mod','review@pilot.test','fake','[]','2026-01-01','2026-01-01'); INSERT INTO games (id,name,status,timezone,start_date,end_date,active_weekdays_json,schedule_json,final_cutoff_at,created_by_moderator_id,created_at,updated_at) VALUES ('game','Review','REGISTRATION','UTC','2026-01-01','2027-01-01','[1]','{}','2099-01-01','mod','2026-01-01','2026-01-01'); INSERT INTO game_moderators (game_id,moderator_id,role,added_at) VALUES ('game','mod','OWNER','2026-01-01');");
@@ -185,6 +185,26 @@ describe('setup and publication invariants', () => {
     expect(gameSettings(gameId)).toEqual({ hunterWindowMinutes: 480, dayDivisor: 30, nightDivisor: 30 });
     const listed = await (await gamesGet()).json() as { games: Array<Record<string, unknown>> };
     expect(listed.games.find((game) => game.id === gameId)).toMatchObject({ hunterWindowMinutes: 480, dayDivisor: 30, nightDivisor: 30 });
+  });
+
+  test('a new game uses moderator review unless the moderator opts in to automatic results', async () => {
+    const review = await (await gamesPost(request(launchSchedule))).json() as { gameId: string };
+    const automatic = await (await gamesPost(request({ ...launchSchedule, publicationMode: 'AUTOMATIC' }))).json() as { gameId: string };
+    const custom = await (await gamesPost(request({ ...launchSchedule, publicationMode: 'AUTOMATIC', reviewWindowMinutes: 15 }))).json() as { gameId: string };
+    const automation = (id: string) => sqlite.prepare('SELECT publication_mode AS mode, review_window_minutes AS minutes, automation_paused_at AS paused FROM games WHERE id = ?').get(id);
+    expect(automation(review.gameId)).toEqual({ mode: 'REVIEW', minutes: 60, paused: null });
+    expect(automation(automatic.gameId)).toEqual({ mode: 'AUTOMATIC', minutes: 60, paused: null });
+    expect(automation(custom.gameId)).toEqual({ mode: 'AUTOMATIC', minutes: 15, paused: null });
+    // A game created before this version keeps moderator review.
+    expect(automation('game')).toEqual({ mode: 'REVIEW', minutes: 60, paused: null });
+    expect((await gamesPost(request({ ...launchSchedule, reviewWindowMinutes: 5000 }))).status).toBe(400);
+    const listed = await (await gamesGet()).json() as { games: Array<Record<string, unknown>> };
+    expect(listed.games.find((game) => game.id === automatic.gameId)).toMatchObject({ publicationMode: 'AUTOMATIC', reviewWindowMinutes: 60, automationPaused: false });
+  });
+
+  test('the schedule saves the publication choice during setup', async () => {
+    expect((await schedule({ ...launchSchedule, publicationMode: 'AUTOMATIC', reviewWindowMinutes: 30 })).status).toBe(200);
+    expect(sqlite.prepare("SELECT publication_mode AS mode, review_window_minutes AS minutes FROM games WHERE id = 'game'").get()).toEqual({ mode: 'AUTOMATIC', minutes: 30 });
   });
 
   test('a new game can start with its own Hunter window and elimination divisors', async () => {
@@ -289,8 +309,11 @@ describe('setup and publication invariants', () => {
     sqlite.prepare("INSERT INTO seats (id,game_id,display_name,email,status,claim_code_hash,alive,created_at,updated_at) VALUES ('archived','game','Archived Player','archived@invalid.test','REMOVED','archived-hash',0,'2026-01-01','2026-01-01')").run();
     sqlite.prepare("INSERT INTO game_events (id,game_id,event_type,actor_seat_id,payload_json,created_at) VALUES ('archived-event','game','HISTORICAL_NOTE','archived','{}','2026-01-01')").run();
 
+    sqlite.exec("UPDATE games SET automation_paused_at = '2026-01-02T00:00:00.000Z' WHERE id = 'game'");
     const response = await operations({ action: 'RESET', confirmed: true, confirmationName: 'Review' });
     expect(response.status).toBe(200);
+    // A reset game starts over unpaused.
+    expect(sqlite.prepare("SELECT automation_paused_at AS paused FROM games WHERE id = 'game'").get()).toEqual({ paused: null });
     expect(sqlite.prepare("SELECT status FROM seats WHERE id = 'archived'").get()).toMatchObject({ status: 'REMOVED' });
     expect((sqlite.prepare("SELECT COUNT(*) AS count FROM seats WHERE game_id = 'game' AND status = 'INVITED'").get() as { count: number }).count).toBe(20);
     expect((sqlite.prepare("SELECT actor_seat_id AS actorSeatId FROM game_events WHERE id = 'archived-event'").get() as { actorSeatId: string }).actorSeatId).toBe('archived');
@@ -385,7 +408,7 @@ describe('setup and publication invariants', () => {
     const events = sqlite.prepare("SELECT actor_moderator_id AS moderatorId, payload_json AS payloadJson FROM game_events WHERE phase_id = ? AND event_type = 'HUNTER_RESOLVED'").all(openedData.phaseId) as Array<{ moderatorId: string; payloadJson: string }>;
     expect(events).toHaveLength(1);
     expect(events[0].moderatorId).toBe('mod');
-    expect(JSON.parse(events[0].payloadJson)).toEqual({ submitted });
+    expect(JSON.parse(events[0].payloadJson)).toEqual({ submitted, source: 'MODERATOR' });
     const replaced = await phases({ action: 'PUBLISH', phaseId: openedData.phaseId, overrideEliminationIds: [villagerId], overrideReason: 'Replace the Hunter outcome after review' });
     expect(replaced.status).toBe(200);
     const outcome = sqlite.prepare('SELECT outcome_json AS outcomeJson, reviewed_outcome_json AS reviewedOutcomeJson, published_outcome_json AS publishedOutcomeJson FROM resolution_proposals WHERE phase_id = ?').get(openedData.phaseId) as { outcomeJson: string; reviewedOutcomeJson: string; publishedOutcomeJson: string };

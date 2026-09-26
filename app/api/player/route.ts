@@ -2,6 +2,8 @@ import { getDb } from '../../../db';
 import { ensureDatabase } from '../../../db/migrate';
 import { getCurrentPlayer } from '../../../lib/auth/session';
 import { participationCounter, participationCountsAcrossPlayers, permissionForRole } from '../../../lib/game/actions';
+import { automaticStepDueAt } from '../../../lib/game/automation';
+import { advanceGameSafely } from '../../../lib/game/automation-sweep';
 import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type RoleKey } from '../../../lib/game/types';
 import { jsonError } from '../../../lib/http/security';
@@ -23,6 +25,10 @@ export async function GET(request: Request) {
     await ensureDatabase();
     const identity = await getCurrentPlayer();
     if (!identity) return jsonError('Player authentication required.', 401);
+    // Any automatic step that is due (lock and calculate, Hunter follow-up, publish) happens
+    // on this visit, so the game moves on even with no cron. When nothing is due, the sweep costs one query.
+    const automation = await advanceGameSafely(identity.gameId);
+    const due = automation ? automaticStepDueAt(automation.game, automation.phase) : null;
     const db = getDb();
     const player = await db
       .prepare(
@@ -299,6 +305,7 @@ export async function GET(request: Request) {
             eliminations,
             protectedAttackBlocked,
             winner: payload.winner ?? null,
+            publishedAutomatically: payload.source === 'SCHEDULER',
             votes: ['DAY', 'FINAL_BALLOT'].includes(String(payload.kind)) && event.phaseId
               ? publicVotesByPhase.get(event.phaseId) ?? []
               : undefined,
@@ -345,11 +352,19 @@ export async function GET(request: Request) {
         status: player.gameStatus,
         timezone: player.timezone,
         stopReason: player.stopReason,
+        automationPaused: Boolean(automation?.game.pausedAt),
         counts: { total: roster.length, living: livingPlayers.length, werewolvesRemaining },
         livingPlayers,
         eliminatedPlayers,
       },
-      phase: phase ? { ...phase, deadline: phase.status === 'PENDING_HUNTER' ? phase.hunterDeadlineAt : phase.closesAt } : null,
+      phase: phase
+        ? {
+            ...phase,
+            deadline: phase.status === 'PENDING_HUNTER' ? phase.hunterDeadlineAt : phase.closesAt,
+            // Set while a calculated result waits in automatic mode: it publishes then unless a moderator acts first.
+            autoPublishAt: due?.kind === 'PUBLISH' && automation?.phase?.id === phase.id ? due.at : null,
+          }
+        : null,
       permission,
       candidates,
       currentAction: currentAction

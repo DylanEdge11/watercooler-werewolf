@@ -1,11 +1,14 @@
 import { getDb } from '../../../db';
 import { ensureDatabase } from '../../../db/migrate';
 import { requireModerator } from '../../../lib/auth/authorization';
+import { DEFAULT_NEW_GAME_AUTOMATION, resolveAutomationSettings, type PublicationMode } from '../../../lib/game/automation';
 import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettingsInput } from '../../../lib/game/game-settings';
 import { assertValidCalendarDate, assertValidTimeZone, formatZonedDateTimeLocal, parseScheduledDate, validateSchedule } from '../../../lib/game/scheduling';
 import { assertSameOrigin, jsonError } from '../../../lib/http/security';
 
 interface CreateGameBody extends GameSettingsInput {
+  publicationMode?: unknown;
+  reviewWindowMinutes?: unknown;
   name?: string;
   timezone?: string;
   startDate?: string;
@@ -26,6 +29,9 @@ interface GameListRow {
   scheduleJson: string;
   finalCutoffAt: string;
   hunterWindowMinutes: number;
+  publicationMode: PublicationMode;
+  reviewWindowMinutes: number;
+  automationPausedAt: string | null;
   dayDivisor: number;
   nightDivisor: number;
   moderatorRole: string;
@@ -44,6 +50,8 @@ export async function GET() {
                 g.final_cutoff_at AS finalCutoffAt,
                 g.hunter_window_minutes AS hunterWindowMinutes,
                 g.day_divisor AS dayDivisor, g.night_divisor AS nightDivisor,
+                g.publication_mode AS publicationMode, g.review_window_minutes AS reviewWindowMinutes,
+                g.automation_paused_at AS automationPausedAt,
                 gm.role AS moderatorRole
          FROM games g
          JOIN game_moderators gm ON gm.game_id = g.id
@@ -68,6 +76,9 @@ export async function GET() {
         hunterWindowMinutes: Number(game.hunterWindowMinutes),
         dayDivisor: Number(game.dayDivisor),
         nightDivisor: Number(game.nightDivisor),
+        publicationMode: game.publicationMode,
+        reviewWindowMinutes: Number(game.reviewWindowMinutes),
+        automationPaused: Boolean(game.automationPausedAt),
         moderatorRole: game.moderatorRole,
       })),
     });
@@ -106,6 +117,9 @@ export async function POST(request: Request) {
     if (scheduleErrors.length) throw new Error(scheduleErrors.join(' '));
     const { settings, errors: settingsErrors } = resolveGameSettings(body, DEFAULT_GAME_SETTINGS);
     if (settingsErrors.length) throw new Error(settingsErrors.join(' '));
+    // New games use moderator review unless the moderator opts in to automatic results.
+    const { settings: automation, errors: automationErrors } = resolveAutomationSettings(body, DEFAULT_NEW_GAME_AUTOMATION);
+    if (automationErrors.length) throw new Error(automationErrors.join(' '));
 
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -116,9 +130,9 @@ export async function POST(request: Request) {
           `INSERT INTO games
            (id, name, status, timezone, start_date, end_date, active_weekdays_json, schedule_json,
             day_divisor, night_divisor, hunter_window_minutes, final_round_minutes,
-            chat_retention_days, final_cutoff_at, publication_mode, created_by_moderator_id,
+            chat_retention_days, final_cutoff_at, publication_mode, review_window_minutes, created_by_moderator_id,
             created_at, updated_at)
-           VALUES (?, ?, 'REGISTRATION', ?, ?, ?, ?, ?, ?, ?, ?, 60, 7, ?, 'REVIEW', ?, ?, ?)`,
+           VALUES (?, ?, 'REGISTRATION', ?, ?, ?, ?, ?, ?, ?, ?, 60, 7, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -132,6 +146,8 @@ export async function POST(request: Request) {
           settings.nightDivisor,
           settings.hunterWindowMinutes,
           finalCutoffAt.toISOString(),
+          automation.publicationMode,
+          automation.reviewWindowMinutes,
           moderator.id,
           now,
           now,

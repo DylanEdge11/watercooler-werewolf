@@ -29,7 +29,7 @@ Local development (`npm run dev` with a `file:` database) is the only mode where
 | `TURSO_AUTH_TOKEN` | Remote only | Token scoped to that one database. |
 | `SITE_ORIGIN` | Yes | Exact origin players use, such as `https://watercooler-werewolf.vercel.app`, with no path. Browser writes from any other origin are rejected. |
 | `WATERCOOLER_OWNER_EMAIL` | For bootstrap | Email for the first moderator account. |
-| `CRON_SECRET` | Optional | Enables `/api/scheduler/deadlines` for an external scheduler. Without it, moderators use **Check deadlines**. |
+| `CRON_SECRET` | Optional | Enables `/api/scheduler/deadlines` for Vercel Cron or an external scheduler. See [Scheduler](#scheduler). |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Optional | Turns on **Email invites**. `SMTP_PORT` defaults to 465. Without all of them, moderators use the invite CSV. See [Invite email](#invite-email). |
 
 Set variables separately for `preview` and `production` in Vercel. Never prefix database credentials with `NEXT_PUBLIC_`. See `.env.example` for local and test variables.
@@ -142,6 +142,12 @@ Routine releases go through `main`:
 2. **If the change adds a migration, migrate Production first.** Every API route refuses to serve when the database lacks a migration listed in `db/readiness.ts`, so deploying first takes the site down until the migration runs. Keep migrations additive, such as new tables or nullable columns, so the code already on `main` keeps working against the migrated schema.
 3. Merge to `main`. Vercel builds and deploys Production.
 4. Confirm the deployment is `READY`, the landing page loads, anonymous `GET /api/games` returns 401, and runtime logs are clean.
+
+## Scheduler
+
+Automatic results never depend on a cron: each due step runs on the next visit to the moderator console or a player dashboard. A scheduler only makes steps happen when nobody is looking, for example a result that should publish overnight.
+
+`vercel.json` asks Vercel Cron to call `/api/scheduler/deadlines` once a day, which is all the Hobby plan allows. Vercel sends `CRON_SECRET` as a Bearer token, so set `CRON_SECRET` in the Production environment. For timely automatic results without visits, point a free external scheduler (for example cron-job.org) at `GET https://<your-site>/api/scheduler/deadlines` every five minutes with the header `Authorization: Bearer <CRON_SECRET>`. Never paste the secret into chat or commit it.
 
 ## Schema changes
 

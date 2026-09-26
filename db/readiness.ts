@@ -6,6 +6,7 @@ export const MIGRATION_VERSIONS = [
   '0002_pilot_hardening',
   '0003_reviewed_outcome',
   '0004_operator_bootstrap',
+  '0005_game_automation',
 ] as const;
 
 export async function verifyDatabaseReady(db: Database): Promise<void> {

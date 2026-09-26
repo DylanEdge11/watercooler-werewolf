@@ -97,6 +97,9 @@
 /* Pasted rosters and long notes are typed onto the page. */
 .backstage textarea:not(.app-shell *) { font-family: var(--ll-font-type), 'Courier New', monospace; font-size: 13px; line-height: 1.6; }
 .backstage .weekday-picker label { background: #fffdf7; border: 1px solid var(--bs-rule); border-radius: 2px; font-family: var(--ll-font-type), monospace; font-size: 11px; }
+.backstage .automation-block { background: #fffdf7; border: 1px solid var(--bs-rule); border-radius: 2px; }
+.backstage .automation-block.paused { border: 1px dashed #b9a988; }
+.backstage .automation-settings summary { font-family: var(--ll-font-type), monospace; font-weight: 400; }
 .backstage :is(.outstanding-block, .copy-preview) { background: #fffdf7; border: 1px solid var(--bs-rule); border-radius: 2px; }
 .backstage .outstanding-list li { background: #fffdf7; border: 1px solid var(--bs-rule); border-radius: 2px; font-family: var(--ll-font-type), monospace; }
 .backstage :is(.announcement-copy, .feedback-list li) { border-top: 1px dotted var(--bs-rule); }

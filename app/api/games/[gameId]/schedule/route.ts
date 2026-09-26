@@ -1,6 +1,7 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
+import { resolveAutomationSettings, type PublicationMode } from '../../../../../lib/game/automation';
 import { resolveGameSettings, type GameSettingsInput } from '../../../../../lib/game/game-settings';
 import { assertValidCalendarDate, assertValidTimeZone, parseScheduledDate, validateSchedule } from '../../../../../lib/game/scheduling';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
@@ -10,6 +11,8 @@ interface RouteContext {
 }
 
 interface UpdateScheduleBody extends GameSettingsInput {
+  publicationMode?: unknown;
+  reviewWindowMinutes?: unknown;
   name?: string;
   timezone?: string;
   startDate?: string;
@@ -24,6 +27,8 @@ interface SetupGameRow {
   status: string;
   updatedAt: string;
   hunterWindowMinutes: number;
+  publicationMode: PublicationMode;
+  reviewWindowMinutes: number;
   dayDivisor: number;
   nightDivisor: number;
 }
@@ -66,7 +71,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     const game = await db
       .prepare(
         `SELECT name, status, updated_at AS updatedAt, hunter_window_minutes AS hunterWindowMinutes,
-                day_divisor AS dayDivisor, night_divisor AS nightDivisor
+                day_divisor AS dayDivisor, night_divisor AS nightDivisor,
+                publication_mode AS publicationMode, review_window_minutes AS reviewWindowMinutes
          FROM games WHERE id = ? LIMIT 1`,
       )
       .bind(gameId)
@@ -81,6 +87,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       nightDivisor: Number(game.nightDivisor),
     });
     if (settingsErrors.length) throw new Error(settingsErrors.join(' '));
+    const { settings: automation, errors: automationErrors } = resolveAutomationSettings(body, {
+      publicationMode: game.publicationMode,
+      reviewWindowMinutes: Number(game.reviewWindowMinutes),
+    });
+    if (automationErrors.length) throw new Error(automationErrors.join(' '));
 
     const now = new Date().toISOString();
     const updateGuard = `EXISTS (
@@ -93,7 +104,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           `UPDATE games
            SET name = ?, timezone = ?, start_date = ?, end_date = ?, active_weekdays_json = ?,
                schedule_json = ?, final_cutoff_at = ?, hunter_window_minutes = ?, day_divisor = ?,
-               night_divisor = ?, updated_at = ?
+               night_divisor = ?, publication_mode = ?, review_window_minutes = ?, updated_at = ?
            WHERE id = ? AND updated_at = ? AND status IN ('DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW')`,
         )
         .bind(
@@ -107,6 +118,8 @@ export async function PATCH(request: Request, context: RouteContext) {
           settings.hunterWindowMinutes,
           settings.dayDivisor,
           settings.nightDivisor,
+          automation.publicationMode,
+          automation.reviewWindowMinutes,
           now,
           gameId,
           game.updatedAt,
@@ -121,7 +134,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           crypto.randomUUID(),
           gameId,
           moderator.id,
-          JSON.stringify({ previousName: game.name, name, timezone: body.timezone, startDate: body.startDate, endDate: body.endDate, ...settings }),
+          JSON.stringify({ previousName: game.name, name, timezone: body.timezone, startDate: body.startDate, endDate: body.endDate, ...settings, ...automation }),
           now,
           gameId,
           now,

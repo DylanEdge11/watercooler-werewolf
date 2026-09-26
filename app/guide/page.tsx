@@ -103,7 +103,7 @@ export default function GuidePage() {
           <ul>
             <li><strong>Private roles.</strong> Each player sees only their own role and anything their role is allowed to know.</li>
             <li><strong>Official ballots.</strong> Votes and night actions are saved in the app, so nobody has to track them by hand.</li>
-            <li><strong>Reviewed results.</strong> A moderator locks each phase, checks the calculated outcome, and publishes it.</li>
+            <li><strong>Reviewed results.</strong> A moderator checks each calculated result and publishes it. A moderator can instead switch a game to automatic results: at each deadline the app locks and calculates, then publishes after a review window (60 minutes by default) unless the moderator publishes, corrects, or pauses it first.</li>
             <li><strong>Your own pace.</strong> Each phase stays open for hours, so people play between meetings instead of all at once.</li>
           </ul>
           <p>Talk happens wherever your group already chats: in person, Slack, Teams, or email. Only what you save in the app counts.</p>
@@ -114,7 +114,7 @@ export default function GuidePage() {
           <div className="guide-cards">
             <article><h3>Day</h3><p>Every living player votes to eliminate someone. Werewolves vote too, to blend in.</p></article>
             <article><h3>Night</h3><p>Werewolves choose whom to attack. The Seer investigates, the Bodyguard protects, and Cupid may link two lovers. Everyone else waits.</p></article>
-            <article><h3>Results</h3><p>The moderator publishes each result. Eliminated players’ roles are revealed and they become spectators.</p></article>
+            <article><h3>Results</h3><p>The moderator publishes each result. In a game with automatic results, it publishes after the moderator’s review window, or sooner if the moderator publishes it, and your deadline card says when. Eliminated players’ roles are revealed and they become spectators.</p></article>
           </div>
           <p>The game starts with a Day, then alternates Night and Day.</p>
           <ul>
@@ -183,7 +183,7 @@ export default function GuidePage() {
           <p>The moderator runs the game but does not play: the console shows every role. You need a moderator account from the site operator, 6–80 players with unique email addresses, and an agreed place for discussion.</p>
           <h3>Set up a game</h3>
           <ol>
-            <li><strong>Create the game.</strong> In the <Link href="/moderator">Moderator console</Link>, enter a name, timezone, dates, a final cutoff, and the <strong>Hunter window</strong> (how long an eliminated Hunter has to shoot, 8 hours by default), then select <strong>Create game</strong>. <strong>Advanced: eliminations per phase</strong> sets how many living players each elimination slot covers, with a preview of the slots; most games keep the default of 30. You can change all of these under <strong>Game schedule</strong> until roles are released.</li>
+            <li><strong>Create the game.</strong> In the <Link href="/moderator">Moderator console</Link>, enter a name, timezone, dates, a final cutoff, and the <strong>Hunter window</strong> (how long an eliminated Hunter has to shoot, 8 hours by default), then select <strong>Create game</strong>. <strong>Advanced: eliminations per phase</strong> sets how many living players each elimination slot covers, with a preview of the slots; most games keep the default of 30. Under <strong>Results</strong>, keep <strong>I review and publish each result</strong> or choose <strong>Publish automatically after a review window</strong> (60 minutes by default). You can change all of these under <strong>Game schedule</strong> until roles are released; the Results choice can also change at any time in <strong>Run the live game</strong>.</li>
             <li><strong>Add players.</strong> Paste a roster with the header <code>display_name,email</code>, one email address per player, and select <strong>Create private seats</strong>. Then select <strong>Email invites</strong> to send each player their own private link (if the site operator has turned email on), or <strong>Download invite CSV</strong> and send each person only their own message. <strong>Waiting on</strong> lists who hasn’t claimed yet, with <strong>Resend</strong> for a lost email. A resent link replaces the old one. Before you randomize roles, use <strong>Change the roster</strong> to add a late joiner, or <strong>Remove</strong> beside someone who hasn’t claimed; everyone else keeps their seat, and each change adds or removes one Villager. Re-importing the CSV replaces every seat, so everyone would have to claim again.</li>
             <li><strong>Balance the roles.</strong> Accept the suggested counts or edit them and select <strong>Save composition</strong>. A 20-player game defaults to 12 Villagers, 3 Werewolves, a Seer, a Bodyguard, a Hunter, and 2 Masons.</li>
             <li><strong>Release roles.</strong> When every seat is claimed, select <strong>Randomize roles</strong>, review the result privately, then <strong>Release roles to players</strong>. Setup is locked after release.</li>
@@ -192,11 +192,11 @@ export default function GuidePage() {
           <h3>Run each phase</h3>
           <p>Repeat this loop, starting with a Day and then alternating Night and Day:</p>
           <ol>
-            <li><strong>Open.</strong> Choose the phase and a deadline, then select <strong>Open phase</strong>. Phases never open on their own.</li>
+            <li><strong>Open.</strong> Choose the phase and a deadline, then select <strong>Open phase</strong>. Phases never open on their own; opening is the one step you always do.</li>
             <li><strong>Collect.</strong> <strong>Still to respond</strong> lists, for your eyes only, the living players who haven’t saved a response. Select <strong>Copy nudge message</strong> and paste it into your group chat. On a Day it names who hasn’t voted. At Night it names nobody, because the list would reveal who has a Night role.</li>
-            <li><strong>Lock and calculate.</strong> At the deadline, select <strong>Lock responses &amp; calculate</strong>.</li>
-            <li><strong>Hunter.</strong> If a Hunter is eliminated, they get the game’s Hunter window (8 hours by default) to shoot. Then select <strong>Finalize Hunter</strong>.</li>
-            <li><strong>Review and publish.</strong> Check the tally and proposed outcome, then select <strong>Approve &amp; publish</strong>. Only publishing eliminates players, reveals roles, and checks for a winner.</li>
+            <li><strong>Lock and calculate.</strong> With automatic results, this happens by itself at the deadline. In review mode, or to close early, select <strong>Lock responses &amp; calculate</strong>.</li>
+            <li><strong>Hunter.</strong> If a Hunter is eliminated, they get the game’s Hunter window (8 hours by default) to shoot. With automatic results the game finishes this as soon as the Hunter shoots, or when the window closes. In review mode, select <strong>Finalize Hunter</strong>.</li>
+            <li><strong>Review and publish.</strong> Check the tally and proposed outcome. With automatic results, the console says when it will publish; do nothing and it publishes then, marked “Published automatically after the review window”. Select <strong>Approve &amp; publish</strong> to publish sooner, <strong>Override calculated eliminations</strong> to correct it, or <strong>Pause automation</strong> to hold everything. In review mode, nothing publishes until you select <strong>Approve &amp; publish</strong>. Only publishing eliminates players, reveals roles, and checks for a winner.</li>
           </ol>
           <Shot src="/guide/moderator-live-game.png" alt="Moderator console reviewing a calculated result" caption="Reviewing a calculated Day result before publishing it." />
           <p>If a result must be corrected, <strong>Override calculated eliminations</strong> lets you publish a different list with a written reason. The original calculation stays on record.</p>
@@ -209,6 +209,7 @@ export default function GuidePage() {
             <li><strong>Player access recovery</strong> sets a new PIN for a player who forgot theirs.</li>
             <li><strong>Private rooms</strong> can be made read-only, and individual messages removed with a reason.</li>
             <li><strong>Co-moderators</strong> can be added by the game owner.</li>
+            <li><strong>Pause automation</strong> in <strong>Run the live game</strong> stops every automatic lock, calculation, and publication (for an offsite or a long weekend) until you select <strong>Resume automation</strong>. Players see “The schedule is paused”.</li>
             <li><strong>Stop game</strong> ends play permanently. <strong>Reset to setup</strong> (owner only) clears the game back to setup after taking a backup.</li>
           </ul>
         </section>
