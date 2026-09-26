@@ -1,7 +1,7 @@
 import { getDb } from '../../../db';
 import { ensureDatabase } from '../../../db/migrate';
 import { getCurrentPlayer } from '../../../lib/auth/session';
-import { permissionForRole } from '../../../lib/game/actions';
+import { participationCounter, participationCountsAcrossPlayers, permissionForRole } from '../../../lib/game/actions';
 import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type RoleKey } from '../../../lib/game/types';
 import { jsonError } from '../../../lib/http/security';
@@ -237,22 +237,22 @@ export async function GET(request: Request) {
       .bind(player.gameId, player.id)
       .all();
 
-    let participation = { submitted: 0, eligible: 0 };
-    if (phase && permission.actionKind) {
-      const submitted = await db
-        .prepare(
-          `SELECT COUNT(DISTINCT actor_seat_id) AS count FROM action_submissions
-           WHERE phase_id = ? AND kind = ? AND superseded_at IS NULL`,
-        )
-        .bind(phase.id, permission.actionKind)
-        .first<{ count: number }>();
-      const eligible = permission.actionKind === 'DAY_VOTE'
-        ? livingPlayers.length
-        : permission.actionKind === 'WOLF_VOTE'
-          ? werewolvesRemaining
-          : 1;
-      participation = { submitted: Number(submitted?.count ?? 0), eligible };
-    }
+    const sharedSubmissions = phase && participationCountsAcrossPlayers(permission.actionKind)
+      ? await db
+          .prepare(
+            `SELECT COUNT(DISTINCT actor_seat_id) AS count FROM action_submissions
+             WHERE phase_id = ? AND kind = ? AND superseded_at IS NULL`,
+          )
+          .bind(phase.id, permission.actionKind)
+          .first<{ count: number }>()
+      : null;
+    const participation = participationCounter({
+      actionKind: phase ? permission.actionKind : null,
+      livingPlayers: livingPlayers.length,
+      livingWerewolves: werewolvesRemaining,
+      sharedSubmissions: Number(sharedSubmissions?.count ?? 0),
+      ownSubmission: Boolean(currentAction),
+    });
 
     // One extra row tells the full Timeline that older updates were left out.
     const timelineHasMore = timelineRows.results.length > TIMELINE_LIMIT;

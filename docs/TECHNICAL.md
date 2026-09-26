@@ -42,6 +42,8 @@ Requests never change the schema. `ensureDatabase()` checks that every version i
 - The Mayor's Day and Final ballot votes count twice. Bodyguard protection blocks only the pack's attack. Cupid pairs once; when one lover is eliminated, the other is added to the same result. The Apprentice Seer has no action while the Seer lives; afterwards they investigate each Night and see the Seer's past results.
 - If the result eliminates a Hunter, the phase waits for the Hunter's shot (60 minutes by default) before it can be published.
 - Each result is stored three ways: the engine's `proposedOutcome`, a `reviewedOutcome` after Hunter follow-up or override, and the authoritative `publishedOutcome`. Overrides record the reason, reviewer, and time.
+- The Mayor's extra vote is never published. The public ballot lists one line per voter and players' vote counts are unweighted, so they can differ from the result. A Bodyguard save is announced ("Bodyguard protection stopped a pack attack") without naming who was protected.
+- The "N of M submitted" counter (`participationCounter` in `lib/game/actions.ts`) counts across players only for Day ballots and the pack's vote. Every other action is counted for the reader alone, so the counter cannot reveal how many players hold another Night role.
 - Publishing applies eliminations, reveals roles, delivers Seer and lover notifications, updates room access, and checks for a winner in one transaction.
 - Final showdown requires the final cutoff to have passed and the latest phase to be published. After that, only Final ballots are allowed until a team wins.
 - Legacy `DOCTOR` rows are read as `BODYGUARD`.

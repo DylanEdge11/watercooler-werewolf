@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, type APIResponse, type Browser, type BrowserContext, type Page, type Response as PageResponse } from '@playwright/test';
 import type { ActionKind, PhaseKind, PhaseResolution, RoleComposition, RoleKey } from '../../lib/game/types';
+import { participationCounter } from '../../lib/game/actions';
 import type { TestInfo } from '@playwright/test';
 import { BASE_URL, DEFAULT_COMPOSITION, E2E_PLAYER_COUNT, E2E_REMOTE, E2E_RUN_ID, MODERATOR_EMAIL, MODERATOR_PASSWORD } from '../constants';
 import { E2E_REQUEST_HEADERS, newBrowserContext } from '../transport';
@@ -70,7 +71,7 @@ export interface PlayerDashboard {
     id: string;
     name: string;
     status: string;
-    counts: { total: number; living: number };
+    counts: { total: number; living: number; werewolvesRemaining: number };
   };
   phase: null | {
     id: string;
@@ -714,6 +715,17 @@ export class BrowserGame {
     expect(dashboard.candidates.every((candidate) => Object.keys(candidate).sort().join(',') === 'displayName,id')).toBe(true);
     expect(dashboard.player.teammates.every((teammate) => Object.keys(teammate).sort().join(',') === 'alive,displayName,id')).toBe(true);
     if (!options.allowOwnInvestigation) expect(dashboard.notifications.some((notification) => notification.type === 'INVESTIGATION_RESULT')).toBe(false);
+    // "N of M submitted" may count across players only for Day ballots and the pack's own vote.
+    // Any other action, including a future Night role, is counted for the reader alone.
+    expect(Object.keys(dashboard.participation).sort().join(',')).toBe('eligible,submitted');
+    expect(dashboard.participation).toEqual(participationCounter({
+      actionKind: dashboard.phase ? dashboard.permission.actionKind : null,
+      livingPlayers: dashboard.game.counts.living,
+      livingWerewolves: dashboard.game.counts.werewolvesRemaining,
+      sharedSubmissions: dashboard.participation.submitted,
+      ownSubmission: Boolean(dashboard.currentAction),
+    }));
+    if (dashboard.permission.actionKind === 'WOLF_VOTE') expect(dashboard.player.role).toBe('WEREWOLF');
     const rendered = await player.page.locator('body').innerText();
     expect(rendered).not.toContain('Proposed outcome');
     expect(rendered).not.toContain('Vote tally');

@@ -64,3 +64,30 @@ export function validateActionTargets(input: {
   }
   return [...new Set(errors)];
 }
+
+/** Actions that several players share. Only these may be counted across players. */
+const SHARED_ACTION_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>(['DAY_VOTE', 'WOLF_VOTE']);
+
+/**
+ * The "N of M submitted" counter a player sees. Day ballots count every living
+ * voter and the pack counts its own members, which Werewolves already know.
+ * Every other action is counted for the reader alone, so the counter can never
+ * reveal how many players hold another Night role, including roles added later.
+ */
+export function participationCounter(input: {
+  actionKind: ActionKind | null;
+  livingPlayers: number;
+  livingWerewolves: number;
+  /** Distinct players with a saved action of this kind; used only for shared actions. */
+  sharedSubmissions: number;
+  ownSubmission: boolean;
+}): { submitted: number; eligible: number } {
+  if (!input.actionKind) return { submitted: 0, eligible: 0 };
+  if (!SHARED_ACTION_KINDS.has(input.actionKind)) return { submitted: input.ownSubmission ? 1 : 0, eligible: 1 };
+  const eligible = input.actionKind === 'DAY_VOTE' ? input.livingPlayers : input.livingWerewolves;
+  return { submitted: Math.min(input.sharedSubmissions, eligible), eligible };
+}
+
+export function participationCountsAcrossPlayers(actionKind: ActionKind | null): boolean {
+  return actionKind !== null && SHARED_ACTION_KINDS.has(actionKind);
+}

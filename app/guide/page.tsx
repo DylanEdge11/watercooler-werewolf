@@ -25,7 +25,7 @@ const ROLES = [
   { name: 'Hunter', team: 'Village', text: 'When you are eliminated, you get a short window to take one living player with you.' },
   { name: 'Mason', team: 'Village', text: 'You know the other Masons and share a private Mason room. There are always zero or at least two.' },
   { name: 'Apprentice Seer', team: 'Village', text: 'Waits while the Seer lives. After the Seer is eliminated, inherit their past results and investigate each Night.' },
-  { name: 'Mayor', team: 'Village', text: 'Your Day and Final ballot votes count twice.' },
+  { name: 'Mayor', team: 'Village', text: 'Your Day and Final ballot votes count twice. The published ballot shows your vote once, so your role stays hidden.' },
   { name: 'Cupid', team: 'Village', text: 'Once, on a Night, link two living players as lovers (yourself included). If one is eliminated, so is the other, whatever their team.' },
 ] as const;
 
