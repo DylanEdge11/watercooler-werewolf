@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_GAME_SETTINGS, formatHunterWindow, resolveGameSettings, slotTable } from './game-settings';
+import { DEFAULT_GAME_SETTINGS, formatHunterWindow, heavySlotWarning, resolveGameSettings, slotTable } from './game-settings';
 
 describe('game settings', () => {
   it('defaults a new game to an eight-hour Hunter window and 30 players per slot', () => {
@@ -52,5 +52,16 @@ describe('game settings', () => {
     expect(formatHunterWindow(60)).toBe('1 hour');
     expect(formatHunterWindow(90)).toBe('1.5 hours');
     expect(formatHunterWindow(45)).toBe('45 minutes');
+  });
+});
+
+describe('heavy elimination warning', () => {
+  it('never warns for the default divisor of 30', () => {
+    expect(heavySlotWarning(slotTable(30))).toBeNull();
+  });
+
+  it('points to the first player count where one phase can eliminate more than 3', () => {
+    expect(heavySlotWarning(slotTable(20))).toEqual({ from: 61, to: 80, slots: 4 });
+    expect(heavySlotWarning(slotTable(1))).toEqual({ from: 4, to: 4, slots: 4 });
   });
 });

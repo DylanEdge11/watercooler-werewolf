@@ -97,8 +97,8 @@ test.describe('browser player-readiness scenarios', () => {
       const seer = game.byRole('SEER')[0];
       const ordinary = game.chooseLiving((player) => player.account.role === 'VILLAGER');
       await expect(seer.page.getByRole('heading', { name: 'Private result history', exact: true })).toBeVisible();
-      await expect(seer.page.getByText(/is the werewolf\./iu)).toBeVisible();
-      await expect(ordinary.page.getByText(/is the werewolf\./iu)).toHaveCount(0);
+      await expect(seer.page.getByText(/is a werewolf\./iu)).toBeVisible();
+      await expect(ordinary.page.getByText(/is a werewolf\./iu)).toHaveCount(0);
       // This assertion intentionally covers the complete HTTP response. The
       // reviewed application currently fails it because the public timeline
       // contains the full Night proposal.

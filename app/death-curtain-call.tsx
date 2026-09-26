@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import RoleMedallion from './role-medallion';
 import type { RoleKey } from './player-dashboard';
-import { eliminationCause, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
+import { eliminationCause, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
 
 /**
  * The elimination "curtain call". Curtains close, a spotlight comes up, and
@@ -16,7 +16,6 @@ import { eliminationCause, readableRole, type PublicTimelineEvent } from '../lib
 // the end instead of dismissing a scene the player hasn't seen.
 const SEQUENCE_MS = 2900;
 
-const KIND_LABEL: Record<string, string> = { DAY: 'Day', NIGHT: 'Night', FINAL_BALLOT: 'Final ballot' };
 
 function CauseMark({ cause }: { cause: string }): ReactNode {
   if (cause === 'WEREWOLF_ATTACK') {
@@ -66,7 +65,7 @@ export default function DeathCurtainCall({ event, onDismiss }: DeathCurtainCallP
 
   const eliminations = event.payload.eliminations ?? [];
   const self = eliminations.some((item) => item.isYou);
-  const phase = `${KIND_LABEL[event.payload.kind ?? ''] ?? 'The latest phase'} · Cycle ${event.payload.sequence ?? '—'}`;
+  const phase = event.payload.kind ? phaseName(event.payload.kind, event.payload.sequence) : 'The latest phase';
   const heading = self
     ? 'You have been eliminated'
     : eliminations.length > 1 ? `${eliminations.length} players have been eliminated` : 'A player has been eliminated';

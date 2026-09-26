@@ -89,7 +89,7 @@ test.describe('scripted 20-player bot farm', () => {
       farm.updateAlive(publishedNightOne.outcome);
 
       const seerDashboard = await farm.dashboard(seer);
-      expect(seerDashboard.notifications.some((notification) => notification.body.includes('is the WEREWOLF'))).toBe(true);
+      expect(seerDashboard.notifications.some((notification) => notification.body.includes('is a Werewolf.'))).toBe(true);
       const ordinaryVillager = chooseLivingTarget(farm.livingBots(), (bot) => bot.role === 'VILLAGER');
       const villagerDashboard = await farm.dashboard(ordinaryVillager);
       const nightTimeline = villagerDashboard.timeline.find((event) => event.payload.kind === 'NIGHT');
@@ -97,7 +97,7 @@ test.describe('scripted 20-player bot farm', () => {
       expect(nightTimeline?.payload).not.toHaveProperty('investigations');
       expect(nightTimeline?.payload).not.toHaveProperty('protectedPlayerIds');
       expect(nightTimeline?.payload).not.toHaveProperty('proposedOutcome');
-      expect(villagerDashboard.notifications.some((notification) => notification.body.includes('is the WEREWOLF'))).toBe(false);
+      expect(villagerDashboard.notifications.some((notification) => notification.body.includes('is a Werewolf.'))).toBe(false);
       expect(villagerDashboard.candidates.every((candidate) => !Object.hasOwn(candidate, 'role'))).toBe(true);
 
       const privatePhases = await ordinaryVillager.context.get(`/api/games/${farm.gameId}/phases`);

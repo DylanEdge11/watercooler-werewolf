@@ -43,7 +43,7 @@ function respondentLabel(type: string): string {
   return type === 'MODERATOR' ? 'Moderator' : 'Player';
 }
 
-/** Ratings and comments from this game. Entries say whether a player or a moderator sent them, never who. */
+/** Ratings and comments from this game. The list shows whether a player or a moderator sent each one; the sender is kept in the audit log. */
 export function FeedbackBlock({ feedback }: { feedback: FeedbackSummary | null }) {
   return <div className="ops-block feedback-summary">
     <div className="ops-heading">

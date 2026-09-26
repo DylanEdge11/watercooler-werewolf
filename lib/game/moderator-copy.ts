@@ -1,3 +1,4 @@
+import { cycleNumber } from './timeline-view';
 import type { PhaseKind } from './types';
 
 /** "Friday 09:00" in the game's timezone. */
@@ -28,9 +29,9 @@ export function nudgeMessage(input: {
 }): string {
   const when = formatDeadlineForChat(input.closesAt, input.timeZone);
   if (input.kind === 'NIGHT') {
-    return `Night ${input.sequence} closes ${when} (${input.timeZone}). If your role has a night action, save it before ${when} at ${input.siteUrl}`;
+    return `Night ${cycleNumber(input.sequence)} closes ${when} (${input.timeZone}). If your role has a night action, save it before ${when} at ${input.siteUrl}`;
   }
-  const heading = input.kind === 'FINAL_BALLOT' ? 'Final ballot closes' : `Day ${input.sequence} ballot closes`;
+  const heading = input.kind === 'FINAL_BALLOT' ? 'Final ballot closes' : `Day ${cycleNumber(input.sequence)} ballot closes`;
   const names = input.outstandingNames;
   return names.length
     ? `${heading} ${when} (${input.timeZone}). Still to vote: ${names.join(', ')}. Save your vote at ${input.siteUrl}`
