@@ -1,5 +1,5 @@
 import { getDb } from '../../db';
-import { canonicalRoleKey, type ActionSubmission, type PhaseResolution, type PlayerState, type RoleKey } from './types';
+import { canonicalRoleKey, type ActionSubmission, type PlayerState, type RoleKey } from './types';
 
 /**
  * Database reads and small helpers shared by the phases route and the phase
@@ -16,31 +16,6 @@ export function overrideIdsFromJson(value: string | null): string[] | null {
   } catch {
     throw new Error('The stored moderation override is invalid.');
   }
-}
-
-/** Apply a saved review override without replacing the original engine result. */
-export function applyEliminationOverride(
-  proposedOutcome: PhaseResolution,
-  ids: string[],
-  players: PlayerState[],
-): PhaseResolution {
-  const cause = proposedOutcome.kind === 'NIGHT' ? 'WEREWOLF_ATTACK' : 'DAY_VOTE';
-  const eliminations: PhaseResolution['eliminations'] = ids.map((playerId) => ({ playerId, cause }));
-  const loverPair = proposedOutcome.loverPair;
-  if (loverPair) {
-    const eliminatedIds = new Set(eliminations.map((item) => item.playerId));
-    const [first, second] = loverPair.playerIds;
-    if (eliminatedIds.has(first) && !eliminatedIds.has(second)) eliminations.push({ playerId: second, cause: 'LOVER_BOND' });
-    else if (eliminatedIds.has(second) && !eliminatedIds.has(first)) eliminations.push({ playerId: first, cause: 'LOVER_BOND' });
-  }
-  return {
-    ...proposedOutcome,
-    selectedTargets: ids,
-    eliminations,
-    hunterRequiredIds: eliminations
-      .filter((item) => players.find((player) => player.id === item.playerId)?.role === 'HUNTER')
-      .map((item) => item.playerId),
-  };
 }
 
 export function changes(result: unknown): number {
