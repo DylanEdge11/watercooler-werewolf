@@ -1,53 +1,59 @@
 import { getDb, type PreparedStatement } from '../../db';
-import { canonicalRoleKey, type RoleKey } from '../game/types';
-import { allowedRoomTypes, type PrivateRoomType } from './policy';
+import type { Database } from '../../db/contracts';
+import type { PrivateRoomType } from './policy';
 
 export { allowedRoomTypes, normalizeChatBody } from './policy';
 
-export async function ensureGameRooms(gameId: string): Promise<void> {
-  const db = getDb();
-  const now = new Date().toISOString();
-  await db.batch((['WEREWOLF', 'MASON', 'DEAD'] as PrivateRoomType[]).map((type) =>
+const ROOM_TYPES: PrivateRoomType[] = ['WEREWOLF', 'MASON', 'DEAD'];
+
+/**
+ * Creates the game's three private rooms and brings every membership in line
+ * with `allowedRoomTypes`: Werewolves and Masons in their room (read-only once
+ * eliminated) and every eliminated player in the Afterlife. The SQL mirrors
+ * that function, and `room-sync.test.ts` checks the two agree. Membership changes
+ * only when roles are released or a phase is published, so those writes add
+ * these statements to their own transaction; reads never write.
+ */
+export function roomSyncStatements(db: Database, gameId: string, now: string): PreparedStatement[] {
+  return [
+    ...ROOM_TYPES.map((type) =>
+      db
+        .prepare("INSERT OR IGNORE INTO chat_rooms (id, game_id, type, status, created_at) VALUES (?, ?, ?, 'OPEN', ?)")
+        .bind(crypto.randomUUID(), gameId, type, now),
+    ),
     db
       .prepare(
-        `INSERT OR IGNORE INTO chat_rooms (id, game_id, type, status, created_at)
-         VALUES (?, ?, ?, 'OPEN', ?)`,
+        `INSERT INTO chat_room_members (room_id, seat_id, access, granted_at, revoked_at)
+         SELECT r.id, s.id,
+                CASE WHEN r.type = 'DEAD' OR s.alive = 1 THEN 'WRITE' ELSE 'READ_ONLY' END,
+                ?,
+                CASE WHEN r.type = 'DEAD' OR s.alive = 1 THEN NULL ELSE ? END
+         FROM seats s
+         JOIN role_assignments ra ON ra.game_id = s.game_id AND ra.seat_id = s.id
+         JOIN chat_rooms r ON r.game_id = s.game_id
+         WHERE s.game_id = ? AND s.status = 'CLAIMED'
+           AND ((r.type = 'WEREWOLF' AND ra.role_key = 'WEREWOLF')
+             OR (r.type = 'MASON' AND ra.role_key = 'MASON')
+             OR (r.type = 'DEAD' AND s.alive = 0))
+         ON CONFLICT(room_id, seat_id) DO UPDATE SET access = excluded.access, revoked_at = excluded.revoked_at
+         WHERE chat_room_members.access != excluded.access`,
       )
-      .bind(crypto.randomUUID(), gameId, type, now),
-  ));
-  const rooms = await db
-    .prepare('SELECT id, type FROM chat_rooms WHERE game_id = ?')
-    .bind(gameId)
-    .all<{ id: string; type: PrivateRoomType }>();
-  const roomByType = new Map(rooms.results.map((room) => [room.type, room.id]));
-  const seats = await db
-    .prepare(
-      `SELECT s.id, s.alive, ra.role_key AS role
-       FROM seats s JOIN role_assignments ra ON ra.game_id = s.game_id AND ra.seat_id = s.id
-       WHERE s.game_id = ? AND s.status = 'CLAIMED'`,
-    )
-    .bind(gameId)
-    .all<{ id: string; alive: number; role: RoleKey }>();
+      .bind(now, now, gameId),
+  ];
+}
 
-  const statements: PreparedStatement[] = [];
-  for (const seat of seats.results) {
-    const alive = Boolean(seat.alive);
-    const role = canonicalRoleKey(seat.role);
-    for (const type of allowedRoomTypes(role, alive)) {
-      const roomId = roomByType.get(type);
-      if (!roomId) continue;
-      const access = !alive && type !== 'DEAD' ? 'READ_ONLY' : 'WRITE';
-      statements.push(
-        db
-          .prepare(
-            `INSERT INTO chat_room_members (room_id, seat_id, access, granted_at, revoked_at)
-             VALUES (?, ?, ?, ?, ?)
-             ON CONFLICT(room_id, seat_id) DO UPDATE SET access = excluded.access, revoked_at = excluded.revoked_at
-             WHERE chat_room_members.access != excluded.access`,
-          )
-          .bind(roomId, seat.id, access, now, access === 'READ_ONLY' ? now : null),
-      );
-    }
-  }
-  if (statements.length) await db.batch(statements);
+/** Runs the room sync on its own. Release and publish include it in their transaction instead. */
+export async function ensureGameRooms(gameId: string): Promise<void> {
+  const db = getDb();
+  await db.batch(roomSyncStatements(db, gameId, new Date().toISOString()));
+}
+
+/**
+ * A one-read safety net for games whose rooms were never created (for
+ * example, a release that failed before this sync moved into its
+ * transaction). Creates them only when fewer than three exist.
+ */
+export async function ensureGameRoomsExist(gameId: string): Promise<void> {
+  const row = await getDb().prepare('SELECT COUNT(*) AS count FROM chat_rooms WHERE game_id = ?').bind(gameId).first<{ count: number }>();
+  if (Number(row?.count ?? 0) < ROOM_TYPES.length) await ensureGameRooms(gameId);
 }

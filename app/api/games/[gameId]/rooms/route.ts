@@ -1,7 +1,7 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { ensureGameRooms } from '../../../../../lib/chat/rooms';
+import { ensureGameRoomsExist } from '../../../../../lib/chat/rooms';
 import { assertSameOrigin } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 
@@ -14,7 +14,7 @@ export async function GET(_request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
-    await ensureGameRooms(gameId);
+    await ensureGameRoomsExist(gameId);
     const db = getDb();
     const rooms = await db
       .prepare(

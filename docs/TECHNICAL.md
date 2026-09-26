@@ -48,6 +48,7 @@ Requests never change the schema. `ensureDatabase()` checks that every version i
 - The Mayor's extra vote is never published. The public ballot lists one line per voter and players' vote counts are unweighted, so they can differ from the result. A Bodyguard save is announced ("Bodyguard protection stopped a pack attack") without naming who was protected.
 - The "N of M submitted" counter (`participationCounter` in `lib/game/actions.ts`) counts across players only for Day ballots and the pack's vote. Every other action is counted for the reader alone, so the counter cannot reveal how many players hold another Night role.
 - Publishing applies eliminations, reveals roles, delivers Seer and lover notifications, updates room access, and checks for a winner in one transaction.
+- Private-room membership (`roomSyncStatements` in `lib/chat/rooms.ts`) is written only inside the role-release and publish transactions, because those are the only writes that change roles or who is alive. Player, chat, and moderator reads never write it; the player and moderator room reads only check, with one query, that the game's three rooms exist.
 - Final showdown requires the final cutoff to have passed and the latest phase to be published. After that, only Final ballots are allowed until a team wins.
 - Legacy `DOCTOR` rows are read as `BODYGUARD`.
 

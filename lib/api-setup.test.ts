@@ -22,7 +22,6 @@ vi.mock('../lib/auth/authorization', () => ({
   requireGameModerator: async () => ({ id: 'mod' }),
   requireGameOwner: async () => ({ id: 'mod' }),
 }));
-vi.mock('../lib/chat/rooms', () => ({ ensureGameRooms: async () => {} }));
 
 import { POST as assignmentPost } from '../app/api/games/[gameId]/assignments/route';
 import { POST as operationsPost } from '../app/api/games/[gameId]/operations/route';
