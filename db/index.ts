@@ -1,7 +1,8 @@
 import 'server-only';
 
+import { createRequire } from 'node:module';
 import { HttpError } from '../lib/http/errors';
-import { createClient } from '@libsql/client/node';
+import { createClient as createWebClient } from '@libsql/client/web';
 import {
   LibsqlDatabase,
   type LibsqlClient,
@@ -31,13 +32,23 @@ export function getDb(): LibsqlDatabase {
     );
   }
 
-  database ??= new LibsqlDatabase(
-    createClient({
-      url,
-      authToken: process.env.TURSO_AUTH_TOKEN?.trim() || undefined,
-    }) as unknown as LibsqlClient,
-  );
+  database ??= new LibsqlDatabase(createRawClient(url));
   return database;
+}
+
+/**
+ * Deployed functions talk to Turso over HTTP with the web client, which has no
+ * native code. Only a local `file:` or `:memory:` URL (development and local
+ * test servers, refused above when deployed) loads the Node client and its
+ * native SQLite binary, so it is required here rather than imported.
+ */
+function createRawClient(url: string): LibsqlClient {
+  const authToken = process.env.TURSO_AUTH_TOKEN?.trim() || undefined;
+  if (isLocalDatabaseUrl(url)) {
+    const { createClient } = createRequire(import.meta.url)('@libsql/client/node') as typeof import('@libsql/client/node');
+    return createClient({ url, authToken }) as unknown as LibsqlClient;
+  }
+  return createWebClient({ url, authToken }) as unknown as LibsqlClient;
 }
 
 export { LibsqlDatabase } from './libsql';
