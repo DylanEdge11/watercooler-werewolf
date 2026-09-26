@@ -2,7 +2,6 @@ import { getDb } from '../../../db';
 import { ensureDatabase } from '../../../db/migrate';
 import { getCurrentPlayer } from '../../../lib/auth/session';
 import { participationCounter, participationCountsAcrossPlayers, permissionForRole } from '../../../lib/game/actions';
-import { publicVoteTotals } from '../../../lib/game/timeline-view';
 import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type RoleKey } from '../../../lib/game/types';
 import { jsonError } from '../../../lib/http/security';
@@ -271,10 +270,24 @@ export async function GET(request: Request) {
             isYou: elimination.playerId === player.id,
           };
         });
-        // Bodyguard protection stays out of the public record: a blocked attack
-        // publishes as "No one was eliminated". Only the weighted Day totals
-        // are read from the published outcome, and Night tallies never leave it.
-        const isBallot = ['DAY', 'FINAL_BALLOT'].includes(String(payload.kind));
+        const publishedOutcome = payload.publishedOutcome && typeof payload.publishedOutcome === 'object'
+          ? payload.publishedOutcome as Record<string, unknown>
+          : null;
+        const selectedTargets = Array.isArray(publishedOutcome?.selectedTargets)
+          ? publishedOutcome.selectedTargets.filter((id): id is string => typeof id === 'string')
+          : [];
+        const protectedPlayerIds = Array.isArray(publishedOutcome?.protectedPlayerIds)
+          ? publishedOutcome.protectedPlayerIds.filter((id): id is string => typeof id === 'string')
+          : [];
+        const packEliminatedIds = new Set(rawEliminations
+          .map((item) => item as Record<string, unknown>)
+          .filter((item) => item.cause === 'WEREWOLF_ATTACK')
+          .map((item) => item.playerId)
+          .filter((id): id is string => typeof id === 'string'));
+        const protectedAttackBlocked = selectedTargets.some((id) =>
+          protectedPlayerIds.includes(id)
+          && !packEliminatedIds.has(id),
+        );
         return {
           id: event.id,
           eventType: event.eventType,
@@ -284,11 +297,11 @@ export async function GET(request: Request) {
             sequence: event.phaseSequence,
             kind: payload.kind,
             eliminations,
+            protectedAttackBlocked,
             winner: payload.winner ?? null,
-            votes: isBallot && event.phaseId
+            votes: ['DAY', 'FINAL_BALLOT'].includes(String(payload.kind)) && event.phaseId
               ? publicVotesByPhase.get(event.phaseId) ?? []
               : undefined,
-            voteTotals: publicVoteTotals(payload.kind, payload.publishedOutcome, displayNameById),
           },
         };
       }

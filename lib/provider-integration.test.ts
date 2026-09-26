@@ -374,7 +374,7 @@ describe('real libSQL provider integration', () => {
     expect(loverDeaths.filter((item) => item.isYou).map((item) => item.displayName)).toEqual(['Player 1']);
   });
 
-  test('publishes Day totals that count the Mayor twice, with one ledger line per voter', async () => {
+  test('keeps the Mayor hidden: the public ballot shows one line per voter and no weighted totals', async () => {
     await seedActiveGame();
     await executeBatch([
       { sql: "UPDATE role_assignments SET role_key = 'MAYOR' WHERE seat_id = 'p0'" },
@@ -392,18 +392,21 @@ describe('real libSQL provider integration', () => {
 
     shared.currentPlayer = { seatId: 'p6' };
     const body = await (await playerGet(new Request('http://localhost:3000/api/player'))).json() as {
-      timeline: Array<{ eventType: string; payload: Record<string, unknown> & { votes?: unknown[]; voteTotals?: unknown } }>;
+      timeline: Array<{ eventType: string; payload: Record<string, unknown> & { votes?: unknown[] } }>;
     };
     const day = body.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED');
-    expect(day?.payload.voteTotals).toEqual([
-      { name: 'Player 1', votes: 3 },
-      { name: 'Player 5', votes: 2 },
+    // The Mayor's second vote is never published: one ledger line per voter, and no weighted totals.
+    expect(day?.payload.votes).toEqual([
+      { actorName: 'Player 0', targetNames: ['Player 1'] },
+      { actorName: 'Player 2', targetNames: ['Player 1'] },
+      { actorName: 'Player 3', targetNames: ['Player 5'] },
+      { actorName: 'Player 4', targetNames: ['Player 5'] },
     ]);
-    expect(day?.payload.votes).toHaveLength(4);
     expect(day?.payload).not.toHaveProperty('tally');
+    expect(day?.payload).not.toHaveProperty('voteTotals');
   });
 
-  test('a Bodyguard save publishes as "no one eliminated" while the moderator keeps the detail', async () => {
+  test('a Bodyguard save is announced without naming who was protected', async () => {
     await seedActiveGame();
     await executeBatch([
       { sql: "UPDATE phases SET kind = 'NIGHT' WHERE id = 'phase'" },
@@ -425,11 +428,10 @@ describe('real libSQL provider integration', () => {
     for (const seatId of ['p5', 'p17', 'p1']) {
       shared.currentPlayer = { seatId };
       const text = await (await playerGet(new Request('http://localhost:3000/api/player'))).text();
-      expect(text).not.toMatch(/protect|bodyguard/iu);
+      expect(text).not.toContain('protectedPlayerIds');
       const night = (JSON.parse(text) as { timeline: Array<{ eventType: string; payload: Record<string, unknown> }> })
         .timeline.find((event) => event.eventType === 'PHASE_PUBLISHED');
-      expect(night?.payload).toMatchObject({ kind: 'NIGHT', eliminations: [] });
-      expect(night?.payload).not.toHaveProperty('voteTotals');
+      expect(night?.payload).toMatchObject({ kind: 'NIGHT', eliminations: [], protectedAttackBlocked: true });
     }
   });
 

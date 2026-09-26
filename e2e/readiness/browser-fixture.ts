@@ -33,8 +33,6 @@ const FORBIDDEN_PLAYER_KEYS = new Set([
   'privateData',
   'privateActionTallies',
   'rawOutcome',
-  // Bodyguard saves are no longer announced; the old flag must never return.
-  'protectedAttackBlocked',
 ]);
 
 const REDACTED_MESSAGE = '[redacted]';
@@ -728,19 +726,10 @@ export class BrowserGame {
       ownSubmission: Boolean(dashboard.currentAction),
     }));
     if (dashboard.permission.actionKind === 'WOLF_VOTE') expect(dashboard.player.role).toBe('WEREWOLF');
-    // Weighted totals are public for Day and Final ballots only, and carry only a name and a number.
-    for (const event of dashboard.timeline) {
-      const totals = event.payload.voteTotals;
-      if (totals === undefined) continue;
-      expect(['DAY', 'FINAL_BALLOT']).toContain(event.payload.kind);
-      expect(Array.isArray(totals)).toBe(true);
-      for (const total of totals as Array<Record<string, unknown>>) expect(Object.keys(total).sort().join(',')).toBe('name,votes');
-    }
     const rendered = await player.page.locator('body').innerText();
     expect(rendered).not.toContain('Proposed outcome');
     expect(rendered).not.toContain('Vote tally');
     expect(rendered).not.toContain('Protected:');
-    expect(rendered).not.toMatch(/Bodyguard protection/iu);
     return dashboard;
   }
 

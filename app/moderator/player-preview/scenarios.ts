@@ -57,7 +57,7 @@ function makeTimeline(now: Date, scenario: PreviewScenarioId): DashboardData['ti
           { actorName: 'Morgan Lee', targetNames: ['Jordan Blake'] },
           { actorName: 'Taylor Reed', targetNames: ['Riley Chen'] },
         ],
-        voteTotals: isDay ? [{ name: 'Jordan Blake', votes: 2 }, { name: 'Riley Chen', votes: 1 }] : undefined,
+        protectedAttackBlocked: scenario === 'night-action',
       },
     },
     {
