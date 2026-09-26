@@ -5,7 +5,7 @@ For developers. Installation is in [Setup](SETUP.md), verification in [Testing](
 ## Stack
 
 - Next.js App Router with React, on Vercel's Node.js runtime (Node 24.x).
-- Turso/libSQL through `@libsql/client`. Routes use a small database contract (`db/contracts.ts`) implemented in `db/libsql.ts`; multi-statement writes go through `batch()`, which runs as one transaction.
+- Turso/libSQL through `@libsql/client`: the web (HTTP) client in deployed functions, and the Node client with its native SQLite binary only for local `file:` and `:memory:` URLs (`db/index.ts`; `next.config.ts` keeps the binaries out of the function bundles). Routes use a small database contract (`db/contracts.ts`) implemented in `db/libsql.ts`; multi-statement writes go through `batch()`, which runs as one transaction.
 - Drizzle is used only for the schema (`db/schema.ts`) and for generating migrations. Queries are hand-written SQL with bound parameters.
 - Local development and tests use a SQLite file or in-memory database. Deployed functions refuse `file:` URLs.
 - Builds compile from source every time (`experimental.turbopackFileSystemCacheForBuild: false` in `next.config.ts`). With Turbopack's build cache on, a Vercel build restored from an older deployment served stale `globals.css` under a chunk name already published to Vercel's shared immutable asset store, so the page got the wrong styles. Don't turn it back on.

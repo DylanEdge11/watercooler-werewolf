@@ -3,6 +3,16 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   agentRules: false,
   serverExternalPackages: ['@libsql/client'],
+  // Deployed functions use the libSQL web client (db/index.ts); the native
+  // SQLite binaries are only for local file databases, so keep them out.
+  outputFileTracingExcludes: {
+    '*': [
+      './node_modules/@libsql/linux-*/**',
+      './node_modules/@libsql/darwin-*/**',
+      './node_modules/@libsql/win32-*/**',
+      './node_modules/libsql/**',
+    ],
+  },
   experimental: {
     // Vercel restores the previous deployment's build cache. With Turbopack's
     // filesystem cache on, a branch's first build served stale globals.css
