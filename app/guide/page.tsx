@@ -25,7 +25,7 @@ const ROLES = [
   { name: 'Hunter', team: 'Village', text: 'When you are eliminated, you get a short window to take one living player with you.' },
   { name: 'Mason', team: 'Village', text: 'You know the other Masons and share a private Mason room. There are always zero or at least two.' },
   { name: 'Apprentice Seer', team: 'Village', text: 'Waits while the Seer lives. After the Seer is eliminated, inherit their past results and investigate each Night.' },
-  { name: 'Mayor', team: 'Village', text: 'Your Day and Final ballot votes count twice.' },
+  { name: 'Mayor', team: 'Village', text: 'Your Day and Final ballot votes count twice. The published ballot shows your vote once, so your role stays hidden.' },
   { name: 'Cupid', team: 'Village', text: 'Once, on a Night, link two living players as lovers (yourself included). If one is eliminated, so is the other, whatever their team.' },
 ] as const;
 
@@ -122,7 +122,7 @@ export default function GuidePage() {
             <li><strong>The Werewolves win</strong> when living Werewolves equal or outnumber everyone else still alive.</li>
           </ul>
           <h3>How many players are eliminated</h3>
-          <p>Each Day, Night attack, and Final ballot has a number of <em>slots</em>: the most players it can eliminate. Each voter may pick up to that many targets. Slots depend on how many players are alive when the phase opens:</p>
+          <p>Each Day, Night attack, and Final ballot has a number of <em>slots</em>: the most players it can eliminate. Each voter may pick up to that many targets. Slots depend on how many players are alive when the phase opens. With the default setting:</p>
           <table className="guide-table">
             <thead><tr><th scope="col">Living players</th><th scope="col">Slots</th></tr></thead>
             <tbody>{SLOT_ROWS.map(([living, slots]) => <tr key={living}><td>{living}</td><td>{slots}</td></tr>)}</tbody>
@@ -183,7 +183,7 @@ export default function GuidePage() {
           <p>The moderator runs the game but does not play: the console shows every role. You need a moderator account from the site operator, 6–80 players with unique email addresses, and an agreed place for discussion.</p>
           <h3>Set up a game</h3>
           <ol>
-            <li><strong>Create the game.</strong> In the <Link href="/moderator">Moderator console</Link>, enter a name, timezone, dates, and a final cutoff, then select <strong>Create game</strong>.</li>
+            <li><strong>Create the game.</strong> In the <Link href="/moderator">Moderator console</Link>, enter a name, timezone, dates, a final cutoff, and the <strong>Hunter window</strong> (how long an eliminated Hunter has to shoot, 8 hours by default), then select <strong>Create game</strong>. <strong>Advanced: eliminations per phase</strong> sets how many living players each elimination slot covers, with a preview of the slots; most games keep the default of 30. You can change all of these under <strong>Game schedule</strong> until roles are released.</li>
             <li><strong>Add players.</strong> Paste a roster with the header <code>display_name,email</code>, one email address per player, and select <strong>Create private seats</strong>. Then select <strong>Email invites</strong> to send each player their own private link (if the site operator has turned email on), or <strong>Download invite CSV</strong> and send each person only their own message. <strong>Waiting on</strong> lists who hasn’t claimed yet, with <strong>Resend</strong> for a lost email. A resent link replaces the old one. Before you randomize roles, use <strong>Change the roster</strong> to add a late joiner, or <strong>Remove</strong> beside someone who hasn’t claimed; everyone else keeps their seat, and each change adds or removes one Villager. Re-importing the CSV replaces every seat, so everyone would have to claim again.</li>
             <li><strong>Balance the roles.</strong> Accept the suggested counts or edit them and select <strong>Save composition</strong>. A 20-player game defaults to 12 Villagers, 3 Werewolves, a Seer, a Bodyguard, a Hunter, and 2 Masons.</li>
             <li><strong>Release roles.</strong> When every seat is claimed, select <strong>Randomize roles</strong>, review the result privately, then <strong>Release roles to players</strong>. Setup is locked after release.</li>
@@ -195,7 +195,7 @@ export default function GuidePage() {
             <li><strong>Open.</strong> Choose the phase and a deadline, then select <strong>Open phase</strong>. Phases never open on their own.</li>
             <li><strong>Collect.</strong> <strong>Still to respond</strong> lists, for your eyes only, the living players who haven’t saved a response. Select <strong>Copy nudge message</strong> and paste it into your group chat. On a Day it names who hasn’t voted. At Night it names nobody, because the list would reveal who has a Night role.</li>
             <li><strong>Lock and calculate.</strong> At the deadline, select <strong>Lock responses &amp; calculate</strong>.</li>
-            <li><strong>Hunter.</strong> If a Hunter is eliminated, they get a window (60 minutes by default) to shoot. Then select <strong>Finalize Hunter</strong>.</li>
+            <li><strong>Hunter.</strong> If a Hunter is eliminated, they get the game’s Hunter window (8 hours by default) to shoot. Then select <strong>Finalize Hunter</strong>.</li>
             <li><strong>Review and publish.</strong> Check the tally and proposed outcome, then select <strong>Approve &amp; publish</strong>. Only publishing eliminates players, reveals roles, and checks for a winner.</li>
           </ol>
           <Shot src="/guide/moderator-live-game.png" alt="Moderator console reviewing a calculated result" caption="Reviewing a calculated Day result before publishing it." />

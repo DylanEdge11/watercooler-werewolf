@@ -1,10 +1,11 @@
 import { getDb } from '../../../db';
 import { ensureDatabase } from '../../../db/migrate';
 import { requireModerator } from '../../../lib/auth/authorization';
+import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettingsInput } from '../../../lib/game/game-settings';
 import { assertValidCalendarDate, assertValidTimeZone, formatZonedDateTimeLocal, parseScheduledDate, validateSchedule } from '../../../lib/game/scheduling';
 import { assertSameOrigin, jsonError } from '../../../lib/http/security';
 
-interface CreateGameBody {
+interface CreateGameBody extends GameSettingsInput {
   name?: string;
   timezone?: string;
   startDate?: string;
@@ -24,6 +25,9 @@ interface GameListRow {
   activeWeekdaysJson: string;
   scheduleJson: string;
   finalCutoffAt: string;
+  hunterWindowMinutes: number;
+  dayDivisor: number;
+  nightDivisor: number;
   moderatorRole: string;
 }
 
@@ -38,6 +42,8 @@ export async function GET() {
                 g.active_weekdays_json AS activeWeekdaysJson,
                 g.schedule_json AS scheduleJson,
                 g.final_cutoff_at AS finalCutoffAt,
+                g.hunter_window_minutes AS hunterWindowMinutes,
+                g.day_divisor AS dayDivisor, g.night_divisor AS nightDivisor,
                 gm.role AS moderatorRole
          FROM games g
          JOIN game_moderators gm ON gm.game_id = g.id
@@ -59,6 +65,9 @@ export async function GET() {
         schedule: JSON.parse(game.scheduleJson) as Record<string, string>,
         finalCutoffAt: game.finalCutoffAt,
         finalCutoffLocal: formatZonedDateTimeLocal(new Date(game.finalCutoffAt), game.timezone),
+        hunterWindowMinutes: Number(game.hunterWindowMinutes),
+        dayDivisor: Number(game.dayDivisor),
+        nightDivisor: Number(game.nightDivisor),
         moderatorRole: game.moderatorRole,
       })),
     });
@@ -95,6 +104,8 @@ export async function POST(request: Request) {
       activeWeekdays: body.activeWeekdays,
     });
     if (scheduleErrors.length) throw new Error(scheduleErrors.join(' '));
+    const { settings, errors: settingsErrors } = resolveGameSettings(body, DEFAULT_GAME_SETTINGS);
+    if (settingsErrors.length) throw new Error(settingsErrors.join(' '));
 
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -107,7 +118,7 @@ export async function POST(request: Request) {
             day_divisor, night_divisor, hunter_window_minutes, final_round_minutes,
             chat_retention_days, final_cutoff_at, publication_mode, created_by_moderator_id,
             created_at, updated_at)
-           VALUES (?, ?, 'REGISTRATION', ?, ?, ?, ?, ?, 30, 30, 60, 60, 7, ?, 'REVIEW', ?, ?, ?)`,
+           VALUES (?, ?, 'REGISTRATION', ?, ?, ?, ?, ?, ?, ?, ?, 60, 7, ?, 'REVIEW', ?, ?, ?)`,
         )
         .bind(
           id,
@@ -117,6 +128,9 @@ export async function POST(request: Request) {
           body.endDate,
           JSON.stringify(body.activeWeekdays),
           JSON.stringify(body.schedule),
+          settings.dayDivisor,
+          settings.nightDivisor,
+          settings.hunterWindowMinutes,
           finalCutoffAt.toISOString(),
           moderator.id,
           now,

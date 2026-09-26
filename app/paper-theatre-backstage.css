@@ -102,6 +102,10 @@
 .backstage :is(.announcement-copy, .feedback-list li) { border-top: 1px dotted var(--bs-rule); }
 .backstage :is(.copy-preview, .announcement-copy summary, .feedback-rating) { font-family: var(--ll-font-type), monospace; }
 .backstage :is(.feedback-average small, .feedback-meta, .announcement-copy summary small) { color: var(--bs-ink-soft); }
+.backstage .advanced-settings { background: #fffdf7; border: 1px dashed #b9a988; border-radius: 2px; }
+.backstage .advanced-settings summary { font-family: var(--ll-font-type), monospace; font-weight: 400; }
+.backstage .slot-preview { font-family: var(--ll-font-type), monospace; }
+.backstage .slot-preview th, .backstage .slot-preview td { border-bottom: 1px dotted var(--bs-rule); }
 .backstage :is(.field-help, .privacy-note, .empty-note, .protected-note):not(.app-shell *) { font-size: 11px; font-style: italic; }
 .backstage .form-error:not(.app-shell *) { color: var(--bs-stop); font-family: var(--ll-font-type), monospace; font-size: 12px; }
 
