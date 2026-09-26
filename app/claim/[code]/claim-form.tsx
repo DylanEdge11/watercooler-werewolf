@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-html-link-for-pages -- use a reliable full-page transition after seat claim. */
 
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import type { ClaimSeat } from '../../../lib/auth/claim';
 import { withRetryAfter } from '../../../lib/http/retry-after';
 import BrandMark from '../../brand-mark';
@@ -11,11 +11,14 @@ export default function ClaimForm({ code, seat, lookupError }: { code: string; s
   const [error, setError] = useState(lookupError);
   const [busy, setBusy] = useState(false);
   const [claimed, setClaimed] = useState(false);
+  // Set synchronously, so a second submit is refused even before React re-renders.
+  const inFlight = useRef(false);
 
   async function claim(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     // A second tap while the first claim is in flight would spend another of the three hourly attempts.
-    if (busy) return;
+    if (inFlight.current) return;
+    inFlight.current = true;
     setError('');
     setBusy(true);
     const form = new FormData(event.currentTarget);
@@ -28,12 +31,14 @@ export default function ClaimForm({ code, seat, lookupError }: { code: string; s
       const data = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
         setError(withRetryAfter(data.error ?? 'Unable to claim this seat.', response));
+        inFlight.current = false;
         setBusy(false);
         return;
       }
       setClaimed(true);
     } catch {
       setError('The village is out of reach. Try again in a moment.');
+      inFlight.current = false;
       setBusy(false);
     }
   }

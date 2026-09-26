@@ -21,6 +21,8 @@ export default function SignInCard({ className = '', kicker, night }: SignInCard
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const warmed = useRef({ dashboard: false, moderator: false });
+  // Set synchronously, so a second submit is refused even before React re-renders.
+  const inFlight = useRef(false);
 
   // Someone reaching for the form is about to sign in: fetch the dashboard's
   // code now so it is already cached when the page reloads as signed in.
@@ -38,7 +40,9 @@ export default function SignInCard({ className = '', kicker, night }: SignInCard
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    // A second Enter while the first check runs would spend another sign-in attempt.
+    if (inFlight.current) return;
+    inFlight.current = true;
     setError('');
     setBusy(true);
     const form = new FormData(event.currentTarget);
@@ -51,6 +55,7 @@ export default function SignInCard({ className = '', kicker, night }: SignInCard
       const data = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
         setError(withRetryAfter(data.error ?? 'Unable to sign in.', response));
+        inFlight.current = false;
         setBusy(false);
         return;
       }
@@ -59,6 +64,7 @@ export default function SignInCard({ className = '', kicker, night }: SignInCard
       else router.push('/');
     } catch {
       setError('The village is out of reach. Try again in a moment.');
+      inFlight.current = false;
       setBusy(false);
     }
   }
