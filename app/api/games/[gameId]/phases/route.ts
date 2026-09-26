@@ -55,7 +55,7 @@ export async function GET(_request: Request, context: RouteContext) {
     // The console's ten-second refresh also applies any automatic step that is due.
     const automation = await advanceGameSafely(gameId);
     const db = getDb();
-    const [gameRow, phaseRows, proposalRows, rosterRows] = await Promise.all([
+    const [gameRow, phaseRows, proposalRows, reviewRows, rosterRows] = await Promise.all([
       db.prepare(`SELECT status, final_cutoff_at AS finalCutoffAt, timezone, updated_at AS updatedAt,
                 publication_mode AS publicationMode, review_window_minutes AS reviewWindowMinutes,
                 automation_paused_at AS automationPausedAt
@@ -71,6 +71,8 @@ export async function GET(_request: Request, context: RouteContext) {
         )
         .bind(gameId)
         .all<PhaseRow>(),
+      // Full results only for the phases the console can show: any phase not yet
+      // published, and the newest phase. Older phases get a summary (below).
       db
         .prepare(
           `SELECT rp.id, rp.phase_id AS phaseId, rp.status, rp.outcome_json AS outcomeJson,
@@ -81,10 +83,20 @@ export async function GET(_request: Request, context: RouteContext) {
                   rp.published_outcome_json AS publishedOutcomeJson,
                   rp.created_at AS createdAt
            FROM resolution_proposals rp JOIN phases p ON p.id = rp.phase_id
+           WHERE p.game_id = ?
+             AND (p.status NOT IN ('PUBLISHED', 'SUPERSEDED') OR p.sequence = (SELECT MAX(sequence) FROM phases WHERE game_id = ?))
+           ORDER BY rp.created_at DESC`,
+        )
+        .bind(gameId, gameId)
+        .all<ProposalRow>(),
+      db
+        .prepare(
+          `SELECT rp.phase_id AS phaseId, rp.reviewed_by_moderator_id AS reviewedByModeratorId
+           FROM resolution_proposals rp JOIN phases p ON p.id = rp.phase_id
            WHERE p.game_id = ? ORDER BY rp.created_at DESC`,
         )
         .bind(gameId)
-        .all<ProposalRow>(),
+        .all<{ phaseId: string; reviewedByModeratorId: string | null }>(),
       db
         .prepare(
           `SELECT s.id, s.display_name AS displayName, s.alive, ra.role_key AS role
@@ -97,6 +109,11 @@ export async function GET(_request: Request, context: RouteContext) {
     const proposalByPhase = new Map<string, ProposalRow>();
     for (const proposal of proposalRows.results) {
       if (!proposalByPhase.has(proposal.phaseId)) proposalByPhase.set(proposal.phaseId, proposal);
+    }
+    // The latest proposal of every phase, for the "published automatically" mark.
+    const reviewByPhase = new Map<string, { reviewedByModeratorId: string | null }>();
+    for (const review of reviewRows.results) {
+      if (!reviewByPhase.has(review.phaseId)) reviewByPhase.set(review.phaseId, review);
     }
     const rosterPlayers: PlayerState[] = rosterRows.results.map((row) => ({
       id: String(row.id),
@@ -137,7 +154,8 @@ export async function GET(_request: Request, context: RouteContext) {
           currentSubmissions: Number(phase.currentSubmissions),
           outstanding: phase.id === openPhase?.id ? outstanding : [],
           // Published with no moderator attached: the sweep published it after the review window.
-          publishedAutomatically: phase.status === 'PUBLISHED' && Boolean(proposal) && !proposal?.reviewedByModeratorId,
+          publishedAutomatically: phase.status === 'PUBLISHED' && reviewByPhase.has(phase.id) && !reviewByPhase.get(phase.id)?.reviewedByModeratorId,
+          // Older published phases are summaries: the console shows only the newest or unpublished phase's result.
           proposal: proposal
              ? {
                  ...proposal,
