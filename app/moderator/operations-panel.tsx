@@ -140,6 +140,41 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     }
   }
 
+  async function removeModerator(moderator: Moderator) {
+    if (!window.confirm(`Remove ${moderator.email} from this game? They lose access to it at once. Their account stays, so you can add them again.`)) return;
+    setError('');
+    setBusyAction('moderator');
+    try {
+      await parse(await fetch(`/api/games/${gameId}/moderators/${moderator.id}`, { method: 'DELETE' }));
+      setMessage(`${moderator.email} was removed from this game.`);
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to remove the co-moderator.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function makeOwner(moderator: Moderator) {
+    if (!window.confirm(`Make ${moderator.email} the owner of this game? You stay on as a co-moderator, and only the new owner can reset, restore, cancel setup, or manage moderators.`)) return;
+    setError('');
+    setBusyAction('moderator');
+    try {
+      await parse(await fetch(`/api/games/${gameId}/moderators/${moderator.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role: 'OWNER' }),
+      }));
+      setMessage(`${moderator.email} now owns this game. You are a co-moderator.`);
+      await refresh();
+      onGameChanged?.();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to transfer ownership.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   async function resetPlayerPin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -357,7 +392,7 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
 
       <div className="operations-columns">
         <form className="ops-block" onSubmit={announce}><p className="eyebrow accent">Official announcement</p><label>Title<input name="title" required /></label><label>Message<textarea name="body" rows={4} required /></label><button className="primary-button" type="submit">Publish notice</button></form>
-        <form className="ops-block" onSubmit={addModerator}><p className="eyebrow accent">Co-moderator access</p><p className="field-help">Current: {moderators.map((moderator) => moderator.email).join(', ')}</p><label>Email<input name="email" type="email" required /></label><label>Moderator password<input name="password" type="password" minLength={12} required /></label><p className="field-help">There is no forced expiry; the moderator can recover with a one-time code.</p><button className="secondary-button" type="submit">Add co-moderator</button>{recoveryCodes.length > 0 && <code className="recovery-list">{recoveryCodes.join(' · ')}</code>}</form>
+        <form className="ops-block" onSubmit={addModerator}><p className="eyebrow accent">Co-moderator access</p><ul className="moderator-list" aria-label="Moderators">{moderators.map((moderator) => <li key={moderator.id}><span className="moderator-email">{moderator.email}</span><small>{moderator.role === 'OWNER' ? 'Owner' : 'Co-moderator'}</small>{operations.viewerRole === 'OWNER' && moderator.role !== 'OWNER' && <span className="moderator-actions"><button type="button" onClick={() => void makeOwner(moderator)} disabled={busyAction !== null}>Make owner</button><button type="button" onClick={() => void removeModerator(moderator)} disabled={busyAction !== null}>Remove</button></span>}</li>)}</ul><label>Email<input name="email" type="email" required /></label><label>Moderator password<input name="password" type="password" minLength={12} required /></label><p className="field-help">There is no forced expiry; the moderator can recover with a one-time code.</p><button className="secondary-button" type="submit">Add co-moderator</button>{recoveryCodes.length > 0 && <code className="recovery-list">{recoveryCodes.join(' · ')}</code>}</form>
         <form className="ops-block" onSubmit={resetPlayerPin}><p className="eyebrow accent">Player access recovery</p><p className="field-help">Use when a claimed player forgets a PIN or their seat is locked after 10 wrong PINs in a row. The new PIN is shown only to you, prior sessions are revoked, and the seat unlocks.</p><label>Player<select name="seatId" value={pinSeatId} onChange={(event) => setPinSeatId(event.target.value)} required><option value="">Choose a claimed seat</option>{operations.seats.filter((seat) => seat.status === 'CLAIMED').map((seat) => <option key={seat.id} value={seat.id}>{seat.displayName}{seat.pinLocked ? ' (locked: too many wrong PINs)' : ''}</option>)}</select></label><label>New six-digit PIN<input name="newPin" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required /></label><label>Reason<textarea name="reason" rows={2} minLength={5} required placeholder="Player forgot the previous PIN" /></label><button className="secondary-button" type="submit">Reset player PIN</button></form>
       </div>
 

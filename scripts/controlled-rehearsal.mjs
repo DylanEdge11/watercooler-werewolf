@@ -58,7 +58,7 @@ const config = {
   name: `Controlled rehearsal ${Date.now()}`,
   timezone: 'UTC',
   startDate: '2026-09-01',
-  endDate: '2026-12-31',
+  endDate: '2099-01-01',
   finalCutoffAt: '2099-01-01T00:00Z',
   activeWeekdays: [1, 2, 3, 4, 5],
   schedule: { dayCloses: '16:00', nightCloses: '09:00' },
