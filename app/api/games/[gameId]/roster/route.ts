@@ -7,6 +7,7 @@ import { ROLE_CATALOG } from '../../../../../lib/game/catalog';
 import { ROLE_KEYS } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
+import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 import { createInviteExport, parseRosterCsv } from '../../../../../lib/roster/csv';
 import { loadRosterView } from '../../../../../lib/game/setup-view';
 
@@ -14,12 +15,12 @@ interface RouteContext {
   params: Promise<{ gameId: string }>;
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
-    return Response.json({ ok: true, ...(await loadRosterView(gameId)) });
+    return respondJsonWithEtag(request, { ok: true, ...(await loadRosterView(gameId)) });
   } catch (error) {
     return routeError(error, 'Unable to load the roster.');
   }

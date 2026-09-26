@@ -83,7 +83,15 @@ Deadlines are entered in the game's IANA timezone and stored as UTC. Impossible 
 
 ## Polling
 
-The player dashboard, open chat rooms, and moderator panels each refresh every ten seconds. There are no WebSockets. The moderator console loads and refreshes with one request: `GET /api/games` returns the games list plus the selected game's roster and assignments (`?gameId=`, or the newest game; `lib/game/setup-view.ts`), and its signed-out 401 carries `needsBootstrap`. The Communications & operations panel refreshes operations and rooms on every tick, and the co-moderator list, announcements, and feedback at most once a minute and after the moderator's own changes.
+There are no WebSockets; pages poll. How often (`lib/http/poll-interval.ts`):
+
+- The player dashboard and the console's live game panel refresh every 10 seconds while an open phase's deadline is within 15 minutes, and every 30 seconds otherwise.
+- A chat room refreshes every 10 seconds while its newest message is under two minutes old, and every 30 seconds otherwise.
+- The rest of the console (games list and setup, operations, rooms) refreshes every 30 seconds.
+
+Every polled `GET` answers through `respondJsonWithEtag` (`lib/http/etag.ts`): the `ETag` is a hash of the JSON body, and a request whose `If-None-Match` matches gets an empty 304. Pollers use `conditionalGet` (`lib/http/conditional-get.ts`) and keep each tag next to the data it describes, so a 304 skips the state update and the re-render, and a response the page drops (a newer request won) never leaves it holding a tag for data it isn't showing. `/api/*` keeps `Cache-Control: private, no-store`: the browser stores nothing, which matters on shared devices, and the tag comes from the page's own memory.
+
+The moderator console loads and refreshes with one request: `GET /api/games` returns the games list plus the selected game's roster and assignments (`?gameId=`, or the newest game; `lib/game/setup-view.ts`), and its signed-out 401 carries `needsBootstrap`. The Communications & operations panel refreshes operations and rooms on every tick, the co-moderator list, announcements, and feedback at most once a minute, and everything after the moderator's own changes.
 
 ## Reserved fields
 

@@ -18,6 +18,22 @@ function countPosts(page: Page, pattern: RegExp): () => number {
   return () => count;
 }
 
+/**
+ * Holds the page's POSTs to `pattern` until released. A wrong PIN is answered
+ * in about 20 ms locally, faster than a second key press lands; holding the
+ * first answer makes sure the second submit arrives while the first is still
+ * in flight, which is the case these checks are about.
+ */
+async function holdPosts(page: Page, pattern: RegExp): Promise<() => void> {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route((url) => pattern.test(url.pathname), async (route) => {
+    if (route.request().method() === 'POST') await held;
+    await route.fallback();
+  });
+  return release;
+}
+
 test('player sign-in and seat claim send one request per submit and render the invitation on the server', async ({ browser }) => {
   const suffix = randomUUID().slice(0, 6);
   const context = await newBrowserContext(browser);
@@ -25,11 +41,13 @@ test('player sign-in and seat claim send one request per submit and render the i
 
   // Two quick Enters on the sign-in page make one attempt, not two.
   const logins = countPosts(page, /^\/api\/seats\/login$/u);
+  const releaseLogin = await holdPosts(page, /^\/api\/seats\/login$/u);
   await page.goto('/player-login');
   await page.getByLabel('Email or seat code').fill(`nobody-${E2E_RUN_ID}-${suffix}@e2e.test`);
   await page.getByLabel('Six-digit PIN').fill('000000');
   await page.getByLabel('Six-digit PIN').press('Enter');
   await page.getByLabel('Six-digit PIN').press('Enter');
+  releaseLogin();
   await expect(page.getByRole('alert').filter({ hasText: 'not accepted' })).toBeVisible();
   expect(logins()).toBe(1);
 
@@ -61,9 +79,11 @@ test('player sign-in and seat claim send one request per submit and render the i
 
   // A double click on Claim makes one claim.
   const claims = countPosts(page, /^\/api\/seats\/claim\/[^/]+$/u);
+  const releaseClaim = await holdPosts(page, /^\/api\/seats\/claim\/[^/]+$/u);
   await page.goto(claimPath);
   await page.getByLabel('Six-digit PIN').fill('482913');
   await page.getByRole('button', { name: 'Claim my seat', exact: true }).dblclick();
+  releaseClaim();
   await expect(page.getByRole('heading', { name: 'Your seat is ready.', exact: true })).toBeVisible();
   expect(claims()).toBe(1);
   await context.close();

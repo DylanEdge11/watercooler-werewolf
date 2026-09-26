@@ -13,6 +13,8 @@ import { ROLE_KEYS, type RoleKey } from '../../lib/game/types';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
 import BrandMark from '../brand-mark';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
+import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import { createInviteExport } from '../../lib/roster/csv';
 
 const sampleRoster = [
@@ -172,6 +174,10 @@ export default function ModeratorPage() {
   const selectedGameRef = useRef('');
   const gamesRequest = useRef(0);
   const gameDetailRequest = useRef(0);
+  // The ETag of the games list and setup on screen (lib/http/conditional-get.ts).
+  // It names the data, not the URL: the first load (no ?gameId=) and the polls
+  // that follow (with it) return the same body, so they share one tag.
+  const gamesEtag = useRef<string | null>(null);
   const compositionDrafts = useRef(new Map<string, Composition>());
 
   function markCompositionDraft(selectedGameId: string, draft: Composition | null) {
@@ -210,7 +216,11 @@ export default function ModeratorPage() {
     const requestId = ++gamesRequest.current;
     const detailRequestId = ++gameDetailRequest.current;
     const query = preferredGameId ? `?gameId=${encodeURIComponent(preferredGameId)}` : '';
-    const data = await requestJson<{ games: GameSummary[]; selected: SelectedGameSetup | null }>(`/api/games${query}`);
+    const response = await conditionalGet(`/api/games${query}`, gamesEtag.current);
+    // null: nothing changed since what is on screen.
+    if (!response) return;
+    const data = (await response.json()) as { games: GameSummary[]; selected: SelectedGameSetup | null; error?: string };
+    if (!response.ok) throw new RequestError(data.error ?? 'Request failed.', response.status, data as unknown as Record<string, unknown>);
     if (requestId !== gamesRequest.current) return;
     setAuthenticated(true);
     setGames(data.games);
@@ -219,8 +229,11 @@ export default function ModeratorPage() {
       selectedGameRef.current = selected.gameId;
       setGameId(selected.gameId);
       // A game switch that started after this request wins.
-      if (detailRequestId === gameDetailRequest.current) applyGameSetup(selected.gameId, selected.roster, selected.assignments);
+      const applied = detailRequestId === gameDetailRequest.current;
+      if (applied) applyGameSetup(selected.gameId, selected.roster, selected.assignments);
+      gamesEtag.current = applied ? responseEtag(response) : null;
     } else {
+      gamesEtag.current = responseEtag(response);
       selectedGameRef.current = '';
       setGameId('');
       setRoster([]);
@@ -250,9 +263,10 @@ export default function ModeratorPage() {
 
   useEffect(() => {
     if (!authenticated) return;
+    // The live game panel keeps its own, faster pace near deadlines.
     return pollWhileVisible(() => {
       void loadGames(gameId).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.'));
-    }, 10_000);
+    }, RELAXED_POLL_MS);
   }, [authenticated, gameId, loadGames]);
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {

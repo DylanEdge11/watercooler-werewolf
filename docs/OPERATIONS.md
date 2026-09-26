@@ -93,6 +93,6 @@ The moderator always wins. Before the window ends you can **Approve & publish**,
 
 If an automatic step cannot run, an `AUTOMATION` warning appears in the Operations panel's event log and the step retries on the next check.
 
-In review mode the Operations panel still checks for expired phases every ten seconds while open and locks them; **Check deadlines** does the same on demand.
+In review mode the Operations panel still checks for expired phases every 30 seconds while open and locks them (a late response is refused at the deadline either way); **Check deadlines** does the same on demand.
 
 The scheduler route `GET` or `POST /api/scheduler/deadlines` with `Authorization: Bearer <CRON_SECRET>` runs the automatic steps for every automatic game and locks expired phases in review-mode games. Without `CRON_SECRET`, the endpoint returns 503. See [Scheduler](SETUP.md#scheduler).

@@ -9,6 +9,7 @@ import { PIN_LOCKOUT_ATTEMPTS, pinFailureKey } from '../../../../../lib/auth/pin
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { restoreConfirmation } from '../../../../../lib/backup/restore';
+import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -18,7 +19,7 @@ function changes(result: unknown): number {
   return Number((result as { meta?: { changes?: number } } | null)?.meta?.changes ?? 0);
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { gameId } = await context.params;
@@ -96,7 +97,7 @@ export async function GET(_request: Request, context: RouteContext) {
     ]);
     const latestBackup = backups.results[0];
     const lastBackup = latestBackup ? { exportedAt: latestBackup.exportedAt, checksum: latestBackup.checksum } : null;
-    return Response.json({ ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, seats: seats.results.map((seat) => ({ ...seat, pinLocked: Boolean(seat.pinLocked) })), lastBackup, backups: backups.results, events: events.results });
+    return respondJsonWithEtag(request, { ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, seats: seats.results.map((seat) => ({ ...seat, pinLocked: Boolean(seat.pinLocked) })), lastBackup, backups: backups.results, events: events.results });
   } catch (error) {
     return routeError(error, 'Unable to load operational health.');
   }
