@@ -1,6 +1,7 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { preparePlayerSession } from '../../../../../lib/auth/session';
+import { pinFailureKey } from '../../../../../lib/auth/pin-lockout';
 import { changes } from '../../../../../db/results';
 import { hashSecret, sha256 } from '../../../../../lib/auth/crypto';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
@@ -85,6 +86,7 @@ export async function POST(request: Request, context: RouteContext) {
            SELECT ?, ?, ?, ?, ?, ? WHERE ${claimedGuard}`,
         )
         .bind(...session.values, seat.id, now, seat.sessionVersion),
+      db.prepare(`DELETE FROM rate_limit_buckets WHERE bucket_key = ? AND ${claimedGuard}`).bind(pinFailureKey(seat.id), seat.id, now, seat.sessionVersion),
     ]);
     if (changes(result[0]) !== 1) return jsonError('This seat was claimed by another request. Use seat sign-in instead.', 409);
     await session.setCookie();

@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     await ensureDatabase();
     const body = (await request.json()) as { email?: string; recoveryCode?: string; newPassword?: string };
     const email = body.email?.trim().toLowerCase() ?? '';
-    await enforceRateLimit(requestRateLimitKey(request, `moderator-recovery:${email}`), 5, 15 * 60_000);
+    await enforceRateLimit(requestRateLimitKey(request, `moderator-recovery:${email.slice(0, 80)}`), 5, 15 * 60_000);
     const moderator = await redeemModeratorRecoveryCode(email, body.recoveryCode ?? '', body.newPassword ?? '');
     if (!moderator) return jsonError('The recovery code or account details were not accepted.', 401);
     await createModeratorSession(moderator.id);

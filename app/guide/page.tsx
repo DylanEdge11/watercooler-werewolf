@@ -38,6 +38,7 @@ const SLOT_ROWS = [
 const HELP_ROWS = [
   ['I lost my invitation link', 'Sign in at Player sign-in with your invitation email and PIN. If that fails, ask the moderator for your seat code.'],
   ['I forgot my PIN', 'Ask the moderator. They can set a new PIN, which signs out your old sessions.'],
+  ['“This seat is locked”', 'After 10 wrong PINs in a row your seat stops accepting sign-in. Ask the moderator for a new PIN; that unlocks it.'],
   ['My role says “Not released”', 'The moderator has not released roles yet. Every seat must be claimed first.'],
   ['Save response is unavailable', 'Select a legal player first. The phase may also be closed, your role may have no action this phase, or you may be eliminated.'],
   ['“Too many attempts”', 'Stop retrying and wait for the limit to reset (usually 15 minutes for sign-in).'],
@@ -206,7 +207,7 @@ export default function GuidePage() {
           <ul>
             <li><strong>Announcements</strong> appear in every player’s updates. <strong>Announcement copy</strong> then shows each one ready to paste into an email or a group chat, with <strong>Copy email</strong> and <strong>Copy for chat</strong>.</li>
             <li><strong>Feedback</strong> lists the ratings and comments players and moderators send from the feedback card, with the average. It shows whether each came from a player or a moderator. The list doesn’t name the sender, but the audit log and backups record who sent each one.</li>
-            <li><strong>Player access recovery</strong> sets a new PIN for a player who forgot theirs.</li>
+            <li><strong>Player access recovery</strong> sets a new PIN for a player who forgot theirs, and unlocks a seat locked after 10 wrong PINs (marked “locked” in the list).</li>
             <li><strong>Private rooms</strong> can be made read-only, and individual messages removed with a reason.</li>
             <li><strong>Co-moderators</strong> can be added by the game owner.</li>
             <li><strong>Pause automation</strong> in <strong>Run the live game</strong> stops every automatic lock, calculation, and publication (for an offsite or a long weekend) until you select <strong>Resume automation</strong>. Players see “The schedule is paused”.</li>

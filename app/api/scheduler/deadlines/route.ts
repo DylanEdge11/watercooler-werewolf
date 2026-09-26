@@ -3,6 +3,7 @@ import { getDb } from '../../../../db';
 import { ensureDatabase } from '../../../../db/migrate';
 import { sweepAutomation } from '../../../../lib/game/automation-sweep';
 import { sweepDuePhases } from '../../../../lib/game/scheduling';
+import { purgeExpiredRows } from '../../../../lib/maintenance';
 import { jsonError } from '../../../../lib/http/security';
 import { routeError } from '../../../../lib/http/errors';
 
@@ -38,7 +39,9 @@ async function sweep(request: Request) {
     // The deadline sweep then locks any remaining due phase in review-mode games, as before.
     const automation = await sweepAutomation();
     const result = await sweepDuePhases(getDb());
-    return Response.json({ ok: true, games: result, lockedPhaseCount: result.reduce((total, game) => total + game.phaseIds.length, 0), automation, ranAt: new Date().toISOString() });
+    // Housekeeping never fails the sweep.
+    const purged = await purgeExpiredRows(getDb()).catch((error) => { console.error('Expired-row cleanup failed', error); return null; });
+    return Response.json({ ok: true, games: result, lockedPhaseCount: result.reduce((total, game) => total + game.phaseIds.length, 0), automation, purged, ranAt: new Date().toISOString() });
   } catch (error) {
     return routeError(error, 'Unable to sweep phase deadlines.');
   }
