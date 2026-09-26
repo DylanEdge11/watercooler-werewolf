@@ -17,6 +17,8 @@ export interface PublicTimelineEvent {
     eliminations?: Array<{ displayName: string; role: string; cause: string; isYou?: boolean }>;
     votes?: Array<{ actorName: string; targetNames: string[] }>;
     protectedAttackBlocked?: boolean;
+    /** Published by the sweep after the review window rather than by a moderator. */
+    publishedAutomatically?: boolean;
   };
 }
 

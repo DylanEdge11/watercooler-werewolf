@@ -33,6 +33,8 @@ export interface DashboardData {
     livingPlayers: Array<{ id: string; displayName: string }>;
     eliminatedPlayers: Array<{ id: string; displayName: string; role: RoleKey | null }>;
     stopReason?: string | null;
+    /** A moderator paused automatic results. */
+    automationPaused?: boolean;
   };
   phase: null | {
     id: string;
@@ -41,6 +43,8 @@ export interface DashboardData {
     status: string;
     slots: number;
     deadline: string | null;
+    /** Set while a calculated result waits in automatic mode. */
+    autoPublishAt?: string | null;
   };
   permission: { actionKind: ActionKind | null; maxTargets: number; label: string };
   candidates: Array<{ id: string; displayName: string }>;
@@ -62,6 +66,14 @@ interface PlayerDashboardProps {
 
 function initials(name: string): string {
   return name.split(/\s+/u).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+}
+
+function clockTime(iso: string, timeZone: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone });
+  } catch {
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
 }
 
 function deadlineLabel(deadline: string | null): string {
@@ -441,7 +453,9 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
         {view === 'timeline' ? <FullTimeline events={data.timeline} hasMore={Boolean(data.timelineHasMore)} onBack={() => showView('today')} /> : <section className="main-column" id="today">
           <div className="welcome-row">
             <div><p className="eyebrow accent">{data.phase ? `${data.phase.kind.replaceAll('_', ' ')} · Cycle ${data.phase.sequence}` : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{data.permission.label}</p></div>
-            <div className="deadline-card"><span>Response window</span><strong>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : deadlineLabel(data.phase?.deadline ?? null)}</strong><small>{data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>
+            {data.phase?.autoPublishAt && !['COMPLETED', 'STOPPED'].includes(data.game.status)
+              ? <div className="deadline-card"><span>Results</span><strong suppressHydrationWarning>by {clockTime(data.phase.autoPublishAt, data.game.timezone)}</strong><small suppressHydrationWarning>Results publish by {clockTime(data.phase.autoPublishAt, data.game.timezone)} unless the moderator reviews them first.</small></div>
+              : <div className="deadline-card"><span>Response window</span><strong>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : deadlineLabel(data.phase?.deadline ?? null)}</strong><small>{data.game.automationPaused && !['COMPLETED', 'STOPPED'].includes(data.game.status) ? 'The schedule is paused' : data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>}
           </div>
           {data.game.status === 'STOPPED' && <p className="notice warning" role="status">{data.game.stopReason ?? 'This game is stopped. Player actions and rooms are read-only.'}</p>}
 

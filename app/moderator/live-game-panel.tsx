@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { nudgeMessage } from '../../lib/game/moderator-copy';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
+import AutomationControls, { type NextAutomaticStep } from './automation-controls';
 import CopyButton from './copy-button';
 import { formatZonedDateTimeLocal } from '../../lib/game/scheduling';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
@@ -29,6 +30,8 @@ interface Phase {
   currentSubmissions: number;
   /** Open phase only: living players who still owe a response. For the moderator's eyes alone. */
   outstanding?: Array<{ id: string; displayName: string }>;
+  /** Published by the sweep after the review window, with no moderator attached. */
+  publishedAutomatically?: boolean;
   proposal: null | { id: string; outcome: Outcome; proposedOutcome?: Outcome; reviewedOutcome?: Outcome | null; publishedOutcome?: Outcome | null; overrideReason: string | null; reviewedAt?: string | null };
 }
 
@@ -76,12 +79,16 @@ interface GameState {
   finalCutoffAt: string;
   timezone: string;
   updatedAt: string;
+  publicationMode: 'REVIEW' | 'AUTOMATIC';
+  reviewWindowMinutes: number;
+  automationPausedAt: string | null;
 }
 
 export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameId: string; gameStatus: string; onChanged?: (action?: string) => void }) {
   const [phases, setPhases] = useState<Phase[]>([]);
   const [roster, setRoster] = useState<RosterMember[]>([]);
   const [game, setGame] = useState<GameState | null>(null);
+  const [nextAutomaticStep, setNextAutomaticStep] = useState<NextAutomaticStep | null>(null);
   const [overrideIds, setOverrideIds] = useState<string[]>([]);
   const [overrideReason, setOverrideReason] = useState('');
   const [message, setMessage] = useState('');
@@ -92,12 +99,13 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
     const response = await fetch('/api/games/' + gameId + '/phases');
-    const data = await response.json() as { game?: GameState; phases?: Phase[]; roster?: RosterMember[]; error?: string };
+    const data = await response.json() as { game?: GameState; phases?: Phase[]; roster?: RosterMember[]; nextAutomaticStep?: NextAutomaticStep | null; error?: string };
     if (!response.ok) throw new Error(data.error ?? 'Unable to load the live game.');
     if (sequence !== refreshSequence.current) return;
     setPhases(data.phases ?? []);
     setRoster(data.roster ?? []);
     setGame(data.game ?? null);
+    setNextAutomaticStep(data.nextAutomaticStep ?? null);
   }, [gameId]);
 
   useEffect(() => {
@@ -210,6 +218,8 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
 
       {!current && effectiveStatus === 'ACTIVE' && latestPublished && <div className="final-showdown-callout"><div><p className="eyebrow accent">Final cutoff · {game?.timezone ?? 'UTC'}</p><strong>{game?.finalCutoffAt ? gameTime(game.finalCutoffAt) : 'Configured in the game schedule'}</strong><p>When the cutoff has passed, enter final showdown to unlock the final ballot.</p></div><button className="secondary-button" type="button" onClick={() => void enterFinalShowdown()}>Enter final showdown</button></div>}
 
+      {game && !['COMPLETED', 'STOPPED', 'CANCELLED'].includes(effectiveStatus) && <AutomationControls gameId={gameId} game={game} nextStep={nextAutomaticStep} formatTime={gameTime} onChanged={refresh} />}
+
       {latest && (
         <div className="phase-review">
           <div className="phase-status-row"><div><p className="eyebrow accent">Cycle {latest.sequence} · {latest.kind.replaceAll('_', ' ')}</p><h3>{latest.status.replaceAll('_', ' ')}</h3></div><div><strong>{latest.currentSubmissions}</strong><small>current responses</small></div><div><strong>{latest.slots}</strong><small>elimination slots</small></div></div>
@@ -225,6 +235,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
                 <div><p className="eyebrow">Vote tally</p>{proposedOutcome?.tally.length ? proposedOutcome.tally.map((entry) => <div className="tally-row" key={entry.playerId}><span>{byId.get(entry.playerId)?.displayName ?? 'Player'}</span><strong>{entry.votes}</strong></div>) : <p className="empty-note">No eligible votes were submitted.</p>}</div>
                 <div><p className="eyebrow">{latest.status === 'PUBLISHED' ? 'Authoritative published outcome' : reviewedOutcome ? 'Reviewed outcome awaiting follow-up' : 'Proposed outcome'}</p>{authoritativeOutcome.eliminations.length ? authoritativeOutcome.eliminations.map((item) => <div className="outcome-row" key={item.playerId}><span>{byId.get(item.playerId)?.displayName ?? 'Player'}</span><strong>{byId.get(item.playerId)?.role}</strong><small>{item.cause.replaceAll('_', ' ')}</small></div>) : <p className="empty-note">No elimination.</p>}{authoritativeOutcome.protectedPlayerIds.length > 0 && <p className="protected-note">Protected: {authoritativeOutcome.protectedPlayerIds.map((id) => byId.get(id)?.displayName).join(', ')}</p>}{authoritativeOutcome.randomDraws.length > 0 && <p className="random-note">A recorded random draw resolved a boundary tie.</p>}</div>
               </div>
+              {latest.status === 'PUBLISHED' && latest.publishedAutomatically && <p className="notice success">Published automatically after the review window.</p>}
               {publishedOutcome && proposedOutcome && JSON.stringify(publishedOutcome) !== JSON.stringify(proposedOutcome) && <div className="notice warning"><strong>Override published.</strong> The original calculation remains preserved for audit. {latest.proposal.overrideReason ? 'Reason: ' + latest.proposal.overrideReason : ''}</div>}
               {latest.status === 'PUBLISHED' && latest.proposal.overrideReason && <p className="field-help">Review note: {latest.proposal.overrideReason}{latest.proposal.reviewedAt ? ` Review recorded ${gameTime(latest.proposal.reviewedAt)}.` : ''}</p>}
               {latest.status === 'PENDING_APPROVAL' && (

@@ -169,6 +169,8 @@ export class GameHarness {
             finalCutoffAt: '2000-01-01T00:00',
             activeWeekdays: [1, 2, 3, 4, 5],
             schedule: { dayCloses: '16:00', nightCloses: '09:00' },
+            // The bot farm locks and publishes by hand; automatic results would race it.
+            publicationMode: 'REVIEW',
           },
         }),
         'create game',

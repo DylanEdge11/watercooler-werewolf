@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { DEFAULT_NEW_GAME_AUTOMATION, type AutomationSettings } from '../../lib/game/automation';
 import { DEFAULT_GAME_SETTINGS, slotTable, type GameSettings } from '../../lib/game/game-settings';
 
 interface GameSettingsFieldsProps {
-  initial?: Partial<GameSettings>;
+  initial?: Partial<GameSettings & AutomationSettings>;
   disabled?: boolean;
 }
 
@@ -29,10 +30,18 @@ export default function GameSettingsFields({ initial, disabled = false }: GameSe
     dayDivisor: initial?.dayDivisor ?? DEFAULT_GAME_SETTINGS.dayDivisor,
     nightDivisor: initial?.nightDivisor ?? DEFAULT_GAME_SETTINGS.nightDivisor,
   };
+  const [publicationMode, setPublicationMode] = useState(initial?.publicationMode ?? DEFAULT_NEW_GAME_AUTOMATION.publicationMode);
+  const reviewWindowMinutes = initial?.reviewWindowMinutes ?? DEFAULT_NEW_GAME_AUTOMATION.reviewWindowMinutes;
   const [dayDivisor, setDayDivisor] = useState(String(settings.dayDivisor));
   const [nightDivisor, setNightDivisor] = useState(String(settings.nightDivisor));
   return <>
     <label>Hunter window (hours)<input name="hunterWindowHours" type="number" min="0.25" max="168" step="0.25" defaultValue={Math.round((settings.hunterWindowMinutes / 60) * 100) / 100} disabled={disabled} required /><small className="field-hint">How long an eliminated Hunter has to take their shot before you can finalize the result.</small></label>
+    <fieldset className="results-choice wide" disabled={disabled}>
+      <legend>Results</legend>
+      <label><input type="radio" name="publicationMode" value="AUTOMATIC" checked={publicationMode === 'AUTOMATIC'} onChange={() => setPublicationMode('AUTOMATIC')} />Publish automatically after a review window</label>
+      <label><input type="radio" name="publicationMode" value="REVIEW" checked={publicationMode === 'REVIEW'} onChange={() => setPublicationMode('REVIEW')} />I review and publish each result</label>
+      <label className="review-window-field">Review window (minutes)<input name="reviewWindowMinutes" type="number" min="0" max="1440" step="1" defaultValue={reviewWindowMinutes} required /><small className="field-hint">{publicationMode === 'AUTOMATIC' ? 'At each deadline the game locks and calculates. The result publishes after this many minutes unless you publish, override, or pause first.' : 'Nothing locks, calculates, or publishes on its own. You can switch to automatic at any time in Run the live game.'}</small></label>
+    </fieldset>
     <details className="advanced-settings wide">
       <summary>Advanced: eliminations per phase</summary>
       <p className="field-hint">Each phase can eliminate one player for every so many living players, counted when it opens. The default of 30 means one elimination up to 30 players, two up to 60, and so on.</p>

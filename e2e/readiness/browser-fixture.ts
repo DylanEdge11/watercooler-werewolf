@@ -534,6 +534,9 @@ export class BrowserGame {
           finalCutoffAt: '2000-01-01T00:00',
           activeWeekdays: [1, 2, 3, 4, 5],
           schedule: { dayCloses: '16:00', nightCloses: '09:00' },
+          // These scripted games drive every lock, Hunter follow-up, and publish by hand, so automatic results stay off.
+          // The UI-created UAT game keeps the automatic default and checks it.
+          publicationMode: 'REVIEW',
         }, 'create browser game');
         gameId = created.gameId;
         const rosterData = await post<{ invites: InviteRow[] }>(moderator.context, `/api/games/${gameId}/roster`, { csv: rosterCsv(suffix, playerCount) }, 'import browser roster');

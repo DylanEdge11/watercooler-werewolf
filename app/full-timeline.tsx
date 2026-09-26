@@ -34,6 +34,7 @@ export default function FullTimeline({ events: unordered, hasMore = false, onBac
                 {eliminations.map((item, index) => <li key={`${event.id}-${item.displayName}-${index}`}><strong>{item.displayName}</strong><span>{readableRole(item.role)}{eliminationCause(item.cause) ? ` · ${eliminationCause(item.cause)}` : ''}</span></li>)}
               </ul>}
               {event.payload.protectedAttackBlocked && <p>Bodyguard protection stopped a pack attack.</p>}
+              {event.payload.publishedAutomatically && <p className="timeline-auto-note">Published automatically after the review window.</p>}
               {view.publicBallot && (votes.length ? <details className="timeline-votes" open={event.id === newestBallotId}>
                 <summary>{votes.length} {votes.length === 1 ? 'vote' : 'votes'}{tally.length ? ` · ${tally.map((item) => `${item.name} ${item.count}`).join(', ')}` : ''}</summary>
                 <div className="vote-ledger">{votes.map((vote, index) => <div className="vote-ledger-row" key={`${event.id}-${vote.actorName}-${index}`}><strong>{vote.actorName}</strong><span aria-hidden="true">→</span><span>{vote.targetNames.length ? vote.targetNames.join(', ') : 'No target recorded'}</span></div>)}</div>
