@@ -1,6 +1,7 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { preparePlayerSession } from '../../../../../lib/auth/session';
+import { INVALID_CLAIM_LINK, lookupClaimSeat } from '../../../../../lib/auth/claim';
 import { pinFailureKey } from '../../../../../lib/auth/pin-lockout';
 import { changes } from '../../../../../db/results';
 import { hashSecret, sha256 } from '../../../../../lib/auth/crypto';
@@ -16,15 +17,8 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { code } = await context.params;
-    const seat = await getDb()
-      .prepare(
-        `SELECT s.display_name AS displayName, s.status, g.name AS gameName
-         FROM seats s JOIN games g ON g.id = s.game_id
-         WHERE s.claim_code_hash = ? LIMIT 1`,
-      )
-      .bind(await sha256(code))
-      .first<{ displayName: string; status: string; gameName: string }>();
-    if (!seat) return jsonError('This private seat link is not valid.', 404);
+    const seat = await lookupClaimSeat(code);
+    if (!seat) return jsonError(INVALID_CLAIM_LINK, 404);
     return Response.json({ ok: true, seat });
   } catch (error) {
     return routeError(error, 'Unable to look up this seat.');
