@@ -23,7 +23,7 @@ Requests never change the schema. `ensureDatabase()` checks that every version i
 | Deadlines and timezones | `lib/game/scheduling.ts` |
 | Phase open, lock, Hunter, publish | `app/api/games/[gameId]/phases/route.ts` |
 | Player submissions | `app/api/phases/[phaseId]/actions/route.ts` |
-| Player dashboard data | `app/api/player/route.ts` |
+| Player dashboard data | `lib/player/dashboard-data.ts` (`loadDashboard`, three rounds of parallel reads), served by `app/api/player/route.ts` |
 | Stop, reset, restore, cancel, PIN reset | `app/api/games/[gameId]/operations/route.ts`, `lib/backup/` |
 | Sessions, hashing, authorization | `lib/auth/` |
 | Co-moderators: add, remove, transfer ownership | `app/api/games/[gameId]/moderators/`, `lib/auth/game-moderators.ts` |
