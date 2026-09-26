@@ -1,6 +1,6 @@
 # Reviewer and verifier briefs
 
-The lead fills in each `<placeholder>` and sends the brief as the agent's whole prompt. The agent starts with no memory of the conversation, so the brief has to stand on its own. Paste the priority scale and the hard-floor rules from `SKILL.md` where indicated; don't paraphrase them.
+The lead running the audit fills in each `<placeholder>` at run time, from its setup, system map, and findings, and sends the brief as the agent's whole prompt. The owner doesn't edit this file. The agent starts with no memory of the conversation, so the brief has to stand on its own. Paste the priority scale and the hard-floor rules from `SKILL.md` where indicated; don't paraphrase them.
 
 ## Area reviewer (pass 1)
 

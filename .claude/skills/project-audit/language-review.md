@@ -1,6 +1,6 @@
 # Docs, instructions, and language review (pass 2)
 
-The lead fills in each `<placeholder>` and sends the brief as the agent's whole prompt. When there is a lot of text, split it between two reviewers: one for instruction files and skills, one for maintainer docs and user-facing text. Paste the hard-floor rules and priority scale from `SKILL.md`; don't paraphrase them.
+The lead running the audit fills in each `<placeholder>` at run time, from its setup and system map, and sends the brief as the agent's whole prompt. The owner doesn't edit this file. When there is a lot of text, split it between two reviewers: one for instruction files and skills, one for maintainer docs and user-facing text. Paste the hard-floor rules and priority scale from `SKILL.md`; don't paraphrase them.
 
 ```text
 You are reviewing the written text of a software repository against what its code actually does, at a fixed commit. Much of this text was written by earlier AI sessions and is now read, literally, by later ones. Check it for accuracy, and check whether its wording fits its purpose.

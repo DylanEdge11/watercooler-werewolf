@@ -1,6 +1,6 @@
 # Report template
 
-Keep every section, and write "None found." in a section with nothing in it, so a reader can tell it was checked rather than skipped. Cite file:line at the candidate SHA. Link to the code where that helps the owner.
+The lead fills this in when writing the report; the owner doesn't edit this file. Keep every section, and write "None found." in a section with nothing in it, so a reader can tell it was checked rather than skipped. Cite file:line at the candidate SHA. Link to the code where that helps the owner.
 
 ````markdown
 # Project audit: <Month D, YYYY>

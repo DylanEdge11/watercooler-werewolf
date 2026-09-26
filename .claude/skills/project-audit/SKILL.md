@@ -1,6 +1,6 @@
 ---
 name: project-audit
-description: Independent, report-only audit of the whole repository — code, tests, config, dependencies, git history, branches and open PRs, docs, agent instructions, and user-facing text. Builds its own view from the code before reading docs or earlier audits, reproduces every defect, has each finding challenged by a second reviewer, asks the owner one round of questions, and commits a dated report with stable finding IDs. Changes no code.
+description: Independent, report-only audit of the whole repository — code, tests, config, dependencies, git history, branches and open PRs, docs, agent instructions, and user-facing text. Builds its own view from the code before reading docs or earlier audits, reproduces every defect, has each finding challenged by a second reviewer, and commits a dated report with stable finding IDs. Changes no code.
 argument-hint: "[optional scope: a path, an area, 'PR #N', or a branch] [--full to add the long test suite]"
 disable-model-invocation: true
 ---
@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 Give the owner an independent, evidence-backed picture of the repository as it is now, and a worklist that fix branches can cite by ID. You are an outside reviewer. Earlier sessions, including the ones that wrote this repository's docs, rules, skills, and earlier audits, are colleagues whose work you are checking, not authorities. What they wrote are claims to test.
 
-This skill holds no facts about any particular project. Get commands, branch conventions, safety rules, and the owner's preferences from the repository each run. Supporting files in this folder:
+This skill holds no facts about any particular project, and the owner doesn't edit it. Everything it needs comes from the repository, from the owner's arguments, or from a short setup round with the owner when you are invoked (step 0). The `<placeholders>` in the supporting files are for you to fill in at run time from your own setup, map, and findings. Supporting files in this folder:
 
 - [reviewer-brief.md](reviewer-brief.md): the prompts for area reviewers and verifiers.
 - [language-review.md](language-review.md): the prompt and rubric for the docs, instructions, and language pass.
@@ -42,14 +42,22 @@ During the audit, never connect to production, use production credentials, print
 
 A code defect marked Plausible is at most P2.
 
-## 0. Pin the candidate and survey the state
+## 0. Set up
 
-1. Read the repository's instruction files for operational facts only: the working base branch, how to install and test, safety rules, and who the owner is. Their descriptions of the code are audited in pass 2.
-2. **Candidate:** the working base branch the instructions name, otherwise the default branch. If that's ambiguous (none, or several), ask. `git fetch`, check out the branch's head, and record the full SHA. Every result in the report is for that SHA.
-3. If the working tree has uncommitted changes, stop and ask. Don't stash, reset, or clean them.
-4. **Scope:** everything, unless the owner's arguments narrow it to a path, an area, a PR, or a branch. A narrowed audit still runs pass 3 for the IDs in its scope.
-5. If the clone is shallow, fetch the full history, or record how far back the history review went.
-6. **Survey and record:** open PRs and branches on origin; whether a release is pending (an open release PR, a certification handoff naming a SHA); whether a current, non-archived audit report exists; whether dependencies are installed. None of these stops the audit. They change what you check and how you deliver (step 9).
+Find out as much as you can yourself, then confirm it with the owner in one short round before any review work.
+
+1. Read the repository's instruction files for operational facts only: the working base branch, how to install and test, where audit reports may be committed, safety rules, and who the owner is. Their descriptions of the code are audited in pass 2.
+2. **Candidate:** the working base branch the instructions name, otherwise the default branch. `git fetch` and note its head SHA.
+3. **Scope:** everything, unless the owner's arguments narrow it to a path, an area, a PR, or a branch. A narrowed audit still runs pass 3 for the IDs in its scope.
+4. **Survey:** uncommitted changes in the working tree; open PRs and branches on origin; whether a release is pending (an open release PR, a certification handoff naming a SHA); whether a current, non-archived audit report exists; whether dependencies are installed; whether the clone is shallow.
+5. **Setup round.** Ask the owner, using a structured question tool if one is available, with a recommended answer for each question. Skip any question the arguments already answer:
+   - **Candidate:** the branch and short SHA you found (recommended), or another. If you found none or several, the question has no default.
+   - **Scope:** everything (recommended), or a narrower scope.
+   - **Long test suite:** no (recommended; say roughly how long it takes), or yes.
+   - Only when the survey calls for it: how to handle uncommitted changes (don't stash, reset, or clean them yourself); how to install or run the tests when the repository doesn't say; where to commit the report when the instructions don't say; whether to hold the report's commit until a pending release is out (recommended).
+
+   Keep this round to logistics. Don't ask what the owner is worried about or where to look, because that would steer the blind pass. If the owner offers a concern anyway, note it and check it after pass 1. If every answer is already known, state the setup in one line and carry on.
+6. Check out the confirmed candidate and record its full SHA. Every result in the report is for that SHA. If the clone is shallow, fetch the full history, or record how far back the history review went.
 7. This is a long run and your context may be summarized. Keep a task list, and keep a findings file in a scratch directory outside the repository as the durable record.
 
 | State | What to do |
@@ -59,7 +67,7 @@ A code defect marked Plausible is at most P2.
 | No tests, or the gates fail | Record it as a finding and keep going. Reproduce with scripts. |
 | No earlier audit | Skip pass 3. |
 | Very large repository, or time runs short | Cover security and privacy, data integrity, and the core flows first. Mark the report PARTIAL; the coverage ledger shows the rest. |
-| The owner can't be asked | Put the step 7 questions in the report as open decisions with your recommendation. |
+| The owner can't be asked | Use the recommended setup answers and record them in the report header. Put the step 7 questions in the report as open decisions with your recommendation. |
 
 ## 1. Baseline checks
 
@@ -133,7 +141,7 @@ Drop Rejected findings. Record how many were rejected, and give a one-line reaso
 
 ## 7. Owner interview
 
-Ask once, after verification, and only what the owner has to decide: product behavior, wording users will read, priority trade-offs, whether to revisit an earlier decision, and anything that would need a risky or non-additive change. Give each question a recommended answer and one sentence of evidence. If a structured question tool is available, use it; several calls in one sitting are fine when there are more than a few questions. Don't ask what the evidence already answers. Record the answers in the decisions table.
+Ask once more, after verification, and only what the owner has to decide: product behavior, wording users will read, priority trade-offs, whether to revisit an earlier decision, and anything that would need a risky or non-additive change. Give each question a recommended answer and one sentence of evidence. If a structured question tool is available, use it; several calls in one sitting are fine when there are more than a few questions. Don't ask what the evidence already answers. Record the answers in the decisions table.
 
 ## 8. Write the report
 
@@ -149,7 +157,7 @@ Follow [report-template.md](report-template.md).
 1. Delete every scratch file the reviewers and verifiers listed (`audit-scratch-*`, `audit-verify-*`). `git status --porcelain` should then show only the report, and the archive move if you are superseding an audit. If anything else appears, find out what created it before touching it.
 2. **Supersede:** `git mv` each earlier audit whose open items this report now carries into the archive folder, and add a row for each to the archive index.
 3. **Where to commit:** if the repository's instructions allow audit reports directly on the working base branch, commit there. Otherwise, commit on a new branch and open a PR into the base. Never commit to the production branch. Check first:
-   - **Release pending:** if a release candidate is certified, or being certified, at the base branch's current SHA, a new commit moves the branch and can invalidate that certification. Ask before committing.
+   - **Release pending:** if a release candidate is certified, or being certified, at the base branch's current SHA, a new commit moves the branch and can invalidate that certification. Follow the owner's setup answer; if the release started during the audit, ask before committing.
    - **Branch moved during the audit:** commit on top. The report header names the audited SHA and lists what landed since.
    - **The session limits where you can push:** push there, and tell the owner where the report is.
 4. **Commit message:** the audited SHA, finding counts by priority, and the earlier-audit reconciliation counts.
