@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "55cdf32a-97cd-4fb8-a333-ce7b22b9a21a",
+  "id": "9c295269-a7a9-4e9d-b366-ca75c01022f3",
   "prevId": "07ff59b1-78dc-4e75-91d3-ce96c70608dc",
   "tables": {
     "action_submissions": {
@@ -1162,14 +1162,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "schedule_mode": {
-          "name": "schedule_mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'MANUAL'"
         },
         "setup_revision": {
           "name": "setup_revision",

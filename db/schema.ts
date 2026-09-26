@@ -90,8 +90,6 @@ export const games = sqliteTable(
     reviewWindowMinutes: integer('review_window_minutes').notNull().default(60),
     // Set while a moderator has paused automation; nothing locks, calculates, or publishes on its own.
     automationPausedAt: text('automation_paused_at'),
-    // Reserved for scheduled phase opening (a later package): MANUAL or SCHEDULED.
-    scheduleMode: text('schedule_mode').$type<'MANUAL' | 'SCHEDULED'>().notNull().default('MANUAL'),
     // Incremented whenever setup inputs change. Assignment previews capture
     // this value so an old preview cannot be released after a roster or
     // composition change.
