@@ -489,7 +489,7 @@ export class BrowserGame {
         }
         await expect(gameNameField).toBeVisible();
         await gameNameField.fill(gameName);
-        if (options.automaticResults) await moderator.page.getByLabel('Publish automatically after a review window').check();
+        if (options.automaticResults) await moderator.page.getByRole('group', { name: 'Results', exact: true }).getByLabel('Publish automatically after a review window').check();
         const createResponsePromise = moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/games');
         await moderator.page.getByRole('button', { name: 'Create game', exact: true }).click();
         const created = await json<{ gameId: string }>(await createResponsePromise, 'create browser game');

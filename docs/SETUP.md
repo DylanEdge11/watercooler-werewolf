@@ -27,7 +27,7 @@ Local development (`npm run dev` with a `file:` database) is the only mode where
 | --- | --- | --- |
 | `TURSO_DATABASE_URL` | Yes | libSQL URL. Use `file:./work/watercooler.db` locally; deployed functions refuse `file:` URLs. |
 | `TURSO_AUTH_TOKEN` | Remote only | Token scoped to that one database. |
-| `SITE_ORIGIN` | Yes | Exact origin players use, such as `https://watercooler-werewolf.vercel.app`, with no path. Browser writes from any other origin are rejected. |
+| `SITE_ORIGIN` | Recommended | Exact origin players use, such as `https://watercooler-werewolf.vercel.app`, with no path. Browser writes from any other origin are rejected. If unset, each request's own origin is used, which still blocks other sites; set it in Production so writes through any other hostname are refused. Claim links always use the address the moderator is on. |
 | `WATERCOOLER_OWNER_EMAIL` | For bootstrap | Email for the first moderator account. |
 | `CRON_SECRET` | Optional | Enables `/api/scheduler/deadlines` for Vercel Cron or an external scheduler. See [Scheduler](#scheduler). |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Optional | Turns on **Email invites**. `SMTP_PORT` defaults to 465. Without all of them, moderators use the invite CSV. See [Invite email](#invite-email). |

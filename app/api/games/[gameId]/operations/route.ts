@@ -5,6 +5,7 @@ import { createBackupRecord, restoreGameBackup } from '../../../../../lib/backup
 import { canCancelSetup, canResetGame, canStopGame } from '../../../../../lib/game/lifecycle';
 import { reconcileDuePhases } from '../../../../../lib/game/scheduling';
 import { hashSecret, randomToken, sha256 } from '../../../../../lib/auth/crypto';
+import { PIN_LOCKOUT_ATTEMPTS, pinFailureKey } from '../../../../../lib/auth/pin-lockout';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { restoreConfirmation } from '../../../../../lib/backup/restore';
@@ -85,16 +86,17 @@ export async function GET(_request: Request, context: RouteContext) {
         .first<{ submittedActions: number; lateRejections: number; lastActionAt: string | null }>(),
       db
         .prepare(
-          `SELECT id, display_name AS displayName, status
-           FROM seats WHERE game_id = ? AND status != 'REMOVED'
-           ORDER BY display_name COLLATE NOCASE`,
+          `SELECT s.id, s.display_name AS displayName, s.status,
+                  COALESCE((SELECT b.attempts FROM rate_limit_buckets b WHERE b.bucket_key = 'pin-failures:' || s.id), 0) >= ? AS pinLocked
+           FROM seats s WHERE s.game_id = ? AND s.status != 'REMOVED'
+           ORDER BY s.display_name COLLATE NOCASE`,
         )
-        .bind(gameId)
-        .all<{ id: string; displayName: string; status: string }>(),
+        .bind(PIN_LOCKOUT_ATTEMPTS, gameId)
+        .all<{ id: string; displayName: string; status: string; pinLocked: number }>(),
     ]);
     const latestBackup = backups.results[0];
     const lastBackup = latestBackup ? { exportedAt: latestBackup.exportedAt, checksum: latestBackup.checksum } : null;
-    return Response.json({ ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, seats: seats.results, lastBackup, backups: backups.results, events: events.results });
+    return Response.json({ ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, seats: seats.results.map((seat) => ({ ...seat, pinLocked: Boolean(seat.pinLocked) })), lastBackup, backups: backups.results, events: events.results });
   } catch (error) {
     return routeError(error, 'Unable to load operational health.');
   }
@@ -359,6 +361,8 @@ export async function POST(request: Request, context: RouteContext) {
           )
           .bind(pinHash, now, seat.id, gameId, seat.sessionVersion),
         db.prepare(`DELETE FROM seat_sessions WHERE seat_id = ? AND ${pinResetGuard}`).bind(seat.id, seat.id, gameId, nextVersion, now),
+        // A new PIN unlocks a seat that was locked after too many wrong PINs.
+        db.prepare(`DELETE FROM rate_limit_buckets WHERE bucket_key = ? AND ${pinResetGuard}`).bind(pinFailureKey(seat.id), seat.id, gameId, nextVersion, now),
         db
           .prepare(
             `INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at)
