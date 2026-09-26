@@ -21,11 +21,11 @@ const ROLES = [
   { name: 'Villager', team: 'Village', text: 'No special power. Discuss, read the timeline, and vote wisely.' },
   { name: 'Werewolf', team: 'Werewolves', text: 'Each Night, vote with your pack on whom to attack. You know your packmates and share a private Pack room. You cannot attack another Werewolf.' },
   { name: 'Seer', team: 'Village', text: 'Each Night, investigate one living player. After the result is published, you privately learn their exact role.' },
-  { name: 'Bodyguard', team: 'Village', text: 'Each Night, protect one other living player from the pack. Protection does not stop a Day vote or a Hunter shot.' },
+  { name: 'Bodyguard', team: 'Village', text: 'Each Night, protect one other living player from the pack. Protection does not stop a Day vote or a Hunter shot. A save is never announced: the result simply says no one was eliminated. Only the moderator sees who was protected.' },
   { name: 'Hunter', team: 'Village', text: 'When you are eliminated, you get a short window to take one living player with you.' },
   { name: 'Mason', team: 'Village', text: 'You know the other Masons and share a private Mason room. There are always zero or at least two.' },
   { name: 'Apprentice Seer', team: 'Village', text: 'Waits while the Seer lives. After the Seer is eliminated, inherit their past results and investigate each Night.' },
-  { name: 'Mayor', team: 'Village', text: 'Your Day and Final ballot votes count twice.' },
+  { name: 'Mayor', team: 'Village', text: 'Your Day and Final ballot votes count twice. The published totals include your extra vote, so careful players may work out who you are.' },
   { name: 'Cupid', team: 'Village', text: 'Once, on a Night, link two living players as lovers (yourself included). If one is eliminated, so is the other, whatever their team.' },
 ] as const;
 
@@ -127,7 +127,7 @@ export default function GuidePage() {
             <thead><tr><th scope="col">Living players</th><th scope="col">Slots</th></tr></thead>
             <tbody>{SLOT_ROWS.map(([living, slots]) => <tr key={living}><td>{living}</td><td>{slots}</td></tr>)}</tbody>
           </table>
-          <p>The players with the most votes fill the slots. A tie for the last slot is settled by a recorded random draw. No votes means no elimination, and a Bodyguard’s protection can leave a slot empty.</p>
+          <p>The players with the most votes fill the slots. A tie for the last slot is settled by a recorded random draw. No votes means no elimination, and a Bodyguard’s protection can leave a slot empty. A protected player is not named: the result reads “No one was eliminated”, exactly as a quiet night does.</p>
           <h3>Final showdown</h3>
           <p>If no team has won by the organizer’s final cutoff, the moderator can start a Final showdown: repeated Final ballots, with no more Nights, until one team wins.</p>
         </section>
@@ -168,7 +168,7 @@ export default function GuidePage() {
           </ol>
           <Shot src="/guide/player-day-ballot.png" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself about every ten seconds." />
           <h3>4. Follow the story</h3>
-          <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page (the latest 100 updates), with each Day’s vote tally. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
+          <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page (the latest 100 updates), with each Day’s vote totals. The Mayor’s vote counts twice, so totals can be higher than the number of voters. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
           <Shot src="/guide/player-timeline.png" alt="Player dashboard showing the full Timeline of published results" caption="The full Timeline: each published result, who was eliminated and their role, and how everyone voted." />
           <h3>Good to know</h3>
           <ul>
