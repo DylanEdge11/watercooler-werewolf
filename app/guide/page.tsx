@@ -193,7 +193,7 @@ export default function GuidePage() {
           <p>Repeat this loop, starting with a Day and then alternating Night and Day:</p>
           <ol>
             <li><strong>Open.</strong> Choose the phase and a deadline, then select <strong>Open phase</strong>. Phases never open on their own.</li>
-            <li><strong>Collect.</strong> Watch the response count and nudge players in your group chat.</li>
+            <li><strong>Collect.</strong> <strong>Still to respond</strong> lists, for your eyes only, the living players who haven’t saved a response. Select <strong>Copy nudge message</strong> and paste it into your group chat. On a Day it names who hasn’t voted. At Night it names nobody, because the list would reveal who has a Night role.</li>
             <li><strong>Lock and calculate.</strong> At the deadline, select <strong>Lock responses &amp; calculate</strong>.</li>
             <li><strong>Hunter.</strong> If a Hunter is eliminated, they get the game’s Hunter window (8 hours by default) to shoot. Then select <strong>Finalize Hunter</strong>.</li>
             <li><strong>Review and publish.</strong> Check the tally and proposed outcome, then select <strong>Approve &amp; publish</strong>. Only publishing eliminates players, reveals roles, and checks for a winner.</li>
@@ -204,7 +204,8 @@ export default function GuidePage() {
           <p>The game completes as soon as a published result produces a winner. After the final cutoff, you can instead <strong>Enter final showdown</strong> and run Final ballots until someone wins. Afterwards, select <strong>Download JSON backup</strong> to keep a private record.</p>
           <h3>Moderator tools</h3>
           <ul>
-            <li><strong>Announcements</strong> appear in every player’s updates.</li>
+            <li><strong>Announcements</strong> appear in every player’s updates. <strong>Announcement copy</strong> then shows each one ready to paste into an email or a group chat, with <strong>Copy email</strong> and <strong>Copy for chat</strong>.</li>
+            <li><strong>Feedback</strong> lists the ratings and comments players and moderators send from the feedback card, with the average. It shows whether each came from a player or a moderator, never who.</li>
             <li><strong>Player access recovery</strong> sets a new PIN for a player who forgot theirs.</li>
             <li><strong>Private rooms</strong> can be made read-only, and individual messages removed with a reason.</li>
             <li><strong>Co-moderators</strong> can be added by the game owner.</li>

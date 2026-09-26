@@ -2,12 +2,31 @@ import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentModerator, getCurrentPlayer } from '../../../../../lib/auth/session';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { validatePilotFeedback } from '../../../../../lib/game/feedback';
+import { summarizeFeedback, validatePilotFeedback, type FeedbackEntry } from '../../../../../lib/game/feedback';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../../lib/http/rate-limit';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
+}
+
+/** Moderators read every rating and comment for their game. Entries never say which player sent them. */
+export async function GET(_request: Request, context: RouteContext) {
+  try {
+    await ensureDatabase();
+    const { gameId } = await context.params;
+    await requireGameModerator(gameId);
+    const rows = await getDb()
+      .prepare(
+        `SELECT rating, comment, respondent_type AS respondentType, created_at AS createdAt
+         FROM pilot_feedback WHERE game_id = ? ORDER BY created_at DESC`,
+      )
+      .bind(gameId)
+      .all<FeedbackEntry>();
+    return Response.json({ ok: true, feedback: summarizeFeedback(rows.results) });
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : 'Unable to load feedback.', 401);
+  }
 }
 
 export async function POST(request: Request, context: RouteContext) {

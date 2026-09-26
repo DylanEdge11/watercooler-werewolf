@@ -10,11 +10,17 @@ const shared = vi.hoisted(() => ({
   db: null as LibsqlDatabase | null,
   currentPlayer: null as { seatId: string } | null,
   ensureGameRooms: null as ((gameId: string) => Promise<void>) | null,
+  denyModerator: false,
 }));
 
 vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
-vi.mock('../lib/auth/authorization', () => ({ requireGameModerator: async () => ({ id: 'mod' }) }));
+vi.mock('../lib/auth/authorization', () => ({
+  requireGameModerator: async () => {
+    if (shared.denyModerator) throw new Error('Moderator authentication required.');
+    return { id: 'mod' };
+  },
+}));
 vi.mock('../lib/auth/session', () => ({
   createPlayerSession: async () => {},
   getCurrentPlayer: async () => shared.currentPlayer,
@@ -36,7 +42,8 @@ vi.mock('../lib/http/rate-limit', () => {
 });
 
 import { POST as claimPost } from '../app/api/seats/claim/[code]/route';
-import { POST as phasePost } from '../app/api/games/[gameId]/phases/route';
+import { GET as phaseGet, POST as phasePost } from '../app/api/games/[gameId]/phases/route';
+import { GET as feedbackGet } from '../app/api/games/[gameId]/feedback/route';
 import { GET as roomsGet } from '../app/api/games/[gameId]/rooms/route';
 import { POST as roomsPost } from '../app/api/games/[gameId]/rooms/route';
 import { GET as operationsGet } from '../app/api/games/[gameId]/operations/route';
@@ -118,6 +125,7 @@ beforeEach(async () => {
   shared.db = db;
   shared.currentPlayer = null;
   shared.ensureGameRooms = null;
+  shared.denyModerator = false;
 });
 
 afterEach(() => {
@@ -372,6 +380,53 @@ describe('real libSQL provider integration', () => {
     const lover = await (await playerGet(new Request('http://localhost:3000/api/player'))).json() as { timeline: Array<{ eventType: string; payload: { eliminations?: Array<{ displayName: string; isYou: boolean }> } }> };
     const loverDeaths = lover.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED')?.payload.eliminations ?? [];
     expect(loverDeaths.filter((item) => item.isYou).map((item) => item.displayName)).toEqual(['Player 1']);
+  });
+
+  test('moderators read feedback with ratings and an average, never who sent it', async () => {
+    await seedActiveGame();
+    await executeBatch([{
+      sql: `INSERT INTO pilot_feedback (id, game_id, respondent_type, rating, comment, created_at) VALUES
+        ('f1','game','PLAYER',5,'Loved it.','2026-02-01T10:00:00Z'),
+        ('f2','game','MODERATOR',2,NULL,'2026-02-02T10:00:00Z')`,
+    }]);
+    const context = { params: Promise.resolve({ gameId: 'game' }) };
+    const response = await feedbackGet(new Request('http://localhost:3000/api/games/game/feedback'), context);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { feedback: { count: number; average: number; entries: Array<Record<string, unknown>> } };
+    expect(body.feedback).toMatchObject({ count: 2, average: 3.5 });
+    expect(body.feedback.entries).toEqual([
+      { rating: 2, comment: null, respondentType: 'MODERATOR', createdAt: '2026-02-02T10:00:00Z' },
+      { rating: 5, comment: 'Loved it.', respondentType: 'PLAYER', createdAt: '2026-02-01T10:00:00Z' },
+    ]);
+
+    shared.denyModerator = true;
+    expect((await feedbackGet(new Request('http://localhost:3000/api/games/game/feedback'), context)).status).toBe(401);
+  });
+
+  test('the live panel lists who has not voted on a Day and who owes a Night action', async () => {
+    await seedActiveGame();
+    await executeBatch([
+      { sql: "UPDATE role_assignments SET role_key = 'SEER' WHERE seat_id = 'p0'" },
+      { sql: "UPDATE seats SET alive = 0 WHERE id = 'p19'" },
+      { sql: "INSERT INTO action_submissions (id,phase_id,actor_seat_id,kind,target_ids_json,version,submitted_at) SELECT 'v' || id, 'phase', id, 'DAY_VOTE', '[\"p1\"]', 1, '2026-01-01' FROM seats WHERE game_id = 'game' AND id NOT IN ('p3', 'p12', 'p19')" },
+    ]);
+    const context = { params: Promise.resolve({ gameId: 'game' }) };
+    type PhasesBody = { phases: Array<{ id: string; outstanding: Array<Record<string, unknown>> }> };
+    const day = await (await phaseGet(new Request('http://localhost:3000/api/games/game/phases'), context)).json() as PhasesBody;
+    expect(day.phases[0].outstanding).toEqual([{ id: 'p12', displayName: 'Player 12' }, { id: 'p3', displayName: 'Player 3' }]);
+
+    await executeBatch([
+      { sql: "UPDATE phases SET kind = 'NIGHT' WHERE id = 'phase'" },
+      { sql: "DELETE FROM action_submissions" },
+      { sql: "INSERT INTO action_submissions (id,phase_id,actor_seat_id,kind,target_ids_json,version,submitted_at) VALUES ('w17','phase','p17','WOLF_VOTE','[\"p2\"]',1,'2026-01-01')" },
+    ]);
+    const night = await (await phaseGet(new Request('http://localhost:3000/api/games/game/phases'), context)).json() as PhasesBody;
+    // Villagers have nothing to do at night; the dead wolf (p19) is not listed.
+    expect(night.phases[0].outstanding).toEqual([{ id: 'p0', displayName: 'Player 0' }, { id: 'p18', displayName: 'Player 18' }]);
+
+    await executeBatch([{ sql: "UPDATE phases SET status = 'PENDING_APPROVAL' WHERE id = 'phase'" }]);
+    const locked = await (await phaseGet(new Request('http://localhost:3000/api/games/game/phases'), context)).json() as PhasesBody;
+    expect(locked.phases[0].outstanding).toEqual([]);
   });
 
   test('keeps the Mayor hidden: the public ballot shows one line per voter and no weighted totals', async () => {

@@ -177,7 +177,7 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await click(page, page.getByRole('button', { name: 'Sign in', exact: true }), 1500);
   await expect(page.getByRole('heading', { name: gameName, exact: true })).toBeVisible({ timeout: 30_000 });
   await caption(page, 'Email invites sends each player their own private link');
-  await page.locator('.invite-email').evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  await page.locator('.invite-email:not(.roster-edit)').evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'smooth' }));
   await pause(page, 1500);
   await click(page, page.getByText('Waiting on 1 player', { exact: true }), 900);
   // Hover only: the capture server's email settings are placeholders.
