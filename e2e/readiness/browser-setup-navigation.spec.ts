@@ -36,9 +36,11 @@ test('keeps setup drafts scoped, supports safe restart, and exposes another game
   // A new game gives the Hunter eight hours; the divisors sit under a collapsed Advanced section with a slot preview.
   await expect(moderator.page.getByLabel('Hunter window (hours)')).toHaveValue('8');
   // New games use moderator review; automatic results are opt-in with a 60-minute window.
-  await expect(moderator.page.getByLabel('I review and publish each result')).toBeChecked();
-  await expect(moderator.page.getByLabel('Publish automatically after a review window')).not.toBeChecked();
-  await expect(moderator.page.getByLabel('Review window (minutes)')).toHaveValue('60');
+  // Scoped to the schedule's Results fieldset: the live panel has the same choice under "Change how results publish".
+  const results = moderator.page.getByRole('group', { name: 'Results', exact: true });
+  await expect(results.getByLabel('I review and publish each result')).toBeChecked();
+  await expect(results.getByLabel('Publish automatically after a review window')).not.toBeChecked();
+  await expect(results.getByLabel('Review window (minutes)')).toHaveValue('60');
   await moderator.page.getByLabel('Hunter window (hours)').fill('2');
   await expect(moderator.page.getByLabel('Players per Day elimination')).toBeHidden();
   await moderator.page.getByText('Advanced: eliminations per phase', { exact: true }).click();
