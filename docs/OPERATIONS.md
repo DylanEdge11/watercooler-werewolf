@@ -12,7 +12,7 @@ These controls are under **Communications & operations** in the moderator consol
 | Announcements, room moderation, backups | ✓ | |
 | Reset a player's PIN, sign out a player | ✓ | |
 | Stop the game | ✓ | |
-| Add co-moderators | | ✓ |
+| Add or remove co-moderators, transfer ownership | | ✓ |
 | Reset, restore, cancel setup | | ✓ |
 
 ## Quick reference
@@ -28,6 +28,8 @@ These controls are under **Communications & operations** in the moderator consol
 | Drop a no-show | **Import the roster** → **Waiting on N players** → **Remove** beside the player | Their link stops working and one Villager is removed. Only unclaimed players can be removed. Locked once roles are randomized. |
 | Re-send a lost invitation | **Import the roster** → **Waiting on N players** → **Resend** beside the player | The player gets a fresh link by email; their old link stops working. Needs [invite email](SETUP.md#invite-email). |
 | Add a helper | **Co-moderator access** → email and a 12+ character password → **Add co-moderator** | A new account shows one-time recovery codes; deliver access privately. An existing moderator keeps their password. |
+| Remove a helper | **Co-moderator access** → **Remove** beside them → confirm | They lose access to this game at once. Their account and any other games stay; you can add them again. |
+| Hand the game to someone else | **Co-moderator access** → **Make owner** beside a co-moderator → confirm | They become the owner and you stay on as a co-moderator. Only the owner can reset, restore, cancel setup, or manage moderators, so the new owner has to transfer it back. |
 | Player forgot their PIN, or their seat is locked | **Player access recovery** → player, new six-digit PIN, reason (5+ characters) → **Reset player PIN** | The player's old sessions are signed out and the seat unlocks. A seat locks after 10 wrong PINs in a row and is marked "locked" in the list. Deliver the PIN privately. |
 | Moderator forgot their password | Sign-in page → **Forgot password? Use a recovery code** → email, unused code, new password → **Recover access** | The code is used up and old sessions end. Without a code, contact the operator. There is no email reset. |
 | Moderate chat | **Private rooms** → **Make read-only** / **Reopen**, or **Remove** a message with a reason | Removal and purges blank the message in the game. |

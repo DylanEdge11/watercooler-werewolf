@@ -156,7 +156,7 @@
 }
 .backstage .secondary-button:hover:not(:disabled, .app-shell *) { box-shadow: 3px 3px 0 rgba(35, 29, 24, 0.4); }
 .backstage :is(.text-button, .quiet-link):not(.app-shell *) { color: var(--bs-go); font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; text-decoration: underline dotted; text-underline-offset: 3px; }
-.backstage :is(.room-health-list, .moderation-line) button { color: var(--bs-stop); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; }
+.backstage :is(.room-health-list, .moderation-line, .moderator-list) button { color: var(--bs-stop); font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; }
 
 /* ---------- Sign-in ---------- */
 
@@ -239,6 +239,8 @@
 .backstage .review-actions summary { font-family: var(--ll-font-type), monospace; font-size: 11px; font-weight: 400; }
 .backstage .override-grid button { background: #fffdf7; border: 1px solid var(--bs-rule); border-radius: 2px; font-size: 11px; }
 .backstage .override-grid button.selected { background: #f4d9d6; border-color: var(--bs-stop); color: var(--bs-stop); }
+.backstage .moderator-list .moderator-email { font-size: 13px; }
+.backstage .moderator-list small { font-family: var(--ll-font-type), monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
 .backstage .room-health-list span { font-family: var(--ll-font-type), monospace; font-size: 10px; font-weight: 400; letter-spacing: 0.08em; }
 .backstage .room-health-list strong { font-size: 11px; }
 .backstage .ops-inline-note { font-size: 11px; font-style: italic; }
