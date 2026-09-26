@@ -10,6 +10,7 @@ import { validateGameSetup, type GameSetupInput } from '../../../lib/game/game-s
 import { formatZonedDateTimeLocal } from '../../../lib/game/scheduling';
 import { assertSameOrigin } from '../../../lib/http/security';
 import { routeError } from '../../../lib/http/errors';
+import { respondJsonWithEtag } from '../../../lib/http/etag';
 
 interface CreateGameBody extends GameSettingsInput, GameSetupInput {
   publicationMode?: unknown;
@@ -72,7 +73,7 @@ export async function GET(request: Request) {
     const [roster, assignments] = selectedGame
       ? await Promise.all([loadRosterView(selectedGame.id), loadAssignmentsView(selectedGame.id)])
       : [null, null];
-    return Response.json({
+    return respondJsonWithEtag(request, {
       ok: true,
       needsBootstrap: false,
       selected: selectedGame && roster && assignments ? { gameId: selectedGame.id, roster, assignments } : null,

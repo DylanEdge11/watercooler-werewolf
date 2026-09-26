@@ -8,6 +8,8 @@ import AutomationControls, { type NextAutomaticStep } from './automation-control
 import CopyButton from './copy-button';
 import { formatZonedDateTimeLocal } from '../../lib/game/scheduling';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
+import { pollInterval } from '../../lib/http/poll-interval';
 
 interface Outcome {
   tally: Array<{ playerId: string; votes: number }>;
@@ -97,12 +99,22 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
   const [deadlineDraft, setDeadlineDraft] = useState<{ gameId: string; timeZone: string; value: string } | null>(null);
   const refreshSequence = useRef(0);
 
+  // The ETag of the phases on screen (lib/http/conditional-get.ts), and the open
+  // phase, which sets how often the panel refreshes (lib/http/poll-interval.ts).
+  const etag = useRef<string | null>(null);
+  const pacing = useRef<{ status: string; deadline: string | null } | null>(null);
+
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
-    const response = await fetch('/api/games/' + gameId + '/phases');
+    const response = await conditionalGet('/api/games/' + gameId + '/phases', etag.current);
+    // null: nothing changed since the phases on screen, so nothing re-renders.
+    if (!response) return;
     const data = await response.json() as { game?: GameState; phases?: Phase[]; roster?: RosterMember[]; nextAutomaticStep?: NextAutomaticStep | null; error?: string };
     if (!response.ok) throw new Error(data.error ?? 'Unable to load the live game.');
     if (sequence !== refreshSequence.current) return;
+    etag.current = responseEtag(response);
+    const open = data.phases?.find((phase) => phase.status === 'OPEN');
+    pacing.current = open ? { status: open.status, deadline: open.closesAt } : null;
     setPhases(data.phases ?? []);
     setRoster(data.roster ?? []);
     setGame(data.game ?? null);
@@ -115,7 +127,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
     }, 0);
     const stopPolling = pollWhileVisible(() => {
       void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh phases.'));
-    }, 10_000);
+    }, () => pollInterval(pacing.current));
     return () => {
       window.clearTimeout(timer);
       stopPolling();

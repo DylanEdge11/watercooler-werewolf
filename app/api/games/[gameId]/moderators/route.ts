@@ -6,12 +6,13 @@ import { assertSameOrigin } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { changes } from '../../../../../db/results';
 import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
+import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { gameId } = await context.params;
@@ -24,7 +25,7 @@ export async function GET(_request: Request, context: RouteContext) {
       )
       .bind(gameId)
       .all();
-    return Response.json({ ok: true, moderators: rows.results });
+    return respondJsonWithEtag(request, { ok: true, moderators: rows.results });
   } catch (error) {
     return routeError(error, 'Unable to load moderators.');
   }

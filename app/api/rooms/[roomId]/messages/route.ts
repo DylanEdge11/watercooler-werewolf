@@ -5,6 +5,7 @@ import { normalizeChatBody } from '../../../../../lib/chat/rooms';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
+import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 
 interface RouteContext {
   params: Promise<{ roomId: string }>;
@@ -25,7 +26,7 @@ async function requireRoomAccess(roomId: string) {
   return { identity, room };
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { roomId } = await context.params;
@@ -41,7 +42,7 @@ export async function GET(_request: Request, context: RouteContext) {
       )
       .bind(roomId)
       .all();
-    return Response.json({ ok: true, room, messages: messages.results });
+    return respondJsonWithEtag(request, { ok: true, room, messages: messages.results });
   } catch (error) {
     return routeError(error, 'Unable to load this room.');
   }
