@@ -10,7 +10,12 @@
  */
 export async function conditionalGet(url: string, etag: string | null, fetcher: typeof fetch = fetch): Promise<Response | null> {
   const response = await fetcher(url, { cache: 'no-store', headers: etag ? { 'if-none-match': etag } : undefined });
-  return response.status === 304 ? null : response;
+  if (response.status !== 304) return response;
+  // Read the empty body: Chromium reports a response whose body is never read
+  // as a cancelled request (net::ERR_ABORTED), which the browser suites count
+  // as a failure and which looks like one in the browser's network panel.
+  await response.arrayBuffer();
+  return null;
 }
 
 /** The tag to send next time, or null when the response can't be reused. */
