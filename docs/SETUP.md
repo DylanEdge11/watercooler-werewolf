@@ -25,7 +25,7 @@ Local development (`npm run dev` with a `file:` database) is the only mode where
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `TURSO_DATABASE_URL` | Yes | libSQL URL. Use `file:./work/watercooler.db` locally; deployed functions refuse `file:` URLs. |
+| `TURSO_DATABASE_URL` | Yes | libSQL URL. Use `file:./work/watercooler.db` locally; deployed functions refuse `file:` URLs and reach Turso over HTTP with the libSQL web client, so they don't ship the native SQLite binary. |
 | `TURSO_AUTH_TOKEN` | Remote only | Token scoped to that one database. |
 | `SITE_ORIGIN` | Recommended | Exact origin players use, such as `https://watercooler-werewolf.vercel.app`, with no path. Browser writes from any other origin are rejected. If unset, each request's own origin is used, which still blocks other sites; set it in Production so writes through any other hostname are refused. Claim links always use the address the moderator is on. |
 | `WATERCOOLER_OWNER_EMAIL` | For bootstrap | Email for the first moderator account. |
