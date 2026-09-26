@@ -7,6 +7,7 @@ import GameSettingsFields from './game-settings-fields';
 import { useRouter } from 'next/navigation';
 import LiveGamePanel from './live-game-panel';
 import OperationsPanel from './operations-panel';
+import RecapPanel from './recap-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
@@ -740,6 +741,7 @@ export default function ModeratorPage() {
                 </section>
               )}
               {latestBatch?.releasedAt && <LiveGamePanel key={`live-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} onChanged={handleLiveChange} />}
+              {selectedGame?.status === 'COMPLETED' && <RecapPanel key={`recap-${gameId}`} gameId={gameId} />}
               <OperationsPanel key={`operations-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} onGameChanged={handleLiveChange} />
             </>
           )}

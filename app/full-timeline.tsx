@@ -38,7 +38,12 @@ export default function FullTimeline({ events: unordered, hasMore = false, onBac
                 <summary>{votes.length} {votes.length === 1 ? 'vote' : 'votes'}{tally.length ? ` · ${tally.map((item) => `${item.name} ${item.count}`).join(', ')}` : ''}</summary>
                 <div className="vote-ledger">{votes.map((vote, index) => <div className="vote-ledger-row" key={`${event.id}-${vote.actorName}-${index}`}><strong>{vote.actorName}</strong><span aria-hidden="true">→</span><span>{vote.targetNames.length ? vote.targetNames.join(', ') : 'No target recorded'}</span></div>)}</div>
               </details> : <p className="empty-note">No public votes were recorded.</p>)}
-            </> : view.description && <p>{view.description}</p>}
+            </> : <>
+              {view.description && <p>{view.description}</p>}
+              {event.payload.finalRoster?.length ? <ul className="timeline-final-roster" aria-label="Final roster">
+                {[...event.payload.finalRoster].sort((a, b) => Number(b.survived) - Number(a.survived) || a.displayName.localeCompare(b.displayName)).map((seat) => <li key={seat.displayName} className={seat.survived ? 'survived' : ''}><strong>{seat.displayName}</strong><span>{readableRole(seat.role)} · {seat.survived ? 'survived' : 'eliminated'}</span></li>)}
+              </ul> : null}
+            </>}
           </li>;
         })}
       </ol> : <section className="ballot-card waiting-card"><span className="waiting-icon" aria-hidden="true">≋</span><div><h2>Nothing published yet</h2><p>Results appear here after the moderator publishes each Day and Night.</p></div></section>}

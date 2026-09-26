@@ -380,7 +380,7 @@ test.describe('browser player-readiness scenarios', () => {
       await expect(mobile.page.getByRole('button', { name: 'Save response', exact: true })).toHaveCount(0);
       await game.publish(phase.phaseId);
       await refreshPlayers(game);
-      await expect(mobile.page.getByRole('heading', { name: /The village is between phases\.|The village is voting\.|Night has fallen\.|The campaign is complete\./u })).toBeVisible();
+      await expect(mobile.page.getByRole('heading', { name: /The village is between phases\.|The village is voting\.|Night has fallen\.|The campaign is complete\.|The Village wins|The Werewolves win/u })).toBeVisible();
       await game.assertHealthy();
     } finally {
       await game.dispose();

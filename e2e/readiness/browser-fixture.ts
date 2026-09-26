@@ -72,6 +72,7 @@ export interface PlayerDashboard {
     name: string;
     status: string;
     counts: { total: number; living: number; werewolvesRemaining: number };
+    livingPlayers: Array<Record<string, unknown>>;
   };
   phase: null | {
     id: string;
@@ -389,7 +390,8 @@ export class BrowserPlayer {
   }
 
   async waitForDashboard(): Promise<void> {
-    await expect(this.page.getByText('Your private role', { exact: true })).toBeVisible({ timeout: 30_000 });
+    // A completed game may open the Final curtain in place of Today the first time.
+    await expect(this.page.getByText('Your private role', { exact: true }).or(this.page.locator('#final-curtain'))).toBeVisible({ timeout: 30_000 });
   }
 
   async reload(): Promise<PlayerDashboard> {
@@ -462,9 +464,14 @@ export class BrowserPlayer {
   }
 
   async expectCompleted(): Promise<void> {
+    // The Final curtain opens by itself the first time a player sees the completed game.
+    const curtain = this.page.locator('#final-curtain');
+    await expect(curtain.getByRole('heading', { level: 1, name: /^The (Village wins|Werewolves win)$/u })).toBeVisible({ timeout: 30_000 });
+    await expect(curtain.locator('.curtain-cast li').filter({ hasText: this.account.displayName })).toContainText(ROLE_NAMES[this.account.role]);
+    await curtain.getByRole('button', { name: 'Back to today', exact: true }).click();
     await expect(this.page.getByRole('heading', { name: 'The campaign is complete.', exact: true })).toBeVisible();
     await expect(this.page.getByRole('button', { name: 'Save response', exact: true })).toHaveCount(0);
-    await expect(this.page.getByText('This campaign is complete.', { exact: false })).toBeVisible();
+    await expect(this.page.getByText('This campaign is complete and every role is revealed.', { exact: false })).toBeVisible();
   }
 
   async expectReadOnly(): Promise<void> {
@@ -726,6 +733,11 @@ export class BrowserGame {
       ownSubmission: Boolean(dashboard.currentAction),
     }));
     if (dashboard.permission.actionKind === 'WOLF_VOTE') expect(dashboard.player.role).toBe('WEREWOLF');
+    // Living players' roles become public only when the game is COMPLETED; a stopped game reveals nothing.
+    if (dashboard.game.status !== 'COMPLETED') {
+      expect(dashboard.game.livingPlayers.every((seat) => Object.keys(seat).sort().join(',') === 'displayName,id')).toBe(true);
+      expect(dashboard.timeline.some((event) => 'finalRoster' in event.payload && event.payload.finalRoster !== undefined)).toBe(false);
+    }
     const rendered = await player.page.locator('body').innerText();
     expect(rendered).not.toContain('Proposed outcome');
     expect(rendered).not.toContain('Vote tally');

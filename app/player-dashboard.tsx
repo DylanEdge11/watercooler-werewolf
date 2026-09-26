@@ -8,6 +8,8 @@ import PrivateRoomChat from './private-room-chat';
 import FullTimeline from './full-timeline';
 import RoleMedallion from './role-medallion';
 import DeathCurtainCall from './death-curtain-call';
+import FinalCurtain from './final-curtain';
+import type { GameRecap } from '../lib/game/recap';
 import BrandMark from './brand-mark';
 import { pollWhileVisible } from '../lib/http/poll-while-visible';
 import { describeTimelineEvent, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
@@ -30,7 +32,8 @@ export interface DashboardData {
     status: string;
     timezone: string;
     counts: { total: number; living: number; werewolvesRemaining: number };
-    livingPlayers: Array<{ id: string; displayName: string }>;
+    /** Roles appear here only once the game is COMPLETED. */
+    livingPlayers: Array<{ id: string; displayName: string; role?: RoleKey }>;
     eliminatedPlayers: Array<{ id: string; displayName: string; role: RoleKey | null }>;
     stopReason?: string | null;
   };
@@ -56,6 +59,8 @@ export interface DashboardData {
 
 interface PlayerDashboardProps {
   previewData?: DashboardData;
+  /** Player View Studio only: a sample recap for the completed scenario. */
+  previewRecap?: GameRecap;
   previewMode?: boolean;
   onExitPreview?: () => void;
 }
@@ -83,6 +88,12 @@ function deathAlertKey(gameId: string, playerId: string): string {
   return `werewolf:v1:death-alert:${gameId}:${playerId}`;
 }
 
+function finalCurtainKey(gameId: string, playerId: string): string {
+  return `werewolf:v1:final-curtain-seen:${gameId}:${playerId}`;
+}
+
+type DashboardView = 'today' | 'timeline' | 'curtain';
+
 // Only needed when a stored session has expired, so signed-in players never download it.
 const LandingShell = dynamic(() => import('./landing/landing-shell'));
 
@@ -90,7 +101,7 @@ function PublicWelcome() {
   return <LandingShell />;
 }
 
-export default function PlayerDashboard({ previewData, previewMode = false, onExitPreview }: PlayerDashboardProps) {
+export default function PlayerDashboard({ previewData, previewRecap, previewMode = false, onExitPreview }: PlayerDashboardProps) {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(() => previewMode ? previewData ?? null : null);
   const [loading, setLoading] = useState(!previewMode);
@@ -104,7 +115,9 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
   const [roleHidden, setRoleHidden] = useState(false);
-  const [view, setView] = useState<'today' | 'timeline'>('today');
+  const [view, setView] = useState<DashboardView>('today');
+  const [loadedRecap, setLoadedRecap] = useState<{ completionId: string; recap: GameRecap } | null>(null);
+  const [recapError, setRecapError] = useState('');
   const [roleJustRevealed, setRoleJustRevealed] = useState(false);
   const [deathAlert, setDeathAlert] = useState<DashboardData['timeline'][number] | null>(null);
   const [selectedTimeline, setSelectedTimeline] = useState<DashboardData['timeline'][number] | null>(null);
@@ -211,6 +224,38 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     };
   }, [previewMode, refresh]);
 
+  // The Final curtain loads once the game is COMPLETED and opens by itself the first time.
+  const completedGameId = data?.game.status === 'COMPLETED' ? data.game.id : null;
+  const readerId = data?.player.id ?? null;
+  // Keyed by the completion itself, so a game that is reset and finished again opens the curtain again.
+  const completionId = data?.timeline.find((event) => event.eventType === 'GAME_COMPLETED')?.id ?? 'completed';
+  // A recap belongs to one completion; after a reset or restore it no longer applies.
+  const recap = previewMode
+    ? previewRecap ?? null
+    : completedGameId && loadedRecap?.completionId === completionId ? loadedRecap.recap : null;
+  useEffect(() => {
+    if (previewMode || !completedGameId || !readerId || recap) return;
+    let cancelled = false;
+    void fetch('/api/player/recap')
+      .then(async (response) => {
+        const body = await response.json() as { recap?: GameRecap; error?: string };
+        if (!response.ok || !body.recap) throw new Error(body.error ?? 'Unable to load the recap.');
+        if (cancelled) return;
+        setLoadedRecap({ completionId, recap: body.recap });
+        setRecapError('');
+        let seen = false;
+        try {
+          seen = window.localStorage.getItem(finalCurtainKey(completedGameId, readerId)) === completionId;
+          window.localStorage.setItem(finalCurtainKey(completedGameId, readerId), completionId);
+        } catch {
+          seen = false;
+        }
+        if (!seen) setView('curtain');
+      })
+      .catch((caught) => { if (!cancelled) setRecapError(caught instanceof Error ? caught.message : 'Unable to load the recap.'); });
+    return () => { cancelled = true; };
+  }, [previewMode, completedGameId, readerId, completionId, recap]);
+
   useEffect(() => {
     if (!activeModal) return;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -308,7 +353,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     router.push('/');
   }
 
-  function showView(next: 'today' | 'timeline') {
+  function showView(next: DashboardView) {
     setView(next);
     document.getElementById('top')?.scrollIntoView({ block: 'start' });
   }
@@ -409,6 +454,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           {data.player.teammates.length > 0 && <a href="#team">Teammates</a>}
           {data.rooms.length > 0 && <a href="#private-room">Private room</a>}
           <button type="button" aria-pressed={view === 'timeline'} onClick={() => showView('timeline')}>Timeline</button>
+          {data.game.status === 'COMPLETED' && <button type="button" aria-pressed={view === 'curtain'} onClick={() => showView('curtain')}>Final curtain</button>}
           {data.notifications.length > 0 && <a href="#notifications">Updates</a>}
           <a href="#feedback">Feedback</a>
         </nav>
@@ -417,6 +463,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           <nav>
             <button className={`nav-item${view === 'today' ? ' active' : ''}`} type="button" aria-current={view === 'today' ? 'page' : undefined} onClick={() => showView('today')}><span aria-hidden="true">◐</span>Today</button>
             <button className={`nav-item${view === 'timeline' ? ' active' : ''}`} type="button" aria-current={view === 'timeline' ? 'page' : undefined} onClick={() => showView('timeline')}><span aria-hidden="true">≋</span>Timeline</button>
+            {data.game.status === 'COMPLETED' && <button className={`nav-item${view === 'curtain' ? ' active' : ''}`} type="button" aria-current={view === 'curtain' ? 'page' : undefined} onClick={() => showView('curtain')}><span aria-hidden="true">✦</span>Final curtain</button>}
             {data.rooms.length > 0 && <a className="nav-item" href="#private-room"><span aria-hidden="true">◆</span>Private room</a>}
           </nav>
           <div className="sidebar-rule" />
@@ -425,7 +472,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           <details className="stat-details">
             <summary className="mini-stat stat-trigger"><span>Living</span><strong>{data.game.counts.living}</strong></summary>
             <div className="stat-popover" aria-label="Living players">
-              {data.game.livingPlayers.length ? data.game.livingPlayers.map((player) => <div className="stat-player" key={player.id}><span className="candidate-avatar small">{initials(player.displayName)}</span><strong>{player.displayName}</strong></div>) : <p className="empty-note">No living players.</p>}
+              {data.game.livingPlayers.length ? data.game.livingPlayers.map((player) => <div className="stat-player" key={player.id}><span className="candidate-avatar small">{initials(player.displayName)}</span>{player.role ? <span><strong>{player.displayName}</strong><small>{readableRole(player.role)}</small></span> : <strong>{player.displayName}</strong>}</div>) : <p className="empty-note">No living players.</p>}
             </div>
           </details>
           <details className="stat-details">
@@ -435,10 +482,10 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
             </div>
           </details>
           <div className="mini-stat wolf-stat"><span>Werewolves left</span><strong>{data.game.counts.werewolvesRemaining}</strong></div>
-          <div className="sidebar-note"><span aria-hidden="true">☾</span><p><strong>Keep it quiet.</strong>Your role is private until you are eliminated.</p></div>
+          <div className="sidebar-note"><span aria-hidden="true">☾</span><p>{data.game.status === 'COMPLETED' ? <><strong>Curtain down.</strong>Every role is now revealed.</> : <><strong>Keep it quiet.</strong>Your role is private until you are eliminated.</>}</p></div>
         </aside>
 
-        {view === 'timeline' ? <FullTimeline events={data.timeline} hasMore={Boolean(data.timelineHasMore)} onBack={() => showView('today')} /> : <section className="main-column" id="today">
+        {view === 'curtain' && data.game.status === 'COMPLETED' ? <FinalCurtain recap={recap} error={recapError || undefined} onBack={() => showView('today')} /> : view === 'timeline' ? <FullTimeline events={data.timeline} hasMore={Boolean(data.timelineHasMore)} onBack={() => showView('today')} /> : <section className="main-column" id="today">
           <div className="welcome-row">
             <div><p className="eyebrow accent">{data.phase ? `${data.phase.kind.replaceAll('_', ' ')} · Cycle ${data.phase.sequence}` : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{data.permission.label}</p></div>
             <div className="deadline-card"><span>Response window</span><strong>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : deadlineLabel(data.phase?.deadline ?? null)}</strong><small>{data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>
@@ -471,7 +518,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
               <div className="ballot-footer"><p><span>●</span> {previewMode ? 'This response is staged locally for the preview.' : 'Your latest revision counts when the phase locks.'}</p><button className="primary-button" type="button" onClick={submitAction} disabled={submitting || selected.length === 0 || (data.permission.actionKind === 'CUPID_PAIR' && selected.length !== 2)}>{submitting ? 'Saving…' : previewMode ? 'Stage response' : 'Save response'}</button></div>
             </section>
           ) : (
-            <section className="ballot-card waiting-card"><span className="waiting-icon" aria-hidden="true">◐</span><div><h2>{data.permission.label}</h2><p>{data.game.status === 'COMPLETED' ? 'This campaign is complete. Review the official timeline and your private result history below.' : data.player.alive ? 'You can step away. This page will show the next official action when it opens.' : 'Published outcomes and game announcements will continue to appear here.'}</p></div><button className="secondary-button" type="button" onClick={() => previewMode ? setMessage('This staged sample does not refresh from a live game.') : void refresh()}>{previewMode ? 'Preview mode' : 'Check for updates'}</button></section>
+            <section className="ballot-card waiting-card"><span className="waiting-icon" aria-hidden="true">◐</span><div><h2>{data.permission.label}</h2><p>{data.game.status === 'COMPLETED' ? 'This campaign is complete and every role is revealed. Open the Final curtain for the whole story.' : data.player.alive ? 'You can step away. This page will show the next official action when it opens.' : 'Published outcomes and game announcements will continue to appear here.'}</p></div><button className="secondary-button" type="button" onClick={() => previewMode ? setMessage('This staged sample does not refresh from a live game.') : void refresh()}>{previewMode ? 'Preview mode' : 'Check for updates'}</button></section>
           )}
         </section>}
 

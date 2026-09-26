@@ -7,12 +7,13 @@ import { ROLE_KEYS, type RoleKey } from '../../../lib/game/types';
 import PlayerDashboard from '../../player-dashboard';
 import DeathCurtainCall from '../../death-curtain-call';
 import BrandMark from '../../brand-mark';
-import { createPreviewData, createPreviewElimination, PREVIEW_ELIMINATIONS, PREVIEW_SCENARIOS, type PreviewEliminationId, type PreviewScenarioId } from './scenarios';
+import { createPreviewData, createPreviewElimination, createPreviewRecap, PREVIEW_ELIMINATIONS, PREVIEW_SCENARIOS, type PreviewEliminationId, type PreviewScenarioId } from './scenarios';
 
 export default function PlayerViewStudio() {
   const [role, setRole] = useState<RoleKey>('SEER');
   const [scenario, setScenario] = useState<PreviewScenarioId>('night-action');
   const previewData = useMemo(() => createPreviewData(role, scenario), [role, scenario]);
+  const previewRecap = useMemo(() => scenario === 'completed' ? createPreviewRecap(role) : undefined, [role, scenario]);
   const [scene, setScene] = useState<PreviewEliminationId>('night-attack');
   // Counts plays, so replaying the same scene restarts it.
   const [scenePlay, setScenePlay] = useState(0);
@@ -74,6 +75,7 @@ export default function PlayerViewStudio() {
       <PlayerDashboard
         key={`${role}-${scenario}`}
         previewData={previewData}
+        previewRecap={previewRecap}
         previewMode
         onExitPreview={scrollToControls}
       />

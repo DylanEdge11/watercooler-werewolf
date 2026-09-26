@@ -3,6 +3,7 @@ import { permissionForRole } from '../../../lib/game/actions';
 import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import type { DashboardData } from '../../player-dashboard';
 import type { RoleKey } from '../../../lib/game/types';
+import { buildRecap, type GameRecap } from '../../../lib/game/recap';
 
 export const PREVIEW_SCENARIOS = [
   { id: 'day-ballot', label: 'Day ballot' },
@@ -157,7 +158,8 @@ export function createPreviewData(roleKey: RoleKey, scenario: PreviewScenarioId)
         living: isUnreleased ? candidates.length + 1 : isEliminated ? 14 : 15,
         werewolvesRemaining: isUnreleased ? 0 : 3,
       },
-      livingPlayers: livingPlayers.map(({ id, displayName }) => ({ id, displayName })),
+      // A completed game reveals every living player's role, as the real dashboard does.
+      livingPlayers: livingPlayers.map(({ id, displayName }) => (scenario === 'completed' ? { id, displayName, role: id === 'preview-player' ? roleKey : 'VILLAGER' as RoleKey } : { id, displayName })),
       eliminatedPlayers: isUnreleased ? [] : [
         { id: 'preview-eliminated-jordan', displayName: 'Jordan Blake', role: 'WEREWOLF' },
         { id: 'preview-eliminated-riley', displayName: 'Riley Chen', role: 'VILLAGER' },
@@ -211,4 +213,32 @@ export function createPreviewElimination(scene: PreviewEliminationId, roleKey: R
     createdAt: new Date().toISOString(),
     payload: { kind: night ? 'NIGHT' : 'DAY', sequence: 4, eliminations },
   };
+}
+
+/** A synthetic recap for the "Campaign completed" scenario. The viewer plays the chosen role. */
+export function createPreviewRecap(roleKey: RoleKey): GameRecap {
+  return buildRecap({
+    winner: 'VILLAGE',
+    roster: [
+      { id: 'preview-player', displayName: 'Alex Morgan', role: roleKey, alive: true },
+      { id: 'preview-casey', displayName: 'Casey Rivera', role: roleKey === 'SEER' ? 'VILLAGER' : 'SEER', alive: true },
+      { id: 'preview-riley', displayName: 'Riley Chen', role: roleKey === 'BODYGUARD' ? 'VILLAGER' : 'BODYGUARD', alive: true },
+      { id: 'preview-jordan', displayName: 'Jordan Blake', role: 'WEREWOLF', alive: false },
+      { id: 'preview-morgan', displayName: 'Morgan Lee', role: roleKey === 'WEREWOLF' ? 'VILLAGER' : 'WEREWOLF', alive: false },
+      { id: 'preview-taylor', displayName: 'Taylor Reed', role: 'VILLAGER', alive: false },
+    ],
+    phases: [
+      { phaseId: 'preview-d1', sequence: 1, kind: 'DAY', payload: { publishedOutcome: { tally: [{ playerId: 'preview-jordan', votes: 4 }, { playerId: 'preview-taylor', votes: 2 }], selectedTargets: ['preview-jordan'], eliminations: [{ playerId: 'preview-jordan', cause: 'DAY_VOTE' }] } } },
+      { phaseId: 'preview-n2', sequence: 2, kind: 'NIGHT', payload: { publishedOutcome: { selectedTargets: ['preview-casey'], protectedPlayerIds: ['preview-casey'], investigations: [{ seerId: 'preview-casey', targetId: 'preview-morgan', role: 'WEREWOLF' }] } } },
+      { phaseId: 'preview-d3', sequence: 3, kind: 'DAY', payload: { publishedOutcome: { tally: [{ playerId: 'preview-taylor', votes: 2 }, { playerId: 'preview-morgan', votes: 2 }], selectedTargets: ['preview-taylor'], eliminations: [{ playerId: 'preview-taylor', cause: 'DAY_VOTE' }], randomDraws: [{ kind: 'BOUNDARY_TIE', candidates: ['preview-morgan', 'preview-taylor'], selected: ['preview-taylor'], rolls: [0.8] }] } } },
+      { phaseId: 'preview-d5', sequence: 5, kind: 'DAY', payload: { publishedOutcome: { tally: [{ playerId: 'preview-morgan', votes: 3 }], selectedTargets: ['preview-morgan'], eliminations: [{ playerId: 'preview-morgan', cause: 'DAY_VOTE' }] } } },
+    ],
+    pairings: [],
+    ballots: [
+      { phaseId: 'preview-d1', actorId: 'preview-player', targetIds: ['preview-jordan'] },
+      { phaseId: 'preview-d1', actorId: 'preview-casey', targetIds: ['preview-jordan'] },
+      { phaseId: 'preview-d3', actorId: 'preview-morgan', targetIds: ['preview-taylor'] },
+      { phaseId: 'preview-d5', actorId: 'preview-player', targetIds: ['preview-morgan'] },
+    ],
+  });
 }

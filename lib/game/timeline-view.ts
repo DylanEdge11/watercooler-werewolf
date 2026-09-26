@@ -16,6 +16,8 @@ export interface PublicTimelineEvent {
     winner?: string | null;
     eliminations?: Array<{ displayName: string; role: string; cause: string; isYou?: boolean }>;
     votes?: Array<{ actorName: string; targetNames: string[] }>;
+    /** GAME_COMPLETED only: every player's role and whether they survived. */
+    finalRoster?: Array<{ displayName: string; role: string | null; survived: boolean }>;
     protectedAttackBlocked?: boolean;
   };
 }
@@ -71,7 +73,7 @@ export function describeTimelineEvent(event: PublicTimelineEvent): TimelineEntry
     return {
       eyebrow: 'Campaign complete',
       title: winner,
-      description: 'The campaign is complete. Review the official timeline and your private results.',
+      description: 'The campaign is complete and every role is revealed. Open the Final curtain for the whole story.',
       headline: winner,
       tone: 'milestone',
       publicBallot: false,

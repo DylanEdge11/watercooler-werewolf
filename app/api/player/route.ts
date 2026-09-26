@@ -106,7 +106,15 @@ export async function GET(request: Request) {
     if (player.gameStatus === 'STOPPED') {
       permission = { actionKind: null, maxTargets: 0, label: 'This game has been stopped by a moderator.' };
     }
-    const livingPlayers = roster.filter((seat) => seat.alive).map(({ id, displayName }) => ({ id, displayName }));
+    // The curtain call: once the game is COMPLETED every role is public. Before that, a living
+    // player's role never leaves the server. Stopped games get no reveal.
+    const revealAll = player.gameStatus === 'COMPLETED';
+    const livingPlayers = roster
+      .filter((seat) => seat.alive)
+      .map(({ id, displayName, role }) => (revealAll ? { id, displayName, role } : { id, displayName }));
+    const finalRoster = revealAll
+      ? roster.map(({ displayName, role, alive }) => ({ displayName, role, survived: alive }))
+      : undefined;
     const eliminatedPlayers = roster
       .filter((seat) => !seat.alive)
       .map(({ id, displayName, role }) => ({ id, displayName, role }));
@@ -310,7 +318,7 @@ export async function GET(request: Request) {
           id: event.id,
           eventType: event.eventType,
           createdAt: event.createdAt,
-          payload: { winner: payload.winner ?? null },
+          payload: { winner: payload.winner ?? null, finalRoster },
         };
       }
       if (event.eventType === 'ANNOUNCEMENT') {

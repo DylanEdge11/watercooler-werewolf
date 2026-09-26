@@ -56,6 +56,10 @@ describe('timeline wording', () => {
     expect(describeTimelineEvent(event(type, payload))).toMatchObject({ eyebrow, headline, tone, publicBallot: false });
   });
 
+  it('says every role is revealed when the campaign completes', () => {
+    expect(describeTimelineEvent(event('GAME_COMPLETED', { winner: 'VILLAGE' })).description).toBe('The campaign is complete and every role is revealed. Open the Final curtain for the whole story.');
+  });
+
   it('names the winner the same way in the rail and the full Timeline', () => {
     const view = describeTimelineEvent(event('GAME_COMPLETED', { winner: 'WEREWOLF' }));
     expect(view.title).toBe('Werewolf wins');

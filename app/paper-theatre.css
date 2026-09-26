@@ -805,6 +805,34 @@
 .app-shell .timeline-eliminations { display: grid; gap: 6px; list-style: none; margin: 0 0 12px; padding: 0; }
 .app-shell .timeline-eliminations li { align-items: baseline; border-left: 3px solid var(--pt-curtain); display: flex; flex-wrap: wrap; gap: 2px 10px; padding-left: 10px; }
 .app-shell .timeline-eliminations span { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 12px; }
+/* The final curtain: every role revealed as a playbill, then the moments and the story. */
+.app-shell .final-curtain { display: grid; gap: 22px; }
+.app-shell .curtain-block { background: var(--pt-paper); border: 1px solid var(--pt-paper-edge); border-radius: 3px; box-shadow: var(--pt-shadow); color: var(--pt-ink); padding: 20px 24px; }
+.app-shell .curtain-block h2 { font-family: var(--ll-font-display), Georgia, serif; font-size: 24px; font-style: italic; font-weight: 700; margin: 0 0 14px; }
+.app-shell .curtain-cast { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); list-style: none; margin: 0; padding: 0; }
+.app-shell .curtain-cast li { align-items: center; border: 1px solid var(--pt-paper-edge); border-radius: 3px; display: grid; gap: 10px; grid-template-columns: 52px 1fr; padding: 10px; }
+.app-shell .curtain-cast li:not(.survived) { filter: grayscale(0.45) sepia(0.15); }
+.app-shell .curtain-cast li.wolf { border-left: 4px solid var(--pt-curtain); }
+.app-shell .curtain-cast li.survived { background: color-mix(in srgb, var(--pt-gold-soft) 22%, var(--pt-paper)); }
+.app-shell .curtain-medallion { align-items: center; background: var(--pt-gel); border: 2px solid var(--pt-ink); border-radius: 50%; display: flex; height: 52px; justify-content: center; width: 52px; }
+.app-shell .curtain-cast-copy { display: grid; gap: 1px; min-width: 0; }
+.app-shell .curtain-cast-copy strong { font-size: 15px; overflow-wrap: anywhere; }
+.app-shell .curtain-role { font-family: var(--ll-font-type), monospace; font-size: 12px; }
+.app-shell .curtain-cast-copy small { color: var(--pt-ink-soft); font-size: 12px; }
+.app-shell .curtain-moments { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); list-style: none; margin: 0; padding: 0; }
+.app-shell .curtain-moments li { background: var(--pt-note); border-radius: 2px; box-shadow: var(--pt-shadow); padding: 12px 14px; transform: rotate(-0.4deg); }
+.app-shell .curtain-moments li:nth-child(even) { transform: rotate(0.5deg); }
+.app-shell .curtain-moments .eyebrow { color: var(--pt-curtain-deep); margin: 0 0 4px; }
+.app-shell .curtain-moments p:last-child { font-size: 14px; margin: 0; }
+.app-shell .curtain-cycles { display: grid; gap: 14px; list-style: none; margin: 0; padding: 0; }
+.app-shell .curtain-cycles > li { border-left: 3px solid var(--pt-gold); padding-left: 12px; }
+.app-shell .curtain-cycles > li.night { border-left-color: var(--pt-valance); }
+.app-shell .curtain-cycles .eyebrow { color: var(--pt-ink-soft); margin: 0 0 4px; }
+.app-shell .curtain-cycles ul { display: grid; gap: 3px; margin: 0; padding-left: 18px; }
+.app-shell .curtain-cycles ul li { font-size: 14px; }
+.app-shell .timeline-final-roster { display: grid; gap: 4px 16px; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); list-style: none; margin: 8px 0 0; padding: 0; }
+.app-shell .timeline-final-roster li { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+.app-shell .timeline-final-roster span { color: var(--pt-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 12px; }
 .app-shell .timeline-votes summary { cursor: pointer; font-family: var(--ll-font-type), monospace; font-size: 12px; overflow-wrap: anywhere; }
 .app-shell .timeline-votes .vote-ledger { border: 1px solid var(--pt-paper-edge); border-radius: 2px; gap: 0; margin-top: 10px; }
 .app-shell .timeline-votes .vote-ledger-row { border-bottom: 1px dotted var(--pt-paper-edge); font-size: 13px; gap: 10px; grid-template-columns: minmax(110px, .85fr) 20px minmax(120px, 1.6fr); padding: 8px 12px; }
@@ -813,5 +841,7 @@
 .app-shell .timeline-votes .vote-ledger-row strong { font-size: 13px; white-space: normal; }
 @media (max-width: 600px) {
   .app-shell .timeline-full-entry { padding: 16px; }
+  .app-shell .curtain-block { padding: 16px; }
+  .app-shell .curtain-cast { grid-template-columns: 1fr; }
   .app-shell .timeline-votes .vote-ledger-row { gap: 7px; grid-template-columns: minmax(75px, .8fr) 16px minmax(90px, 1.4fr); padding: 8px; }
 }

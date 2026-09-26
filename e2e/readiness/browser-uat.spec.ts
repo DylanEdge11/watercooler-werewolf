@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { RoleComposition } from '../../lib/game/types';
 import { BASE_URL } from '../constants';
-import { BrowserGame, closeSharedModerator, verifyExpectedRoleComposition, type BrowserPlayer } from './browser-fixture';
+import { BrowserGame, closeSharedModerator, roleName, verifyExpectedRoleComposition, type BrowserPlayer } from './browser-fixture';
 import { livingTarget, runDayElimination, runNight } from './game-steps';
 
 // The hosted UAT browser check: one complete, small game played through eight
@@ -162,6 +162,34 @@ test('an eight-player game runs from setup to a Village win with private informa
       await viewer.page.unroute('**/api/player');
       await viewer.page.getByRole('button', { name: 'Back to today', exact: true }).click();
     }
+
+    // The curtain opened once; after a reload it waits behind "Final curtain" with every role revealed.
+    {
+      const viewer = game.players[1];
+      await viewer.reload();
+      await expect(viewer.page.locator('#today')).toBeVisible();
+      await expect(viewer.page.locator('#final-curtain')).toHaveCount(0);
+      await viewer.page.getByRole('button', { name: 'Final curtain', exact: true }).filter({ visible: true }).click();
+      const curtain = viewer.page.locator('#final-curtain');
+      for (const player of game.players) {
+        await expect(curtain.locator('.curtain-cast li').filter({ hasText: player.account.displayName })).toContainText(roleName(player.account.role));
+      }
+      await expect(curtain.locator('.curtain-cycles > li')).toHaveCount(3);
+      await expect(curtain.locator('.curtain-moments li').first()).toBeVisible();
+      await curtain.getByRole('button', { name: 'Back to today', exact: true }).click();
+      await viewer.page.getByRole('button', { name: 'Timeline', exact: true }).filter({ visible: true }).click();
+      const finale = viewer.page.locator('#full-timeline .timeline-full-entry.milestone').filter({ hasText: 'Village wins' });
+      await expect(finale.locator('.timeline-final-roster li').filter({ hasText: wolfTwo.account.displayName })).toContainText('Werewolf · eliminated');
+      await viewer.page.getByRole('button', { name: 'Back to today', exact: true }).click();
+    }
+
+    // The moderator copies the same recap, roles included, for the group chat.
+    await moderatorPage.reload();
+    await expect(moderatorPage.getByRole('heading', { name: 'The final curtain', exact: true })).toBeVisible({ timeout: 30_000 });
+    await moderatorPage.getByRole('button', { name: 'Copy recap', exact: true }).click();
+    const recapCopy = (await moderatorPage.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/gu, '\n');
+    expect(recapCopy.split('\n')[1]).toBe('The Village wins.');
+    expect(recapCopy).toContain(`${wolfOne.account.displayName} (Werewolf): Voted out on Day 1`);
 
     const livingPlayer = game.living()[0];
     await game.assertNoActionAfterCompletion(livingPlayer, finalDay.phaseId, game.chooseLiving((player) => player.account.seatId !== livingPlayer.account.seatId, livingPlayer));

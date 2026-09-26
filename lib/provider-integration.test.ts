@@ -23,7 +23,7 @@ vi.mock('../lib/auth/authorization', () => ({
 }));
 vi.mock('../lib/auth/session', () => ({
   createPlayerSession: async () => {},
-  getCurrentPlayer: async () => shared.currentPlayer,
+  getCurrentPlayer: async () => shared.currentPlayer ? { gameId: 'game', ...shared.currentPlayer } : null,
 }));
 vi.mock('../lib/chat/rooms', () => ({
   ensureGameRooms: async (gameId: string) => {
@@ -44,6 +44,8 @@ vi.mock('../lib/http/rate-limit', () => {
 import { POST as claimPost } from '../app/api/seats/claim/[code]/route';
 import { GET as phaseGet, POST as phasePost } from '../app/api/games/[gameId]/phases/route';
 import { GET as feedbackGet } from '../app/api/games/[gameId]/feedback/route';
+import { GET as playerRecapGet } from '../app/api/player/recap/route';
+import { GET as moderatorRecapGet } from '../app/api/games/[gameId]/recap/route';
 import { GET as roomsGet } from '../app/api/games/[gameId]/rooms/route';
 import { POST as roomsPost } from '../app/api/games/[gameId]/rooms/route';
 import { GET as operationsGet } from '../app/api/games/[gameId]/operations/route';
@@ -510,5 +512,76 @@ describe('real libSQL provider integration', () => {
     expect(await participationFor('p1')).toEqual({ submitted: 0, eligible: 1 });
     expect(await participationFor('p5')).toEqual({ submitted: 0, eligible: 0 });
     expect(await participationFor('p18')).toEqual({ submitted: 1, eligible: 3 });
+  });
+
+  async function finishWithVillageWin(): Promise<void> {
+    // Two of the three Werewolves are already out; the Day votes out the last one.
+    await executeBatch([
+      { sql: "UPDATE seats SET alive = 0 WHERE id IN ('p18', 'p19')" },
+      { sql: "UPDATE role_assignments SET role_key = 'SEER' WHERE seat_id = 'p0'" },
+      { sql: "INSERT INTO action_submissions (id,phase_id,actor_seat_id,kind,target_ids_json,version,submitted_at) SELECT 'v' || id, 'phase', id, 'DAY_VOTE', '[\"p17\"]', 1, '2026-01-01' FROM seats WHERE game_id = 'game' AND alive = 1 AND id != 'p17'" },
+      { sql: "INSERT INTO action_submissions (id,phase_id,actor_seat_id,kind,target_ids_json,version,submitted_at) VALUES ('v17','phase','p17','DAY_VOTE','[\"p1\"]',1,'2026-01-01')" },
+    ]);
+    const phaseContext = { params: Promise.resolve({ gameId: 'game' }) };
+    expect((await phasePost(request('/api/games/game/phases', { action: 'LOCK_AND_PROPOSE', phaseId: 'phase' }), phaseContext)).status).toBe(200);
+    const published = await (await phasePost(request('/api/games/game/phases', { action: 'PUBLISH', phaseId: 'phase' }), phaseContext)).json() as { winner: string };
+    expect(published.winner).toBe('VILLAGE');
+  }
+
+  type RevealBody = {
+    game: { status: string; livingPlayers: Array<Record<string, unknown>> };
+    timeline: Array<{ eventType: string; payload: Record<string, unknown> }>;
+  };
+
+  test('a running game never shows a living player’s role and has no recap', async () => {
+    await seedActiveGame();
+    shared.currentPlayer = { seatId: 'p5' };
+    const body = await (await playerGet(new Request('http://localhost:3000/api/player'))).json() as RevealBody;
+    expect(body.game.livingPlayers.length).toBeGreaterThan(0);
+    expect(body.game.livingPlayers.every((seat) => Object.keys(seat).sort().join(',') === 'displayName,id')).toBe(true);
+    const recap = await playerRecapGet();
+    expect(recap.status).toBe(403);
+    expect(await recap.json()).toMatchObject({ error: 'The recap opens when the game is complete.' });
+    expect((await moderatorRecapGet(new Request('http://localhost:3000/api/games/game/recap'), { params: Promise.resolve({ gameId: 'game' }) })).status).toBe(403);
+  });
+
+  test('a stopped game gets no reveal and no recap', async () => {
+    await seedActiveGame();
+    await executeBatch([{ sql: "UPDATE games SET status = 'STOPPED' WHERE id = 'game'" }]);
+    shared.currentPlayer = { seatId: 'p5' };
+    const body = await (await playerGet(new Request('http://localhost:3000/api/player'))).json() as RevealBody;
+    expect(body.game.livingPlayers.some((seat) => 'role' in seat)).toBe(false);
+    expect((await playerRecapGet()).status).toBe(403);
+  });
+
+  test('a completed game reveals every role and serves the recap to players and moderators', async () => {
+    await seedActiveGame();
+    await finishWithVillageWin();
+
+    shared.currentPlayer = { seatId: 'p5' };
+    const body = await (await playerGet(new Request('http://localhost:3000/api/player'))).json() as RevealBody;
+    expect(body.game.status).toBe('COMPLETED');
+    expect(body.game.livingPlayers.find((seat) => seat.id === 'p0')).toEqual({ id: 'p0', displayName: 'Player 0', role: 'SEER' });
+    const completed = body.timeline.find((event) => event.eventType === 'GAME_COMPLETED');
+    const finalRoster = completed?.payload.finalRoster as Array<{ displayName: string; role: string; survived: boolean }>;
+    expect(finalRoster).toHaveLength(20);
+    expect(finalRoster.find((seat) => seat.displayName === 'Player 17')).toEqual({ displayName: 'Player 17', role: 'WEREWOLF', survived: false });
+    expect(finalRoster.filter((seat) => seat.survived)).toHaveLength(17);
+
+    const recapResponse = await playerRecapGet();
+    expect(recapResponse.status).toBe(200);
+    const { recap } = await recapResponse.json() as { recap: { winner: string; cast: Array<{ name: string; role: string; fate: string }>; cycles: Array<{ label: string; voteTotals: Array<{ name: string; votes: number }> }>; moments: Array<{ id: string }> } };
+    expect(recap.winner).toBe('VILLAGE');
+    expect(recap.cast).toHaveLength(20);
+    expect(recap.cast.find((entry) => entry.name === 'Player 17')).toMatchObject({ role: 'WEREWOLF', fate: 'Voted out on Day 1' });
+    expect(recap.cycles).toHaveLength(1);
+    expect(recap.cycles[0].voteTotals[0]).toEqual({ name: 'Player 17', votes: 17 });
+    expect(recap.moments.map((moment) => moment.id)).toContain('sharpest');
+
+    const moderator = await (await moderatorRecapGet(new Request('http://localhost:3000/api/games/game/recap'), { params: Promise.resolve({ gameId: 'game' }) })).json() as { text: string };
+    expect(moderator.text.split('\n')[1]).toBe('The Village wins.');
+    expect(moderator.text).toContain('Player 17 (Werewolf): Voted out on Day 1');
+    shared.denyModerator = true;
+    expect((await moderatorRecapGet(new Request('http://localhost:3000/api/games/game/recap'), { params: Promise.resolve({ gameId: 'game' }) })).status).toBe(401);
   });
 });
