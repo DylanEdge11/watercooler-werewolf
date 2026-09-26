@@ -19,6 +19,8 @@ These controls are under **Communications & operations** in the moderator consol
 
 | Need | Steps | Result |
 | --- | --- | --- |
+| Hold automatic results | **Run the live game** → **Pause automation** | Nothing locks, calculates, or publishes on its own until **Resume automation**. Players see "The schedule is paused". |
+| Switch to reviewing every result | **Run the live game** → **Change how results publish** → **I review and publish each result** → **Save** | Takes effect at once, including for a result already waiting. Switching back publishes a waiting result once it has waited the window. |
 | Notify players | **Official announcement** → title and message → **Publish notice** | Appears in every player's updates. No email is sent; **Announcement copy** shows the email and a chat version of each announcement with **Copy email** and **Copy for chat**. |
 | Chase missing responses | **Run the live game** → **Still to respond** → **Copy nudge message** | The list names living players who haven't saved a response for the open phase and is for the moderator only. The copied Day message names who hasn't voted; the Night message names and counts nobody, so it is safe to post in a group chat. |
 | Read player feedback | **Feedback** | Every rating and comment for the game, newest first, with the average. Entries say player or moderator, never who. |
@@ -77,8 +79,16 @@ Owner only, for games that were never released. **Cancel setup and start new gam
 - Bootstrap and new co-moderator accounts show eight one-time recovery codes. Store them in a password manager; only hashes are kept.
 - Players sign in with their invitation email and PIN, or their seat code.
 
-## Deadlines
+## Deadlines and automatic results
 
-Phases never open, close, or publish on their own. Server-side deadlines reject late submissions even when no moderator is watching. The Operations panel checks for expired phases every ten seconds while open and locks them; **Check deadlines** does the same on demand. Publishing is always a moderator action.
+Phases never open on their own; the moderator opens each one. Server-side deadlines reject late submissions even when no moderator is watching.
 
-An optional external scheduler can call `GET` or `POST /api/scheduler/deadlines` with `Authorization: Bearer <CRON_SECRET>` to lock expired phases. Without `CRON_SECRET`, the endpoint returns 503.
+A game in **automatic** mode (the default for new games) then runs itself. At the deadline the phase locks and the result is calculated. A Hunter follow-up finishes when the Hunter shoots or their window closes. The result publishes once it has waited the **review window** (60 minutes by default). Each automatic step runs on the next visit to the moderator console or a player dashboard after it is due, and on the scheduler route, so no cron is required. Automatic publications record no moderator, are marked "Published automatically after the review window" in the console and the Timeline, and use exactly the same calculation as **Approve & publish**.
+
+The moderator always wins. Before the window ends you can **Approve & publish**, **Override calculated eliminations**, or **Pause automation**; an automatic publish that races any of these changes nothing. **Pause automation** holds every automatic step until **Resume automation**, and players see "The schedule is paused". **Change how results publish** switches between automatic and review mode and sets the window at any time. Each change, pause, and resume is recorded in the audit log. Games created before version 1.4 stay in review mode, where nothing locks, calculates, or publishes by itself. A reset or restore clears a pause.
+
+If an automatic step cannot run, an `AUTOMATION` warning appears in the Operations panel's event log and the step retries on the next check.
+
+In review mode the Operations panel still checks for expired phases every ten seconds while open and locks them; **Check deadlines** does the same on demand.
+
+The scheduler route `GET` or `POST /api/scheduler/deadlines` with `Authorization: Bearer <CRON_SECRET>` runs the automatic steps for every automatic game and locks expired phases in review-mode games. Without `CRON_SECRET`, the endpoint returns 503. See [Scheduler](SETUP.md#scheduler).
