@@ -175,7 +175,9 @@ export default function ModeratorPage() {
   const gamesRequest = useRef(0);
   const gameDetailRequest = useRef(0);
   // The ETag of the games list and setup on screen (lib/http/conditional-get.ts).
-  const gamesEtag = useRef<{ url: string; etag: string | null }>({ url: '', etag: null });
+  // It names the data, not the URL: the first load (no ?gameId=) and the polls
+  // that follow (with it) return the same body, so they share one tag.
+  const gamesEtag = useRef<string | null>(null);
   const compositionDrafts = useRef(new Map<string, Composition>());
 
   function markCompositionDraft(selectedGameId: string, draft: Composition | null) {
@@ -214,8 +216,7 @@ export default function ModeratorPage() {
     const requestId = ++gamesRequest.current;
     const detailRequestId = ++gameDetailRequest.current;
     const query = preferredGameId ? `?gameId=${encodeURIComponent(preferredGameId)}` : '';
-    const url = `/api/games${query}`;
-    const response = await conditionalGet(url, gamesEtag.current.url === url ? gamesEtag.current.etag : null);
+    const response = await conditionalGet(`/api/games${query}`, gamesEtag.current);
     // null: nothing changed since what is on screen.
     if (!response) return;
     const data = (await response.json()) as { games: GameSummary[]; selected: SelectedGameSetup | null; error?: string };
@@ -230,9 +231,9 @@ export default function ModeratorPage() {
       // A game switch that started after this request wins.
       const applied = detailRequestId === gameDetailRequest.current;
       if (applied) applyGameSetup(selected.gameId, selected.roster, selected.assignments);
-      gamesEtag.current = { url, etag: applied ? responseEtag(response) : null };
+      gamesEtag.current = applied ? responseEtag(response) : null;
     } else {
-      gamesEtag.current = { url, etag: responseEtag(response) };
+      gamesEtag.current = responseEtag(response);
       selectedGameRef.current = '';
       setGameId('');
       setRoster([]);
