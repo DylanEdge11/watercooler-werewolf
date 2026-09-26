@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { DEFAULT_NEW_GAME_AUTOMATION, type AutomationSettings } from '../../lib/game/automation';
-import { DEFAULT_GAME_SETTINGS, slotTable, type GameSettings } from '../../lib/game/game-settings';
+import { DEFAULT_GAME_SETTINGS, heavySlotWarning, slotTable, type GameSettings } from '../../lib/game/game-settings';
 
 interface GameSettingsFieldsProps {
   initial?: Partial<GameSettings & AutomationSettings>;
@@ -14,10 +14,15 @@ function SlotPreview({ label, divisor }: { label: string; divisor: string }) {
   if (!Number.isInteger(value) || value < 1 || value > 80) {
     return <p className="slot-preview-note">Enter a whole number from 1 to 80 to preview the {label} slots.</p>;
   }
-  return <table className="slot-preview" aria-label={`${label} elimination slots`}>
-    <thead><tr><th scope="col">Living players</th><th scope="col">{label} slots</th></tr></thead>
-    <tbody>{slotTable(value).map((row) => <tr key={row.from}><td>{row.from === row.to ? row.from : `${row.from}–${row.to}`}</td><td>{row.slots}</td></tr>)}</tbody>
-  </table>;
+  const rows = slotTable(value);
+  const heavy = heavySlotWarning(rows);
+  return <>
+    <table className="slot-preview" aria-label={`${label} elimination slots`}>
+      <thead><tr><th scope="col">Living players</th><th scope="col">{label} slots</th></tr></thead>
+      <tbody>{rows.map((row) => <tr key={row.from}><td>{row.from === row.to ? row.from : `${row.from}–${row.to}`}</td><td>{row.slots}</td></tr>)}</tbody>
+    </table>
+    {heavy && <p className="slot-preview-warning" role="note">{`With ${heavy.from} or more living players, one ${label} can eliminate ${heavy.slots} or more players. Most games keep it to 1–3; the default is 30.`}</p>}
+  </>;
 }
 
 /**

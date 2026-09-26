@@ -113,8 +113,8 @@ test('an eight-player game runs from setup to a Village win with private informa
     expect(firstNight.proposal.outcome.eliminations).toEqual([]);
     const seer = game.byRole('SEER')[0];
     const ordinary = game.chooseLiving((player) => player.account.role === 'VILLAGER');
-    await expect(seer.page.getByText(/is the werewolf\./iu)).toBeVisible();
-    await expect(ordinary.page.getByText(/is the werewolf\./iu)).toHaveCount(0);
+    await expect(seer.page.getByText(/is a werewolf\./iu)).toBeVisible();
+    await expect(ordinary.page.getByText(/is a werewolf\./iu)).toHaveCount(0);
     await game.assertPlayerPrivacy(ordinary);
     await game.assertPlayerPrivacy(seer, { allowOwnInvestigation: true });
 

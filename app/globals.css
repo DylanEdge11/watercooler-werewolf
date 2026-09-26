@@ -224,6 +224,7 @@ textarea { line-height: 1.55; resize: vertical; }
 .slot-preview { border-collapse: collapse; font-size: 11px; margin-top: 8px; width: 100%; }
 .slot-preview th, .slot-preview td { border-bottom: 1px solid #e8ebe6; padding: 4px 6px; text-align: left; }
 .slot-preview-note { color: var(--muted); font-size: 11px; margin: 8px 0 0; }
+.slot-preview-warning { background: #fff4d6; border-left: 3px solid #c98a12; border-radius: 6px; font-size: 11px; margin: 8px 0 0; padding: 6px 8px; }
 .schedule-lock-note { margin: 18px 0 0; }
 .schedule-note { align-items: center; background: #edf2ed; border-radius: 10px; display: flex; font-size: 10px; justify-content: space-between; padding: 12px 14px; }
 .schedule-note span { color: var(--muted); }

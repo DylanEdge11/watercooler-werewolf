@@ -72,7 +72,7 @@ describe('nudge message', () => {
 
   it('names who still has to vote on a Day', () => {
     expect(nudgeMessage({ kind: 'DAY', sequence: 3, closesAt: deadline, timeZone: 'America/Regina', outstandingNames: ['Sky', 'Vic'], siteUrl: 'https://werewolf.example.test' }))
-      .toBe('Day 3 ballot closes Friday 09:00 (America/Regina). Still to vote: Sky, Vic. Save your vote at https://werewolf.example.test');
+      .toBe('Day 2 ballot closes Friday 09:00 (America/Regina). Still to vote: Sky, Vic. Save your vote at https://werewolf.example.test');
   });
 
   it('says everyone has voted when nobody is outstanding', () => {
@@ -80,9 +80,15 @@ describe('nudge message', () => {
       .toBe('Final ballot closes Friday 09:00 (America/Regina). Everyone has voted; you can still change your vote at https://werewolf.example.test');
   });
 
+  it('calls the first Night "Night 1", not by its phase number', () => {
+    expect(nudgeMessage({ kind: 'NIGHT', sequence: 2, closesAt: deadline, timeZone: 'America/Regina', outstandingNames: [], siteUrl: 'https://werewolf.example.test' }))
+      .toMatch(/^Night 1 closes /u);
+  });
+
   it('never names anyone, or counts them, on a Night', () => {
-    const text = nudgeMessage({ kind: 'NIGHT', sequence: 4, closesAt: deadline, timeZone: 'America/Regina', outstandingNames: ['Wren', 'Gale'], siteUrl: 'https://werewolf.example.test' });
-    expect(text).toBe('Night 4 closes Friday 09:00 (America/Regina). If your role has a night action, save it before Friday 09:00 at https://werewolf.example.test');
+    // Night 3 (sequence 6), so the check below can tell the two outstanding players are never counted.
+    const text = nudgeMessage({ kind: 'NIGHT', sequence: 6, closesAt: deadline, timeZone: 'America/Regina', outstandingNames: ['Wren', 'Gale'], siteUrl: 'https://werewolf.example.test' });
+    expect(text).toBe('Night 3 closes Friday 09:00 (America/Regina). If your role has a night action, save it before Friday 09:00 at https://werewolf.example.test');
     expect(text).not.toMatch(/Wren|Gale|\b2\b|werewolf |seer|bodyguard|cupid/iu);
   });
 });
