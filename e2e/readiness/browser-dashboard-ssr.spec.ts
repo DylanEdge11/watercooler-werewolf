@@ -29,7 +29,8 @@ test('the signed-in dashboard arrives rendered, with the role concealed unless t
   await setVisibility();
   await page.goto('/');
   await expect(page.getByText(player.account.displayName, { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('The village is between phases.');
+  // Unhydrated, the page is inert (hidden from the accessibility tree), so find the heading by element.
+  await expect(page.locator('main h1')).toHaveText('The village is between phases.');
   await expect(page.locator('.role-card h2')).toHaveText('Hidden');
 
   // This seat chose to show it: the server renders the role.

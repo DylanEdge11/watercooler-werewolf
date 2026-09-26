@@ -1,7 +1,7 @@
 'use client';
 
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
@@ -108,6 +108,13 @@ function deathAlertKey(gameId: string, playerId: string): string {
   return `werewolf:v1:death-alert:${gameId}:${playerId}`;
 }
 
+const subscribeToNothing = () => () => {};
+
+/** false in the server's HTML and while React takes it over; true once buttons respond. */
+function useHydrated(): boolean {
+  return useSyncExternalStore(subscribeToNothing, () => true, () => false);
+}
+
 // Only needed when a stored session has expired, so signed-in players never download it.
 const LandingShell = dynamic(() => import('./landing/landing-shell'));
 
@@ -128,6 +135,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const [submitting, setSubmitting] = useState(false);
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
+  const hydrated = useHydrated();
   const [roleHidden, setRoleHidden] = useState(initialRoleHidden ?? false);
   // A server-rendered role stays concealed until this device's own "Hide role" setting is read,
   // unless the cookie already said the role is shown.
@@ -427,7 +435,8 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const stageLight = data.phase?.kind === 'NIGHT' ? 'night' : 'day';
 
   return (
-    <main className={`app-shell${previewMode ? ' preview-player-shell' : ''}`} data-stage-light={stageLight}>
+    // The server-rendered page shows before its buttons work; inert until then, so a tap is never silently lost.
+    <main className={`app-shell${previewMode ? ' preview-player-shell' : ''}`} data-stage-light={stageLight} inert={!hydrated}>
       {previewMode && <div className="preview-mode-banner" role="status">
         <span><strong>Player View Studio.</strong> Synthetic sample data; actions, feedback, and chat stay in this page.</span>
         <button className="text-button" type="button" onClick={onExitPreview}>Back to studio controls</button>
