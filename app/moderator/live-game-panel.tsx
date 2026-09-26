@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { nudgeMessage } from '../../lib/game/moderator-copy';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
+import CopyButton from './copy-button';
 import { formatZonedDateTimeLocal } from '../../lib/game/scheduling';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 
@@ -25,6 +27,8 @@ interface Phase {
   hunterDeadlineAt: string | null;
   slots: number;
   currentSubmissions: number;
+  /** Open phase only: living players who still owe a response. For the moderator's eyes alone. */
+  outstanding?: Array<{ id: string; displayName: string }>;
   proposal: null | { id: string; outcome: Outcome; proposedOutcome?: Outcome; reviewedOutcome?: Outcome | null; publishedOutcome?: Outcome | null; overrideReason: string | null; reviewedAt?: string | null };
 }
 
@@ -33,6 +37,33 @@ interface RosterMember {
   displayName: string;
   alive: number | boolean;
   role: string;
+}
+
+function OutstandingBlock({ phase, timeZone }: { phase: Phase; timeZone: string }) {
+  const outstanding = phase.outstanding ?? [];
+  const isNight = phase.kind === 'NIGHT';
+  const nudge = nudgeMessage({
+    kind: phase.kind,
+    sequence: phase.sequence,
+    closesAt: phase.closesAt,
+    timeZone,
+    outstandingNames: outstanding.map((player) => player.displayName),
+    siteUrl: typeof window === 'undefined' ? '' : window.location.origin,
+  });
+  return <div className="outstanding-block" aria-labelledby={`outstanding-${phase.id}`}>
+    <div className="ops-heading">
+      <div>
+        <p className="eyebrow accent" id={`outstanding-${phase.id}`}>Still to respond · {outstanding.length}</p>
+        <p className="field-help">{isNight
+          ? 'Only you can see these names. At night they show who holds a Night role, so the nudge message never names or counts anyone.'
+          : 'Only you can see this list. Every living player votes by day, so the nudge message names who has not voted yet.'}</p>
+      </div>
+      <CopyButton text={nudge} label="Copy nudge message" />
+    </div>
+    {outstanding.length
+      ? <ul className="outstanding-list">{outstanding.map((player) => <li key={player.id}>{player.displayName}</li>)}</ul>
+      : <p className="empty-note">Everyone who can act has saved a response.</p>}
+  </div>;
 }
 
 function localDeadline(minutes = 60, timeZone = 'UTC'): string {
@@ -182,6 +213,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
       {latest && (
         <div className="phase-review">
           <div className="phase-status-row"><div><p className="eyebrow accent">Cycle {latest.sequence} · {latest.kind.replaceAll('_', ' ')}</p><h3>{latest.status.replaceAll('_', ' ')}</h3></div><div><strong>{latest.currentSubmissions}</strong><small>current responses</small></div><div><strong>{latest.slots}</strong><small>elimination slots</small></div></div>
+          {latest.status === 'OPEN' && <OutstandingBlock phase={latest} timeZone={gameTimeZone} />}
           {['OPEN', 'LOCKED'].includes(latest.status) && <button className="danger-button" type="button" onClick={() => void run('LOCK_AND_PROPOSE', latest.id)}>{latest.status === 'LOCKED' ? 'Calculate locked responses' : 'Lock responses & calculate'}</button>}
           {latest.status === 'PENDING_HUNTER' && (
             <div className="hunter-callout"><span aria-hidden="true">➶</span><div><strong>Hunter follow-up required</strong><p>Deadline {latest.hunterDeadlineAt ? gameTime(latest.hunterDeadlineAt) : 'pending'} ({game?.timezone ?? 'UTC'}).</p></div><button className="primary-button" type="button" onClick={() => void run('FINALIZE_HUNTER', latest.id, { skipHunter: latest.hunterDeadlineAt ? new Date(latest.hunterDeadlineAt) <= new Date() : false })}>Finalize Hunter</button></div>

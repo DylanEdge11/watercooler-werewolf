@@ -6,6 +6,7 @@ import { calculateEliminationSlots } from '../../../../../lib/game/balance';
 import { evaluateWinner, resolveHunterShot, resolvePhase } from '../../../../../lib/game/engine';
 import { validateFinalShowdownEntry, validatePhaseOpen } from '../../../../../lib/game/phase-policy';
 import { createSecureRandomRolls } from '../../../../../lib/game/random';
+import { outstandingResponders } from '../../../../../lib/game/outstanding';
 import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
 import { parseScheduledDate } from '../../../../../lib/game/scheduling';
 import { canonicalRoleKey, type ActionSubmission, type PhaseKind, type PhaseResolution, type PlayerState, type RoleKey } from '../../../../../lib/game/types';
@@ -168,6 +169,16 @@ export async function GET(_request: Request, context: RouteContext) {
       role: canonicalRoleKey(String(row.role)),
       alive: Boolean(row.alive),
     }));
+    // Only the open phase has anyone outstanding. Names are for the moderator console only.
+    const openPhase = phaseRows.results.find((phase) => phase.status === 'OPEN');
+    const outstanding = openPhase
+      ? outstandingResponders({
+          phase: { kind: openPhase.kind, status: openPhase.status },
+          players: rosterPlayers,
+          actions: await loadActions(openPhase.id),
+          cupidPairExists: Boolean(await loadCurrentLoverPair(gameId)),
+        }).map(({ id, displayName }) => ({ id, displayName }))
+      : [];
     return Response.json({
       ok: true,
       game: gameRow,
@@ -187,6 +198,7 @@ export async function GET(_request: Request, context: RouteContext) {
         return {
           ...phase,
           currentSubmissions: Number(phase.currentSubmissions),
+          outstanding: phase.id === openPhase?.id ? outstanding : [],
           proposal: proposal
              ? {
                  ...proposal,

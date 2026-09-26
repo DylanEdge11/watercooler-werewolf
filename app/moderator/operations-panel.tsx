@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import type { FeedbackSummary } from '../../lib/game/feedback';
+import { AnnouncementCopies, FeedbackBlock, type AnnouncementRecord } from './communications';
 
 interface Operations {
   viewerRole: string | null;
@@ -52,6 +54,9 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [moderators, setModerators] = useState<Moderator[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
+  const [latestAnnouncementId, setLatestAnnouncementId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackSummary | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [pinSeatId, setPinSeatId] = useState('');
   const [restoreBackupId, setRestoreBackupId] = useState('');
@@ -63,16 +68,20 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
 
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
-    const [ops, roomData, moderatorData] = await Promise.all([
+    const [ops, roomData, moderatorData, announcementData, feedbackData] = await Promise.all([
       fetch(`/api/games/${gameId}/operations`).then(parse<Operations>),
       fetch(`/api/games/${gameId}/rooms`).then(parse<{ rooms: Room[]; recentMessages: RoomMessage[] }>),
       fetch(`/api/games/${gameId}/moderators`).then(parse<{ moderators: Moderator[] }>),
+      fetch(`/api/games/${gameId}/announcements`).then(parse<{ announcements: AnnouncementRecord[] }>),
+      fetch(`/api/games/${gameId}/feedback`).then(parse<{ feedback: FeedbackSummary }>),
     ]);
     if (sequence !== refreshSequence.current) return;
     setOperations(ops);
     setRooms(roomData.rooms);
     setMessages(roomData.recentMessages);
     setModerators(moderatorData.moderators);
+    setAnnouncements(announcementData.announcements);
+    setFeedback(feedbackData.feedback);
     setRestoreBackupId((current) => current && ops.backups?.some((backup) => backup.id === current) ? current : ops.backups?.[0]?.id ?? '');
   }, [gameId]);
 
@@ -100,9 +109,11 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     const form = event.currentTarget;
     const data = new FormData(form);
     try {
-      await post(`/api/games/${gameId}/announcements`, { title: data.get('title'), body: data.get('body') });
+      const response = await fetch(`/api/games/${gameId}/announcements`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: data.get('title'), body: data.get('body') }) });
+      const created = await parse<{ announcement: AnnouncementRecord }>(response);
       form.reset();
-      setMessage('Announcement published in-app. Email-ready copy was generated with it.');
+      setLatestAnnouncementId(created.announcement.id);
+      setMessage('Announcement published in the app. Its email and chat copy are ready below.');
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to publish announcement.');
@@ -306,7 +317,7 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     try {
       await post(`/api/games/${gameId}/feedback`, { rating: Number(data.get('rating')), comment: data.get('comment') });
       form.reset();
-      setMessage('Pilot feedback recorded for the operational review.');
+      setMessage('Your feedback was recorded.');
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to record pilot feedback.');
@@ -352,7 +363,11 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
 
       <div className="ops-block room-operations"><div className="ops-heading"><div><p className="eyebrow accent">Private rooms</p><p className="field-help">Messages expire after {operations.game.chatRetentionDays} days.</p></div><button className="secondary-button" type="button" onClick={purgeRetention}>Purge expired</button></div><div className="room-health-list">{rooms.map((room) => <div key={room.id}><span>{room.type}</span><strong>{room.memberCount} members · {room.messageCount} messages</strong><button type="button" onClick={() => void toggleRoom(room)}>{room.status === 'OPEN' ? 'Make read-only' : 'Reopen'}</button></div>)}</div>{messages.slice(0, 8).map((chat) => <div className="moderation-line" key={chat.id}><span><strong>{chat.authorName}</strong> in {chat.roomType}</span><p>{chat.body ?? 'Removed message'}</p>{chat.body && <button type="button" onClick={() => void removeMessage(chat.id)}>Remove</button>}</div>)}</div>
 
-      <form className="ops-block pilot-feedback" onSubmit={submitFeedback}><p className="eyebrow accent">Pilot feedback</p><p className="field-help">Capture a quick moderator signal while the pilot is running.</p><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve before the next game?" /></label><button className="secondary-button" type="submit">Save feedback</button></form>
+      <AnnouncementCopies announcements={announcements} highlightId={latestAnnouncementId} />
+
+      <FeedbackBlock feedback={feedback} />
+
+      <form className="ops-block pilot-feedback" onSubmit={submitFeedback}><p className="eyebrow accent">Send your own feedback</p><p className="field-help">Add a quick moderator rating; it appears in the Feedback list above.</p><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve before the next game?" /></label><button className="secondary-button" type="submit">Save feedback</button></form>
 
       <div className="backup-row"><div><p className="eyebrow accent">Verified backup</p><strong>{operations.lastBackup ? `Last export ${new Date(operations.lastBackup.exportedAt).toLocaleString()}` : 'No backup exported yet'}</strong><small>{operations.lastBackup?.checksum ? `Checksum ${operations.lastBackup.checksum.slice(0, 18)}…` : 'Includes game state, audit history, and private rooms.'}</small></div><button className="primary-button" type="button" onClick={exportBackup} disabled={busyAction !== null}>{busyAction === 'export' ? 'Creating…' : 'Download JSON backup'}</button></div>
       {operations.viewerRole === 'OWNER' && operations.backups.length > 0 && <div className="ops-block restore-backup-block"><p className="eyebrow accent">Recovery restore</p><p className="field-help">Restore a verified snapshot into this game’s setup state. Secrets are never restored; fresh seat links are generated.</p><div className="button-row"><label className="restore-select">Snapshot<select value={restoreBackupId} onChange={(event) => setRestoreBackupId(event.target.value)} disabled={busyAction !== null}>{operations.backups.map((backup) => <option key={backup.id} value={backup.id}>{new Date(backup.exportedAt).toLocaleString()} · {backup.checksum.slice(0, 12)}…</option>)}</select></label><button className="secondary-button" type="button" onClick={() => void restoreBackup()} disabled={busyAction !== null}>{busyAction === 'restore' ? 'Restoring…' : 'Restore to setup'}</button>{restoreInviteCsv && <button className="secondary-button" type="button" onClick={downloadRestoredInvites}>Download fresh invites</button>}</div></div>}
