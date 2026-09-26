@@ -145,6 +145,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   }>({ deathAlert: null, selectedTimeline: null, data: null });
   const selectionDirty = useRef(false);
   const selectionPhaseId = useRef<string | null>(initialData?.phase?.id ?? null);
+  const initialDataRef = useRef(initialData);
   const olderNotifications = useRef<DashboardData['notifications']>([]);
   const refreshSequence = useRef(0);
 
@@ -231,9 +232,11 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
 
   useEffect(() => {
     if (previewMode) return;
-    // The first refresh also applies this device's settings to server-rendered data.
+    // The first refresh also applies this device's settings to server-rendered data. That page is
+    // usable before the refresh returns, so like every poll it keeps a target the player already picked.
+    const serverRendered = Boolean(initialDataRef.current);
     const timer = window.setTimeout(() => {
-      void refresh().catch((caught) => {
+      void refresh(serverRendered).catch((caught) => {
         setError(caught instanceof Error ? caught.message : 'Unable to load the game.');
         setLoading(false);
       });
