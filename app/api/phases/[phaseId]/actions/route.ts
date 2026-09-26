@@ -1,10 +1,12 @@
 import { getDb } from '../../../../../db';
+import { changes } from '../../../../../db/results';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentPlayer } from '../../../../../lib/auth/session';
 import { permissionForRole, validateActionTargets } from '../../../../../lib/game/actions';
 import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type PlayerState, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../../lib/http/rate-limit';
+import { routeError } from '../../../../../lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
 import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
 
 interface RouteContext {
@@ -157,28 +159,24 @@ export async function POST(request: Request, context: RouteContext) {
              AND EXISTS (SELECT 1 FROM action_submissions WHERE id = ?)`,
         )
         .bind(now, phase.id, actor.id, permission.actionKind, actionId, actionId),
+      // The audit event and the saved revision number come from the same transaction as the action.
+      db
+        .prepare(
+          `INSERT INTO game_events
+           (id, game_id, phase_id, event_type, actor_seat_id, payload_json, created_at)
+           SELECT ?, ?, ?, 'ACTION_SUBMITTED', ?, json_object('kind', a.kind, 'version', a.version), ?
+           FROM action_submissions a WHERE a.id = ?`,
+        )
+        .bind(crypto.randomUUID(), identity.gameId, phase.id, actor.id, now, actionId),
+      db.prepare('SELECT version FROM action_submissions WHERE id = ? LIMIT 1').bind(actionId),
     ]);
-    if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
+    if (changes(result[0]) !== 1) {
       await recordLateAttempt();
       return jsonError('The phase closed while your response was being saved. Refresh and try again if a response window is still open.', 409);
     }
-    const revision = await db
-      .prepare('SELECT version FROM action_submissions WHERE id = ? LIMIT 1')
-      .bind(actionId)
-      .first<{ version: number }>();
-    const version = Number(revision?.version ?? 1);
-    await db
-      .prepare(
-        `INSERT INTO game_events
-         (id, game_id, phase_id, event_type, actor_seat_id, payload_json, created_at)
-         VALUES (?, ?, ?, 'ACTION_SUBMITTED', ?, ?, ?)`,
-      )
-      .bind(crypto.randomUUID(), identity.gameId, phase.id, actor.id, JSON.stringify({ kind: permission.actionKind, version }), now)
-      .run();
+    const version = Number((result[3]?.results[0] as { version?: number } | undefined)?.version ?? 1);
     return Response.json({ ok: true, actionId, version, targetIds, submittedAt: now });
   } catch (error) {
-    return error instanceof RateLimitError
-      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
-      : jsonError(error instanceof Error ? error.message : 'Unable to submit this action.', 400);
+    return routeError(error, 'Unable to submit this action.');
   }
 }

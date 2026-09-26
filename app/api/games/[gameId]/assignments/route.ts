@@ -8,6 +8,7 @@ import { ROLE_CATALOG } from '../../../../../lib/game/catalog';
 import { createSecureRandomRolls } from '../../../../../lib/game/random';
 import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { ensureGameRooms } from '../../../../../lib/chat/rooms';
 
 interface RouteContext {
@@ -50,7 +51,7 @@ export async function GET(_request: Request, context: RouteContext) {
       .prepare('SELECT status, setup_revision AS setupRevision FROM games WHERE id = ? LIMIT 1')
       .bind(gameId)
       .first<GameSetupRow>();
-    if (!game) throw new Error('Game not found.');
+    if (!game) throw new HttpError(404, 'Game not found.');
     const composition = await loadComposition(gameId);
     const roster = await db
       .prepare(
@@ -86,7 +87,7 @@ export async function GET(_request: Request, context: RouteContext) {
       })),
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to load assignments.', 401);
+    return routeError(error, 'Unable to load assignments.');
   }
 }
 
@@ -106,7 +107,7 @@ export async function POST(request: Request, context: RouteContext) {
       .prepare('SELECT status, setup_revision AS setupRevision FROM games WHERE id = ? LIMIT 1')
       .bind(gameId)
       .first<GameSetupRow>();
-    if (!game) throw new Error('Game not found.');
+    if (!game) throw new HttpError(404, 'Game not found.');
     const roster = await db
       .prepare("SELECT id, status FROM seats WHERE game_id = ? AND status != 'REMOVED' ORDER BY id")
       .bind(gameId)
@@ -380,6 +381,6 @@ export async function POST(request: Request, context: RouteContext) {
 
     throw new Error('Unknown assignment action.');
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to update assignments.', 400);
+    return routeError(error, 'Unable to update assignments.');
   }
 }

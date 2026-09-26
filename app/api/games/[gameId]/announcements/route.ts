@@ -1,7 +1,8 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { assertSameOrigin } from '../../../../../lib/http/security';
+import { routeError } from '../../../../../lib/http/errors';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -21,7 +22,7 @@ export async function GET(_request: Request, context: RouteContext) {
       .all();
     return Response.json({ ok: true, announcements: rows.results });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to load announcements.', 401);
+    return routeError(error, 'Unable to load announcements.');
   }
 }
 
@@ -71,6 +72,6 @@ export async function POST(request: Request, context: RouteContext) {
     ]);
     return Response.json({ ok: true, announcement: { id, title, body: announcementBody, emailSubject, emailBody, createdAt: now } }, { status: 201 });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to publish the announcement.', 400);
+    return routeError(error, 'Unable to publish the announcement.');
   }
 }

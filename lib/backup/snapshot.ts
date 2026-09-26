@@ -2,6 +2,7 @@ import { getDb, type PreparedStatement } from '../../db';
 import { sha256 } from '../auth/crypto';
 import { randomToken } from '../auth/crypto';
 import { backupComposition, backupGameFromRecord, backupSeats, validateBackupForRestore } from './restore';
+import { HttpError } from '../http/errors';
 
 export interface GameBackup {
   schemaVersion: 2;
@@ -84,7 +85,7 @@ export async function collectGameBackup(gameId: string): Promise<GameBackup> {
     db.prepare('SELECT * FROM operational_events WHERE game_id = ? ORDER BY created_at').bind(gameId).all(),
     db.prepare('SELECT * FROM pilot_feedback WHERE game_id = ? ORDER BY created_at').bind(gameId).all(),
   ]);
-  if (!game) throw new Error('Game not found.');
+  if (!game) throw new HttpError(404, 'Game not found.');
   return {
     schemaVersion: 2,
     exportedAt: new Date().toISOString(),

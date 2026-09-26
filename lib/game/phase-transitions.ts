@@ -6,6 +6,7 @@ import { changes, loadActions, loadPlayers, overrideIdsFromJson } from './phase-
 import { createSecureRandomRolls } from './random';
 import { loadCurrentLoverPair } from './relationships';
 import type { PhaseKind, PhaseResolution } from './types';
+import { HttpError } from '../http/errors';
 
 /**
  * Lock-and-calculate, Hunter follow-up, and publication for one phase.
@@ -71,7 +72,7 @@ export async function runPhaseAction(
     )
     .bind(body.phaseId, gameId)
     .first<{ id: string; kind: PhaseKind; status: string; slots: number; version: number; hunterDeadlineAt: string | null }>();
-  if (!phase) throw new Error('Phase not found.');
+  if (!phase) throw new HttpError(404, 'Phase not found.');
 
   if (body.action === 'LOCK_AND_PROPOSE' && !['OPEN', 'LOCKED'].includes(phase.status)) {
     if (phase.status === 'PENDING_HUNTER' || phase.status === 'PENDING_APPROVAL' || phase.status === 'PUBLISHED') {

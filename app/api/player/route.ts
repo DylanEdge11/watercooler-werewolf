@@ -7,6 +7,7 @@ import { advanceGameSafely } from '../../../lib/game/automation-sweep';
 import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type RoleKey } from '../../../lib/game/types';
 import { jsonError } from '../../../lib/http/security';
+import { routeError } from '../../../lib/http/errors';
 import { ensureGameRooms } from '../../../lib/chat/rooms';
 import { loadCurrentLoverPair } from '../../../lib/game/relationships';
 
@@ -272,7 +273,8 @@ export async function GET(request: Request) {
             displayName: elimination.displayName,
             role: elimination.role,
             cause: elimination.cause,
-            // Marks only the reader's own elimination; other players' seat IDs stay private.
+            // Marks the reader's own elimination. Seat ids aren't secret (players see them in livingPlayers),
+            // but the timeline doesn't need them.
             isYou: elimination.playerId === player.id,
           };
         });
@@ -379,6 +381,6 @@ export async function GET(request: Request) {
       rooms: roomRows.results,
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to load the player dashboard.', 400);
+    return routeError(error, 'Unable to load the player dashboard.');
   }
 }

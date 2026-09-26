@@ -2,7 +2,8 @@ import { authenticateModerator } from '../../../../lib/auth/moderators';
 import { ensureDatabase } from '../../../../db/migrate';
 import { createModeratorSession } from '../../../../lib/auth/session';
 import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
-import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../lib/http/rate-limit';
+import { routeError } from '../../../../lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
 
 export async function POST(request: Request) {
   try {
@@ -16,8 +17,6 @@ export async function POST(request: Request) {
     await createModeratorSession(moderator.id);
     return Response.json({ ok: true, moderator });
   } catch (error) {
-    return error instanceof RateLimitError
-      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
-      : jsonError(error instanceof Error ? error.message : 'Unable to sign in.', 400);
+    return routeError(error, 'Unable to sign in.');
   }
 }

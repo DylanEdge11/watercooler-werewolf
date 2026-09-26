@@ -5,6 +5,7 @@ import { resolveAutomationSettings, type PublicationMode } from '../../../../../
 import { resolveGameSettings, type GameSettingsInput } from '../../../../../lib/game/game-settings';
 import { assertValidCalendarDate, assertValidTimeZone, parseScheduledDate, validateSchedule } from '../../../../../lib/game/scheduling';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { HttpError, routeError } from '../../../../../lib/http/errors';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -77,7 +78,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       )
       .bind(gameId)
       .first<SetupGameRow>();
-    if (!game) throw new Error('Game not found.');
+    if (!game) throw new HttpError(404, 'Game not found.');
     if (!['DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'].includes(game.status)) {
       throw new Error('The game schedule is locked after roles are released. Reset or restore the game before changing it.');
     }
@@ -145,6 +146,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
     return Response.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to update the game schedule.', 400);
+    return routeError(error, 'Unable to update the game schedule.');
   }
 }

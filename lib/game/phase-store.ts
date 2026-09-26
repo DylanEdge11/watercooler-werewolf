@@ -18,9 +18,7 @@ export function overrideIdsFromJson(value: string | null): string[] | null {
   }
 }
 
-export function changes(result: unknown): number {
-  return Number((result as { meta?: { changes?: number } } | null)?.meta?.changes ?? 0);
-}
+export { changes } from '../../db/results';
 
 export async function loadPlayers(gameId: string): Promise<PlayerState[]> {
   const rows = await getDb()

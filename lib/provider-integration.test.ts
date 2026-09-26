@@ -15,14 +15,21 @@ const shared = vi.hoisted(() => ({
 
 vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
-vi.mock('../lib/auth/authorization', () => ({
-  requireGameModerator: async () => {
-    if (shared.denyModerator) throw new Error('Moderator authentication required.');
-    return { id: 'mod' };
-  },
-}));
+vi.mock('../lib/auth/authorization', async () => {
+  const { HttpError } = await import('../lib/http/errors');
+  return {
+    requireGameModerator: async () => {
+      if (shared.denyModerator) throw new HttpError(401, 'Moderator authentication required.');
+      return { id: 'mod' };
+    },
+  };
+});
 vi.mock('../lib/auth/session', () => ({
   createPlayerSession: async () => {},
+  preparePlayerSession: async (seatId: string, sessionVersion: number) => ({
+    values: [crypto.randomUUID(), seatId, `token-${crypto.randomUUID()}`, sessionVersion, '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'],
+    setCookie: async () => {},
+  }),
   getCurrentPlayer: async () => shared.currentPlayer,
 }));
 vi.mock('../lib/chat/rooms', () => ({
@@ -268,6 +275,9 @@ describe('real libSQL provider integration', () => {
     expect(String(seat.rows[0]?.pinHash)).not.toContain('222222');
     const events = await client.execute("SELECT COUNT(*) AS count FROM game_events WHERE event_type = 'SEAT_CLAIMED'");
     expect(Number(events.rows[0]?.count)).toBe(1);
+    // The claim, its event, and the winner's session commit together; the loser gets no session.
+    const sessions = await client.execute("SELECT COUNT(*) AS count FROM seat_sessions WHERE seat_id = 'claim-seat'");
+    expect(Number(sessions.rows[0]?.count)).toBe(1);
   });
 
   test('increments a persistent rate-limit bucket and returns Retry-After semantics', async () => {

@@ -240,7 +240,7 @@ describe('emailing invitations', () => {
   test('rejects a cross-origin request', async () => {
     await seed();
     const response = await sendInvites({}, 'https://attacker.test');
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(403);
     expect(shared.sent).toEqual([]);
   });
 });

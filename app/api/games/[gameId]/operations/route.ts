@@ -6,6 +6,7 @@ import { canCancelSetup, canResetGame, canStopGame } from '../../../../../lib/ga
 import { reconcileDuePhases } from '../../../../../lib/game/scheduling';
 import { hashSecret, randomToken, sha256 } from '../../../../../lib/auth/crypto';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { restoreConfirmation } from '../../../../../lib/backup/restore';
 
 interface RouteContext {
@@ -95,7 +96,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const lastBackup = latestBackup ? { exportedAt: latestBackup.exportedAt, checksum: latestBackup.checksum } : null;
     return Response.json({ ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, seats: seats.results, lastBackup, backups: backups.results, events: events.results });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to load operational health.', 401);
+    return routeError(error, 'Unable to load operational health.');
   }
 }
 
@@ -121,7 +122,7 @@ export async function POST(request: Request, context: RouteContext) {
       .prepare('SELECT id, name, status, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1')
       .bind(gameId)
       .first<{ id: string; name: string; status: string; updatedAt: string }>();
-    if (!game) throw new Error('Game not found.');
+    if (!game) throw new HttpError(404, 'Game not found.');
     if (body.action === 'CANCEL_SETUP') {
       await requireGameOwner(gameId);
       const decision = canCancelSetup(game.status, game.name, body.confirmationName?.trim() ?? '', 'OWNER', body.confirmed === true);
@@ -318,7 +319,7 @@ export async function POST(request: Request, context: RouteContext) {
         .prepare('SELECT id FROM seats WHERE id = ? AND game_id = ? LIMIT 1')
         .bind(body.seatId, gameId)
         .first();
-      if (!seat) throw new Error('Seat not found.');
+      if (!seat) throw new HttpError(404, 'Seat not found.');
       await db.batch([
         db.prepare('UPDATE seats SET session_version = session_version + 1, updated_at = ? WHERE id = ?').bind(now, body.seatId),
         db.prepare('DELETE FROM seat_sessions WHERE seat_id = ?').bind(body.seatId),
@@ -371,6 +372,6 @@ export async function POST(request: Request, context: RouteContext) {
     }
     throw new Error('Unknown operational action.');
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to update operations.', 400);
+    return routeError(error, 'Unable to update operations.');
   }
 }

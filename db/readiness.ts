@@ -1,3 +1,4 @@
+import { HttpError } from '../lib/http/errors';
 import type { Database } from './contracts';
 
 export const MIGRATION_VERSIONS = [
@@ -14,12 +15,12 @@ export async function verifyDatabaseReady(db: Database): Promise<void> {
   try {
     appliedRows = (await db.prepare('SELECT version FROM __app_migrations').all<{ version: string }>()).results;
   } catch {
-    throw new Error('Database schema is not initialized. Run `npm run db:migrate` with the target database configured.');
+    throw new HttpError(503, 'Database schema is not initialized. Run `npm run db:migrate` with the target database configured.');
   }
 
   const applied = new Set(appliedRows.map((row) => row.version));
   const missing = MIGRATION_VERSIONS.filter((version) => !applied.has(version));
   if (missing.length) {
-    throw new Error(`Database schema is not current. Run \`npm run db:migrate\`; missing: ${missing.join(', ')}.`);
+    throw new HttpError(503, `Database schema is not current. Run \`npm run db:migrate\`; missing: ${missing.join(', ')}.`);
   }
 }

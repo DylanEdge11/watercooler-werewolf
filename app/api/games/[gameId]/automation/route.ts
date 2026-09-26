@@ -4,6 +4,7 @@ import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { resolveAutomationSettings, type PublicationMode } from '../../../../../lib/game/automation';
 import { changes } from '../../../../../lib/game/phase-store';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { HttpError, routeError } from '../../../../../lib/http/errors';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -34,7 +35,7 @@ export async function POST(request: Request, context: RouteContext) {
       )
       .bind(gameId)
       .first<{ status: string; publicationMode: PublicationMode; reviewWindowMinutes: number; pausedAt: string | null }>();
-    if (!game) throw new Error('Game not found.');
+    if (!game) throw new HttpError(404, 'Game not found.');
     if (!EDITABLE.includes(`'${game.status}'`)) return jsonError('Automation cannot change once a game is finished, stopped, or cancelled.', 409);
     const now = new Date().toISOString();
 
@@ -91,6 +92,6 @@ export async function POST(request: Request, context: RouteContext) {
     if (changes(result[0]) !== 1) return jsonError('The game changed before automation could be updated. Refresh and try again.', 409);
     return Response.json({ ok: true, ...settings });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to update automation.', 400);
+    return routeError(error, 'Unable to update automation.');
   }
 }
