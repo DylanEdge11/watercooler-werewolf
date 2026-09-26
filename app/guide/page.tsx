@@ -209,7 +209,7 @@ export default function GuidePage() {
             <li><strong>Feedback</strong> lists the ratings and comments players and moderators send from the feedback card, with the average. It shows whether each came from a player or a moderator. The list doesn’t name the sender, but the audit log and backups record who sent each one.</li>
             <li><strong>Player access recovery</strong> sets a new PIN for a player who forgot theirs, and unlocks a seat locked after 10 wrong PINs (marked “locked” in the list).</li>
             <li><strong>Private rooms</strong> can be made read-only, and individual messages removed with a reason.</li>
-            <li><strong>Co-moderators</strong> can be added by the game owner.</li>
+            <li><strong>Co-moderators</strong> can be added by the game owner, who can also <strong>Remove</strong> one or <strong>Make owner</strong> to hand the game over and stay on as a co-moderator.</li>
             <li><strong>Pause automation</strong> in <strong>Run the live game</strong> stops every automatic lock, calculation, and publication (for an offsite or a long weekend) until you select <strong>Resume automation</strong>. Players see “The schedule is paused”.</li>
             <li><strong>Stop game</strong> ends play permanently. <strong>Reset to setup</strong> (owner only) clears the game back to setup after taking a backup.</li>
           </ul>
