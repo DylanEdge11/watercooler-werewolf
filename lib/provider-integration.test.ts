@@ -373,4 +373,85 @@ describe('real libSQL provider integration', () => {
     const loverDeaths = lover.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED')?.payload.eliminations ?? [];
     expect(loverDeaths.filter((item) => item.isYou).map((item) => item.displayName)).toEqual(['Player 1']);
   });
+
+  test('publishes Day totals that count the Mayor twice, with one ledger line per voter', async () => {
+    await seedActiveGame();
+    await executeBatch([
+      { sql: "UPDATE role_assignments SET role_key = 'MAYOR' WHERE seat_id = 'p0'" },
+      {
+        sql: `INSERT INTO action_submissions (id,phase_id,actor_seat_id,kind,target_ids_json,version,submitted_at) VALUES
+          ('v0','phase','p0','DAY_VOTE','["p1"]',1,'2026-01-01T00:00:00Z'),
+          ('v2','phase','p2','DAY_VOTE','["p1"]',1,'2026-01-01T00:00:01Z'),
+          ('v3','phase','p3','DAY_VOTE','["p5"]',1,'2026-01-01T00:00:02Z'),
+          ('v4','phase','p4','DAY_VOTE','["p5"]',1,'2026-01-01T00:00:03Z')`,
+      },
+    ]);
+    const phaseContext = { params: Promise.resolve({ gameId: 'game' }) };
+    expect((await phasePost(request('/api/games/game/phases', { action: 'LOCK_AND_PROPOSE', phaseId: 'phase' }), phaseContext)).status).toBe(200);
+    expect((await phasePost(request('/api/games/game/phases', { action: 'PUBLISH', phaseId: 'phase' }), phaseContext)).status).toBe(200);
+
+    shared.currentPlayer = { seatId: 'p6' };
+    const body = await (await playerGet(new Request('http://localhost:3000/api/player'))).json() as {
+      timeline: Array<{ eventType: string; payload: Record<string, unknown> & { votes?: unknown[]; voteTotals?: unknown } }>;
+    };
+    const day = body.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED');
+    expect(day?.payload.voteTotals).toEqual([
+      { name: 'Player 1', votes: 3 },
+      { name: 'Player 5', votes: 2 },
+    ]);
+    expect(day?.payload.votes).toHaveLength(4);
+    expect(day?.payload).not.toHaveProperty('tally');
+  });
+
+  test('a Bodyguard save publishes as "no one eliminated" while the moderator keeps the detail', async () => {
+    await seedActiveGame();
+    await executeBatch([
+      { sql: "UPDATE phases SET kind = 'NIGHT' WHERE id = 'phase'" },
+      { sql: "UPDATE role_assignments SET role_key = 'BODYGUARD' WHERE seat_id = 'p0'" },
+      {
+        sql: `INSERT INTO action_submissions (id,phase_id,actor_seat_id,kind,target_ids_json,version,submitted_at) VALUES
+          ('guard','phase','p0','PROTECT','["p1"]',1,'2026-01-01'),
+          ('w17','phase','p17','WOLF_VOTE','["p1"]',1,'2026-01-01'),
+          ('w18','phase','p18','WOLF_VOTE','["p1"]',1,'2026-01-01')`,
+      },
+    ]);
+    const phaseContext = { params: Promise.resolve({ gameId: 'game' }) };
+    expect((await phasePost(request('/api/games/game/phases', { action: 'LOCK_AND_PROPOSE', phaseId: 'phase' }), phaseContext)).status).toBe(200);
+    const published = await phasePost(request('/api/games/game/phases', { action: 'PUBLISH', phaseId: 'phase' }), phaseContext);
+    const moderatorView = await published.json() as { publishedOutcome: { protectedPlayerIds: string[]; eliminations: unknown[] } };
+    expect(moderatorView.publishedOutcome.protectedPlayerIds).toEqual(['p1']);
+    expect(moderatorView.publishedOutcome.eliminations).toEqual([]);
+
+    for (const seatId of ['p5', 'p17', 'p1']) {
+      shared.currentPlayer = { seatId };
+      const text = await (await playerGet(new Request('http://localhost:3000/api/player'))).text();
+      expect(text).not.toMatch(/protect|bodyguard/iu);
+      const night = (JSON.parse(text) as { timeline: Array<{ eventType: string; payload: Record<string, unknown> }> })
+        .timeline.find((event) => event.eventType === 'PHASE_PUBLISHED');
+      expect(night?.payload).toMatchObject({ kind: 'NIGHT', eliminations: [] });
+      expect(night?.payload).not.toHaveProperty('voteTotals');
+    }
+  });
+
+  test('a Night counter covers only the reader’s own action', async () => {
+    await seedActiveGame();
+    await executeBatch([
+      { sql: "UPDATE phases SET kind = 'NIGHT' WHERE id = 'phase'" },
+      { sql: "UPDATE role_assignments SET role_key = 'SEER' WHERE seat_id = 'p0'" },
+      { sql: "UPDATE role_assignments SET role_key = 'BODYGUARD' WHERE seat_id = 'p1'" },
+      {
+        sql: `INSERT INTO action_submissions (id,phase_id,actor_seat_id,kind,target_ids_json,version,submitted_at) VALUES
+          ('see','phase','p0','INVESTIGATE','["p17"]',1,'2026-01-01'),
+          ('w17','phase','p17','WOLF_VOTE','["p2"]',1,'2026-01-01')`,
+      },
+    ]);
+    const participationFor = async (seatId: string) => {
+      shared.currentPlayer = { seatId };
+      return (await (await playerGet(new Request('http://localhost:3000/api/player'))).json() as { participation: unknown }).participation;
+    };
+    expect(await participationFor('p0')).toEqual({ submitted: 1, eligible: 1 });
+    expect(await participationFor('p1')).toEqual({ submitted: 0, eligible: 1 });
+    expect(await participationFor('p5')).toEqual({ submitted: 0, eligible: 0 });
+    expect(await participationFor('p18')).toEqual({ submitted: 1, eligible: 3 });
+  });
 });

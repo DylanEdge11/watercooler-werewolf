@@ -96,6 +96,7 @@ test.describe('scripted 20-player bot farm', () => {
       expect(nightTimeline).toBeDefined();
       expect(nightTimeline?.payload).not.toHaveProperty('investigations');
       expect(nightTimeline?.payload).not.toHaveProperty('protectedPlayerIds');
+      expect(nightTimeline?.payload).not.toHaveProperty('protectedAttackBlocked');
       expect(nightTimeline?.payload).not.toHaveProperty('proposedOutcome');
       expect(villagerDashboard.notifications.some((notification) => notification.body.includes('is the WEREWOLF'))).toBe(false);
       expect(villagerDashboard.candidates.every((candidate) => !Object.hasOwn(candidate, 'role'))).toBe(true);

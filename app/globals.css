@@ -315,6 +315,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .timeline-modal .vote-ledger-row strong { font-size: 13px; white-space: normal; }
 .timeline-modal .vote-ledger-row > span:last-child { font-size: 13px; }
 .timeline-privacy-note { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 14px 0 0; }
+.vote-totals { margin: 0 0 14px; }
+.vote-totals .eyebrow { margin: 0 0 6px; }
+.vote-totals ul { display: flex; flex-wrap: wrap; gap: 6px 8px; list-style: none; margin: 0; padding: 0; }
+.vote-totals li { align-items: baseline; border: 1px solid var(--line); border-radius: 999px; display: inline-flex; font-size: 13px; gap: 8px; padding: 4px 12px; }
+.vote-totals li strong { font-size: 14px; }
+.vote-totals-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 8px 0 0; }
 .modal-close { border-radius: 50%; flex: 0 0 auto; font-size: 28px; }
 @media (max-width: 650px) {
   .waiting-card { grid-template-columns: 42px 1fr; }

@@ -16,9 +16,18 @@ export interface PublicTimelineEvent {
     winner?: string | null;
     eliminations?: Array<{ displayName: string; role: string; cause: string; isYou?: boolean }>;
     votes?: Array<{ actorName: string; targetNames: string[] }>;
-    protectedAttackBlocked?: boolean;
+    /** Day and Final ballots only: per-target totals exactly as the engine counted them. */
+    voteTotals?: VoteTotal[];
   };
 }
+
+export interface VoteTotal {
+  name: string;
+  votes: number;
+}
+
+/** Shown wherever public vote totals appear, whether or not the game has a Mayor. */
+export const MAYOR_TOTALS_NOTE = 'The Mayor’s vote counts twice, so totals can be higher than the number of voters.';
 
 export interface TimelineEntryView {
   /** Short label above the headline, e.g. "Day · Cycle 3". */
@@ -99,11 +108,10 @@ export function describeTimelineEvent(event: PublicTimelineEvent): TimelineEntry
   }
 
   const eliminations = payload.eliminations ?? [];
+  // A Bodyguard save is never announced: a blocked attack reads exactly like a quiet night.
   const description = eliminations.length
-    ? `${eliminations.map((item) => `${item.displayName} · ${readableRole(item.role)}${item.cause === 'LOVER_BOND' ? ' · lover bond' : item.cause === 'HUNTER_SHOT' ? ' · Hunter shot' : ''}`).join(', ')}${payload.protectedAttackBlocked ? ' · Bodyguard protection stopped a pack attack.' : ''}`
-    : payload.protectedAttackBlocked
-      ? 'Bodyguard protection stopped a pack attack. No one died.'
-      : 'No elimination published.';
+    ? eliminations.map((item) => `${item.displayName} · ${readableRole(item.role)}${item.cause === 'LOVER_BOND' ? ' · lover bond' : item.cause === 'HUNTER_SHOT' ? ' · Hunter shot' : ''}`).join(', ')
+    : 'No one was eliminated.';
   const names = eliminations.map((item) => item.displayName);
   const headline = names.length === 0
     ? 'No one was eliminated'
@@ -118,10 +126,27 @@ export function describeTimelineEvent(event: PublicTimelineEvent): TimelineEntry
   };
 }
 
-/** Votes per target, most first; ties keep name order. */
-export function tallyVotes(votes: Array<{ targetNames: string[] }>): Array<{ name: string; count: number }> {
-  const counts = new Map<string, number>();
-  for (const vote of votes) for (const name of vote.targetNames) counts.set(name, (counts.get(name) ?? 0) + 1);
-  return [...counts].map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+/**
+ * Public per-target totals for a published Day or Final ballot. They come from
+ * the engine's own tally in the published outcome, so a living Mayor's vote
+ * counts twice exactly as it did when the result was decided. Night tallies
+ * are private and never returned.
+ */
+export function publicVoteTotals(
+  kind: unknown,
+  outcome: unknown,
+  displayNameById: ReadonlyMap<string, string>,
+): VoteTotal[] | undefined {
+  if (kind !== 'DAY' && kind !== 'FINAL_BALLOT') return undefined;
+  const tally = outcome && typeof outcome === 'object' ? (outcome as { tally?: unknown }).tally : undefined;
+  if (!Array.isArray(tally)) return [];
+  const totals: VoteTotal[] = [];
+  for (const entry of tally) {
+    if (!entry || typeof entry !== 'object') continue;
+    const { playerId, votes } = entry as { playerId?: unknown; votes?: unknown };
+    const name = typeof playerId === 'string' ? displayNameById.get(playerId) : undefined;
+    if (!name || typeof votes !== 'number' || !Number.isFinite(votes) || votes <= 0) continue;
+    totals.push({ name, votes });
+  }
+  return totals.sort((a, b) => b.votes - a.votes || a.name.localeCompare(b.name));
 }

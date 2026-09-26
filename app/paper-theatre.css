@@ -514,6 +514,11 @@
 .app-shell .timeline-modal .vote-ledger-row { border-bottom: 1px dotted var(--pt-paper-edge); }
 .app-shell .timeline-modal .vote-ledger-row:nth-child(odd) { background: rgba(255, 250, 240, 0.5); }
 .app-shell .timeline-privacy-note { color: var(--pt-ink-soft); font-size: 12px; font-style: italic; }
+.app-shell .vote-totals li { background: rgba(255, 250, 240, 0.6); border: 1px solid var(--pt-paper-edge); border-radius: 2px; color: var(--pt-ink); }
+.app-shell .vote-totals li strong { font-family: var(--ll-font-type), monospace; }
+.app-shell .vote-totals .eyebrow { color: var(--pt-ink-soft); }
+.app-shell .vote-totals-note { color: var(--pt-ink-soft); font-style: italic; }
+.app-shell .timeline-votes .vote-totals { margin-top: 10px; }
 
 /* Elimination: the curtain closes, then a proclamation is pinned to it. */
 .app-shell .curtain-call::before,
