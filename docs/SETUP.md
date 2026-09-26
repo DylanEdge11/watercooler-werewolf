@@ -46,7 +46,7 @@ npm run owner:bootstrap
 npm run dev
 ```
 
-`owner:bootstrap` prompts for a password (12+ characters, not echoed) and prints eight recovery codes once. Then open `http://localhost:3000/`, `/player-login`, `/moderator`, and `/guide`.
+`owner:bootstrap` applies any pending migrations first, then prompts for a password (12+ characters, not echoed) and prints eight recovery codes once. Then open `http://localhost:3000/`, `/player-login`, `/moderator`, and `/guide`.
 
 To fill the local game with 20 fictional players, see [Testing](TESTING.md#rehearse-a-game).
 
@@ -153,7 +153,7 @@ Automatic results never depend on a cron: each due step runs on the next visit t
 
 1. Edit `db/schema.ts` and run `npm run db:generate`. Inspect the SQL under `drizzle/`.
 2. Add the new file to `MIGRATION_FILES` in `scripts/db-migration-runner.mjs` **and** its version to `MIGRATION_VERSIONS` in `db/readiness.ts`. `db:generate` does not update these lists.
-3. Run `lib/db/migrations.test.ts`.
+3. Run `lib/db/migrations.test.ts`. It fails if either list disagrees with `drizzle/meta/_journal.json`.
 4. Apply with `npm run db:migrate` to Preview, then to Production before release.
 
 The migration runner records each version in `__app_migrations` and refuses to repair a partially applied initial schema.

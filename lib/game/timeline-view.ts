@@ -65,6 +65,17 @@ export function cycleNumber(sequence: number): number {
   return Math.max(1, Math.ceil(sequence / 2));
 }
 
+/**
+ * The cycle the game is in: the open phase's, or between phases the latest
+ * published one's (the timeline is newest first and always keeps it). 0
+ * before the first phase.
+ */
+export function currentCycle(openPhaseSequence: number | null | undefined, timeline: PublicTimelineEvent[]): number {
+  const sequence = openPhaseSequence
+    ?? timeline.find((event) => event.eventType === 'PHASE_PUBLISHED' && event.payload.sequence)?.payload.sequence;
+  return sequence ? cycleNumber(sequence) : 0;
+}
+
 /** "Day 2", "Night 2", or "Final ballot": the one name players and moderators see for a phase. */
 export function phaseName(kind: string | undefined, sequence?: number | null): string {
   if ((kind === 'DAY' || kind === 'NIGHT') && sequence) return `${phaseLabel(kind)} ${cycleNumber(sequence)}`;

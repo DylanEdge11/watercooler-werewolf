@@ -41,7 +41,7 @@ const HELP_ROWS = [
   ['“This seat is locked”', 'After 10 wrong PINs in a row your seat stops accepting sign-in. Ask the moderator for a new PIN; that unlocks it.'],
   ['My role says “Not released”', 'The moderator has not released roles yet. Every seat must be claimed first.'],
   ['Save response is unavailable', 'Select a legal player first. The phase may also be closed, your role may have no action this phase, or you may be eliminated.'],
-  ['“Too many attempts”', 'Stop retrying and wait for the limit to reset (usually 15 minutes for sign-in).'],
+  ['“Too many attempts”', 'Stop retrying and wait as long as the message says (usually up to 15 minutes for sign-in).'],
   ['Moderator: Randomize is disabled', 'Every seat must be claimed and any edited role counts must be saved. Remove anyone who has decided not to play.'],
   ['Moderator: I can’t add or remove a player', 'The roster locks once roles are randomized. Select Save composition to discard the preview and unlock it. After release, the roster is final.'],
   ['Moderator: Hunter cannot be finalized', 'Wait for the Hunter to submit or for their window to expire, then try again.'],
@@ -146,10 +146,10 @@ export default function GuidePage() {
             ))}
           </div>
           <div className="guide-gallery">
-            <Shot src="/guide/role-werewolf.png" alt="Werewolf dashboard choosing a pack target at night" caption="A Werewolf choosing the pack’s target." />
-            <Shot src="/guide/role-seer.png" alt="Seer dashboard choosing a player to investigate" caption="The Seer choosing whom to investigate, with past results on the right." />
-            <Shot src="/guide/role-hunter.png" alt="Hunter dashboard choosing a final target" caption="A Hunter’s final shot after being eliminated." />
-            <Shot src="/guide/role-bodyguard.png" alt="Bodyguard dashboard choosing a player to protect" caption="The Bodyguard choosing whom to protect tonight." />
+            <Shot src="/guide/role-werewolf.webp" alt="Werewolf dashboard choosing a pack target at night" caption="A Werewolf choosing the pack’s target." />
+            <Shot src="/guide/role-seer.webp" alt="Seer dashboard choosing a player to investigate" caption="The Seer choosing whom to investigate, with past results on the right." />
+            <Shot src="/guide/role-hunter.webp" alt="Hunter dashboard choosing a final target" caption="A Hunter’s final shot after being eliminated." />
+            <Shot src="/guide/role-bodyguard.webp" alt="Bodyguard dashboard choosing a player to protect" caption="The Bodyguard choosing whom to protect tonight." />
           </div>
         </section>
 
@@ -157,7 +157,7 @@ export default function GuidePage() {
           <h2>For players</h2>
           <h3>1. Claim your seat</h3>
           <p>Open the private link your moderator sends you. Check your name, choose a six-digit PIN, and select <strong>Claim my seat</strong>. The link works once; keep your PIN private.</p>
-          <Shot src="/guide/claim.png" alt="Claim page asking for a six-digit PIN" caption="Claiming a seat from an invitation link." width={760} height={640} narrow />
+          <Shot src="/guide/claim.webp" alt="Claim page asking for a six-digit PIN" caption="Claiming a seat from an invitation link." width={760} height={640} narrow />
           <h3>2. Sign in later</h3>
           <p>Go to <Link href="/player-login">Player sign-in</Link> and enter your invitation email and PIN. Your seat code works too.</p>
           <h3>3. Vote or act</h3>
@@ -167,10 +167,10 @@ export default function GuidePage() {
             <li>Select <strong>Save response</strong> and wait for the confirmation. Selecting cards alone does not count.</li>
             <li>You can change your mind and save again until the phase closes. Only your latest saved response counts.</li>
           </ol>
-          <Shot src="/guide/player-day-ballot.png" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself about every ten seconds." />
+          <Shot src="/guide/player-day-ballot.webp" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself about every ten seconds." />
           <h3>4. Follow the story</h3>
           <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page (the latest 100 updates), with who voted for whom each Day. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
-          <Shot src="/guide/player-timeline.png" alt="Player dashboard showing the full Timeline of published results" caption="The full Timeline: each published result, who was eliminated and their role, and how everyone voted." />
+          <Shot src="/guide/player-timeline.webp" alt="Player dashboard showing the full Timeline of published results" caption="The full Timeline: each published result, who was eliminated and their role, and how everyone voted." />
           <h3>Good to know</h3>
           <ul>
             <li>Werewolves and Masons get a private room to chat with their team. Eliminated players can talk in the <strong>Afterlife</strong> room.</li>
@@ -199,7 +199,7 @@ export default function GuidePage() {
             <li><strong>Hunter.</strong> If a Hunter is eliminated, they get the game’s Hunter window (8 hours by default) to shoot. With automatic results the game finishes this as soon as the Hunter shoots, or when the window closes. In review mode, select <strong>Finalize Hunter</strong>.</li>
             <li><strong>Review and publish.</strong> Check the tally and proposed outcome. With automatic results, the console says when it will publish; do nothing and it publishes then, marked “Published automatically after the review window”. Select <strong>Approve &amp; publish</strong> to publish sooner, <strong>Override calculated eliminations</strong> to correct it, or <strong>Pause automation</strong> to hold everything. In review mode, nothing publishes until you select <strong>Approve &amp; publish</strong>. Only publishing eliminates players, reveals roles, and checks for a winner.</li>
           </ol>
-          <Shot src="/guide/moderator-live-game.png" alt="Moderator console reviewing a calculated result" caption="Reviewing a calculated Day result before publishing it." />
+          <Shot src="/guide/moderator-live-game.webp" alt="Moderator console reviewing a calculated result" caption="Reviewing a calculated Day result before publishing it." />
           <p>If a result must be corrected, <strong>Override calculated eliminations</strong> lets you publish a different list with a written reason. The original calculation stays on record. If the corrected list eliminates the Hunter, the Hunter gets a fresh window and chooses their shot again.</p>
           <h3>Finish</h3>
           <p>The game completes as soon as a published result produces a winner. After the final cutoff, you can instead <strong>Enter final showdown</strong> and run Final ballots until someone wins. Afterwards, select <strong>Download JSON backup</strong> to keep a private record.</p>

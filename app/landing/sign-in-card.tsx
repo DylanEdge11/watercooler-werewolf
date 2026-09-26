@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { withRetryAfter } from '../../lib/http/retry-after';
 
 interface SignInCardProps {
   /** Extra class for scene-specific framing (tag, sticky note, library card…). */
@@ -37,6 +38,7 @@ export default function SignInCard({ className = '', kicker, night }: SignInCard
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     setError('');
     setBusy(true);
     const form = new FormData(event.currentTarget);
@@ -48,7 +50,7 @@ export default function SignInCard({ className = '', kicker, night }: SignInCard
       });
       const data = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
-        setError(data.error ?? 'Unable to sign in.');
+        setError(withRetryAfter(data.error ?? 'Unable to sign in.', response));
         setBusy(false);
         return;
       }

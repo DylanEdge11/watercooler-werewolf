@@ -23,7 +23,7 @@ Requests never change the schema. `ensureDatabase()` checks that every version i
 | Deadlines and timezones | `lib/game/scheduling.ts` |
 | Phase open, lock, Hunter, publish | `app/api/games/[gameId]/phases/route.ts` |
 | Player submissions | `app/api/phases/[phaseId]/actions/route.ts` |
-| Player dashboard data | `app/api/player/route.ts` |
+| Player dashboard data | `lib/player/dashboard-data.ts` (`loadDashboard`, three rounds of parallel reads), served by `app/api/player/route.ts` |
 | Stop, reset, restore, cancel, PIN reset | `app/api/games/[gameId]/operations/route.ts`, `lib/backup/` |
 | Sessions, hashing, authorization | `lib/auth/` |
 | Co-moderators: add, remove, transfer ownership | `app/api/games/[gameId]/moderators/`, `lib/auth/game-moderators.ts` |
@@ -82,3 +82,13 @@ Deadlines are entered in the game's IANA timezone and stored as UTC. Impossible 
 ## Polling
 
 The player dashboard, open chat rooms, and moderator panels each refresh every ten seconds. There are no WebSockets. The moderator console loads and refreshes with one request: `GET /api/games` returns the games list plus the selected game's roster and assignments (`?gameId=`, or the newest game; `lib/game/setup-view.ts`), and its signed-out 401 carries `needsBootstrap`. The Communications & operations panel refreshes operations and rooms on every tick, and the co-moderator list, announcements, and feedback at most once a minute and after the moderator's own changes.
+
+## Reserved fields
+
+The schema has fields and states that no feature writes. Code may filter on them, but nothing sets them, so don't build on them or add more like them; drop them in a migration when one is next needed.
+
+- Phase status `SCHEDULED`.
+- Chat room status `PURGED` and `chat_rooms.expires_at`. Retention purges blank the messages instead.
+- Seat status `REPLACED` and `seats.predecessor_seat_id`.
+- `game_events.supersedes_event_id`.
+- `games.final_round_minutes`.

@@ -1,5 +1,6 @@
 import { copyFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import sharp from 'sharp';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { formatZonedDateTimeLocal } from '../../lib/game/scheduling';
 import type { RoleKey } from '../../lib/game/types';
@@ -98,10 +99,12 @@ async function type(page: Page, locator: ReturnType<Page['locator']>, text: stri
   await pause(page, 400);
 }
 
+/** Saves a guide screenshot as WebP (quality 82), about a quarter of the PNG's size. */
 async function shot(page: Page, fileName: string, clip?: { x: number; y: number; width: number; height: number }): Promise<void> {
   await page.evaluate(() => document.documentElement.classList.add('guide-media-hidden'));
   await pause(page, 150);
-  await page.screenshot({ path: resolve(PUBLIC_GUIDE, fileName), animations: 'disabled', clip });
+  const png = await page.screenshot({ animations: 'disabled', clip });
+  await sharp(png).webp({ quality: 82 }).toFile(resolve(PUBLIC_GUIDE, fileName));
   await page.evaluate(() => document.documentElement.classList.remove('guide-media-hidden'));
 }
 
@@ -194,7 +197,7 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   const card = await page.locator('.auth-card').boundingBox();
   if (!card) throw new Error('The claim card was not rendered.');
   const centre = { x: card.x + card.width / 2, y: card.y + card.height / 2 };
-  await shot(page, 'claim.png', { x: Math.max(0, centre.x - 380), y: Math.max(0, centre.y - 320), width: 760, height: 640 });
+  await shot(page, 'claim.webp', { x: Math.max(0, centre.x - 380), y: Math.max(0, centre.y - 320), width: 760, height: 640 });
   await click(page, page.getByRole('button', { name: 'Claim my seat', exact: true }), 1500);
   await click(page, page.getByRole('link', { name: 'Enter the game', exact: true }), 500);
   await expect(page.getByText('Your private role', { exact: true })).toBeVisible({ timeout: 30_000 });
@@ -270,7 +273,7 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await click(page, page.getByRole('button', { name: 'Save response', exact: true }), 600);
   await expect(page.getByRole('status')).toContainText('Response saved as revision');
   await pause(page, 1800);
-  await shot(page, 'player-day-ballot.png');
+  await shot(page, 'player-day-ballot.webp');
 
   // 7. The moderator locks, reviews, and publishes.
   await page.goto('/moderator');
@@ -283,7 +286,7 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await expect(publishButton).toBeVisible({ timeout: 30_000 });
   await livePanel.scrollIntoViewIfNeeded();
   await pause(page, 800);
-  await shot(page, 'moderator-live-game.png');
+  await shot(page, 'moderator-live-game.webp');
   await pause(page, 1800);
   await caption(page, 'Publishing makes the result official for everyone');
   await click(page, publishButton, 2200);
@@ -302,7 +305,7 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await click(page, page.getByRole('button', { name: 'Timeline', exact: true }).filter({ visible: true }), 1500);
   await expect(page.locator('#full-timeline')).toBeVisible();
   await pause(page, 2600);
-  await shot(page, 'player-timeline.png');
+  await shot(page, 'player-timeline.webp');
   await click(page, page.getByRole('button', { name: 'Back to today', exact: true }), 900);
   await caption(page, 'Then the next phase begins. Full rules at /guide');
   await pause(page, 3000);
@@ -319,10 +322,10 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await studioPage.goto('/moderator/player-preview');
   await studioPage.evaluate(() => document.documentElement.classList.add('guide-media-hidden'));
   const roleShots: Array<[string, string, string]> = [
-    ['Werewolf', 'night-action', 'role-werewolf.png'],
-    ['Seer', 'night-action', 'role-seer.png'],
-    ['Hunter', 'hunter-follow-up', 'role-hunter.png'],
-    ['Bodyguard', 'night-action', 'role-bodyguard.png'],
+    ['Werewolf', 'night-action', 'role-werewolf.webp'],
+    ['Seer', 'night-action', 'role-seer.webp'],
+    ['Hunter', 'hunter-follow-up', 'role-hunter.webp'],
+    ['Bodyguard', 'night-action', 'role-bodyguard.webp'],
   ];
   for (const [role, scenario, fileName] of roleShots) {
     await studioPage.getByLabel('Player role').selectOption({ label: role });

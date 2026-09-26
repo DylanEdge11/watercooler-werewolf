@@ -3,6 +3,9 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   agentRules: false,
   serverExternalPackages: ['@libsql/client'],
+  // Guide screenshots are WebP; the optimizer may serve AVIF, and keeps each
+  // resized copy for 31 days instead of re-encoding it after every deploy.
+  images: { formats: ['image/avif', 'image/webp'], minimumCacheTTL: 2_678_400 },
   // Deployed functions use the libSQL web client (db/index.ts); the native
   // SQLite binaries are only for local file databases, so keep them out.
   outputFileTracingExcludes: {
