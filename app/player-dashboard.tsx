@@ -10,6 +10,8 @@ import RoleMedallion from './role-medallion';
 import DeathCurtainCall from './death-curtain-call';
 import BrandMark from './brand-mark';
 import { pollWhileVisible } from '../lib/http/poll-while-visible';
+import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
+import { pollInterval } from '../lib/http/poll-interval';
 import { ROLE_VISIBILITY_COOKIE, roleVisibilityCookieValue } from '../lib/player/role-visibility';
 import { currentCycle, describeTimelineEvent, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
 
@@ -95,6 +97,20 @@ function deadlineLabel(deadline: string | null): string {
   return `${hours}h ${remainder}m`;
 }
 
+/**
+ * The time left, recounted every 15 seconds by this label alone: a refresh that
+ * finds nothing new no longer re-renders the page, so it can't rely on that.
+ */
+function DeadlineCountdown({ deadline }: { deadline: string | null }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!deadline) return undefined;
+    const timer = window.setInterval(() => setTick((tick) => tick + 1), 15_000);
+    return () => window.clearInterval(timer);
+  }, [deadline]);
+  return <span suppressHydrationWarning>{deadlineLabel(deadline)}</span>;
+}
+
 function roleVisibilityKey(playerId: string): string {
   return `werewolf:v1:role-hidden:${playerId}`;
 }
@@ -156,6 +172,10 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const initialDataRef = useRef(initialData);
   const olderNotifications = useRef<DashboardData['notifications']>([]);
   const refreshSequence = useRef(0);
+  // The ETag of the dashboard on screen (lib/http/conditional-get.ts), and the
+  // phase that sets how often it refreshes (lib/http/poll-interval.ts).
+  const dashboardEtag = useRef<string | null>(null);
+  const pacing = useRef(initialData?.phase ?? null);
 
   useLayoutEffect(() => {
     modalState.current = { deathAlert, selectedTimeline, data };
@@ -177,9 +197,12 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const refresh = useCallback(async (preserveLocalSelection = false) => {
     if (previewMode) return;
     const sequence = ++refreshSequence.current;
-    const response = await fetch('/api/player');
+    const response = await conditionalGet('/api/player', dashboardEtag.current);
     if (sequence !== refreshSequence.current) return;
+    // null: nothing changed since the dashboard on screen, so nothing re-renders.
+    if (!response) return;
     if (response.status === 401) {
+      dashboardEtag.current = null;
       setUnauthenticated(true);
       setLoading(false);
       return;
@@ -196,6 +219,8 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       ...result.notifications,
       ...olderNotifications.current.filter((older) => !notificationIds.has(older.id)),
     ];
+    dashboardEtag.current = responseEtag(response);
+    pacing.current = result.phase;
     applyDeviceState(result);
     setData({ ...result, notifications: mergedNotifications });
     if (!keepLocalSelection) {
@@ -253,7 +278,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       void refresh(true).catch((caught) => {
         setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.');
       });
-    }, 10_000);
+    }, () => pollInterval(pacing.current));
     return () => {
       window.clearTimeout(timer);
       stopPolling();
@@ -494,7 +519,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
             <div><p className="eyebrow accent">{data.phase ? phaseName(data.phase.kind, data.phase.sequence) : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{data.permission.label}</p></div>
             {data.phase?.autoPublishAt && !['COMPLETED', 'STOPPED'].includes(data.game.status)
               ? <div className="deadline-card"><span>Results</span><strong suppressHydrationWarning>by {clockTime(data.phase.autoPublishAt, data.game.timezone)}</strong><small suppressHydrationWarning>Results publish by {clockTime(data.phase.autoPublishAt, data.game.timezone)} unless the moderator reviews them first.</small></div>
-              : <div className="deadline-card"><span>Response window</span><strong suppressHydrationWarning>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : deadlineLabel(data.phase?.deadline ?? null)}</strong><small>{data.game.automationPaused && !['COMPLETED', 'STOPPED'].includes(data.game.status) ? 'The schedule is paused' : data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>}
+              : <div className="deadline-card"><span>Response window</span><strong suppressHydrationWarning>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : <DeadlineCountdown deadline={data.phase?.deadline ?? null} />}</strong><small>{data.game.automationPaused && !['COMPLETED', 'STOPPED'].includes(data.game.status) ? 'The schedule is paused' : data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>}
           </div>
           {data.game.status === 'STOPPED' && <p className="notice warning" role="status">{data.game.stopReason ?? 'This game is stopped. Player actions and rooms are read-only.'}</p>}
 
