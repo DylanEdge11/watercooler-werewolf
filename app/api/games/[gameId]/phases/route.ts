@@ -3,6 +3,8 @@ import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { calculateEliminationSlots } from '../../../../../lib/game/balance';
 import { validateFinalShowdownEntry, validatePhaseOpen } from '../../../../../lib/game/phase-policy';
+import { automaticStepDueAt } from '../../../../../lib/game/automation';
+import { advanceGameSafely } from '../../../../../lib/game/automation-sweep';
 import { outstandingResponders } from '../../../../../lib/game/outstanding';
 import { applyEliminationOverride, changes, loadActions, overrideIdsFromJson } from '../../../../../lib/game/phase-store';
 import { runPhaseAction } from '../../../../../lib/game/phase-transitions';
@@ -48,9 +50,14 @@ export async function GET(_request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
+    // The console's ten-second refresh also applies any automatic step that is due.
+    const automation = await advanceGameSafely(gameId);
     const db = getDb();
     const [gameRow, phaseRows, proposalRows, rosterRows] = await Promise.all([
-      db.prepare('SELECT status, final_cutoff_at AS finalCutoffAt, timezone, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1').bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string; updatedAt: string }>(),
+      db.prepare(`SELECT status, final_cutoff_at AS finalCutoffAt, timezone, updated_at AS updatedAt,
+                publication_mode AS publicationMode, review_window_minutes AS reviewWindowMinutes,
+                automation_paused_at AS automationPausedAt
+         FROM games WHERE id = ? LIMIT 1`).bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string; updatedAt: string; publicationMode: string; reviewWindowMinutes: number; automationPausedAt: string | null }>(),
       db
         .prepare(
           `SELECT p.id, p.sequence, p.kind, p.status, p.opens_at AS opensAt, p.closes_at AS closesAt,
@@ -108,6 +115,8 @@ export async function GET(_request: Request, context: RouteContext) {
     return Response.json({
       ok: true,
       game: gameRow,
+      // The next automatic step and when it happens, or null in review mode, while paused, or when nothing is pending.
+      nextAutomaticStep: automation ? automaticStepDueAt(automation.game, automation.phase) : null,
       roster: rosterRows.results.map((row) => ({ ...row, role: canonicalRoleKey(String(row.role)) })),
       phases: phaseRows.results.map((phase) => {
         const proposal = proposalByPhase.get(phase.id);
@@ -125,6 +134,8 @@ export async function GET(_request: Request, context: RouteContext) {
           ...phase,
           currentSubmissions: Number(phase.currentSubmissions),
           outstanding: phase.id === openPhase?.id ? outstanding : [],
+          // Published with no moderator attached: the sweep published it after the review window.
+          publishedAutomatically: phase.status === 'PUBLISHED' && Boolean(proposal) && !proposal?.reviewedByModeratorId,
           proposal: proposal
              ? {
                  ...proposal,

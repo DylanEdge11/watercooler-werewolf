@@ -192,7 +192,7 @@ export async function runPhaseAction(
            WHERE EXISTS (SELECT 1 FROM resolution_proposals WHERE id = ? AND phase_id = ?)
              AND EXISTS (SELECT 1 FROM phases WHERE id = ? AND status IN ('PENDING_HUNTER', 'PENDING_APPROVAL'))`,
         )
-        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ proposalId, inputHash }), now.toISOString(), proposalId, phase.id, phase.id),
+        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ proposalId, inputHash, source: actor.source }), now.toISOString(), proposalId, phase.id, phase.id),
     ]);
     if (changes(result[0]) !== 1) {
       const existing = await db
@@ -277,7 +277,7 @@ export async function runPhaseAction(
            (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
            SELECT ?, ?, ?, 'HUNTER_RESOLVED', ?, ?, ? WHERE ${finalizeGuard}`,
         )
-        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ submitted: Boolean(hunterAction) }), now, phase.id, gameId, claimVersion),
+        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ submitted: Boolean(hunterAction), source: actor.source }), now, phase.id, gameId, claimVersion),
       db.prepare(`UPDATE phases SET status = 'PENDING_APPROVAL', updated_at = ? WHERE id = ? AND game_id = ? AND status = 'HUNTER_FINALIZING' AND version = ? AND ${finalizeGuard}`).bind(now, phase.id, gameId, claimVersion, phase.id, gameId, claimVersion),
     ]);
     if (changes(result[0]) !== 1) return conflict('The Hunter follow-up changed before it could be recorded. Refresh and try again.');
@@ -296,6 +296,9 @@ export async function runPhaseAction(
         ? applyEliminationOverride(proposedOutcome, storedOverrideIds, players)
         : proposedOutcome;
     const isOverride = body.overrideEliminationIds !== undefined;
+    if (actor.source === 'SCHEDULER' && (isOverride || !automatic)) {
+      throw new Error('Automatic publication cannot override a result and needs a review window.');
+    }
     let overrideReason = proposal.overrideReason;
     let overrideJson = proposal.overrideJson;
     if (isOverride) {
@@ -366,9 +369,13 @@ export async function runPhaseAction(
           `UPDATE phases SET status = 'PUBLISHING', version = version + 1, updated_at = ?
            WHERE id = ? AND game_id = ? AND status = 'PENDING_APPROVAL' AND version = ?
              AND EXISTS (SELECT 1 FROM games WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN'))
-             AND EXISTS (SELECT 1 FROM resolution_proposals WHERE id = ? AND phase_id = ? AND status = 'PROPOSED')`,
+             AND EXISTS (SELECT 1 FROM resolution_proposals WHERE id = ? AND phase_id = ? AND status = 'PROPOSED')${automatic ? `
+             AND updated_at <= ?
+             AND EXISTS (SELECT 1 FROM games WHERE id = ? AND publication_mode = 'AUTOMATIC' AND automation_paused_at IS NULL)` : ''}`,
         )
-        .bind(now, phase.id, gameId, phase.version, gameId, proposal.id, phase.id),
+        // An automatic publication re-checks, inside this one claim, that the review window has passed,
+        // that the game is still in automatic mode, and that nobody paused it.
+        .bind(now, phase.id, gameId, phase.version, gameId, proposal.id, phase.id, ...(automatic ? [automatic.reviewCutoff, gameId] : [])),
       db
         .prepare(
           `UPDATE resolution_proposals
@@ -396,7 +403,7 @@ export async function runPhaseAction(
            (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
            SELECT ?, ?, ?, 'PHASE_PUBLISHED', ?, ?, ? WHERE ${publicationGuard}`,
         )
-        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ kind: phase.kind, proposedOutcome, publishedOutcome: outcome, eliminations: eliminated, winner: win.winner, overrideReason }), now, phase.id, gameId, claimedVersion),
+        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ kind: phase.kind, proposedOutcome, publishedOutcome: outcome, eliminations: eliminated, winner: win.winner, overrideReason, source: actor.source }), now, phase.id, gameId, claimedVersion),
     ];
     if (!currentLoverPair && outcome.loverPair) {
       statements.push(

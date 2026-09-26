@@ -7,6 +7,7 @@ const shared = vi.hoisted(() => ({
 
 vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
+vi.mock('../lib/game/automation-sweep', () => ({ sweepAutomation: async () => [] }));
 vi.mock('../lib/game/scheduling', () => ({
   sweepDuePhases: async () => {
     shared.sweepCount += 1;
