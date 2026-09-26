@@ -236,6 +236,21 @@ describe('automatic publication', () => {
     expect(body.phases[0]).toMatchObject({ status: 'PUBLISHED', publishedAutomatically: true });
   });
 
+  test('the console gets full results for the newest phase and a summary of older ones', async () => {
+    await seed({ windowMinutes: 0 });
+    type Phases = { phases: Array<{ id: string; status: string; publishedAutomatically?: boolean; proposal: { outcome: { eliminations: unknown[] } } | null }> };
+    const load = async () => await (await phaseGet(new Request('http://localhost:3000/api/games/game/phases'), context)).json() as Phases;
+    // While it is the newest phase, the published Day carries its result.
+    const first = await load();
+    expect(first.phases[0]).toMatchObject({ id: 'phase', status: 'PUBLISHED', publishedAutomatically: true });
+    expect(first.phases[0].proposal?.outcome.eliminations).toHaveLength(1);
+    // Once a newer phase opens, the Day is a summary that still says how it was published.
+    await exec("INSERT INTO phases (id,game_id,sequence,kind,status,opens_at,closes_at,slots,divisor_snapshot,created_at,updated_at) VALUES ('night','game',2,'NIGHT','OPEN','2026-01-02','2099-01-01T00:00:00.000Z',1,30,'2026-01-02','2026-01-02')");
+    const later = await load();
+    expect(later.phases.map((phase) => phase.id)).toEqual(['night', 'phase']);
+    expect(later.phases[1]).toMatchObject({ id: 'phase', publishedAutomatically: true, proposal: null });
+  });
+
   test('the scheduler route sweeps automatic games', async () => {
     await seed({ windowMinutes: 0 });
     vi.stubEnv('CRON_SECRET', 'fictional-cron-secret');
