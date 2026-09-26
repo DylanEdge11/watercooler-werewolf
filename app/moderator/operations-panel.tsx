@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
+import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import type { FeedbackSummary } from '../../lib/game/feedback';
 import { AnnouncementCopies, FeedbackBlock, type AnnouncementRecord } from './communications';
 
@@ -51,6 +53,12 @@ async function parse<T>(response: Response): Promise<T> {
   return data;
 }
 
+/** A conditional GET (lib/http/conditional-get.ts): null when nothing changed since `etag`. */
+async function parseIfChanged<T>(url: string, etag: string | null): Promise<{ data: T; etag: string | null } | null> {
+  const response = await conditionalGet(url, etag);
+  return response ? { data: await parse<T>(response), etag: responseEtag(response) } : null;
+}
+
 export default function OperationsPanel({ gameId, refreshToken = 0, onGameChanged }: { gameId: string; refreshToken?: number; onGameChanged?: () => void }) {
   const router = useRouter();
   const [operations, setOperations] = useState<Operations | null>(null);
@@ -70,19 +78,24 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
   const refreshSequence = useRef(0);
 
   const lastFullRefresh = useRef(0);
+  // The ETags of the operations and rooms data on screen, by URL.
+  const etags = useRef(new Map<string, string | null>());
 
   /**
-   * Operations and rooms change during play and refresh on every poll. The
-   * co-moderator list, announcements, and feedback rarely change, so a poll
-   * reloads them at most once a minute; opening the panel and the moderator's
-   * own changes (which call refresh()) always reload everything.
+   * Operations and rooms change during play and refresh on every poll, as
+   * conditional requests that skip unchanged data. The co-moderator list,
+   * announcements, and feedback rarely change, so a poll reloads them at most
+   * once a minute; opening the panel and the moderator's own changes (which
+   * call refresh()) always reload everything.
    */
   const refresh = useCallback(async (options: { onlyLive?: boolean } = {}) => {
     const sequence = ++refreshSequence.current;
     const full = !options.onlyLive || Date.now() - lastFullRefresh.current >= SLOW_REFRESH_MS;
-    const [ops, roomData, slow] = await Promise.all([
-      fetch(`/api/games/${gameId}/operations`).then(parse<Operations>),
-      fetch(`/api/games/${gameId}/rooms`).then(parse<{ rooms: Room[]; recentMessages: RoomMessage[] }>),
+    const operationsUrl = `/api/games/${gameId}/operations`;
+    const roomsUrl = `/api/games/${gameId}/rooms`;
+    const [opsResult, roomResult, slow] = await Promise.all([
+      parseIfChanged<Operations>(operationsUrl, etags.current.get(operationsUrl) ?? null),
+      parseIfChanged<{ rooms: Room[]; recentMessages: RoomMessage[] }>(roomsUrl, etags.current.get(roomsUrl) ?? null),
       full
         ? Promise.all([
             fetch(`/api/games/${gameId}/moderators`).then(parse<{ moderators: Moderator[] }>),
@@ -92,9 +105,11 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
         : Promise.resolve(null),
     ]);
     if (sequence !== refreshSequence.current) return;
-    setOperations(ops);
-    setRooms(roomData.rooms);
-    setMessages(roomData.recentMessages);
+    if (roomResult) {
+      etags.current.set(roomsUrl, roomResult.etag);
+      setRooms(roomResult.data.rooms);
+      setMessages(roomResult.data.recentMessages);
+    }
     if (slow) {
       lastFullRefresh.current = Date.now();
       const [moderatorData, announcementData, feedbackData] = slow;
@@ -102,7 +117,12 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
       setAnnouncements(announcementData.announcements);
       setFeedback(feedbackData.feedback);
     }
-    setRestoreBackupId((current) => current && ops.backups?.some((backup) => backup.id === current) ? current : ops.backups?.[0]?.id ?? '');
+    if (opsResult) {
+      etags.current.set(operationsUrl, opsResult.etag);
+      const ops = opsResult.data;
+      setOperations(ops);
+      setRestoreBackupId((current) => current && ops.backups?.some((backup) => backup.id === current) ? current : ops.backups?.[0]?.id ?? '');
+    }
   }, [gameId]);
 
   useEffect(() => {
@@ -111,7 +131,7 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     }, 0);
     const stopPolling = pollWhileVisible(() => {
       void refresh({ onlyLive: true }).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh operations.'));
-    }, 10_000);
+    }, RELAXED_POLL_MS);
     return () => {
       window.clearTimeout(timer);
       stopPolling();

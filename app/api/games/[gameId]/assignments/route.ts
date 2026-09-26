@@ -9,6 +9,7 @@ import { createSecureRandomRolls } from '../../../../../lib/game/random';
 import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
+import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 import { roomSyncStatements } from '../../../../../lib/chat/rooms';
 import { loadAssignmentsView, loadComposition } from '../../../../../lib/game/setup-view';
 
@@ -33,12 +34,12 @@ function changes(result: unknown): number {
 const SETUP_STATUSES = "'DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'";
 
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
-    return Response.json({ ok: true, ...(await loadAssignmentsView(gameId)) });
+    return respondJsonWithEtag(request, { ok: true, ...(await loadAssignmentsView(gameId)) });
   } catch (error) {
     return routeError(error, 'Unable to load assignments.');
   }

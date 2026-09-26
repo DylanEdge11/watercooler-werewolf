@@ -4,6 +4,7 @@ import { advanceGameSafely } from '../../../lib/game/automation-sweep';
 import { jsonError } from '../../../lib/http/security';
 import { routeError } from '../../../lib/http/errors';
 import { loadDashboard, type NotificationCursor } from '../../../lib/player/dashboard-data';
+import { respondJsonWithEtag } from '../../../lib/http/etag';
 
 export async function GET(request: Request) {
   try {
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
     const automation = await advanceGameSafely(identity.gameId);
     const dashboard = await loadDashboard(identity.seatId, { cursor, automation });
     if (!dashboard) return jsonError('Player seat not found.', 404);
-    return Response.json({ ok: true, ...dashboard });
+    return respondJsonWithEtag(request, { ok: true, ...dashboard });
   } catch (error) {
     return routeError(error, 'Unable to load the player dashboard.');
   }

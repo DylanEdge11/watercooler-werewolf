@@ -14,6 +14,7 @@ import { parseScheduledDate } from '../../../../../lib/game/scheduling';
 import { canonicalRoleKey, type PhaseKind, type PhaseResolution, type PlayerState } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
+import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -47,7 +48,7 @@ interface ProposalRow {
   createdAt: string;
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { gameId } = await context.params;
@@ -114,7 +115,7 @@ export async function GET(_request: Request, context: RouteContext) {
           cupidPairExists: Boolean(await loadCurrentLoverPair(gameId)),
         }).map(({ id, displayName }) => ({ id, displayName }))
       : [];
-    return Response.json({
+    return respondJsonWithEtag(request, {
       ok: true,
       game: gameRow,
       // The next automatic step and when it happens, or null in review mode, while paused, or when nothing is pending.

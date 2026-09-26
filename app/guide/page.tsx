@@ -167,7 +167,7 @@ export default function GuidePage() {
             <li>Select <strong>Save response</strong> and wait for the confirmation. Selecting cards alone does not count.</li>
             <li>You can change your mind and save again until the phase closes. Only your latest saved response counts.</li>
           </ol>
-          <Shot src="/guide/player-day-ballot.webp" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself about every ten seconds." />
+          <Shot src="/guide/player-day-ballot.webp" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself: every 10 seconds in the last 15 minutes before a deadline, otherwise every 30 seconds." />
           <h3>4. Follow the story</h3>
           <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page (the latest 100 updates), with who voted for whom each Day. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
           <Shot src="/guide/player-timeline.webp" alt="Player dashboard showing the full Timeline of published results" caption="The full Timeline: each published result, who was eliminated and their role, and how everyone voted." />

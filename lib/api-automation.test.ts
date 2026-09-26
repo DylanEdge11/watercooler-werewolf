@@ -279,3 +279,31 @@ describe('automation settings route', () => {
     expect(await rows("SELECT 1 FROM game_events WHERE event_type = 'AUTOMATION_PAUSED'")).toHaveLength(1);
   });
 });
+
+describe('unchanged refreshes', () => {
+  test('a player refresh with nothing new is an empty 304, and any change sends the dashboard again', async () => {
+    await seed({ mode: 'REVIEW' });
+    shared.currentPlayer = { seatId: 'p5', gameId: 'game' };
+    const load = (etag?: string | null) => playerGet(new Request('http://localhost:3000/api/player', { headers: etag ? { 'if-none-match': etag } : {} }));
+    const first = await load();
+    const etag = first.headers.get('etag');
+    expect(first.status).toBe(200);
+    expect(etag).toMatch(/^"[\w-]+"$/u);
+    const unchanged = await load(etag);
+    expect(unchanged.status).toBe(304);
+    expect(await unchanged.text()).toBe('');
+    await exec("UPDATE seats SET display_name = 'Player Five' WHERE id = 'p5'");
+    const changed = await load(etag);
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get('etag')).not.toBe(etag);
+  });
+
+  test('the console phases refresh answers 304 until a phase changes', async () => {
+    await seed({ mode: 'REVIEW' });
+    const load = (etag?: string | null) => phaseGet(new Request('http://localhost:3000/api/games/game/phases', { headers: etag ? { 'if-none-match': etag } : {} }), context);
+    const etag = (await load()).headers.get('etag');
+    expect((await load(etag)).status).toBe(304);
+    await exec("UPDATE phases SET closes_at = '2099-01-03T00:00:00.000Z' WHERE id = 'phase'");
+    expect((await load(etag)).status).toBe(200);
+  });
+});
