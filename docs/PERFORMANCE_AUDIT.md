@@ -18,7 +18,7 @@ Where the finished work differs from a task as written, the pull request explain
 | Fonts emitted | 14 woff2 files, 977 KB; 6 preloaded on every page (~513 KB) | 14 files, 977 KB; 2 preloaded (264 KB). Trimming Fraunces's axes would bring these to 586 KB and 79 KB, but it changes the look, so it is the owner's call. | #45 |
 | `/api/player` traced function bundle | 21.0 MB, of which 18.7 MB is two native libsql binaries | 2.3 MB, no native binaries | #42 |
 | `/api/player` database round trips per call | 12 sequential reads, plus 4 more (2 write transactions) from `ensureGameRooms` | Three rounds of parallel reads, no writes | #41, #46 |
-| Client polling | Dashboard, chat and 3 moderator panels each poll every 10 s; 7 endpoints per moderator tab | 10 s only in the last 15 minutes before a deadline (chat: while a message is under two minutes old), otherwise 30 s. Unchanged polls get an empty 304. Over one idle minute, one player plus one console tab went from 30 requests (55 KB) to 10 requests (9 of them empty). | #49, #53 |
+| Client polling | Dashboard, chat and 3 moderator panels each poll every 10 s; 7 endpoints per moderator tab | 10 s only in the last 15 minutes before a deadline (chat: while a message is under two minutes old), otherwise 30 s. Unchanged polls get an empty 304. Over one idle minute, one player plus one console tab went from 30 requests (55 KB) to 10 requests, all of them empty 304s. | #49, #53 |
 
 Also done from this audit's list: Task 3 (the sign-in and claim forms send one request per submit, #44), Task 7 (the console starts with one request, #49), and Task 10 (guide screenshots as WebP, #48).
 
