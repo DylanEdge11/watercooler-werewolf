@@ -1,9 +1,9 @@
 import { getDb } from '../../db';
 import { sha256 } from '../auth/crypto';
 import { ensureGameRooms } from '../chat/rooms';
-import { evaluateWinner, resolveHunterShot, resolvePhase } from './engine';
-import { applyEliminationOverride, changes, loadActions, loadPlayers, overrideIdsFromJson } from './phase-store';
 import { investigationMessage } from './catalog';
+import { applyEliminationOverride, evaluateWinner, resolveHunterShot, resolvePhase } from './engine';
+import { changes, loadActions, loadPlayers, overrideIdsFromJson } from './phase-store';
 import { createSecureRandomRolls } from './random';
 import { loadCurrentLoverPair } from './relationships';
 import type { PhaseKind, PhaseResolution } from './types';
@@ -221,25 +221,15 @@ export async function runPhaseAction(
   if (!proposal) throw new Error('No pending resolution exists for this phase.');
 
   if (body.action === 'FINALIZE_HUNTER') {
-    if (phase.status !== 'PENDING_HUNTER') throw new Error('This phase is not waiting for a Hunter.');
+    // HUNTER_FINALIZING is accepted only so a phase stranded by an older build can be finalized.
+    if (phase.status !== 'PENDING_HUNTER' && phase.status !== 'HUNTER_FINALIZING') throw new Error('This phase is not waiting for a Hunter.');
     const deadlinePassed = Boolean(phase.hunterDeadlineAt && new Date(phase.hunterDeadlineAt) <= new Date());
-    const initialActions = await loadActions(phase.id);
-    const initialHunterAction = initialActions.find((action) => action.kind === 'HUNTER_SHOT');
-    if (!initialHunterAction && (!body.skipHunter || !deadlinePassed)) {
+    const players = await loadPlayers(gameId);
+    const actions = await loadActions(phase.id);
+    const hunterAction = actions.find((action) => action.kind === 'HUNTER_SHOT');
+    if (!hunterAction && (!body.skipHunter || !deadlinePassed)) {
       throw new Error('The Hunter has not submitted and their response window is still open.');
     }
-    const claimVersion = Number(phase.version) + 1;
-    const claim = await db
-      .prepare(
-        `UPDATE phases SET status = 'HUNTER_FINALIZING', version = version + 1, updated_at = ?
-         WHERE id = ? AND game_id = ? AND status = 'PENDING_HUNTER' AND version = ?
-           AND EXISTS (SELECT 1 FROM games WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN'))
-           AND EXISTS (SELECT 1 FROM resolution_proposals WHERE id = ? AND status = 'PROPOSED')`,
-      )
-      .bind(new Date().toISOString(), phase.id, gameId, phase.version, gameId, proposal.id)
-      .run();
-    if (changes(claim) !== 1) return conflict('The Hunter follow-up or game changed before it could be finalized. Refresh and try again.');
-    const players = await loadPlayers(gameId);
     const proposedOutcome = JSON.parse(proposal.outcomeJson) as PhaseResolution;
     const storedOverrideIds = overrideIdsFromJson(proposal.overrideJson);
     const currentOutcome = proposal.reviewedOutcomeJson
@@ -247,41 +237,44 @@ export async function runPhaseAction(
       : storedOverrideIds
         ? applyEliminationOverride(proposedOutcome, storedOverrideIds, players)
         : proposedOutcome;
-    const actions = await loadActions(phase.id);
-    const hunterAction = actions.find((action) => action.kind === 'HUNTER_SHOT');
-    let outcome: PhaseResolution;
-    if (hunterAction) {
-      outcome = resolveHunterShot({ players, resolution: currentOutcome, hunterAction });
-    } else {
-      if (!body.skipHunter || !deadlinePassed) {
-        await db.prepare("UPDATE phases SET status = 'PENDING_HUNTER', updated_at = ? WHERE id = ? AND status = 'HUNTER_FINALIZING' AND version = ?").bind(new Date().toISOString(), phase.id, claimVersion).run();
-        throw new Error('The Hunter has not submitted and their response window is still open.');
-      }
-      outcome = {
-        ...currentOutcome,
-        hunterRequiredIds: [],
-        warnings: [...currentOutcome.warnings, { actionId: 'hunter-timeout', reason: 'Hunter response window expired without a shot.' }],
-      };
-    }
+    const outcome: PhaseResolution = hunterAction
+      ? resolveHunterShot({ players, resolution: currentOutcome, hunterAction })
+      : {
+          ...currentOutcome,
+          hunterRequiredIds: [],
+          warnings: [...currentOutcome.warnings, { actionId: 'hunter-timeout', reason: 'Hunter response window expired without a shot.' }],
+        };
     const now = new Date().toISOString();
-    const finalizeGuard = `EXISTS (
-      SELECT 1 FROM phases p JOIN games g ON g.id = p.game_id
-      WHERE p.id = ? AND p.game_id = ? AND p.status = 'HUNTER_FINALIZING' AND p.version = ?
-        AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN')
+    const finalizedVersion = Number(phase.version) + 1;
+    const finalizedGuard = `EXISTS (
+      SELECT 1 FROM phases WHERE id = ? AND game_id = ? AND status = 'PENDING_APPROVAL' AND version = ? AND updated_at = ?
     )`;
+    // Everything is calculated before this one transaction, so an error can never leave the
+    // phase half-finalized. The first statement also requires the Hunter's saved shot to be
+    // the one read above: a shot saved in between makes the whole batch change nothing.
     const result = await db.batch([
-      db.prepare(`UPDATE resolution_proposals SET reviewed_outcome_json = ? WHERE id = ? AND status = 'PROPOSED' AND ${finalizeGuard}`).bind(JSON.stringify(outcome), proposal.id, phase.id, gameId, claimVersion),
-      // Record the resolution before the phase transition invalidates finalizeGuard.
+      db
+        .prepare(
+          `UPDATE phases SET status = 'PENDING_APPROVAL', version = version + 1, updated_at = ?
+           WHERE id = ? AND game_id = ? AND status = ? AND version = ?
+             AND EXISTS (SELECT 1 FROM games WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN'))
+             AND EXISTS (SELECT 1 FROM resolution_proposals WHERE id = ? AND status = 'PROPOSED')
+             AND COALESCE((SELECT a.id FROM action_submissions a
+                           WHERE a.phase_id = ? AND a.kind = 'HUNTER_SHOT' AND a.superseded_at IS NULL
+                           ORDER BY a.version DESC LIMIT 1), '') = ?`,
+        )
+        .bind(now, phase.id, gameId, phase.status, phase.version, gameId, proposal.id, phase.id, hunterAction?.id ?? ''),
+      db.prepare(`UPDATE resolution_proposals SET reviewed_outcome_json = ? WHERE id = ? AND status = 'PROPOSED' AND ${finalizedGuard}`)
+        .bind(JSON.stringify(outcome), proposal.id, phase.id, gameId, finalizedVersion, now),
       db
         .prepare(
           `INSERT INTO game_events
            (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
-           SELECT ?, ?, ?, 'HUNTER_RESOLVED', ?, ?, ? WHERE ${finalizeGuard}`,
+           SELECT ?, ?, ?, 'HUNTER_RESOLVED', ?, ?, ? WHERE ${finalizedGuard}`,
         )
-        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ submitted: Boolean(hunterAction), source: actor.source }), now, phase.id, gameId, claimVersion),
-      db.prepare(`UPDATE phases SET status = 'PENDING_APPROVAL', updated_at = ? WHERE id = ? AND game_id = ? AND status = 'HUNTER_FINALIZING' AND version = ? AND ${finalizeGuard}`).bind(now, phase.id, gameId, claimVersion, phase.id, gameId, claimVersion),
+        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ submitted: Boolean(hunterAction), source: actor.source }), now, phase.id, gameId, finalizedVersion, now),
     ]);
-    if (changes(result[0]) !== 1) return conflict('The Hunter follow-up changed before it could be recorded. Refresh and try again.');
+    if (changes(result[0]) !== 1) return conflict('The Hunter follow-up or game changed before it could be finalized. Refresh and try again.');
     return done({ ok: true, outcome });
   }
 
@@ -303,9 +296,12 @@ export async function runPhaseAction(
     let overrideReason = proposal.overrideReason;
     let overrideJson = proposal.overrideJson;
     if (isOverride) {
+      if (!Array.isArray(body.overrideEliminationIds) || body.overrideEliminationIds.some((id) => typeof id !== 'string')) {
+        throw new Error('Override eliminations must be a list of player ids.');
+      }
       const reason = body.overrideReason?.trim() ?? '';
       if (reason.length < 10) throw new Error('An override requires a reason of at least 10 characters.');
-      const ids = [...new Set((body.overrideEliminationIds ?? []).filter((id): id is string => typeof id === 'string'))];
+      const ids = [...new Set(body.overrideEliminationIds)];
       const livingIds = new Set(players.filter((player) => player.alive).map((player) => player.id));
       if (ids.length > Number(phase.slots) + 1 || ids.some((id) => !livingIds.has(id))) {
         throw new Error('Override eliminations must be living players within the phase limit.');
@@ -340,6 +336,14 @@ export async function runPhaseAction(
              WHERE ${handoffGuard}`,
           )
           .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ source: 'OVERRIDE', hunterIds: outcome.hunterRequiredIds, overrideReason }), now, phase.id, gameId),
+        // The corrected result is a new situation, so the Hunter chooses again. A shot saved
+        // against the old result could now be invalid (for example, its target is eliminated).
+        db
+          .prepare(
+            `UPDATE action_submissions SET superseded_at = ?
+             WHERE phase_id = ? AND kind = 'HUNTER_SHOT' AND superseded_at IS NULL AND ${handoffGuard}`,
+          )
+          .bind(now, phase.id, phase.id, gameId),
         db
           .prepare(
             `UPDATE phases SET status = 'PENDING_HUNTER', hunter_deadline_at = ?, updated_at = ?

@@ -52,7 +52,8 @@ export function nextAutomaticStep(game: AutomationGame, phase: AutomationPhase |
     return new Date(phase.closesAt).valueOf() <= time ? { kind: 'LOCK_AND_PROPOSE', phaseId: phase.id } : null;
   }
   if (phase.status === 'LOCKED') return { kind: 'LOCK_AND_PROPOSE', phaseId: phase.id };
-  if (phase.status === 'PENDING_HUNTER') {
+  // HUNTER_FINALIZING appears only on a phase stranded by an older build; it finalizes the same way.
+  if (phase.status === 'PENDING_HUNTER' || phase.status === 'HUNTER_FINALIZING') {
     if (phase.hunterShotSaved) return { kind: 'FINALIZE_HUNTER', phaseId: phase.id, skipHunter: false };
     const deadline = phase.hunterDeadlineAt ? new Date(phase.hunterDeadlineAt).valueOf() : Number.POSITIVE_INFINITY;
     return deadline <= time ? { kind: 'FINALIZE_HUNTER', phaseId: phase.id, skipHunter: true } : null;

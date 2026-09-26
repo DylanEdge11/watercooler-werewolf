@@ -6,7 +6,8 @@ import { validateFinalShowdownEntry, validatePhaseOpen } from '../../../../../li
 import { automaticStepDueAt } from '../../../../../lib/game/automation';
 import { advanceGameSafely } from '../../../../../lib/game/automation-sweep';
 import { outstandingResponders } from '../../../../../lib/game/outstanding';
-import { applyEliminationOverride, changes, loadActions, overrideIdsFromJson } from '../../../../../lib/game/phase-store';
+import { applyEliminationOverride } from '../../../../../lib/game/engine';
+import { changes, loadActions, overrideIdsFromJson } from '../../../../../lib/game/phase-store';
 import { runPhaseAction } from '../../../../../lib/game/phase-transitions';
 import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
 import { parseScheduledDate } from '../../../../../lib/game/scheduling';
@@ -187,20 +188,11 @@ export async function POST(request: Request, context: RouteContext) {
     if (body.action === 'ENTER_FINAL_SHOWDOWN') {
       if (game.status === 'FINAL_SHOWDOWN') return Response.json({ ok: true, idempotent: true, status: game.status });
       const latest = await db
-        .prepare(
-          `SELECT p.kind, p.status, rp.outcome_json AS outcomeJson
-           FROM phases p LEFT JOIN resolution_proposals rp ON rp.phase_id = p.id
-           WHERE p.game_id = ? ORDER BY p.sequence DESC, rp.created_at DESC LIMIT 1`,
-        )
+        .prepare('SELECT kind, status FROM phases WHERE game_id = ? ORDER BY sequence DESC LIMIT 1')
         .bind(gameId)
-        .first<{ kind: PhaseKind; status: string; outcomeJson: string | null }>();
-      const latestEntry = latest
-        ? {
-            kind: latest.kind,
-            status: latest.status,
-            winner: null,
-          }
-        : null;
+        .first<{ kind: PhaseKind; status: string }>();
+      // A final ballot that produced a winner completes the game, so the policy's game-status check covers it.
+      const latestEntry = latest ? { kind: latest.kind, status: latest.status } : null;
       const policyError = validateFinalShowdownEntry({
         gameStatus: game.status,
         latestPhase: latestEntry,
@@ -242,20 +234,11 @@ export async function POST(request: Request, context: RouteContext) {
         throw new Error('Finish the current phase before opening another.');
       }
       const latest = await db
-        .prepare(
-          `SELECT p.kind, p.status, rp.outcome_json AS outcomeJson
-           FROM phases p LEFT JOIN resolution_proposals rp ON rp.phase_id = p.id
-           WHERE p.game_id = ? ORDER BY p.sequence DESC, rp.created_at DESC LIMIT 1`,
-        )
+        .prepare('SELECT kind, status FROM phases WHERE game_id = ? ORDER BY sequence DESC LIMIT 1')
         .bind(gameId)
-        .first<{ kind: PhaseKind; status: string; outcomeJson: string | null }>();
-      const latestEntry = latest
-        ? {
-            kind: latest.kind,
-            status: latest.status,
-            winner: null,
-          }
-        : null;
+        .first<{ kind: PhaseKind; status: string }>();
+      // A final ballot that produced a winner completes the game, so the policy's game-status check covers it.
+      const latestEntry = latest ? { kind: latest.kind, status: latest.status } : null;
       const policyError = validatePhaseOpen({ gameStatus: game.status, latestPhase: latestEntry, requestedKind: body.kind });
       if (policyError) throw new Error(policyError);
       const living = await db

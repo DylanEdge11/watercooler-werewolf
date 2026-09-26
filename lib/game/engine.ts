@@ -237,6 +237,27 @@ export function resolvePhase(input: PhaseResolutionInput): PhaseResolution {
   };
 }
 
+/**
+ * A moderator's corrected list of eliminations, applied to the engine's
+ * original result. Lover bonds still follow, and any eliminated Hunter is
+ * owed a shot again.
+ */
+export function applyEliminationOverride(
+  proposedOutcome: PhaseResolution,
+  ids: string[],
+  players: PlayerState[],
+): PhaseResolution {
+  const cause: Elimination['cause'] = proposedOutcome.kind === 'NIGHT' ? 'WEREWOLF_ATTACK' : 'DAY_VOTE';
+  const eliminations = applyLoverBond(ids.map((playerId) => ({ playerId, cause })), proposedOutcome.loverPair);
+  const roles = new Map(players.map((player) => [player.id, player.role]));
+  return {
+    ...proposedOutcome,
+    selectedTargets: ids,
+    eliminations,
+    hunterRequiredIds: eliminations.filter((item) => roles.get(item.playerId) === 'HUNTER').map((item) => item.playerId),
+  };
+}
+
 export function resolveHunterShot(input: HunterResolutionInput): PhaseResolution {
   const { resolution, players, hunterAction } = input;
   if (resolution.hunterRequiredIds.length === 0 || !hunterAction) return resolution;
@@ -252,11 +273,14 @@ export function resolveHunterShot(input: HunterResolutionInput): PhaseResolution
     target.id === hunterId ||
     resolution.eliminations.some((item) => item.playerId === target.id)
   ) {
+    // An invalid shot counts as no shot. Keeping the Hunter pending would send
+    // the phase back to the Hunter on every publish with no way out.
     return {
       ...resolution,
+      hunterRequiredIds: [],
       warnings: [
         ...resolution.warnings,
-        { actionId: hunterAction.id, reason: 'Hunter shot was not valid.' },
+        { actionId: hunterAction.id, reason: 'Hunter shot was not valid; no shot was applied.' },
       ],
     };
   }

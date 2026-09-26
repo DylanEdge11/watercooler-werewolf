@@ -20,7 +20,7 @@ export async function loadAutomationState(gameId: string): Promise<AutomationSta
               p.updated_at AS phaseUpdatedAt,
               EXISTS (SELECT 1 FROM action_submissions a WHERE a.phase_id = p.id AND a.kind = 'HUNTER_SHOT' AND a.superseded_at IS NULL) AS hunterShotSaved
        FROM games g
-       LEFT JOIN phases p ON p.game_id = g.id AND p.status IN ('OPEN', 'LOCKED', 'PENDING_HUNTER', 'PENDING_APPROVAL')
+       LEFT JOIN phases p ON p.game_id = g.id AND p.status IN ('OPEN', 'LOCKED', 'PENDING_HUNTER', 'HUNTER_FINALIZING', 'PENDING_APPROVAL')
        WHERE g.id = ?
        ORDER BY p.sequence DESC LIMIT 1`,
     )
