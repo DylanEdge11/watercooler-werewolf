@@ -1,23 +1,8 @@
 import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import type { ActionKind, PhaseKind, RoleKey } from '../lib/game/types';
+import type { ActionKind, GameStatus, PhaseKind, RoleKey } from '../lib/game/types';
 
-export type GameStatus =
-  | 'DRAFT'
-  | 'REGISTRATION'
-  | 'ASSIGNMENT_PREVIEW'
-  | 'ACTIVE'
-  | 'FINAL_SHOWDOWN'
-  | 'COMPLETED'
-  | 'STOPPED'
-  | 'CANCELLED'
-  // These values are short-lived database claims. They are never a player-
-  // facing lifecycle state, but make setup transitions race-safe.
-  | 'COMPOSITION_SAVING'
-  | 'ASSIGNMENT_PREVIEWING'
-  | 'ROSTER_IMPORTING'
-  | 'RESETTING'
-  | 'RESTORING';
+export type { GameStatus };
 export type PhaseStatus =
   | 'SCHEDULED'
   | 'OPEN'
