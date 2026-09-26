@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateWinner, resolveHunterShot, resolvePhase, selectFromTally } from './engine';
+import { applyEliminationOverride, evaluateWinner, resolveHunterShot, resolvePhase, selectFromTally } from './engine';
 import type { ActionSubmission, PlayerState } from './types';
 
 const players: PlayerState[] = [
@@ -126,6 +126,42 @@ describe('Hunter and victory', () => {
     });
     expect(final.eliminations).toContainEqual({ playerId: 'wolf-1', cause: 'HUNTER_SHOT' });
     expect(final.hunterRequiredIds).toEqual([]);
+  });
+
+  it('treats an invalid shot as no shot so the Hunter is no longer pending', () => {
+    const initial = resolvePhase({
+      phaseId: 'day-hunter',
+      kind: 'DAY',
+      slots: 1,
+      players,
+      actions: [action('vote', 'seer', 'DAY_VOTE', ['hunter'])],
+    });
+    const final = resolveHunterShot({
+      players,
+      resolution: initial,
+      hunterAction: action('shot', 'hunter', 'HUNTER_SHOT', ['hunter']),
+    });
+    expect(final.eliminations).toEqual(initial.eliminations);
+    expect(final.hunterRequiredIds).toEqual([]);
+    expect(final.warnings).toContainEqual({ actionId: 'shot', reason: 'Hunter shot was not valid; no shot was applied.' });
+  });
+
+  it('applies an override with lover bonds and marks an eliminated Hunter as owed a shot', () => {
+    const initial = resolvePhase({
+      phaseId: 'day-override',
+      kind: 'DAY',
+      slots: 1,
+      players,
+      actions: [action('vote', 'seer', 'DAY_VOTE', ['villager-1'])],
+      loverPair: { cupidId: 'villager-2', playerIds: ['hunter', 'mason-1'] },
+    });
+    const overridden = applyEliminationOverride(initial, ['mason-1'], players);
+    expect(overridden.eliminations).toEqual([
+      { playerId: 'mason-1', cause: 'DAY_VOTE' },
+      { playerId: 'hunter', cause: 'LOVER_BOND' },
+    ]);
+    expect(overridden.selectedTargets).toEqual(['mason-1']);
+    expect(overridden.hunterRequiredIds).toEqual(['hunter']);
   });
 
   it('awards Village when the last wolf dies and Werewolves at parity', () => {

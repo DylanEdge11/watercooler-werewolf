@@ -199,7 +199,7 @@ export default function GuidePage() {
             <li><strong>Review and publish.</strong> Check the tally and proposed outcome. With automatic results, the console says when it will publish; do nothing and it publishes then, marked “Published automatically after the review window”. Select <strong>Approve &amp; publish</strong> to publish sooner, <strong>Override calculated eliminations</strong> to correct it, or <strong>Pause automation</strong> to hold everything. In review mode, nothing publishes until you select <strong>Approve &amp; publish</strong>. Only publishing eliminates players, reveals roles, and checks for a winner.</li>
           </ol>
           <Shot src="/guide/moderator-live-game.png" alt="Moderator console reviewing a calculated result" caption="Reviewing a calculated Day result before publishing it." />
-          <p>If a result must be corrected, <strong>Override calculated eliminations</strong> lets you publish a different list with a written reason. The original calculation stays on record.</p>
+          <p>If a result must be corrected, <strong>Override calculated eliminations</strong> lets you publish a different list with a written reason. The original calculation stays on record. If the corrected list eliminates the Hunter, the Hunter gets a fresh window and chooses their shot again.</p>
           <h3>Finish</h3>
           <p>The game completes as soon as a published result produces a winner. After the final cutoff, you can instead <strong>Enter final showdown</strong> and run Final ballots until someone wins. Afterwards, select <strong>Download JSON backup</strong> to keep a private record.</p>
           <h3>Moderator tools</h3>
