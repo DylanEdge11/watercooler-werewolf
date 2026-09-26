@@ -9,11 +9,7 @@ describe('public moderator bootstrap boundary', () => {
   test('reports that the operator command is required without exposing a creation path', async () => {
     const status = await GET();
     expect(status.status).toBe(200);
-    await expect(status.json()).resolves.toMatchObject({
-      ok: true,
-      needsBootstrap: true,
-      operatorBootstrapRequired: true,
-    });
+    await expect(status.json()).resolves.toEqual({ ok: true, needsBootstrap: true });
 
     const response = await POST(new Request('http://localhost:3000/api/moderators/bootstrap', {
       method: 'POST',

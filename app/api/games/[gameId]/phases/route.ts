@@ -13,6 +13,7 @@ import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
 import { parseScheduledDate } from '../../../../../lib/game/scheduling';
 import { canonicalRoleKey, type PhaseKind, type PhaseResolution, type PlayerState } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { HttpError, routeError } from '../../../../../lib/http/errors';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -154,7 +155,7 @@ export async function GET(_request: Request, context: RouteContext) {
       }),
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to load phases.', 401);
+    return routeError(error, 'Unable to load phases.');
   }
 }
 
@@ -183,7 +184,7 @@ export async function POST(request: Request, context: RouteContext) {
       )
       .bind(gameId)
       .first<{ status: string; dayDivisor: number; nightDivisor: number; hunterWindowMinutes: number; finalCutoffAt: string; timezone: string }>();
-    if (!game) throw new Error('Game not found.');
+    if (!game) throw new HttpError(404, 'Game not found.');
 
     if (body.action === 'ENTER_FINAL_SHOWDOWN') {
       if (game.status === 'FINAL_SHOWDOWN') return Response.json({ ok: true, idempotent: true, status: game.status });
@@ -283,6 +284,6 @@ export async function POST(request: Request, context: RouteContext) {
     const result = await runPhaseAction(gameId, game, { moderatorId: moderator.id, source: 'MODERATOR' }, body);
     return result.status === 200 ? Response.json(result.body) : jsonError(result.error, result.status);
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to update the phase.', 400);
+    return routeError(error, 'Unable to update the phase.');
   }
 }

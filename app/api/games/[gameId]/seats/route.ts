@@ -4,7 +4,8 @@ import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
 import { canAddSeat } from '../../../../../lib/game/roster-edit';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { applySeatChange, loadEditableRoster, RosterEditError } from '../../../../../lib/roster/edit-roster';
+import { routeError } from '../../../../../lib/http/errors';
+import { applySeatChange, loadEditableRoster } from '../../../../../lib/roster/edit-roster';
 import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
 
 interface RouteContext {
@@ -68,7 +69,6 @@ export async function POST(request: Request, context: RouteContext) {
       ...result,
     });
   } catch (error) {
-    if (error instanceof RosterEditError) return jsonError(error.message, error.status);
-    return jsonError(error instanceof Error ? error.message : 'Unable to add the player.', 400);
+    return routeError(error, 'Unable to add the player.');
   }
 }

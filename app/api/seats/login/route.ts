@@ -3,7 +3,8 @@ import { ensureDatabase } from '../../../../db/migrate';
 import { sha256, verifySecret } from '../../../../lib/auth/crypto';
 import { createPlayerSession } from '../../../../lib/auth/session';
 import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
-import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../lib/http/rate-limit';
+import { routeError } from '../../../../lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
 
 interface LoginSeat {
   id: string;
@@ -62,8 +63,6 @@ export async function POST(request: Request) {
     await createPlayerSession(seat.id, seat.sessionVersion);
     return Response.json({ ok: true, seat: { displayName: seat.displayName, gameId: seat.gameId } });
   } catch (error) {
-    return error instanceof RateLimitError
-      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
-      : jsonError(error instanceof Error ? error.message : 'Unable to sign in.', 400);
+    return routeError(error, 'Unable to sign in.');
   }
 }

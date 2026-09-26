@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { HttpError } from '../lib/http/errors';
 import { createClient } from '@libsql/client/node';
 import {
   LibsqlDatabase,
@@ -15,7 +16,8 @@ let database: LibsqlDatabase | undefined;
 export function getDb(): LibsqlDatabase {
   const url = process.env.TURSO_DATABASE_URL?.trim();
   if (!url) {
-    throw new Error(
+    throw new HttpError(
+      503,
       'TURSO_DATABASE_URL is not configured. Run the explicit database migration command and configure the deployment environment.',
     );
   }
@@ -23,7 +25,8 @@ export function getDb(): LibsqlDatabase {
     (process.env.NODE_ENV === 'production' || process.env.VERCEL === '1') &&
     isLocalDatabaseUrl(url)
   ) {
-    throw new Error(
+    throw new HttpError(
+      503,
       'A writable local database URL is not allowed in a deployed function. Configure the remote Turso/libSQL database.',
     );
   }

@@ -3,7 +3,8 @@ import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentPlayer } from '../../../../../lib/auth/session';
 import { ensureGameRooms, normalizeChatBody } from '../../../../../lib/chat/rooms';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../../lib/http/rate-limit';
+import { HttpError, routeError } from '../../../../../lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
 
 interface RouteContext {
   params: Promise<{ roomId: string }>;
@@ -11,7 +12,7 @@ interface RouteContext {
 
 async function requireRoomAccess(roomId: string) {
   const identity = await getCurrentPlayer();
-  if (!identity) throw new Error('Player authentication required.');
+  if (!identity) throw new HttpError(401, 'Player authentication required.');
   await ensureGameRooms(identity.gameId);
   const room = await getDb()
     .prepare(
@@ -21,7 +22,7 @@ async function requireRoomAccess(roomId: string) {
     )
     .bind(roomId, identity.seatId)
     .first<{ id: string; gameId: string; type: string; status: string; access: string }>();
-  if (!room || room.gameId !== identity.gameId) throw new Error('Private room access denied.');
+  if (!room || room.gameId !== identity.gameId) throw new HttpError(403, 'Private room access denied.');
   return { identity, room };
 }
 
@@ -43,7 +44,7 @@ export async function GET(_request: Request, context: RouteContext) {
       .all();
     return Response.json({ ok: true, room, messages: messages.results });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to load this room.', 403);
+    return routeError(error, 'Unable to load this room.');
   }
 }
 
@@ -109,8 +110,6 @@ export async function POST(request: Request, context: RouteContext) {
     }
     return Response.json({ ok: true, message: { id, body: message, authorName: identity.displayName, createdAt: now } }, { status: 201 });
   } catch (error) {
-    return error instanceof RateLimitError
-      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
-      : jsonError(error instanceof Error ? error.message : 'Unable to send this message.', 400);
+    return routeError(error, 'Unable to send this message.');
   }
 }

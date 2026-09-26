@@ -7,6 +7,7 @@ import { defaultComposition } from '../../../../../lib/game/balance';
 import { ROLE_CATALOG } from '../../../../../lib/game/catalog';
 import { canonicalRoleKey, ROLE_KEYS } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { createInviteExport, parseRosterCsv } from '../../../../../lib/roster/csv';
 
 interface RouteContext {
@@ -44,7 +45,7 @@ export async function GET(_request: Request, context: RouteContext) {
       .all();
     return Response.json({ ok: true, emailConfigured: readSmtpSettings() !== null, roster: roster.results, composition: composition.results.map((row) => ({ ...row, roleKey: canonicalRoleKey(String(row.roleKey)) })) });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to load the roster.', 401);
+    return routeError(error, 'Unable to load the roster.');
   }
 }
 
@@ -65,7 +66,7 @@ export async function POST(request: Request, context: RouteContext) {
       .prepare('SELECT status, setup_revision AS setupRevision FROM games WHERE id = ? LIMIT 1')
       .bind(gameId)
       .first<{ status: string; setupRevision: number }>();
-    if (!game) throw new Error('Game not found.');
+    if (!game) throw new HttpError(404, 'Game not found.');
     if (!['DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'].includes(game.status)) {
       throw new Error('The roster cannot be replaced after the game becomes active.');
     }
@@ -194,6 +195,6 @@ export async function POST(request: Request, context: RouteContext) {
       inviteCsv: createInviteExport(inviteRows),
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to import the roster.', 400);
+    return routeError(error, 'Unable to import the roster.');
   }
 }

@@ -1,7 +1,8 @@
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { createBackupRecord } from '../../../../../lib/backup/snapshot';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { assertSameOrigin } from '../../../../../lib/http/security';
+import { routeError } from '../../../../../lib/http/errors';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -24,6 +25,6 @@ export async function POST(request: Request, context: RouteContext) {
       },
     );
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to create the backup export.', 400);
+    return routeError(error, 'Unable to create the backup export.');
   }
 }

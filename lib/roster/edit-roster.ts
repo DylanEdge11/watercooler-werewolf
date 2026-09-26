@@ -3,10 +3,11 @@ import type { SqlValue } from '../../db/contracts';
 import { ROLE_CATALOG } from '../game/catalog';
 import { adjustCompositionForRosterChange, canEditRoster } from '../game/roster-edit';
 import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from '../game/types';
+import { HttpError } from '../http/errors';
 
-export class RosterEditError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
+export class RosterEditError extends HttpError {
+  constructor(message: string, status: number) {
+    super(status, message);
   }
 }
 

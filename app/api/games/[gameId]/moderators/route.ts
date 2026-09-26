@@ -1,8 +1,9 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
+import { requireGameModerator, requireGameOwner } from '../../../../../lib/auth/authorization';
 import { createModeratorAccount } from '../../../../../lib/auth/moderators';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { assertSameOrigin } from '../../../../../lib/http/security';
+import { routeError } from '../../../../../lib/http/errors';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -23,7 +24,7 @@ export async function GET(_request: Request, context: RouteContext) {
       .all();
     return Response.json({ ok: true, moderators: rows.results });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to load moderators.', 401);
+    return routeError(error, 'Unable to load moderators.');
   }
 }
 
@@ -32,12 +33,7 @@ export async function POST(request: Request, context: RouteContext) {
     assertSameOrigin(request);
     await ensureDatabase();
     const { gameId } = await context.params;
-    const owner = await requireGameModerator(gameId);
-    const ownerMembership = await getDb()
-      .prepare("SELECT role FROM game_moderators WHERE game_id = ? AND moderator_id = ? AND role = 'OWNER'")
-      .bind(gameId, owner.id)
-      .first();
-    if (!ownerMembership) throw new Error('Only the game owner can add co-moderators.');
+    const owner = await requireGameOwner(gameId, 'add co-moderators');
     const body = (await request.json()) as { email?: string; password?: string };
     const email = body.email?.trim().toLowerCase() ?? '';
     if (!/^\S+@\S+\.\S+$/u.test(email)) throw new Error('Enter a valid co-moderator email.');
@@ -70,6 +66,6 @@ export async function POST(request: Request, context: RouteContext) {
     ]);
     return Response.json({ ok: true, moderator: account, recoveryCodes });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to add the co-moderator.', 400);
+    return routeError(error, 'Unable to add the co-moderator.');
   }
 }

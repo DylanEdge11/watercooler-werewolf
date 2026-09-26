@@ -4,7 +4,8 @@ import { requireModerator } from '../../../lib/auth/authorization';
 import { DEFAULT_NEW_GAME_AUTOMATION, resolveAutomationSettings, type PublicationMode } from '../../../lib/game/automation';
 import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettingsInput } from '../../../lib/game/game-settings';
 import { assertValidCalendarDate, assertValidTimeZone, formatZonedDateTimeLocal, parseScheduledDate, validateSchedule } from '../../../lib/game/scheduling';
-import { assertSameOrigin, jsonError } from '../../../lib/http/security';
+import { assertSameOrigin } from '../../../lib/http/security';
+import { routeError } from '../../../lib/http/errors';
 
 interface CreateGameBody extends GameSettingsInput {
   publicationMode?: unknown;
@@ -83,7 +84,7 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to list games.', 401);
+    return routeError(error, 'Unable to list games.');
   }
 }
 
@@ -165,6 +166,6 @@ export async function POST(request: Request) {
     ]);
     return Response.json({ ok: true, gameId: id }, { status: 201 });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to create game.', 400);
+    return routeError(error, 'Unable to create game.');
   }
 }
