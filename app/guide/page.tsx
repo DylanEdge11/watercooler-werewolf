@@ -41,7 +41,7 @@ const HELP_ROWS = [
   ['“This seat is locked”', 'After 10 wrong PINs in a row your seat stops accepting sign-in. Ask the moderator for a new PIN; that unlocks it.'],
   ['My role says “Not released”', 'The moderator has not released roles yet. Every seat must be claimed first.'],
   ['Save response is unavailable', 'Select a legal player first. The phase may also be closed, your role may have no action this phase, or you may be eliminated.'],
-  ['“Too many attempts”', 'Stop retrying and wait for the limit to reset (usually 15 minutes for sign-in).'],
+  ['“Too many attempts”', 'Stop retrying and wait as long as the message says (usually up to 15 minutes for sign-in).'],
   ['Moderator: Randomize is disabled', 'Every seat must be claimed and any edited role counts must be saved. Remove anyone who has decided not to play.'],
   ['Moderator: I can’t add or remove a player', 'The roster locks once roles are randomized. Select Save composition to discard the preview and unlock it. After release, the roster is final.'],
   ['Moderator: Hunter cannot be finalized', 'Wait for the Hunter to submit or for their window to expire, then try again.'],
