@@ -44,6 +44,9 @@ export interface PreparedStatement {
 
 export interface Database {
   prepare(sql: string): PreparedStatement;
-  /** Execute all statements sequentially in one database transaction. */
-  batch(statements: PreparedStatement[]): Promise<Array<QueryResult | RunResult>>;
+  /**
+   * Execute all statements sequentially in one database transaction. A `read`
+   * batch is a read-only transaction: every statement sees the same snapshot.
+   */
+  batch(statements: PreparedStatement[], mode?: 'write' | 'read'): Promise<Array<QueryResult | RunResult>>;
 }

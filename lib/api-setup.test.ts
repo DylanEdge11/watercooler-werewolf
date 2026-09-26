@@ -310,8 +310,13 @@ describe('setup and publication invariants', () => {
     sqlite.prepare("INSERT INTO game_events (id,game_id,event_type,actor_seat_id,payload_json,created_at) VALUES ('archived-event','game','HISTORICAL_NOTE','archived','{}','2026-01-01')").run();
 
     sqlite.exec("UPDATE games SET automation_paused_at = '2026-01-02T00:00:00.000Z' WHERE id = 'game'");
+    sqlite.prepare("INSERT INTO announcements (id,game_id,moderator_id,title,body,email_subject,email_body,created_at) VALUES ('old-note','game','mod','Old run','From before the reset','s','b','2026-01-01')").run();
+    sqlite.prepare("INSERT INTO game_events (id,game_id,event_type,actor_moderator_id,payload_json,created_at) VALUES ('old-note-event','game','ANNOUNCEMENT','mod','{}','2026-01-01')").run();
     const response = await operations({ action: 'RESET', confirmed: true, confirmationName: 'Review' });
     expect(response.status).toBe(200);
+    // The previous run's announcements go, as with Restore; the audit event stays.
+    expect((sqlite.prepare("SELECT COUNT(*) AS count FROM announcements WHERE game_id = 'game'").get() as { count: number }).count).toBe(0);
+    expect(sqlite.prepare("SELECT id FROM game_events WHERE id = 'old-note-event'").get()).toBeTruthy();
     // A reset game starts over unpaused.
     expect(sqlite.prepare("SELECT automation_paused_at AS paused FROM games WHERE id = 'game'").get()).toEqual({ paused: null });
     expect(sqlite.prepare("SELECT status FROM seats WHERE id = 'archived'").get()).toMatchObject({ status: 'REMOVED' });

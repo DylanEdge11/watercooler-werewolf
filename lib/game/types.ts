@@ -22,6 +22,23 @@ export function canonicalRoleKey(value: string): RoleKey {
   return (value === 'DOCTOR' ? 'BODYGUARD' : value) as RoleKey;
 }
 export type Faction = 'VILLAGE' | 'WEREWOLF';
+
+export type GameStatus =
+  | 'DRAFT'
+  | 'REGISTRATION'
+  | 'ASSIGNMENT_PREVIEW'
+  | 'ACTIVE'
+  | 'FINAL_SHOWDOWN'
+  | 'COMPLETED'
+  | 'STOPPED'
+  | 'CANCELLED'
+  // These values are short-lived database claims. They are never a player-
+  // facing lifecycle state, but make setup transitions race-safe.
+  | 'COMPOSITION_SAVING'
+  | 'ASSIGNMENT_PREVIEWING'
+  | 'ROSTER_IMPORTING'
+  | 'RESETTING'
+  | 'RESTORING';
 export type PhaseKind = 'DAY' | 'NIGHT' | 'FINAL_BALLOT';
 export type ActionKind =
   | 'DAY_VOTE'

@@ -5,6 +5,7 @@ import { createPlayerSession } from '../../../../lib/auth/session';
 import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
 import { routeError } from '../../../../lib/http/errors';
 import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
+import { isSingleEmailAddress } from '../../../../lib/roster/email-address';
 
 interface LoginSeat {
   id: string;
@@ -22,7 +23,8 @@ export async function POST(request: Request) {
     const identifier = body.identifier?.trim() ?? body.seatCode?.trim() ?? '';
     const pin = body.pin?.trim() ?? '';
     if (!identifier || !pin) throw new Error('Email or seat code and PIN are required.');
-    const isEmail = /^\S+@\S+\.\S+$/u.test(identifier);
+    // Seat codes never contain "@"; anything that is one plain address is looked up as an email.
+    const isEmail = isSingleEmailAddress(identifier.toLowerCase());
     const loginKey = identifier.toLowerCase().slice(0, 80);
     await enforceRateLimit(requestRateLimitKey(request, `seat-login:${loginKey}`), 8, 15 * 60_000);
 

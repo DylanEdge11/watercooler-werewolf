@@ -3,7 +3,7 @@ import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { resolveAutomationSettings, type PublicationMode } from '../../../../../lib/game/automation';
 import { resolveGameSettings, type GameSettingsInput } from '../../../../../lib/game/game-settings';
-import { assertValidCalendarDate, assertValidTimeZone, parseScheduledDate, validateSchedule } from '../../../../../lib/game/scheduling';
+import { validateGameSetup, type GameSetupInput } from '../../../../../lib/game/game-setup';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 
@@ -11,16 +11,9 @@ interface RouteContext {
   params: Promise<{ gameId: string }>;
 }
 
-interface UpdateScheduleBody extends GameSettingsInput {
+interface UpdateScheduleBody extends GameSettingsInput, GameSetupInput {
   publicationMode?: unknown;
   reviewWindowMinutes?: unknown;
-  name?: string;
-  timezone?: string;
-  startDate?: string;
-  endDate?: string;
-  finalCutoffAt?: string;
-  activeWeekdays?: number[];
-  schedule?: Record<string, string>;
 }
 
 interface SetupGameRow {
@@ -45,28 +38,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { gameId } = await context.params;
     const moderator = await requireGameModerator(gameId);
     const body = (await request.json()) as UpdateScheduleBody;
-    const name = body.name?.trim() ?? '';
-    if (name.length < 3 || name.length > 80) throw new Error('Game name must be 3–80 characters.');
-    if (!body.timezone) throw new Error('A game timezone is required.');
-    assertValidTimeZone(body.timezone);
-    if (!body.startDate || !body.endDate || !body.finalCutoffAt) throw new Error('Start, end, and final cutoff are required.');
-    assertValidCalendarDate(body.startDate, 'Start date');
-    assertValidCalendarDate(body.endDate, 'End date');
-    if (body.startDate > body.endDate) throw new Error('The end date must be on or after the start date.');
-    const finalCutoffAt = parseScheduledDate(body.finalCutoffAt, body.timezone);
-    if (
-      !body.activeWeekdays?.length ||
-      body.activeWeekdays.some((weekday) => !Number.isInteger(weekday) || weekday < 0 || weekday > 6)
-    ) {
-      throw new Error('Choose at least one valid active weekday.');
-    }
-    if (!body.schedule || Object.keys(body.schedule).length === 0) throw new Error('Enter the phase schedule.');
-    const schedule = {
-      dayCloses: body.schedule.dayCloses ?? '',
-      nightCloses: body.schedule.nightCloses ?? '',
-    };
-    const scheduleErrors = validateSchedule({ ...schedule, activeWeekdays: body.activeWeekdays });
-    if (scheduleErrors.length) throw new Error(scheduleErrors.join(' '));
+    const setup = validateGameSetup(body);
+    const { name, schedule, finalCutoffAt } = setup;
 
     const db = getDb();
     const game = await db
@@ -110,10 +83,10 @@ export async function PATCH(request: Request, context: RouteContext) {
         )
         .bind(
           name,
-          body.timezone,
-          body.startDate,
-          body.endDate,
-          JSON.stringify(body.activeWeekdays),
+          setup.timezone,
+          setup.startDate,
+          setup.endDate,
+          JSON.stringify(setup.activeWeekdays),
           JSON.stringify(schedule),
           finalCutoffAt.toISOString(),
           settings.hunterWindowMinutes,

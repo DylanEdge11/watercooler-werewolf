@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { expect, type APIResponse, type Browser, type BrowserContext, type Page, type Response as PageResponse } from '@playwright/test';
 import type { ActionKind, PhaseKind, PhaseResolution, RoleComposition, RoleKey } from '../../lib/game/types';
 import { participationCounter } from '../../lib/game/actions';
+import type { DashboardData } from '../../app/player-dashboard';
 import type { TestInfo } from '@playwright/test';
 import { BASE_URL, DEFAULT_COMPOSITION, E2E_PLAYER_COUNT, E2E_REMOTE, E2E_RUN_ID, MODERATOR_EMAIL, MODERATOR_PASSWORD } from '../constants';
 import { E2E_REQUEST_HEADERS, newBrowserContext } from '../transport';
@@ -58,37 +59,8 @@ export interface BrowserPlayerAccount {
   alive: boolean;
 }
 
-export interface PlayerDashboard {
-  player: {
-    id: string;
-    displayName: string;
-    alive: boolean;
-    role: RoleKey | null;
-    roleDefinition: { name: string; faction: string; summary: string } | null;
-    teammates: Array<{ id: string; displayName: string; alive: boolean }>;
-  };
-  game: {
-    id: string;
-    name: string;
-    status: string;
-    counts: { total: number; living: number; werewolvesRemaining: number };
-  };
-  phase: null | {
-    id: string;
-    sequence: number;
-    kind: PhaseKind;
-    status: string;
-    slots: number;
-    deadline: string | null;
-  };
-  permission: { actionKind: ActionKind | null; maxTargets: number; label: string };
-  candidates: Array<{ id: string; displayName: string }>;
-  currentAction: null | { targetIds: string[]; version: number; submittedAt: string };
-  participation: { submitted: number; eligible: number };
-  timeline: Array<{ eventType: string; payload: Record<string, unknown> }>;
-  notifications: Array<{ type: string; title: string; body: string }>;
-  rooms: Array<{ id: string; type: string; status: string; access: string }>;
-}
+/** The player dashboard response, as the app types it. */
+export type PlayerDashboard = DashboardData;
 
 export interface ModeratorPhase {
   id: string;
@@ -532,7 +504,8 @@ export class BrowserGame {
         const created = await post<{ gameId: string }>(moderator.context, '/api/games', {
           name: gameName,
           timezone: 'America/Regina',
-          startDate: '2026-01-01',
+          // The cutoff is in the past so final showdown is available at once; it must fall within the dates.
+          startDate: '2000-01-01',
           endDate: '2099-12-31',
           finalCutoffAt: '2000-01-01T00:00',
           activeWeekdays: [1, 2, 3, 4, 5],

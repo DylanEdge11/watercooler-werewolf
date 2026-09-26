@@ -3,20 +3,14 @@ import { ensureDatabase } from '../../../db/migrate';
 import { requireModerator } from '../../../lib/auth/authorization';
 import { DEFAULT_NEW_GAME_AUTOMATION, resolveAutomationSettings, type PublicationMode } from '../../../lib/game/automation';
 import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettingsInput } from '../../../lib/game/game-settings';
-import { assertValidCalendarDate, assertValidTimeZone, formatZonedDateTimeLocal, parseScheduledDate, validateSchedule } from '../../../lib/game/scheduling';
+import { validateGameSetup, type GameSetupInput } from '../../../lib/game/game-setup';
+import { formatZonedDateTimeLocal } from '../../../lib/game/scheduling';
 import { assertSameOrigin } from '../../../lib/http/security';
 import { routeError } from '../../../lib/http/errors';
 
-interface CreateGameBody extends GameSettingsInput {
+interface CreateGameBody extends GameSettingsInput, GameSetupInput {
   publicationMode?: unknown;
   reviewWindowMinutes?: unknown;
-  name?: string;
-  timezone?: string;
-  startDate?: string;
-  endDate?: string;
-  finalCutoffAt?: string;
-  activeWeekdays?: number[];
-  schedule?: Record<string, string>;
 }
 
 interface GameListRow {
@@ -94,28 +88,7 @@ export async function POST(request: Request) {
     await ensureDatabase();
     const moderator = await requireModerator();
     const body = (await request.json()) as CreateGameBody;
-    const name = body.name?.trim() ?? '';
-    if (name.length < 3 || name.length > 80) throw new Error('Game name must be 3–80 characters.');
-    if (!body.timezone) throw new Error('A game timezone is required.');
-    assertValidTimeZone(body.timezone);
-    if (!body.startDate || !body.endDate || !body.finalCutoffAt) throw new Error('Start, end, and final cutoff are required.');
-    assertValidCalendarDate(body.startDate, 'Start date');
-    assertValidCalendarDate(body.endDate, 'End date');
-    if (body.startDate > body.endDate) throw new Error('The end date must be on or after the start date.');
-    const finalCutoffAt = parseScheduledDate(body.finalCutoffAt, body.timezone);
-    if (
-      !body.activeWeekdays?.length ||
-      body.activeWeekdays.some((weekday) => !Number.isInteger(weekday) || weekday < 0 || weekday > 6)
-    ) {
-      throw new Error('Choose at least one valid active weekday.');
-    }
-    if (!body.schedule || Object.keys(body.schedule).length === 0) throw new Error('Enter the phase schedule.');
-    const scheduleErrors = validateSchedule({
-      dayCloses: body.schedule.dayCloses ?? '',
-      nightCloses: body.schedule.nightCloses ?? '',
-      activeWeekdays: body.activeWeekdays,
-    });
-    if (scheduleErrors.length) throw new Error(scheduleErrors.join(' '));
+    const setup = validateGameSetup(body);
     const { settings, errors: settingsErrors } = resolveGameSettings(body, DEFAULT_GAME_SETTINGS);
     if (settingsErrors.length) throw new Error(settingsErrors.join(' '));
     // New games use moderator review unless the moderator opts in to automatic results.
@@ -137,16 +110,16 @@ export async function POST(request: Request) {
         )
         .bind(
           id,
-          name,
-          body.timezone,
-          body.startDate,
-          body.endDate,
-          JSON.stringify(body.activeWeekdays),
-          JSON.stringify(body.schedule),
+          setup.name,
+          setup.timezone,
+          setup.startDate,
+          setup.endDate,
+          JSON.stringify(setup.activeWeekdays),
+          JSON.stringify(setup.schedule),
           settings.dayDivisor,
           settings.nightDivisor,
           settings.hunterWindowMinutes,
-          finalCutoffAt.toISOString(),
+          setup.finalCutoffAt.toISOString(),
           automation.publicationMode,
           automation.reviewWindowMinutes,
           moderator.id,
@@ -162,7 +135,7 @@ export async function POST(request: Request) {
            (id, game_id, event_type, actor_moderator_id, payload_json, created_at)
            VALUES (?, ?, 'GAME_CREATED', ?, ?, ?)`,
         )
-        .bind(crypto.randomUUID(), id, moderator.id, JSON.stringify({ name }), now),
+        .bind(crypto.randomUUID(), id, moderator.id, JSON.stringify({ name: setup.name }), now),
     ]);
     return Response.json({ ok: true, gameId: id }, { status: 201 });
   } catch (error) {
