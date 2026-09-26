@@ -1,6 +1,9 @@
 import { getDb } from '../../../db';
 import { ensureDatabase } from '../../../db/migrate';
 import { requireModerator } from '../../../lib/auth/authorization';
+import { hasModeratorAccount } from '../../../lib/auth/moderators';
+import { getCurrentModerator } from '../../../lib/auth/session';
+import { loadAssignmentsView, loadRosterView } from '../../../lib/game/setup-view';
 import { DEFAULT_NEW_GAME_AUTOMATION, resolveAutomationSettings, type PublicationMode } from '../../../lib/game/automation';
 import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettingsInput } from '../../../lib/game/game-settings';
 import { validateGameSetup, type GameSetupInput } from '../../../lib/game/game-setup';
@@ -32,10 +35,19 @@ interface GameListRow {
   moderatorRole: string;
 }
 
-export async function GET() {
+/**
+ * The moderator's games, plus the roster and assignments of one selected game
+ * (`?gameId=`, or the newest game), so the console starts and refreshes with
+ * one request. Signed out, the 401 says whether the first moderator account
+ * still has to be created.
+ */
+export async function GET(request: Request) {
   try {
     await ensureDatabase();
-    const moderator = await requireModerator();
+    const moderator = await getCurrentModerator();
+    if (!moderator) {
+      return Response.json({ ok: false, error: 'Moderator authentication required.', needsBootstrap: !(await hasModeratorAccount()) }, { status: 401 });
+    }
     const games = await getDb()
       .prepare(
         `SELECT g.id, g.name, g.status, g.timezone,
@@ -55,8 +67,15 @@ export async function GET() {
       )
       .bind(moderator.id)
       .all<GameListRow>();
+    const preferredGameId = new URL(request.url).searchParams.get('gameId');
+    const selectedGame = games.results.find((game) => game.id === preferredGameId) ?? games.results[0];
+    const [roster, assignments] = selectedGame
+      ? await Promise.all([loadRosterView(selectedGame.id), loadAssignmentsView(selectedGame.id)])
+      : [null, null];
     return Response.json({
       ok: true,
+      needsBootstrap: false,
+      selected: selectedGame && roster && assignments ? { gameId: selectedGame.id, roster, assignments } : null,
       games: games.results.map((game) => ({
         id: game.id,
         name: game.name,

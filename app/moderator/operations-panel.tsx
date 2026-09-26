@@ -42,6 +42,9 @@ interface Moderator {
   role: string;
 }
 
+/** How often a poll also reloads the lists that rarely change. */
+const SLOW_REFRESH_MS = 60_000;
+
 async function parse<T>(response: Response): Promise<T> {
   const data = await response.json() as T & { error?: string };
   if (!response.ok) throw new Error(data.error ?? 'Request failed.');
@@ -66,22 +69,39 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
   const [error, setError] = useState('');
   const refreshSequence = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const lastFullRefresh = useRef(0);
+
+  /**
+   * Operations and rooms change during play and refresh on every poll. The
+   * co-moderator list, announcements, and feedback rarely change, so a poll
+   * reloads them at most once a minute; opening the panel and the moderator's
+   * own changes (which call refresh()) always reload everything.
+   */
+  const refresh = useCallback(async (options: { onlyLive?: boolean } = {}) => {
     const sequence = ++refreshSequence.current;
-    const [ops, roomData, moderatorData, announcementData, feedbackData] = await Promise.all([
+    const full = !options.onlyLive || Date.now() - lastFullRefresh.current >= SLOW_REFRESH_MS;
+    const [ops, roomData, slow] = await Promise.all([
       fetch(`/api/games/${gameId}/operations`).then(parse<Operations>),
       fetch(`/api/games/${gameId}/rooms`).then(parse<{ rooms: Room[]; recentMessages: RoomMessage[] }>),
-      fetch(`/api/games/${gameId}/moderators`).then(parse<{ moderators: Moderator[] }>),
-      fetch(`/api/games/${gameId}/announcements`).then(parse<{ announcements: AnnouncementRecord[] }>),
-      fetch(`/api/games/${gameId}/feedback`).then(parse<{ feedback: FeedbackSummary }>),
+      full
+        ? Promise.all([
+            fetch(`/api/games/${gameId}/moderators`).then(parse<{ moderators: Moderator[] }>),
+            fetch(`/api/games/${gameId}/announcements`).then(parse<{ announcements: AnnouncementRecord[] }>),
+            fetch(`/api/games/${gameId}/feedback`).then(parse<{ feedback: FeedbackSummary }>),
+          ])
+        : Promise.resolve(null),
     ]);
     if (sequence !== refreshSequence.current) return;
     setOperations(ops);
     setRooms(roomData.rooms);
     setMessages(roomData.recentMessages);
-    setModerators(moderatorData.moderators);
-    setAnnouncements(announcementData.announcements);
-    setFeedback(feedbackData.feedback);
+    if (slow) {
+      lastFullRefresh.current = Date.now();
+      const [moderatorData, announcementData, feedbackData] = slow;
+      setModerators(moderatorData.moderators);
+      setAnnouncements(announcementData.announcements);
+      setFeedback(feedbackData.feedback);
+    }
     setRestoreBackupId((current) => current && ops.backups?.some((backup) => backup.id === current) ? current : ops.backups?.[0]?.id ?? '');
   }, [gameId]);
 
@@ -90,7 +110,7 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
       void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load operations.'));
     }, 0);
     const stopPolling = pollWhileVisible(() => {
-      void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh operations.'));
+      void refresh({ onlyLive: true }).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh operations.'));
     }, 10_000);
     return () => {
       window.clearTimeout(timer);
