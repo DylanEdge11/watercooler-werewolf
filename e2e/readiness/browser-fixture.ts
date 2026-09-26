@@ -419,6 +419,8 @@ export class BrowserPlayer {
     this.page.on('request', listener);
     await this.page.getByRole('button', { name: 'Save response', exact: true }).dblclick();
     await expect.poll(() => requests).toBe(1);
+    // Wait for the save itself, so a read that follows sees it.
+    await expect(this.page.getByRole('status')).toContainText('Response saved as revision');
     this.page.off('request', listener);
     return requests;
   }

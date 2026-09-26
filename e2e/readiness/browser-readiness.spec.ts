@@ -291,6 +291,8 @@ test.describe('browser player-readiness scenarios', () => {
       const partialTarget = game.chooseLiving((player) => player.account.role === 'VILLAGER');
       const partialPhase = await game.openPhase('DAY');
       const partialVoter = game.chooseLiving((player) => player.account.seatId !== partialTarget.account.seatId);
+      // Like every other step here, load the page after the phase opens instead of waiting for a poll to notice it.
+      await partialVoter.reload();
       await partialVoter.prepareTarget(partialTarget.account);
       await partialVoter.submitPrepared();
       const partialProposal = await game.lockAndPropose(partialPhase.phaseId);

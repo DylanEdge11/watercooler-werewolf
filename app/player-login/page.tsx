@@ -1,12 +1,10 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import BrandMark from '../brand-mark';
 import { withRetryAfter } from '../../lib/http/retry-after';
 
 export default function PlayerLoginPage() {
-  const router = useRouter();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -29,7 +27,11 @@ export default function PlayerLoginPage() {
         setBusy(false);
         return;
       }
-      router.push('/');
+      // A full page load, like the claim page's "Enter the game" link: the server
+      // renders the dashboard for the new session, and nothing from the
+      // signed-out page carries over.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full-page transition after sign-in, as after seat claim.
+      window.location.assign('/');
     } catch {
       setError('The village is out of reach. Try again in a moment.');
       setBusy(false);
