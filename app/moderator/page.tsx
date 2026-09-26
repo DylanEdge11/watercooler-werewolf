@@ -111,14 +111,26 @@ interface Batch {
 
 const SETUP_STATUSES = new Set(['DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW']);
 
+class RequestError extends Error {
+  constructor(message: string, readonly status: number, readonly body: Record<string, unknown>) {
+    super(message);
+  }
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
     headers: init?.body ? { 'content-type': 'application/json', ...init.headers } : init?.headers,
   });
   const data = (await response.json()) as T & { error?: string; errors?: string[] };
-  if (!response.ok) throw new Error(data.error ?? data.errors?.join(' ') ?? 'Request failed.');
+  if (!response.ok) throw new RequestError(data.error ?? data.errors?.join(' ') ?? 'Request failed.', response.status, data as Record<string, unknown>);
   return data;
+}
+
+interface SelectedGameSetup {
+  gameId: string;
+  roster: { roster: RosterSeat[]; emailConfigured?: boolean };
+  assignments: { composition: Composition; batches: Batch[]; game?: { status: string } };
 }
 
 function BrandHeader() {
@@ -173,13 +185,7 @@ export default function ModeratorPage() {
     });
   }
 
-  const loadGame = useCallback(async (selectedGameId: string) => {
-    const requestId = ++gameDetailRequest.current;
-    const [rosterData, assignmentData] = await Promise.all([
-      requestJson<{ roster: RosterSeat[]; emailConfigured?: boolean }>(`/api/games/${selectedGameId}/roster`),
-      requestJson<{ composition: Composition; batches: Batch[]; game?: { status: string } }>(`/api/games/${selectedGameId}/assignments`),
-    ]);
-    if (requestId !== gameDetailRequest.current || selectedGameRef.current !== selectedGameId) return;
+  const applyGameSetup = useCallback((selectedGameId: string, rosterData: SelectedGameSetup['roster'], assignmentData: SelectedGameSetup['assignments']) => {
     setRoster(rosterData.roster);
     setEmailConfigured(Boolean(rosterData.emailConfigured));
     setComposition(compositionDrafts.current.get(selectedGameId) ?? assignmentData.composition);
@@ -189,17 +195,31 @@ export default function ModeratorPage() {
     }
   }, []);
 
+  const loadGame = useCallback(async (selectedGameId: string) => {
+    const requestId = ++gameDetailRequest.current;
+    const [rosterData, assignmentData] = await Promise.all([
+      requestJson<SelectedGameSetup['roster']>(`/api/games/${selectedGameId}/roster`),
+      requestJson<SelectedGameSetup['assignments']>(`/api/games/${selectedGameId}/assignments`),
+    ]);
+    if (requestId !== gameDetailRequest.current || selectedGameRef.current !== selectedGameId) return;
+    applyGameSetup(selectedGameId, rosterData, assignmentData);
+  }, [applyGameSetup]);
+
+  // One request: the games list carries the selected game's roster and assignments.
   const loadGames = useCallback(async (preferredGameId = selectedGameRef.current) => {
     const requestId = ++gamesRequest.current;
-    const data = await requestJson<{ games: GameSummary[] }>('/api/games');
+    const detailRequestId = ++gameDetailRequest.current;
+    const query = preferredGameId ? `?gameId=${encodeURIComponent(preferredGameId)}` : '';
+    const data = await requestJson<{ games: GameSummary[]; selected: SelectedGameSetup | null }>(`/api/games${query}`);
     if (requestId !== gamesRequest.current) return;
     setAuthenticated(true);
     setGames(data.games);
-    const selected = data.games.find((game) => game.id === preferredGameId) ?? data.games[0];
+    const selected = data.selected;
     if (selected) {
-      selectedGameRef.current = selected.id;
-      setGameId(selected.id);
-      await loadGame(selected.id);
+      selectedGameRef.current = selected.gameId;
+      setGameId(selected.gameId);
+      // A game switch that started after this request wins.
+      if (detailRequestId === gameDetailRequest.current) applyGameSetup(selected.gameId, selected.roster, selected.assignments);
     } else {
       selectedGameRef.current = '';
       setGameId('');
@@ -207,7 +227,7 @@ export default function ModeratorPage() {
       setComposition(null);
       setBatches([]);
     }
-  }, [loadGame]);
+  }, [applyGameSetup]);
 
   const handleLiveChange = useCallback((action?: string) => {
     if (shouldRefreshOperations(action)) setLiveRefreshToken((token) => token + 1);
@@ -217,10 +237,10 @@ export default function ModeratorPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const bootstrap = await requestJson<{ needsBootstrap: boolean }>('/api/moderators/bootstrap');
-        setNeedsBootstrap(bootstrap.needsBootstrap);
-        if (!bootstrap.needsBootstrap) await loadGames();
-      } catch {
+        await loadGames();
+      } catch (caught) {
+        // Signed out: the 401 also says whether the first moderator account still has to be created.
+        setNeedsBootstrap(caught instanceof RequestError && caught.body.needsBootstrap === true);
         setAuthenticated(false);
       } finally {
         setLoading(false);
