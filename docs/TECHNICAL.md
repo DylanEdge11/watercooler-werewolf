@@ -82,3 +82,13 @@ Deadlines are entered in the game's IANA timezone and stored as UTC. Impossible 
 ## Polling
 
 The player dashboard, open chat rooms, and moderator panels each refresh every ten seconds. There are no WebSockets.
+
+## Reserved fields
+
+The schema has fields and states that no feature writes. Code may filter on them, but nothing sets them, so don't build on them or add more like them; drop them in a migration when one is next needed.
+
+- Phase status `SCHEDULED`.
+- Chat room status `PURGED` and `chat_rooms.expires_at`. Retention purges blank the messages instead.
+- Seat status `REPLACED` and `seats.predecessor_seat_id`.
+- `game_events.supersedes_event_id`.
+- `games.final_round_minutes`.
