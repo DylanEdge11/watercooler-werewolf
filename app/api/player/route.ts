@@ -8,7 +8,7 @@ import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type RoleKey } from '../../../lib/game/types';
 import { jsonError } from '../../../lib/http/security';
 import { routeError } from '../../../lib/http/errors';
-import { ensureGameRooms } from '../../../lib/chat/rooms';
+import { ensureGameRoomsExist } from '../../../lib/chat/rooms';
 import { loadCurrentLoverPair } from '../../../lib/game/relationships';
 
 const TIMELINE_LIMIT = 100;
@@ -53,7 +53,8 @@ export async function GET(request: Request) {
       }>();
     if (!player) return jsonError('Player seat not found.', 404);
     if (player.role) player.role = canonicalRoleKey(player.role);
-    if (player.role) await ensureGameRooms(player.gameId);
+    // Membership is kept current by release and publish; this read only repairs missing rooms.
+    if (player.role) await ensureGameRoomsExist(player.gameId);
 
     const phase = await db
       .prepare(

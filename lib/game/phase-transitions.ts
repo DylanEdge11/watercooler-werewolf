@@ -1,6 +1,6 @@
-import { getDb } from '../../db';
+import { getDb, type PreparedStatement } from '../../db';
 import { sha256 } from '../auth/crypto';
-import { ensureGameRooms } from '../chat/rooms';
+import { roomSyncStatements } from '../chat/rooms';
 import { investigationMessage } from './catalog';
 import { applyEliminationOverride, evaluateWinner, resolveHunterShot, resolvePhase } from './engine';
 import { changes, loadActions, loadPlayers, overrideIdsFromJson } from './phase-store';
@@ -366,7 +366,7 @@ export async function runPhaseAction(
       SELECT 1 FROM phases p
       WHERE p.id = ? AND p.game_id = ? AND p.status = 'PUBLISHING' AND p.version = ?
     )`;
-    const statements = [
+    const statements: PreparedStatement[] = [
       // The PUBLISHING status is the authoritative one-phase claim. Since
       // this statement and all dependent statements are one provider batch, Stop
       // and a competing publication cannot interleave with the effects.
@@ -490,6 +490,9 @@ export async function runPhaseAction(
         .prepare("UPDATE phases SET status = 'PUBLISHED', published_at = ?, updated_at = ? WHERE id = ? AND game_id = ? AND status = 'PUBLISHING' AND version = ?")
         .bind(now, now, phase.id, gameId, claimedVersion),
     );
+    // Room access follows the eliminations in the same transaction. The sync
+    // matches whatever state commits, so it needs no publication guard.
+    statements.push(...roomSyncStatements(db, gameId, now));
     const result = await db.batch(statements);
     if (changes(result[0]) !== 1) {
       const current = await db
@@ -509,7 +512,6 @@ export async function runPhaseAction(
       }
       return conflict('The phase was changed before publication could commit. Refresh and review the authoritative result.');
     }
-    await ensureGameRooms(gameId);
     return done({ ok: true, outcome, proposedOutcome, reviewedOutcome: outcome, publishedOutcome: outcome, eliminated, winner: win.winner, overrideReason, reviewedByModeratorId: actor.moderatorId, reviewedAt: now });
   }
 

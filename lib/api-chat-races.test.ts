@@ -22,10 +22,6 @@ vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
 vi.mock('../lib/auth/session', () => ({
   getCurrentPlayer: async () => ({ seatId: 'wolf', gameId: 'game', alive: true, displayName: 'Wolf' }),
 }));
-vi.mock('../lib/chat/rooms', () => ({
-  ensureGameRooms: async () => {},
-  normalizeChatBody: (value: string) => value.trim(),
-}));
 vi.mock('../lib/http/rate-limit', () => ({
   enforceRateLimit: async () => {},
   requestRateLimitKey: () => 'chat-race-test',

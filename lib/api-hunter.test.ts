@@ -12,7 +12,6 @@ const shared = vi.hoisted(() => ({
 vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
 vi.mock('../lib/auth/authorization', () => ({ requireGameModerator: async () => ({ id: 'mod' }) }));
-vi.mock('../lib/chat/rooms', () => ({ ensureGameRooms: async () => {} }));
 vi.mock('./game/phase-store', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./game/phase-store')>();
   return {

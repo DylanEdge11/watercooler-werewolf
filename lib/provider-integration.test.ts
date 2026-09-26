@@ -9,7 +9,6 @@ import { sha256 } from './auth/crypto';
 const shared = vi.hoisted(() => ({
   db: null as LibsqlDatabase | null,
   currentPlayer: null as { seatId: string } | null,
-  ensureGameRooms: null as ((gameId: string) => Promise<void>) | null,
   denyModerator: false,
 }));
 
@@ -32,11 +31,6 @@ vi.mock('../lib/auth/session', () => ({
   }),
   getCurrentPlayer: async () => shared.currentPlayer,
 }));
-vi.mock('../lib/chat/rooms', () => ({
-  ensureGameRooms: async (gameId: string) => {
-    await shared.ensureGameRooms?.(gameId);
-  },
-}));
 vi.mock('../lib/http/rate-limit', () => {
   class TestRateLimitError extends Error {
     readonly retryAfterSeconds = 1;
@@ -55,6 +49,7 @@ import { GET as roomsGet } from '../app/api/games/[gameId]/rooms/route';
 import { POST as roomsPost } from '../app/api/games/[gameId]/rooms/route';
 import { GET as operationsGet } from '../app/api/games/[gameId]/operations/route';
 import { GET as playerGet } from '../app/api/player/route';
+import { ensureGameRooms } from './chat/rooms';
 
 let client: Client;
 let db: LibsqlDatabase;
@@ -131,42 +126,39 @@ beforeEach(async () => {
   db = new LibsqlDatabase(client as unknown as LibsqlClient);
   shared.db = db;
   shared.currentPlayer = null;
-  shared.ensureGameRooms = null;
   shared.denyModerator = false;
 });
 
 afterEach(() => {
   shared.db = null;
   shared.currentPlayer = null;
-  shared.ensureGameRooms = null;
   client.close();
 });
 
 describe('real libSQL provider integration', () => {
-  test('keeps membership timestamps stable across repeated player polling while reconciling elimination', async () => {
+  test('the publish-time room sync reconciles eliminations, and player polling never writes memberships', async () => {
     await seedActiveGame();
-    const { ensureGameRooms } = await vi.importActual<typeof import('./chat/rooms')>('./chat/rooms');
-    shared.ensureGameRooms = ensureGameRooms;
+    // Release and publish run this sync inside their own transaction.
+    await ensureGameRooms('game');
     shared.currentPlayer = { seatId: 'p17' };
     const firstRead = await playerGet(new Request('http://localhost:3000/api/player'));
     expect(firstRead.status).toBe(200);
 
     await client.execute("UPDATE chat_room_members SET granted_at = '2026-01-01' WHERE seat_id = 'p17'");
     await client.execute("UPDATE seats SET alive = 0 WHERE id IN ('p17', 'p18')");
-    const eliminationRead = await playerGet(new Request('http://localhost:3000/api/player'));
-    expect(eliminationRead.status).toBe(200);
+    await ensureGameRooms('game');
 
-    const membershipsBeforePolling = await client.execute(`SELECT m.seat_id AS seatId, r.type, m.access,
+    const memberships = () => client.execute(`SELECT m.seat_id AS seatId, r.type, m.access,
       m.granted_at AS grantedAt, m.revoked_at AS revokedAt
       FROM chat_room_members m JOIN chat_rooms r ON r.id = m.room_id
       WHERE m.seat_id IN ('p17', 'p18', 'p19') ORDER BY m.seat_id, r.type`);
-    const repeatedRead = await playerGet(new Request('http://localhost:3000/api/player'));
-    expect(repeatedRead.status).toBe(200);
-    const membershipsAfterPolling = await client.execute(`SELECT m.seat_id AS seatId, r.type, m.access,
-      m.granted_at AS grantedAt, m.revoked_at AS revokedAt
-      FROM chat_room_members m JOIN chat_rooms r ON r.id = m.room_id
-      WHERE m.seat_id IN ('p17', 'p18', 'p19') ORDER BY m.seat_id, r.type`);
-    expect(membershipsAfterPolling.rows).toEqual(membershipsBeforePolling.rows);
+    const membershipsBeforePolling = await memberships();
+    const batch = vi.spyOn(shared.db!, 'batch');
+    for (let poll = 0; poll < 2; poll += 1) expect((await playerGet(new Request('http://localhost:3000/api/player'))).status).toBe(200);
+    expect((await memberships()).rows).toEqual(membershipsBeforePolling.rows);
+    // A player poll runs no write batch at all.
+    expect(batch).not.toHaveBeenCalled();
+    batch.mockRestore();
 
     const membership = await client.execute(`SELECT r.type, m.access, m.granted_at AS grantedAt, m.revoked_at AS revokedAt
       FROM chat_room_members m JOIN chat_rooms r ON r.id = m.room_id

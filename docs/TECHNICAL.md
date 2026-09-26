@@ -5,7 +5,7 @@ For developers. Installation is in [Setup](SETUP.md), verification in [Testing](
 ## Stack
 
 - Next.js App Router with React, on Vercel's Node.js runtime (Node 24.x).
-- Turso/libSQL through `@libsql/client`. Routes use a small database contract (`db/contracts.ts`) implemented in `db/libsql.ts`; multi-statement writes go through `batch()`, which runs as one transaction.
+- Turso/libSQL through `@libsql/client`: the web (HTTP) client in deployed functions, and the Node client with its native SQLite binary only for local `file:` and `:memory:` URLs (`db/index.ts`; `next.config.ts` keeps the binaries out of the function bundles). Routes use a small database contract (`db/contracts.ts`) implemented in `db/libsql.ts`; multi-statement writes go through `batch()`, which runs as one transaction.
 - Drizzle is used only for the schema (`db/schema.ts`) and for generating migrations. Queries are hand-written SQL with bound parameters.
 - Local development and tests use a SQLite file or in-memory database. Deployed functions refuse `file:` URLs.
 - Builds compile from source every time (`experimental.turbopackFileSystemCacheForBuild: false` in `next.config.ts`). With Turbopack's build cache on, a Vercel build restored from an older deployment served stale `globals.css` under a chunk name already published to Vercel's shared immutable asset store, so the page got the wrong styles. Don't turn it back on.
@@ -49,6 +49,7 @@ Requests never change the schema. `ensureDatabase()` checks that every version i
 - The Mayor's extra vote is never published. The public ballot lists one line per voter and players' vote counts are unweighted, so they can differ from the result. A Bodyguard save is announced ("Bodyguard protection stopped a pack attack") without naming who was protected.
 - The "N of M submitted" counter (`participationCounter` in `lib/game/actions.ts`) counts across players only for Day ballots and the pack's vote. Every other action is counted for the reader alone, so the counter cannot reveal how many players hold another Night role.
 - Publishing applies eliminations, reveals roles, delivers Seer and lover notifications, updates room access, and checks for a winner in one transaction.
+- Private-room membership (`roomSyncStatements` in `lib/chat/rooms.ts`) is written only inside the role-release and publish transactions, because those are the only writes that change roles or who is alive. Player, chat, and moderator reads never write it; the player and moderator room reads only check, with one query, that the game's three rooms exist.
 - Final showdown requires the final cutoff to have passed and the latest phase to be published. After that, only Final ballots are allowed until a team wins.
 - Legacy `DOCTOR` rows are read as `BODYGUARD`.
 
