@@ -84,7 +84,7 @@ test('an eight-player game runs from setup to a Village win with private informa
     await moderatorPage.reload();
     await expect(automation.getByRole('status')).toHaveText('Automatic: each phase you open locks at its deadline and publishes 60 minutes later unless you act.', { timeout: 30_000 });
     await automation.getByRole('button', { name: 'Pause automation', exact: true }).click();
-    await expect(automation.getByRole('status')).toHaveText(/^Paused\. Nothing locks, calculates, or publishes on its own/u);
+    await expect(automation.getByRole('status')).toHaveText(/^Paused\. Deadlines still close voting, but nothing calculates or publishes on its own/u);
     const watcher = game.living().at(-1)!;
     await watcher.reload();
     await expect(watcher.page.locator('.deadline-card')).toContainText('The schedule is paused');
