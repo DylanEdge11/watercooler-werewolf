@@ -1,31 +1,31 @@
-# Prompt: implement the performance and UX corrections from the 2026-09-25 audit
+# Performance corrections from the 2026-09-25 audit: record
 
-You are a senior Next.js engineer working in the `watercooler-werewolf` repository (Next.js 16 App Router on Vercel, Turso/libSQL, React 19, Node 24). A performance audit has already been done. Your job is to implement its corrections, in the order given, without widening scope. Every claim below was measured against a `next build` of the repository on 2026-09-25; the file and line references were exact on that day, so re-check them before editing.
+This file began as the worklist for the performance audit of 2026-09-25. All ten tasks were done in `version-1.4`, one pull request each. The table compares the audit's measured baseline with the result. The task sections below are kept as the record of what each change was for. Their file and line references were exact on 2026-09-25 and have moved since, so check the code rather than the line numbers.
 
-Read `CLAUDE.md` first and follow it. In particular:
+Where the finished work differs from a task as written, the pull request explains why:
 
-- Work from the current `version-X.Y` branch (`git ls-remote --heads origin 'version-*'`), never from `main`. Use one `fix/` branch per task below, merged through a pull request. Do not push to `main`, do not touch `.github/workflows`, and do not run `vercel deploy --prod`.
-- Run `npm run verify` before every push and `npm run verify:full` before opening the last pull request. Batch commits; do not push after every small fix.
-- Never point anything at Production, never print or commit secrets, use `.test` addresses for fixtures.
-- Queries stay hand-written SQL with bound parameters through `db/contracts.ts`; multi-statement writes use `db.batch()`; routes stay thin and rules live in `lib/game/`.
-- Players must never receive another player's role or private results. Do not change the shape of any JSON a player receives except where a task says so, and keep `FORBIDDEN_PLAYER_KEYS` in `e2e/readiness/browser-fixture.ts` passing.
-- The owner is the product manager and reviewer. Explain every change in plain language in the pull request description: what was slow or costly, what changed, how to see the difference.
+- Task 4 kept Fraunces's extra axes, which the look depends on.
+- Task 8 kept `Cache-Control: private, no-store`.
+- Task 9 found two of its claims were wrong.
 
-Do not implement anything from the "Out of scope" section unless the owner asks for it.
+## Result
 
-## Baseline you are improving (measured)
+| Measure | Before (2026-09-25) | After (`version-1.4`) | Pull request |
+| --- | --- | --- | --- |
+| Client JS shared by every page (gzip) | ~128 KB across 5 chunks | Unchanged; no task targeted it. Counted the same way on both builds (scripts on every prerendered page, gzipped), the baseline commit `5dcbbd8` and `version-1.4` each have 169 KB across 7 chunks. The audit's figure used a different count. | |
+| Landing page HTML | 348 KB raw, 103 KB gzip, 605 inline SVG paths, plus a 79 KB theatre chunk | 28 KB raw, 5 KB gzip, no inline SVG. The stage loads as its own chunk, only on screens that show it (phones never load it). | #51 |
+| Signed-in `/` HTML | 10.6 KB: only the shell "Opening the village…" | The full dashboard, rendered per request | #52 |
+| Fonts emitted | 14 woff2 files, 977 KB; 6 preloaded on every page (~513 KB) | 14 files, 977 KB; 2 preloaded (264 KB). Trimming Fraunces's axes would bring these to 586 KB and 79 KB, but it changes the look, so it is the owner's call. | #45 |
+| `/api/player` traced function bundle | 21.0 MB, of which 18.7 MB is two native libsql binaries | 2.3 MB, no native binaries | #42 |
+| `/api/player` database round trips per call | 12 sequential reads, plus 4 more (2 write transactions) from `ensureGameRooms` | Three rounds of parallel reads, no writes | #41, #46 |
+| Client polling | Dashboard, chat and 3 moderator panels each poll every 10 s; 7 endpoints per moderator tab | 10 s only in the last 15 minutes before a deadline (chat: while a message is under two minutes old), otherwise 30 s. Unchanged polls get an empty 304. Over one idle minute, one player plus one console tab went from 30 requests (55 KB) to 10 requests (9 of them empty). | #49, #53 |
 
-| Measure | Value before |
-| --- | --- |
-| Client JS shared by every page (gzip) | ~128 KB across 5 chunks |
-| Landing page HTML | 348 KB raw, 103 KB gzip, 605 inline SVG paths, plus a 79 KB theatre chunk |
-| Signed-in `/` HTML | 10.6 KB: only the shell "Opening the village…" |
-| Fonts emitted | 14 woff2 files, 977 KB; 6 preloaded on every page (~513 KB) |
-| `/api/player` traced function bundle | 21.0 MB, of which 18.7 MB is two native libsql binaries |
-| `/api/player` database round trips per call | 12 sequential reads, plus 4 more (2 write transactions) from `ensureGameRooms` |
-| Client polling | Dashboard, chat and 3 moderator panels each poll every 10 s; 7 endpoints per moderator tab |
+Also done from this audit's list: Task 3 (the sign-in and claim forms send one request per submit, #44), Task 7 (the console starts with one request, #49), and Task 10 (guide screenshots as WebP, #48).
 
-Re-measure after each task with the commands in "How to measure" and put the before/after numbers in the pull request.
+Two items from "Out of scope" are still open. See that section:
+
+- **Web Push**, proposed as the next step in #53.
+- **The function region.** Functions run in `iad1` (Washington, D.C.). The Preview database is in AWS `us-east-2` (Ohio), about 10 ms away per round trip. If Production's database is in the same region, choosing `cle1` (Cleveland) under Project Settings → Functions would put them side by side.
 
 ## How to measure
 
@@ -234,7 +234,3 @@ Acceptance: `du -sh public/guide` drops by roughly 3 MB; the guide page renders 
 - **Removing or replacing the animated theatre.** Task 9 makes it cheap; whether to keep it is a product decision.
 - **A `game_version` column.** Task 8 uses a content hash so no migration is needed. If the owner later wants a cheaper stamp, follow `docs/SETUP.md#schema-changes` (edit `db/schema.ts`, `npm run db:generate`, register the migration in `scripts/db-migration-runner.mjs` and `db/readiness.ts`).
 - **Function region.** The audit could not read the Vercel function region from the API. Ask the owner to confirm in Project Settings → Functions that the region matches the Turso group location; if it does not, that setting change is worth more than Tasks 5 and 6 together and needs no code.
-
-## What "done" looks like
-
-For each task: a `fix/` branch from the version branch, `npm run verify` green locally, a pull request into the version branch whose description states in plain language what was wrong, what changed, the before/after measurement, and how the owner can see it on the Preview deployment. Before the last pull request of each phase, `npm run verify:full` green. At the end, update the baseline table at the top of this file with the new numbers and rename the file's heading to a record of what was done, so `docs/` does not keep a prompt as documentation.
