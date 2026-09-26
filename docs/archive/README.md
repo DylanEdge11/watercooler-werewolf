@@ -10,6 +10,7 @@ Dated records kept for history. **None of these are current instructions.** Link
 | [MIGRATION_PROGRESS.md](MIGRATION_PROGRESS.md) | Migration decisions and stage-by-stage progress, to Sept 23. |
 | [REVIEW_2026-09-16.md](REVIEW_2026-09-16.md) | Code review with findings R1–R7. |
 | [PRODUCT_REVIEW_2026-09-26.md](PRODUCT_REVIEW_2026-09-26.md) | Sept 26 product, UX, and game-design review against version 1.3, with a recommended roadmap. |
+| [VERSION_1.4_DEV_PROMPT.md](VERSION_1.4_DEV_PROMPT.md) | The prompt used to build version 1.4 from that review: fix items, scheduled phases, and the moderator digest. |
 | [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md) | Sept 19 checkpoint: test counts and Preview deployment IDs. |
 | [PLAYWRIGHT_READINESS_REPORT.md](PLAYWRIGHT_READINESS_REPORT.md) | Sept 18 local browser-suite results. |
 | [PLAYWRIGHT_HOSTED_QA_REPORT.md](PLAYWRIGHT_HOSTED_QA_REPORT.md) | Sept 19 hosted Preview results. |
