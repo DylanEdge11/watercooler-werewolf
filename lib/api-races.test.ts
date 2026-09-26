@@ -21,7 +21,6 @@ vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
 vi.mock('../lib/auth/authorization', () => ({ requireGameModerator: async () => ({ id: 'mod' }) }));
 vi.mock('../lib/auth/session', () => ({ getCurrentPlayer: async () => ({ seatId: 'p0', gameId: 'game', alive: true }) }));
-vi.mock('../lib/chat/rooms', () => ({ ensureGameRooms: async () => {} }));
 
 import { POST as phasePost } from '../app/api/games/[gameId]/phases/route';
 import { POST as actionPost } from '../app/api/phases/[phaseId]/actions/route';

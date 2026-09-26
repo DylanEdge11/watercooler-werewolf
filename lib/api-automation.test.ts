@@ -12,7 +12,6 @@ vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
 vi.mock('../lib/auth/authorization', () => ({ requireGameModerator: async () => ({ id: 'mod' }) }));
 vi.mock('../lib/auth/session', () => ({ getCurrentPlayer: async () => shared.currentPlayer }));
-vi.mock('../lib/chat/rooms', () => ({ ensureGameRooms: async () => {} }));
 
 import { GET as phaseGet, POST as phasePost } from '../app/api/games/[gameId]/phases/route';
 import { POST as automationPost } from '../app/api/games/[gameId]/automation/route';
@@ -112,6 +111,12 @@ describe('automatic publication', () => {
     expect(JSON.parse(event.payload)).toMatchObject({ source: 'SCHEDULER', overrideReason: null });
     expect((await rows<{ reviewer: string | null; status: string }>("SELECT reviewed_by_moderator_id AS reviewer, status FROM resolution_proposals"))[0]).toEqual({ reviewer: null, status: 'APPROVED' });
     expect((await rows<{ alive: number }>("SELECT alive FROM seats WHERE id = 'p1'"))[0].alive).toBe(0);
+    // Room access changes in the same publication: the eliminated player is in the Afterlife.
+    expect(await rows(`SELECT m.seat_id AS seatId, r.type, m.access FROM chat_room_members m JOIN chat_rooms r ON r.id = m.room_id
+      WHERE m.seat_id IN ('p1', 'p17') ORDER BY m.seat_id, r.type`)).toEqual([
+      { seatId: 'p1', type: 'DEAD', access: 'WRITE' },
+      { seatId: 'p17', type: 'WEREWOLF', access: 'WRITE' },
+    ]);
     const timelineEntry = published.timeline.find((entry) => entry.eventType === 'PHASE_PUBLISHED');
     expect(timelineEntry?.payload.publishedAutomatically).toBe(true);
   });

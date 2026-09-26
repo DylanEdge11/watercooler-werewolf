@@ -1,7 +1,7 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentPlayer } from '../../../../../lib/auth/session';
-import { ensureGameRooms, normalizeChatBody } from '../../../../../lib/chat/rooms';
+import { normalizeChatBody } from '../../../../../lib/chat/rooms';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
@@ -13,7 +13,6 @@ interface RouteContext {
 async function requireRoomAccess(roomId: string) {
   const identity = await getCurrentPlayer();
   if (!identity) throw new HttpError(401, 'Player authentication required.');
-  await ensureGameRooms(identity.gameId);
   const room = await getDb()
     .prepare(
       `SELECT cr.id, cr.game_id AS gameId, cr.type, cr.status, crm.access

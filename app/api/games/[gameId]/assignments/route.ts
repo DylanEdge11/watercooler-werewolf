@@ -9,7 +9,7 @@ import { createSecureRandomRolls } from '../../../../../lib/game/random';
 import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { ensureGameRooms } from '../../../../../lib/chat/rooms';
+import { roomSyncStatements } from '../../../../../lib/chat/rooms';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -371,11 +371,12 @@ export async function POST(request: Request, context: RouteContext) {
             gameId,
             now,
           ),
+        // Rooms and memberships for the released roles, in the same transaction.
+        ...roomSyncStatements(db, gameId, now),
       ]);
       if (changes(result[0]) !== 1) {
         return jsonError('This assignment preview is no longer current. Refresh and create a new preview.', 409);
       }
-      await ensureGameRooms(gameId);
       return Response.json({ ok: true, releasedAt: now, setupRevision });
     }
 
