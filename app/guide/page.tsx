@@ -169,6 +169,7 @@ export default function GuidePage() {
           <Shot src="/guide/player-day-ballot.png" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself about every ten seconds." />
           <h3>4. Follow the story</h3>
           <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page (the latest 100 updates), with each Day’s vote tally. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
+          <p>When the game is won, the curtain comes down: every player’s role is revealed, and <strong>Final curtain</strong> opens by itself the first time you visit. It shows the whole cast with their roles and fates, a few <em>moments</em> (the keenest eye, the most suspected innocent, the closest call, any Bodyguard save, the survivors, and the last Werewolf standing), and the story cycle by cycle: each Day’s vote totals, whom the pack went for, what the Seer saw, Cupid’s pair, Hunter shots, and tie draws. Select <strong>Final curtain</strong> in the menu to see it again. A stopped game has no reveal.</p>
           <Shot src="/guide/player-timeline.png" alt="Player dashboard showing the full Timeline of published results" caption="The full Timeline: each published result, who was eliminated and their role, and how everyone voted." />
           <h3>Good to know</h3>
           <ul>
@@ -201,7 +202,7 @@ export default function GuidePage() {
           <Shot src="/guide/moderator-live-game.png" alt="Moderator console reviewing a calculated result" caption="Reviewing a calculated Day result before publishing it." />
           <p>If a result must be corrected, <strong>Override calculated eliminations</strong> lets you publish a different list with a written reason. The original calculation stays on record.</p>
           <h3>Finish</h3>
-          <p>The game completes as soon as a published result produces a winner. After the final cutoff, you can instead <strong>Enter final showdown</strong> and run Final ballots until someone wins. Afterwards, select <strong>Download JSON backup</strong> to keep a private record.</p>
+          <p>The game completes as soon as a published result produces a winner. After the final cutoff, you can instead <strong>Enter final showdown</strong> and run Final ballots until someone wins. When it completes, players see every role and the <strong>Final curtain</strong> recap. Your console shows the same recap under <strong>The final curtain</strong>; select <strong>Copy recap</strong> to paste it, roles included, into your group chat. A stopped game gets no reveal or recap. Afterwards, select <strong>Download JSON backup</strong> to keep a private record.</p>
           <h3>Moderator tools</h3>
           <ul>
             <li><strong>Announcements</strong> appear in every player’s updates. <strong>Announcement copy</strong> then shows each one ready to paste into an email or a group chat, with <strong>Copy email</strong> and <strong>Copy for chat</strong>.</li>

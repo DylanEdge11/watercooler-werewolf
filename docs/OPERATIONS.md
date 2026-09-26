@@ -32,6 +32,7 @@ These controls are under **Communications & operations** in the moderator consol
 | Clear old chat | **Purge expired** | Blanks messages older than the retention period (default seven days). |
 | Keep a record | **Download JSON backup** | A private file with roles and room contents. |
 | End play | **Stop game** → reason → confirm | Permanent. See [Stop](#stop). |
+| Share the ending | **The final curtain** (completed games only) → **Copy recap** | Plain text for the group chat: winner, every role and fate, each cycle, and the moments. Players see the same recap under **Final curtain**. |
 | Start over | **Reset to setup** → exact game name → confirm | See [Reset](#reset). |
 | Recover setup | **Recovery restore** → snapshot → **Restore to setup** → exact game name → confirm | See [Restore](#restore). |
 
@@ -50,6 +51,8 @@ Stop requires confirmation and a reason of at least five characters. It:
 - shows players a stopped message.
 
 There is no Resume. Stopping twice changes nothing. A completed or cancelled game cannot be stopped.
+
+A stopped game never reveals living players' roles and has no recap; `GET /api/player/recap` and the console's recap return 403. Only a game that ends with a winner (`COMPLETED`) gets the reveal and the Final curtain.
 
 ## Reset
 
