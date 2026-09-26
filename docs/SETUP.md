@@ -29,7 +29,7 @@ Local development (`npm run dev` with a `file:` database) is the only mode where
 | `TURSO_AUTH_TOKEN` | Remote only | Token scoped to that one database. |
 | `SITE_ORIGIN` | Recommended | Exact origin players use, such as `https://watercooler-werewolf.vercel.app`, with no path. Browser writes from any other origin are rejected. If unset, each request's own origin is used, which still blocks other sites; set it in Production so writes through any other hostname are refused. Claim links always use the address the moderator is on. |
 | `WATERCOOLER_OWNER_EMAIL` | For bootstrap | Email for the first moderator account. |
-| `CRON_SECRET` | Optional | Enables `/api/scheduler/deadlines` for Vercel Cron or an external scheduler. See [Scheduler](#scheduler). |
+| `CRON_SECRET` | Optional | Enables `/api/scheduler/deadlines` for an external scheduler. See [Scheduler](#scheduler). |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Optional | Turns on **Email invites**. `SMTP_PORT` defaults to 465. Without all of them, moderators use the invite CSV. See [Invite email](#invite-email). |
 
 Set variables separately for `preview` and `production` in Vercel. Never prefix database credentials with `NEXT_PUBLIC_`. See `.env.example` for local and test variables.
@@ -147,7 +147,7 @@ Routine releases go through `main`:
 
 Automatic results never depend on a cron: each due step runs on the next visit to the moderator console or a player dashboard. A scheduler only makes steps happen when nobody is looking, for example a result that should publish overnight.
 
-`vercel.json` asks Vercel Cron to call `/api/scheduler/deadlines` once a day, which is all the Hobby plan allows. Vercel sends `CRON_SECRET` as a Bearer token, so set `CRON_SECRET` in the Production environment. For timely automatic results without visits, point a free external scheduler (for example cron-job.org) at `GET https://<your-site>/api/scheduler/deadlines` every five minutes with the header `Authorization: Bearer <CRON_SECRET>`. Never paste the secret into chat or commit it.
+No Vercel Cron is configured: the Hobby plan allows only one run a day, which adds little, and without `CRON_SECRET` it would only log a refused call. To have automatic results happen with nobody visiting, set `CRON_SECRET` in the Production environment and point a free external scheduler (for example cron-job.org) at `GET https://<your-site>/api/scheduler/deadlines` every five minutes with the header `Authorization: Bearer <CRON_SECRET>`. Never paste the secret into chat or commit it. Each call runs the due automatic steps and also locks expired phases in review-mode and paused games, which only closes voting that the deadline had already closed.
 
 ## Schema changes
 

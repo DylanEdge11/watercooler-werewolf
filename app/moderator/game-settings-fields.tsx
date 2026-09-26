@@ -45,7 +45,7 @@ export default function GameSettingsFields({ initial, disabled = false }: GameSe
       <legend>Results</legend>
       <label><input type="radio" name="publicationMode" value="REVIEW" checked={publicationMode === 'REVIEW'} onChange={() => setPublicationMode('REVIEW')} />I review and publish each result</label>
       <label><input type="radio" name="publicationMode" value="AUTOMATIC" checked={publicationMode === 'AUTOMATIC'} onChange={() => setPublicationMode('AUTOMATIC')} />Publish automatically after a review window</label>
-      <label className="review-window-field">Review window (minutes)<input name="reviewWindowMinutes" type="number" min="0" max="1440" step="1" defaultValue={reviewWindowMinutes} required /><small className="field-hint">{publicationMode === 'AUTOMATIC' ? 'At each deadline the game locks and calculates. The result publishes after this many minutes unless you publish, override, or pause first.' : 'Nothing locks, calculates, or publishes on its own. You can switch to automatic at any time in Run the live game.'}</small></label>
+      <label className="review-window-field">Review window (minutes)<input name="reviewWindowMinutes" type="number" min="0" max="1440" step="1" defaultValue={reviewWindowMinutes} required /><small className="field-hint">{publicationMode === 'AUTOMATIC' ? 'At each deadline the game locks and calculates. The result publishes after this many minutes unless you publish, override, or pause first.' : 'Voting closes at each deadline, but nothing calculates or publishes on its own. You can switch to automatic at any time in Run the live game.'}</small></label>
     </fieldset>
     <details className="advanced-settings wide">
       <summary>Advanced: eliminations per phase</summary>

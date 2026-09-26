@@ -23,8 +23,8 @@ interface AutomationControlsProps {
 }
 
 function statusLine(game: AutomationGameState, nextStep: NextAutomaticStep | null, formatTime: (iso: string) => string): string {
-  if (game.automationPausedAt) return 'Paused. Nothing locks, calculates, or publishes on its own until you resume.';
-  if (game.publicationMode === 'REVIEW') return 'Review mode: you lock, calculate, and publish each result yourself.';
+  if (game.automationPausedAt) return 'Paused. Deadlines still close voting, but nothing calculates or publishes on its own until you resume.';
+  if (game.publicationMode === 'REVIEW') return 'Review mode: voting closes at each deadline, and you calculate and publish each result yourself.';
   if (nextStep?.kind === 'LOCK_AND_PROPOSE') return `Locks and calculates at ${formatTime(nextStep.at)}.`;
   if (nextStep?.kind === 'FINALIZE_HUNTER') return `Waiting for the Hunter: finishes as soon as they shoot, or at ${formatTime(nextStep.at)}.`;
   if (nextStep?.kind === 'PUBLISH') return `Publishes automatically at ${formatTime(nextStep.at)} unless you publish, override, or pause first.`;
