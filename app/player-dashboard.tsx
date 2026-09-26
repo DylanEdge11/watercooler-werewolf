@@ -1,7 +1,7 @@
 'use client';
 
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
@@ -10,6 +10,7 @@ import RoleMedallion from './role-medallion';
 import DeathCurtainCall from './death-curtain-call';
 import BrandMark from './brand-mark';
 import { pollWhileVisible } from '../lib/http/poll-while-visible';
+import { ROLE_VISIBILITY_COOKIE, roleVisibilityCookieValue } from '../lib/player/role-visibility';
 import { currentCycle, describeTimelineEvent, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
 
 import type { ActionKind, RoleKey } from '../lib/game/types';
@@ -63,6 +64,12 @@ interface PlayerDashboardProps {
   previewData?: DashboardData;
   previewMode?: boolean;
   onExitPreview?: () => void;
+  /** Rendered on the server for the signed-in player; the dashboard then only polls. */
+  initialData?: DashboardData | null;
+  /** The server found no valid player session. */
+  initiallyUnauthenticated?: boolean;
+  /** The seat's "Hide role" choice from its cookie, or null when the server doesn't know it. */
+  initialRoleHidden?: boolean | null;
 }
 
 function initials(name: string): string {
@@ -92,8 +99,20 @@ function roleVisibilityKey(playerId: string): string {
   return `werewolf:v1:role-hidden:${playerId}`;
 }
 
+function rememberRoleVisibility(playerId: string, hidden: boolean): void {
+  window.localStorage.setItem(roleVisibilityKey(playerId), String(hidden));
+  document.cookie = `${ROLE_VISIBILITY_COOKIE}=${roleVisibilityCookieValue(playerId, hidden)}; path=/; max-age=31536000; samesite=lax`;
+}
+
 function deathAlertKey(gameId: string, playerId: string): string {
   return `werewolf:v1:death-alert:${gameId}:${playerId}`;
+}
+
+const subscribeToNothing = () => () => {};
+
+/** false in the server's HTML and while React takes it over; true once buttons respond. */
+function useHydrated(): boolean {
+  return useSyncExternalStore(subscribeToNothing, () => true, () => false);
 }
 
 // Only needed when a stored session has expired, so signed-in players never download it.
@@ -103,12 +122,12 @@ function PublicWelcome() {
   return <LandingShell />;
 }
 
-export default function PlayerDashboard({ previewData, previewMode = false, onExitPreview }: PlayerDashboardProps) {
+export default function PlayerDashboard({ previewData, previewMode = false, onExitPreview, initialData = null, initiallyUnauthenticated = false, initialRoleHidden = null }: PlayerDashboardProps) {
   const router = useRouter();
-  const [data, setData] = useState<DashboardData | null>(() => previewMode ? previewData ?? null : null);
-  const [loading, setLoading] = useState(!previewMode);
-  const [unauthenticated, setUnauthenticated] = useState(false);
-  const [selected, setSelected] = useState<string[]>(() => previewMode ? previewData?.currentAction?.targetIds ?? [] : []);
+  const [data, setData] = useState<DashboardData | null>(() => previewMode ? previewData ?? null : initialData);
+  const [loading, setLoading] = useState(!previewMode && !initialData && !initiallyUnauthenticated);
+  const [unauthenticated, setUnauthenticated] = useState(initiallyUnauthenticated);
+  const [selected, setSelected] = useState<string[]>(() => (previewMode ? previewData : initialData)?.currentAction?.targetIds ?? []);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
@@ -116,7 +135,12 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const [submitting, setSubmitting] = useState(false);
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
-  const [roleHidden, setRoleHidden] = useState(false);
+  const hydrated = useHydrated();
+  const [roleHidden, setRoleHidden] = useState(initialRoleHidden ?? false);
+  // A server-rendered role stays concealed until this device's own "Hide role" setting is read,
+  // unless the cookie already said the role is shown.
+  const [roleVisibilityKnown, setRoleVisibilityKnown] = useState(!initialData || initialRoleHidden !== null);
+  const concealed = roleHidden || !roleVisibilityKnown;
   const [view, setView] = useState<'today' | 'timeline'>('today');
   const [roleJustRevealed, setRoleJustRevealed] = useState(false);
   const [deathAlert, setDeathAlert] = useState<DashboardData['timeline'][number] | null>(null);
@@ -128,13 +152,27 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     data: DashboardData | null;
   }>({ deathAlert: null, selectedTimeline: null, data: null });
   const selectionDirty = useRef(false);
-  const selectionPhaseId = useRef<string | null>(null);
+  const selectionPhaseId = useRef<string | null>(initialData?.phase?.id ?? null);
+  const initialDataRef = useRef(initialData);
   const olderNotifications = useRef<DashboardData['notifications']>([]);
   const refreshSequence = useRef(0);
 
   useLayoutEffect(() => {
     modalState.current = { deathAlert, selectedTimeline, data };
   }, [deathAlert, selectedTimeline, data]);
+
+  /** What this device remembers: whether the role is hidden, and which elimination was already shown. */
+  const applyDeviceState = useCallback((result: DashboardData) => {
+    const hidden = window.localStorage.getItem(roleVisibilityKey(result.player.id)) === 'true';
+    setRoleHidden(hidden);
+    setRoleVisibilityKnown(true);
+    rememberRoleVisibility(result.player.id, hidden);
+    const latestDeath = result.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED' && event.payload.eliminations?.length);
+    if (latestDeath) {
+      const seenKey = deathAlertKey(result.game.id, result.player.id);
+      if (window.localStorage.getItem(seenKey) !== latestDeath.id) setDeathAlert(latestDeath);
+    }
+  }, []);
 
   const refresh = useCallback(async (preserveLocalSelection = false) => {
     if (previewMode) return;
@@ -158,13 +196,8 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       ...result.notifications,
       ...olderNotifications.current.filter((older) => !notificationIds.has(older.id)),
     ];
-    setRoleHidden(window.localStorage.getItem(roleVisibilityKey(result.player.id)) === 'true');
+    applyDeviceState(result);
     setData({ ...result, notifications: mergedNotifications });
-    const latestDeath = result.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED' && event.payload.eliminations?.length);
-    if (latestDeath) {
-      const seenKey = deathAlertKey(result.game.id, result.player.id);
-      if (window.localStorage.getItem(seenKey) !== latestDeath.id) setDeathAlert(latestDeath);
-    }
     if (!keepLocalSelection) {
       setSelected(result.currentAction?.targetIds ?? []);
       selectionDirty.current = false;
@@ -172,7 +205,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     selectionPhaseId.current = incomingPhaseId;
     setUnauthenticated(false);
     setLoading(false);
-  }, [previewMode]);
+  }, [previewMode, applyDeviceState]);
 
   async function loadOlderNotifications() {
     if (previewMode) return;
@@ -207,8 +240,11 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
 
   useEffect(() => {
     if (previewMode) return;
+    // The first refresh also applies this device's settings to server-rendered data. That page is
+    // usable before the refresh returns, so like every poll it keeps a target the player already picked.
+    const serverRendered = Boolean(initialDataRef.current);
     const timer = window.setTimeout(() => {
-      void refresh().catch((caught) => {
+      void refresh(serverRendered).catch((caught) => {
         setError(caught instanceof Error ? caught.message : 'Unable to load the game.');
         setLoading(false);
       });
@@ -328,9 +364,10 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
 
   function toggleRoleVisibility() {
     if (!data?.player.id) return;
-    const next = !roleHidden;
-    window.localStorage.setItem(roleVisibilityKey(data.player.id), String(next));
+    const next = !concealed;
+    rememberRoleVisibility(data.player.id, next);
     setRoleHidden(next);
+    setRoleVisibilityKnown(true);
     // The reveal flourish plays only when the player chooses to show the role.
     setRoleJustRevealed(!next);
   }
@@ -398,7 +435,8 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const stageLight = data.phase?.kind === 'NIGHT' ? 'night' : 'day';
 
   return (
-    <main className={`app-shell${previewMode ? ' preview-player-shell' : ''}`} data-stage-light={stageLight}>
+    // The server-rendered page shows before its buttons work; inert until then, so a tap is never silently lost.
+    <main className={`app-shell${previewMode ? ' preview-player-shell' : ''}`} data-stage-light={stageLight} inert={!hydrated}>
       {previewMode && <div className="preview-mode-banner" role="status">
         <span><strong>Player View Studio.</strong> Synthetic sample data; actions, feedback, and chat stay in this page.</span>
         <button className="text-button" type="button" onClick={onExitPreview}>Back to studio controls</button>
@@ -456,19 +494,19 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
             <div><p className="eyebrow accent">{data.phase ? phaseName(data.phase.kind, data.phase.sequence) : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{data.permission.label}</p></div>
             {data.phase?.autoPublishAt && !['COMPLETED', 'STOPPED'].includes(data.game.status)
               ? <div className="deadline-card"><span>Results</span><strong suppressHydrationWarning>by {clockTime(data.phase.autoPublishAt, data.game.timezone)}</strong><small suppressHydrationWarning>Results publish by {clockTime(data.phase.autoPublishAt, data.game.timezone)} unless the moderator reviews them first.</small></div>
-              : <div className="deadline-card"><span>Response window</span><strong>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : deadlineLabel(data.phase?.deadline ?? null)}</strong><small>{data.game.automationPaused && !['COMPLETED', 'STOPPED'].includes(data.game.status) ? 'The schedule is paused' : data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>}
+              : <div className="deadline-card"><span>Response window</span><strong suppressHydrationWarning>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : deadlineLabel(data.phase?.deadline ?? null)}</strong><small>{data.game.automationPaused && !['COMPLETED', 'STOPPED'].includes(data.game.status) ? 'The schedule is paused' : data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>}
           </div>
           {data.game.status === 'STOPPED' && <p className="notice warning" role="status">{data.game.stopReason ?? 'This game is stopped. Player actions and rooms are read-only.'}</p>}
 
           <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`} data-just-revealed={roleJustRevealed || undefined}>
             {!data.player.alive && <span className="eliminated-banner" role="status">☠ Eliminated · spectator mode</span>}
-            <div className="role-orbit"><RoleMedallion role={data.player.role} hidden={roleHidden} /></div>
+            <div className="role-orbit"><RoleMedallion role={data.player.role} hidden={concealed} /></div>
             <div className="role-copy">
-              <div className="role-copy-heading"><p className="eyebrow">{roleHidden ? 'Private role · concealed' : 'Your private role'}</p><button className="role-visibility-toggle" type="button" aria-pressed={roleHidden} onClick={toggleRoleVisibility}>{roleHidden ? 'Show role' : 'Hide role'}</button></div>
-              <h2>{roleHidden ? 'Hidden' : role?.name ?? 'Not released'}</h2>
-              <p>{roleHidden ? 'Your role and role details are hidden on this device.' : data.player.alive ? role?.summary ?? 'The moderator is preparing assignments.' : 'You have been eliminated. Your role is now public and you may spectate.'}</p>
+              <div className="role-copy-heading"><p className="eyebrow">{concealed ? 'Private role · concealed' : 'Your private role'}</p><button className="role-visibility-toggle" type="button" aria-pressed={concealed} onClick={toggleRoleVisibility}>{concealed ? 'Show role' : 'Hide role'}</button></div>
+              <h2>{concealed ? 'Hidden' : role?.name ?? 'Not released'}</h2>
+              <p>{concealed ? 'Your role and role details are hidden on this device.' : data.player.alive ? role?.summary ?? 'The moderator is preparing assignments.' : 'You have been eliminated. Your role is now public and you may spectate.'}</p>
             </div>
-            <div className="role-faction"><span>Faction</span><strong>{roleHidden ? 'Hidden' : role?.faction ?? 'Hidden'}</strong><small>{data.player.alive ? 'You are alive' : 'Eliminated'}</small></div>
+            <div className="role-faction"><span>Faction</span><strong>{concealed ? 'Hidden' : role?.faction ?? 'Hidden'}</strong><small>{data.player.alive ? 'You are alive' : 'Eliminated'}</small></div>
           </section>
 
           {data.permission.actionKind && data.phase ? (
