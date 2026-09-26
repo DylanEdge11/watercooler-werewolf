@@ -9,6 +9,7 @@ import LiveGamePanel from './live-game-panel';
 import OperationsPanel from './operations-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
+import { ROLE_KEYS, type RoleKey } from '../../lib/game/types';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
 import BrandMark from '../brand-mark';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
@@ -22,7 +23,7 @@ const sampleRoster = [
   }),
 ].join('\n');
 
-const roleOrder = ['VILLAGER', 'WEREWOLF', 'SEER', 'BODYGUARD', 'HUNTER', 'MASON', 'APPRENTICE_SEER', 'MAYOR', 'CUPID'] as const;
+const roleOrder = ROLE_KEYS;
 const weekdayOptions = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -32,7 +33,6 @@ const weekdayOptions = [
   { value: 6, label: 'Sat' },
   { value: 0, label: 'Sun' },
 ] as const;
-type RoleKey = (typeof roleOrder)[number];
 type Composition = Record<RoleKey, number>;
 
 function dateInput(date: Date): string {

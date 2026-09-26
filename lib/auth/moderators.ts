@@ -1,8 +1,9 @@
 import { ensureDatabase } from '../../db/migrate';
 import { getDb } from '../../db';
 import type { Database } from '../../db/contracts';
-import { hashSecret, randomToken, verifySecret } from './crypto';
-import { bootstrapPrimaryModerator, hasModeratorAccountInDatabase as hasModeratorAccountInDatabaseCore, normalizeModeratorEmail, type CreatedModerator } from './bootstrap';
+import { hashSecret, verifySecret } from './crypto';
+import { bootstrapPrimaryModerator, hasModeratorAccountInDatabase as hasModeratorAccountInDatabaseCore, INSERT_MODERATOR_SQL, normalizeModeratorEmail, prepareModeratorAccount, type CreatedModerator } from './bootstrap';
+import { isSingleEmailAddress } from '../roster/email-address';
 
 export async function hasModeratorAccount(): Promise<boolean> {
   await ensureDatabase();
@@ -25,23 +26,9 @@ export async function createModeratorAccount(email: string, password: string): P
 
 /** Create a co-moderator account without changing the primary bootstrap marker. */
 export async function createModeratorAccountInDatabase(db: Database, email: string, password: string): Promise<CreatedModerator> {
-  const normalizedEmail = normalizeModeratorEmail(email);
-  if (!/^\S+@\S+\.\S+$/u.test(normalizedEmail)) throw new Error('Enter a valid email address.');
-  if (password.length < 12) throw new Error('Moderator passwords must be at least 12 characters.');
-
-  const recoveryCodes = Array.from({ length: 8 }, () => randomToken(9));
-  const recoveryCodeHashes = await Promise.all(recoveryCodes.map((code) => hashSecret(code)));
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-  await db
-    .prepare(
-      `INSERT INTO moderator_accounts
-       (id, email, password_hash, recovery_codes_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(id, normalizedEmail, await hashSecret(password), JSON.stringify(recoveryCodeHashes), now, now)
-    .run();
-  return { id, email: normalizedEmail, recoveryCodes };
+  const prepared = await prepareModeratorAccount(email, password);
+  await db.prepare(INSERT_MODERATOR_SQL).bind(...prepared.values).run();
+  return prepared.account;
 }
 
 let dummyHash: Promise<string> | undefined;
@@ -87,7 +74,7 @@ export async function redeemModeratorRecoveryCode(
 ): Promise<{ id: string; email: string } | null> {
   await ensureDatabase();
   const normalizedEmail = normalizeModeratorEmail(email);
-  if (!/^\S+@\S+\.\S+$/u.test(normalizedEmail) || recoveryCode.trim().length < 8 || newPassword.length < 12) return null;
+  if (!isSingleEmailAddress(normalizedEmail) || recoveryCode.trim().length < 8 || newPassword.length < 12) return null;
   const db = getDb();
   const account = await db
     .prepare('SELECT id, email, recovery_codes_json AS recoveryCodesJson FROM moderator_accounts WHERE email = ? LIMIT 1')

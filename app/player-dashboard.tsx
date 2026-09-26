@@ -12,8 +12,9 @@ import BrandMark from './brand-mark';
 import { pollWhileVisible } from '../lib/http/poll-while-visible';
 import { cycleNumber, describeTimelineEvent, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
 
-export type RoleKey = 'VILLAGER' | 'WEREWOLF' | 'SEER' | 'BODYGUARD' | 'HUNTER' | 'MASON' | 'APPRENTICE_SEER' | 'MAYOR' | 'CUPID';
-export type ActionKind = 'DAY_VOTE' | 'WOLF_VOTE' | 'INVESTIGATE' | 'PROTECT' | 'HUNTER_SHOT' | 'CUPID_PAIR';
+import type { ActionKind, RoleKey } from '../lib/game/types';
+
+export type { ActionKind, RoleKey };
 
 export interface DashboardData {
   player: {

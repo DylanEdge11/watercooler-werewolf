@@ -4,6 +4,7 @@ import { requireGameModerator, requireGameOwner } from '../../../../../lib/auth/
 import { createModeratorAccount } from '../../../../../lib/auth/moderators';
 import { assertSameOrigin } from '../../../../../lib/http/security';
 import { routeError } from '../../../../../lib/http/errors';
+import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -36,7 +37,7 @@ export async function POST(request: Request, context: RouteContext) {
     const owner = await requireGameOwner(gameId, 'add co-moderators');
     const body = (await request.json()) as { email?: string; password?: string };
     const email = body.email?.trim().toLowerCase() ?? '';
-    if (!/^\S+@\S+\.\S+$/u.test(email)) throw new Error('Enter a valid co-moderator email.');
+    if (!isSingleEmailAddress(email)) throw new Error('Enter a valid co-moderator email.');
     const db = getDb();
     let account = await db
       .prepare('SELECT id, email FROM moderator_accounts WHERE email = ? LIMIT 1')

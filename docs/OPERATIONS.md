@@ -43,6 +43,8 @@ A backup contains the game's configuration, roster, role assignments, phases, ac
 
 Each backup has a SHA-256 checksum and is stored with the game. A backup is taken automatically before every Reset and Restore. Chat text in a backup is kept even after the live messages are purged or removed, so treat backups as private.
 
+**Where backups live.** Stored backups are rows in the same Turso database as the game, so they protect against mistakes (a wrong Reset or Restore) but not against losing the database itself. For that, rely on Turso's point-in-time restore for the database, and on the JSON files a moderator downloads with **Download JSON backup**, which are the only copies outside Turso. Keep those files private. A scheduled export outside Turso is planned before the first paying company.
+
 ## Stop
 
 Stop requires confirmation and a reason of at least five characters. It:
@@ -58,7 +60,7 @@ There is no Resume. Stopping twice changes nothing. A completed or cancelled gam
 Owner only; requires the exact game name. A backup is taken first. Reset returns the selected game to `DRAFT` and:
 
 - signs out all players and invalidates every claim link;
-- removes role assignments, phases, submissions, results, notifications, room memberships, and messages; and
+- removes role assignments, phases, submissions, results, notifications, announcements, room memberships, and messages; and
 - keeps the audit history and the backup.
 
 Afterwards, import the roster again, send the new invitations, and release roles again. Resetting a clean draft is harmless; a cancelled game cannot be reset.

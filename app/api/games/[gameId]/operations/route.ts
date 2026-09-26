@@ -255,6 +255,8 @@ export async function POST(request: Request, context: RouteContext) {
         db.prepare('DELETE FROM assignment_batches WHERE game_id = ? AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare('DELETE FROM game_role_counts WHERE game_id = ? AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare('DELETE FROM notifications WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?) AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
+        // Announcements belong to the run that is being cleared, as with Restore; their audit events stay.
+        db.prepare('DELETE FROM announcements WHERE game_id = ? AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare('DELETE FROM chat_room_members WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare('DELETE FROM chat_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare("UPDATE chat_rooms SET status = 'OPEN' WHERE game_id = ? AND " + resetGuard).bind(gameId, gameId, now, moderator.id),
