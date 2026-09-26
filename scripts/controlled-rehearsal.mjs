@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { readSetCookie, sendJson } from './lib/http.mjs';
 
 const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '');
 const parsedBaseUrl = new URL(baseUrl);
@@ -11,7 +12,6 @@ if (!localHosts.has(parsedBaseUrl.hostname) && process.env.PILOT_ALLOW_REMOTE !=
 
 const moderatorEmail = (process.env.PILOT_MODERATOR_EMAIL ?? 'moderator@pilot.test').trim().toLowerCase();
 const moderatorPassword = process.env.PILOT_MODERATOR_PASSWORD ?? 'fictional-review-password-2026';
-const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
 let moderatorCookie = '';
 const checks = [];
 
@@ -20,29 +20,11 @@ function check(name, condition, detail = '') {
   if (!condition) throw new Error(`${name}${detail ? `: ${detail}` : ''}`);
 }
 
-function rememberSession(response) {
-  const values = typeof response.headers.getSetCookie === 'function'
-    ? response.headers.getSetCookie()
-    : (response.headers.get('set-cookie') ?? '').split(/,(?=\s*[^;,=]+=[^;,]+)/u);
-  const session = values
-    .map((value) => value.split(';', 1)[0])
-    .find((value) => value.startsWith('ww_mod_session='));
-  if (session) moderatorCookie = session;
-}
-
 async function request(path, body, cookie = moderatorCookie) {
-  const headers = { origin: baseUrl, cookie, 'content-type': 'application/json' };
-  if (vercelBypassSecret) headers['x-vercel-protection-bypass'] = vercelBypassSecret;
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  rememberSession(response);
-  const text = await response.text();
-  let data = {};
-  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
-  return { response, status: response.status, data, cookie: response.headers.getSetCookie?.().map((value) => value.split(';', 1)[0]).find((value) => value.startsWith('ww_player_session=')) ?? '' };
+  const result = await sendJson(baseUrl, path, { body, cookie });
+  const session = readSetCookie(result.response, 'ww_mod_session');
+  if (session) moderatorCookie = session;
+  return { ...result, cookie: readSetCookie(result.response, 'ww_player_session') };
 }
 
 async function must(path, body, cookie = moderatorCookie) {

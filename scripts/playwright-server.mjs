@@ -1,3 +1,4 @@
+import './lib/stable-euid.mjs';
 import { mkdir } from 'node:fs/promises';
 import { rmSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -5,15 +6,6 @@ import { dirname, relative, resolve, sep } from 'node:path';
 import { createClient } from '@libsql/client/node';
 import { loadMigrations, runMigrations } from './db-migration-runner.mjs';
 
-// tsx's temporary-directory helper falls back to os.userInfo() on Windows
-// when process.geteuid is absent. Keep the e2e server usable on restricted
-// runners where the passwd lookup can fail.
-if (typeof process.geteuid !== 'function') {
-  Object.defineProperty(process, 'geteuid', {
-    configurable: true,
-    value: () => 1,
-  });
-}
 
 const { tsImport } = await import('tsx/esm/api');
 

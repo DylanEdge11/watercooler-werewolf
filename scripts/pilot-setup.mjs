@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { readSetCookie, sendJson } from './lib/http.mjs';
 
 const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '');
 const moderatorEmail = (process.env.PILOT_MODERATOR_EMAIL ?? 'moderator@pilot.test').trim().toLowerCase();
@@ -22,28 +23,10 @@ if (!moderatorPassword || moderatorPassword.length < 12) {
 }
 
 let cookie = '';
-const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
-function rememberSession(response) {
-  const setCookies = typeof response.headers.getSetCookie === 'function'
-    ? response.headers.getSetCookie()
-    : (response.headers.get('set-cookie') ?? '').split(/,(?=\s*[^;,=]+=[^;,]+)/u);
-  const sessionCookies = setCookies
-    .map((value) => value.split(';', 1)[0])
-    .filter((value) => value.startsWith('ww_mod_session='));
-  if (sessionCookies.length) cookie = sessionCookies.at(-1);
-}
-
 async function request(path, options = {}) {
-  const headers = new Headers(options.headers);
-  headers.set('origin', baseUrl);
-  if (vercelBypassSecret) headers.set('x-vercel-protection-bypass', vercelBypassSecret);
-  if (cookie) headers.set('cookie', cookie);
-  if (options.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
-  const response = await fetch(`${baseUrl}${path}`, { ...options, headers });
-  rememberSession(response);
-  const text = await response.text();
-  let data = {};
-  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  const { response, data, text } = await sendJson(baseUrl, path, { method: options.method, body: options.body, cookie });
+  const session = readSetCookie(response, 'ww_mod_session');
+  if (session) cookie = session;
   if (!response.ok) throw new Error(`${path} (${response.status}): ${data.error ?? text}`);
   return data;
 }
