@@ -1,20 +1,17 @@
 'use client';
 
-import { useRef, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import BrandMark from '../brand-mark';
 import { withRetryAfter } from '../../lib/http/retry-after';
 
 export default function PlayerLoginPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // Set synchronously, so a second Enter is refused even before React re-renders.
-  const inFlight = useRef(false);
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     // A second Enter while the first check runs would spend another of the eight attempts.
-    if (inFlight.current) return;
-    inFlight.current = true;
+    if (busy) return;
     setError('');
     setBusy(true);
     const form = new FormData(event.currentTarget);
@@ -27,7 +24,6 @@ export default function PlayerLoginPage() {
       const data = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
         setError(withRetryAfter(data.error ?? 'Unable to sign in.', response));
-        inFlight.current = false;
         setBusy(false);
         return;
       }
@@ -38,7 +34,6 @@ export default function PlayerLoginPage() {
       window.location.assign('/');
     } catch {
       setError('The village is out of reach. Try again in a moment.');
-      inFlight.current = false;
       setBusy(false);
     }
   }
