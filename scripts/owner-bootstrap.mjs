@@ -1,15 +1,7 @@
+import './lib/stable-euid.mjs';
 import { stdin, stdout } from 'node:process';
 import { loadLocalEnv } from './load-env.mjs';
 
-// tsx's temporary-directory helper falls back to os.userInfo() on Windows
-// when process.geteuid is absent. A stable non-privileged identity is enough
-// for this local operator launcher and avoids a platform-specific lookup.
-if (typeof process.geteuid !== 'function') {
-  Object.defineProperty(process, 'geteuid', {
-    configurable: true,
-    value: () => 1,
-  });
-}
 
 loadLocalEnv();
 

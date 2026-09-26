@@ -11,7 +11,7 @@ import DeathCurtainCall from './death-curtain-call';
 import BrandMark from './brand-mark';
 import { pollWhileVisible } from '../lib/http/poll-while-visible';
 import { ROLE_VISIBILITY_COOKIE, roleVisibilityCookieValue } from '../lib/player/role-visibility';
-import { cycleNumber, describeTimelineEvent, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
+import { currentCycle, describeTimelineEvent, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
 
 import type { ActionKind, RoleKey } from '../lib/game/types';
 
@@ -472,7 +472,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           </nav>
           <div className="sidebar-rule" />
           <p className="eyebrow">Your game</p>
-          <div className="mini-stat"><span>Cycle</span><strong>{String(data.phase ? cycleNumber(data.phase.sequence) : 0).padStart(2, '0')}</strong></div>
+          <div className="mini-stat"><span>Cycle</span><strong>{String(currentCycle(data.phase?.sequence, data.timeline)).padStart(2, '0')}</strong></div>
           <details className="stat-details">
             <summary className="mini-stat stat-trigger"><span>Living</span><strong>{data.game.counts.living}</strong></summary>
             <div className="stat-popover" aria-label="Living players">

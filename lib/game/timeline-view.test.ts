@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cycleNumber, describeTimelineEvent, eliminationCause, phaseName, readableRole, type PublicTimelineEvent } from './timeline-view';
+import { currentCycle, cycleNumber, describeTimelineEvent, eliminationCause, phaseName, readableRole, type PublicTimelineEvent } from './timeline-view';
 
 function event(eventType: string, payload: PublicTimelineEvent['payload']): PublicTimelineEvent {
   return { id: 'e1', eventType, createdAt: '2026-09-24T12:00:00.000Z', payload };
@@ -74,6 +74,12 @@ describe('timeline wording', () => {
 describe('phase names', () => {
   it('numbers a Day and the Night after it as one cycle', () => {
     expect([1, 2, 3, 4, 5].map(cycleNumber)).toEqual([1, 1, 2, 2, 3]);
+    const published = (sequence: number): PublicTimelineEvent => ({ id: `p${sequence}`, eventType: 'PHASE_PUBLISHED', createdAt: '', payload: { kind: sequence % 2 ? 'DAY' : 'NIGHT', sequence } });
+    const note: PublicTimelineEvent = { id: 'a', eventType: 'ANNOUNCEMENT', createdAt: '', payload: { title: 'Hi' } };
+    // Between phases the counter keeps the latest published cycle instead of dropping to 0.
+    expect(currentCycle(null, [note, published(3), published(2)])).toBe(2);
+    expect(currentCycle(5, [published(4)])).toBe(3);
+    expect(currentCycle(null, [note])).toBe(0);
     expect(phaseName('DAY', 1)).toBe('Day 1');
     expect(phaseName('NIGHT', 2)).toBe('Night 1');
     expect(phaseName('DAY', 3)).toBe('Day 2');

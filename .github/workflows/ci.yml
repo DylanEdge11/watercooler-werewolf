@@ -27,20 +27,12 @@ jobs:
           node-version: '24.x'
           cache: npm
       - run: npm ci
-      - run: npm test -- --run
+      - run: npm test
       - run: npm run lint
       - run: npx tsc --noEmit --incremental false
       - run: npm run build
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=moderate
-      - name: Record full dependency audit
-        run: npm audit --json > audit-full.json || test "$?" -eq 1
-      - name: Upload full audit report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-audit-full
-          path: audit-full.json
 
   # The full 20-player API and browser suites, against a disposable local
   # server and database. Manual runs only; `npm run verify:full` runs the same

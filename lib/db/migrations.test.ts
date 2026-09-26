@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { createClient, type Client } from '@libsql/client';
 import { LibsqlDatabase, type LibsqlClient } from '../../db/libsql';
 import { MIGRATION_VERSIONS, verifyDatabaseReady } from '../../db/readiness';
-import { loadMigrations, runMigrations, splitMigrationStatements } from '../../scripts/db-migration-runner.mjs';
+import { readFileSync } from 'node:fs';
+import { loadMigrations, MIGRATION_FILES, runMigrations, splitMigrationStatements } from '../../scripts/db-migration-runner.mjs';
 
 let client: Client;
 
@@ -17,6 +18,13 @@ beforeEach(() => {
 afterEach(() => client.close());
 
 describe('libSQL migration chain', () => {
+  test('the runner, the readiness check, and the Drizzle journal list the same migrations in order', () => {
+    const journal = JSON.parse(readFileSync(new URL('../../drizzle/meta/_journal.json', import.meta.url), 'utf8')) as { entries: Array<{ tag: string }> };
+    const tags = journal.entries.map((entry) => entry.tag);
+    expect(MIGRATION_FILES.map((file: string) => file.replace(/\.sql$/u, ''))).toEqual(tags);
+    expect([...MIGRATION_VERSIONS]).toEqual(tags);
+  });
+
   test('fresh install applies all migrations and is safe to rerun', async () => {
     const migrations = await loadMigrations();
     await runMigrations(client, migrations);
