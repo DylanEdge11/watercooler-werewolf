@@ -73,8 +73,8 @@ export default function AutomationControls({ gameId, game, nextStep, formatTime,
       <details className="automation-settings">
         <summary>Change how results publish</summary>
         <form className="automation-form" onSubmit={save} key={`${game.publicationMode}-${game.reviewWindowMinutes}`}>
-          <label><input type="radio" name="publicationMode" value="AUTOMATIC" defaultChecked={game.publicationMode === 'AUTOMATIC'} />Publish automatically after a review window</label>
           <label><input type="radio" name="publicationMode" value="REVIEW" defaultChecked={game.publicationMode === 'REVIEW'} />I review and publish each result</label>
+          <label><input type="radio" name="publicationMode" value="AUTOMATIC" defaultChecked={game.publicationMode === 'AUTOMATIC'} />Publish automatically after a review window</label>
           <label>Review window (minutes)<input name="reviewWindowMinutes" type="number" min="0" max="1440" step="1" defaultValue={game.reviewWindowMinutes} required /></label>
           <button className="secondary-button" type="submit" disabled={busy}>Save</button>
         </form>

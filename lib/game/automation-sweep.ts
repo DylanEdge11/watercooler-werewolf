@@ -9,7 +9,7 @@ export interface AutomationState {
 
 /**
  * One indexed read: the game's automation settings and its current unpublished
- * phase. Idle games cost only this query on every poll.
+ * phase. When nothing is due, this is the sweep's only query on a poll.
  */
 export async function loadAutomationState(gameId: string): Promise<AutomationState | null> {
   const row = await getDb()
@@ -92,19 +92,29 @@ export async function advanceGameSafely(gameId: string, now = new Date()): Promi
   try {
     return (await advance(gameId, now)).state;
   } catch (error) {
+    const state = await loadAutomationState(gameId).catch(() => null);
     try {
       await getDb()
         .prepare(
-          `INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at)
+          `INSERT OR IGNORE INTO operational_events (id, game_id, severity, source, message, details_json, created_at)
            VALUES (?, ?, 'WARNING', 'AUTOMATION', 'An automatic step could not run; it will retry on the next check.', ?, ?)`,
         )
-        .bind(crypto.randomUUID(), gameId, JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), now.toISOString())
+        .bind(automationWarningId(gameId, state?.phase?.id ?? null, now), gameId, JSON.stringify({ phaseId: state?.phase?.id ?? null, error: error instanceof Error ? error.message : 'Unknown error' }), now.toISOString())
         .run();
     } catch {
       // Recording the failure is best effort; the game action itself was not applied.
     }
-    return loadAutomationState(gameId).catch(() => null);
+    return state;
   }
+}
+
+/**
+ * Every player refresh retries a failed step, so a step that keeps failing
+ * would otherwise log a warning on each poll. One id per game, phase, and
+ * UTC hour keeps it to a single warning an hour.
+ */
+export function automationWarningId(gameId: string, phaseId: string | null, now: Date): string {
+  return `automation-${gameId}-${phaseId ?? 'none'}-${now.toISOString().slice(0, 13)}`;
 }
 
 /** The cron entry point: every running game in automatic mode that is not paused. */

@@ -35,8 +35,9 @@ test('keeps setup drafts scoped, supports safe restart, and exposes another game
   await moderator.page.getByLabel('Day ballot closes').fill('15:45');
   // A new game gives the Hunter eight hours; the divisors sit under a collapsed Advanced section with a slot preview.
   await expect(moderator.page.getByLabel('Hunter window (hours)')).toHaveValue('8');
-  // New games publish automatically after a 60-minute review window.
-  await expect(moderator.page.getByLabel('Publish automatically after a review window')).toBeChecked();
+  // New games use moderator review; automatic results are opt-in with a 60-minute window.
+  await expect(moderator.page.getByLabel('I review and publish each result')).toBeChecked();
+  await expect(moderator.page.getByLabel('Publish automatically after a review window')).not.toBeChecked();
   await expect(moderator.page.getByLabel('Review window (minutes)')).toHaveValue('60');
   await moderator.page.getByLabel('Hunter window (hours)').fill('2');
   await expect(moderator.page.getByLabel('Players per Day elimination')).toBeHidden();

@@ -187,12 +187,14 @@ describe('setup and publication invariants', () => {
     expect(listed.games.find((game) => game.id === gameId)).toMatchObject({ hunterWindowMinutes: 480, dayDivisor: 30, nightDivisor: 30 });
   });
 
-  test('a new game publishes automatically after 60 minutes unless the moderator chooses review', async () => {
-    const automatic = await (await gamesPost(request(launchSchedule))).json() as { gameId: string };
-    const review = await (await gamesPost(request({ ...launchSchedule, publicationMode: 'REVIEW', reviewWindowMinutes: 15 }))).json() as { gameId: string };
+  test('a new game uses moderator review unless the moderator opts in to automatic results', async () => {
+    const review = await (await gamesPost(request(launchSchedule))).json() as { gameId: string };
+    const automatic = await (await gamesPost(request({ ...launchSchedule, publicationMode: 'AUTOMATIC' }))).json() as { gameId: string };
+    const custom = await (await gamesPost(request({ ...launchSchedule, publicationMode: 'AUTOMATIC', reviewWindowMinutes: 15 }))).json() as { gameId: string };
     const automation = (id: string) => sqlite.prepare('SELECT publication_mode AS mode, review_window_minutes AS minutes, automation_paused_at AS paused FROM games WHERE id = ?').get(id);
+    expect(automation(review.gameId)).toEqual({ mode: 'REVIEW', minutes: 60, paused: null });
     expect(automation(automatic.gameId)).toEqual({ mode: 'AUTOMATIC', minutes: 60, paused: null });
-    expect(automation(review.gameId)).toEqual({ mode: 'REVIEW', minutes: 15, paused: null });
+    expect(automation(custom.gameId)).toEqual({ mode: 'AUTOMATIC', minutes: 15, paused: null });
     // A game created before this version keeps moderator review.
     expect(automation('game')).toEqual({ mode: 'REVIEW', minutes: 60, paused: null });
     expect((await gamesPost(request({ ...launchSchedule, reviewWindowMinutes: 5000 }))).status).toBe(400);

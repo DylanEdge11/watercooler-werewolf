@@ -32,6 +32,7 @@ test('an eight-player game runs from setup to a Village win with private informa
     composition: UAT_COMPOSITION,
     playerCount: UAT_PLAYER_COUNT,
     setupThroughUi: true,
+    automaticResults: true,
     mobilePlayerIndex: 0,
   });
   try {
@@ -78,7 +79,7 @@ test('an eight-player game runs from setup to a Village win with private informa
     });
     expect(firstDay.published.winner).toBeNull();
 
-    // A game created in the console publishes automatically after 60 minutes unless paused.
+    // This game opted in to automatic results at setup: it publishes 60 minutes after calculation unless paused.
     const automation = moderatorPage.locator('.automation-block');
     await moderatorPage.reload();
     await expect(automation.getByRole('status')).toHaveText('Automatic: each phase you open locks at its deadline and publishes 60 minutes later unless you act.', { timeout: 30_000 });

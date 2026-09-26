@@ -117,7 +117,7 @@ export async function POST(request: Request) {
     if (scheduleErrors.length) throw new Error(scheduleErrors.join(' '));
     const { settings, errors: settingsErrors } = resolveGameSettings(body, DEFAULT_GAME_SETTINGS);
     if (settingsErrors.length) throw new Error(settingsErrors.join(' '));
-    // New games publish automatically after a 60-minute review window unless the moderator chooses review.
+    // New games use moderator review unless the moderator opts in to automatic results.
     const { settings: automation, errors: automationErrors } = resolveAutomationSettings(body, DEFAULT_NEW_GAME_AUTOMATION);
     if (automationErrors.length) throw new Error(automationErrors.join(' '));
 

@@ -18,7 +18,7 @@ import { GET as phaseGet, POST as phasePost } from '../app/api/games/[gameId]/ph
 import { POST as automationPost } from '../app/api/games/[gameId]/automation/route';
 import { GET as playerGet } from '../app/api/player/route';
 import { GET as schedulerGet } from '../app/api/scheduler/deadlines/route';
-import { advanceGame } from './game/automation-sweep';
+import { advanceGame, advanceGameSafely } from './game/automation-sweep';
 
 let client: Client;
 const context = { params: Promise.resolve({ gameId: 'game' }) };
@@ -114,6 +114,20 @@ describe('automatic publication', () => {
     expect((await rows<{ alive: number }>("SELECT alive FROM seats WHERE id = 'p1'"))[0].alive).toBe(0);
     const timelineEntry = published.timeline.find((entry) => entry.eventType === 'PHASE_PUBLISHED');
     expect(timelineEntry?.payload.publishedAutomatically).toBe(true);
+  });
+
+  test('a step that keeps failing logs one warning an hour, not one per visit', async () => {
+    await seed();
+    await playerVisit();
+    expect(await phaseStatus()).toBe('PENDING_APPROVAL');
+    await ageReview();
+    // A corrupt stored override makes every automatic publish attempt throw.
+    await exec("UPDATE resolution_proposals SET override_json = 'not json'");
+    for (let visit = 0; visit < 5; visit += 1) await advanceGameSafely('game');
+    expect(await phaseStatus()).toBe('PENDING_APPROVAL');
+    const warnings = await rows<{ details: string }>("SELECT details_json AS details FROM operational_events WHERE source = 'AUTOMATION'");
+    expect(warnings).toHaveLength(1);
+    expect(JSON.parse(warnings[0].details)).toMatchObject({ phaseId: 'phase' });
   });
 
   test('a zero-minute window publishes on the same visit that calculates', async () => {

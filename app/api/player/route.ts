@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     const identity = await getCurrentPlayer();
     if (!identity) return jsonError('Player authentication required.', 401);
     // Any automatic step that is due (lock and calculate, Hunter follow-up, publish) happens
-    // on this visit, so the game moves on even with no cron. Idle games cost one query.
+    // on this visit, so the game moves on even with no cron. When nothing is due, the sweep costs one query.
     const automation = await advanceGameSafely(identity.gameId);
     const due = automation ? automaticStepDueAt(automation.game, automation.phase) : null;
     const db = getDb();

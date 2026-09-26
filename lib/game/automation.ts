@@ -77,7 +77,8 @@ export interface AutomationSettings {
   reviewWindowMinutes: number;
 }
 
-export const DEFAULT_NEW_GAME_AUTOMATION: AutomationSettings = { publicationMode: 'AUTOMATIC', reviewWindowMinutes: 60 };
+/** New games start in review mode; a moderator opts a game in to automatic results. */
+export const DEFAULT_NEW_GAME_AUTOMATION: AutomationSettings = { publicationMode: 'REVIEW', reviewWindowMinutes: 60 };
 
 /** Validates the moderator's choice. A field left out keeps its current value. */
 export function resolveAutomationSettings(
