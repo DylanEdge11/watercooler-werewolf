@@ -216,6 +216,14 @@ textarea { line-height: 1.55; resize: vertical; }
 .weekday-picker label { align-items: center; background: #fbfaf6; border: 1px solid #d9ddd8; border-radius: 999px; cursor: pointer; display: flex; flex-direction: row; font-size: 10px; gap: 6px; padding: 7px 10px; }
 .weekday-picker input { accent-color: var(--mint-strong); margin: 0; padding: 0; width: auto; }
 .weekday-picker:disabled label { cursor: default; opacity: .7; }
+.field-hint { color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.45; }
+.advanced-settings { border: 1px dashed #d9ddd8; border-radius: 10px; padding: 10px 14px; }
+.advanced-settings summary { cursor: pointer; font-size: 12px; font-weight: 800; }
+.advanced-settings > .field-hint { margin: 10px 0; }
+.advanced-settings-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+.slot-preview { border-collapse: collapse; font-size: 11px; margin-top: 8px; width: 100%; }
+.slot-preview th, .slot-preview td { border-bottom: 1px solid #e8ebe6; padding: 4px 6px; text-align: left; }
+.slot-preview-note { color: var(--muted); font-size: 11px; margin: 8px 0 0; }
 .schedule-lock-note { margin: 18px 0 0; }
 .schedule-note { align-items: center; background: #edf2ed; border-radius: 10px; display: flex; font-size: 10px; justify-content: space-between; padding: 12px 14px; }
 .schedule-note span { color: var(--muted); }
@@ -258,6 +266,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 @media (max-width: 520px) {
   .auth-card { padding: 27px; }
   .setup-grid, .assignment-grid { grid-template-columns: 1fr; }
+  .advanced-settings-grid { grid-template-columns: 1fr; }
   .setup-grid .wide { grid-column: auto; }
   .schedule-note { align-items: flex-start; display: grid; gap: 5px; }
   .console-title { align-items: flex-start; display: grid; gap: 13px; }

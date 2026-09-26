@@ -1,6 +1,7 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
+import { resolveGameSettings, type GameSettingsInput } from '../../../../../lib/game/game-settings';
 import { assertValidCalendarDate, assertValidTimeZone, parseScheduledDate, validateSchedule } from '../../../../../lib/game/scheduling';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 
@@ -8,7 +9,7 @@ interface RouteContext {
   params: Promise<{ gameId: string }>;
 }
 
-interface UpdateScheduleBody {
+interface UpdateScheduleBody extends GameSettingsInput {
   name?: string;
   timezone?: string;
   startDate?: string;
@@ -22,6 +23,9 @@ interface SetupGameRow {
   name: string;
   status: string;
   updatedAt: string;
+  hunterWindowMinutes: number;
+  dayDivisor: number;
+  nightDivisor: number;
 }
 
 function changes(result: unknown): number {
@@ -60,13 +64,23 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const db = getDb();
     const game = await db
-      .prepare('SELECT name, status, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1')
+      .prepare(
+        `SELECT name, status, updated_at AS updatedAt, hunter_window_minutes AS hunterWindowMinutes,
+                day_divisor AS dayDivisor, night_divisor AS nightDivisor
+         FROM games WHERE id = ? LIMIT 1`,
+      )
       .bind(gameId)
       .first<SetupGameRow>();
     if (!game) throw new Error('Game not found.');
     if (!['DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'].includes(game.status)) {
       throw new Error('The game schedule is locked after roles are released. Reset or restore the game before changing it.');
     }
+    const { settings, errors: settingsErrors } = resolveGameSettings(body, {
+      hunterWindowMinutes: Number(game.hunterWindowMinutes),
+      dayDivisor: Number(game.dayDivisor),
+      nightDivisor: Number(game.nightDivisor),
+    });
+    if (settingsErrors.length) throw new Error(settingsErrors.join(' '));
 
     const now = new Date().toISOString();
     const updateGuard = `EXISTS (
@@ -78,7 +92,8 @@ export async function PATCH(request: Request, context: RouteContext) {
         .prepare(
           `UPDATE games
            SET name = ?, timezone = ?, start_date = ?, end_date = ?, active_weekdays_json = ?,
-               schedule_json = ?, final_cutoff_at = ?, updated_at = ?
+               schedule_json = ?, final_cutoff_at = ?, hunter_window_minutes = ?, day_divisor = ?,
+               night_divisor = ?, updated_at = ?
            WHERE id = ? AND updated_at = ? AND status IN ('DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW')`,
         )
         .bind(
@@ -89,6 +104,9 @@ export async function PATCH(request: Request, context: RouteContext) {
           JSON.stringify(body.activeWeekdays),
           JSON.stringify(schedule),
           finalCutoffAt.toISOString(),
+          settings.hunterWindowMinutes,
+          settings.dayDivisor,
+          settings.nightDivisor,
           now,
           gameId,
           game.updatedAt,
@@ -103,7 +121,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           crypto.randomUUID(),
           gameId,
           moderator.id,
-          JSON.stringify({ previousName: game.name, name, timezone: body.timezone, startDate: body.startDate, endDate: body.endDate }),
+          JSON.stringify({ previousName: game.name, name, timezone: body.timezone, startDate: body.startDate, endDate: body.endDate, ...settings }),
           now,
           gameId,
           now,

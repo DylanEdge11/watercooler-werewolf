@@ -18,6 +18,7 @@ const shared = vi.hoisted(() => ({ db: null as TestDatabase | null }));
 vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
 vi.mock('../lib/auth/authorization', () => ({
+  requireModerator: async () => ({ id: 'mod' }),
   requireGameModerator: async () => ({ id: 'mod' }),
   requireGameOwner: async () => ({ id: 'mod' }),
 }));
@@ -27,6 +28,7 @@ import { POST as assignmentPost } from '../app/api/games/[gameId]/assignments/ro
 import { POST as operationsPost } from '../app/api/games/[gameId]/operations/route';
 import { POST as rosterPost } from '../app/api/games/[gameId]/roster/route';
 import { PATCH as schedulePatch } from '../app/api/games/[gameId]/schedule/route';
+import { GET as gamesGet, POST as gamesPost } from '../app/api/games/route';
 import { GET as phaseGet, POST as phasePost } from '../app/api/games/[gameId]/phases/route';
 
 let sqlite: DatabaseSync;
@@ -160,6 +162,62 @@ describe('setup and publication invariants', () => {
       scheduleJson: JSON.stringify({ dayCloses: '15:30', nightCloses: '08:30' }),
     });
     expect(sqlite.prepare("SELECT event_type AS eventType FROM game_events WHERE game_id = 'game' AND event_type = 'GAME_SCHEDULE_UPDATED'").all()).toHaveLength(1);
+  });
+
+  const launchSchedule = {
+    name: 'Settings Review',
+    timezone: 'UTC',
+    startDate: '2026-02-02',
+    endDate: '2026-03-02',
+    finalCutoffAt: '2026-03-02T16:00',
+    activeWeekdays: [1, 2, 3, 4, 5],
+    schedule: { dayCloses: '16:00', nightCloses: '09:00' },
+  };
+
+  function gameSettings(id: string) {
+    return sqlite.prepare('SELECT hunter_window_minutes AS hunterWindowMinutes, day_divisor AS dayDivisor, night_divisor AS nightDivisor FROM games WHERE id = ?').get(id);
+  }
+
+  test('a new game gives the Hunter eight hours and lists its settings', async () => {
+    const created = await gamesPost(request(launchSchedule));
+    expect(created.status).toBe(201);
+    const { gameId } = await created.json() as { gameId: string };
+    expect(gameSettings(gameId)).toEqual({ hunterWindowMinutes: 480, dayDivisor: 30, nightDivisor: 30 });
+    const listed = await (await gamesGet()).json() as { games: Array<Record<string, unknown>> };
+    expect(listed.games.find((game) => game.id === gameId)).toMatchObject({ hunterWindowMinutes: 480, dayDivisor: 30, nightDivisor: 30 });
+  });
+
+  test('a new game can start with its own Hunter window and elimination divisors', async () => {
+    const created = await gamesPost(request({ ...launchSchedule, hunterWindowHours: 2, dayDivisor: 10, nightDivisor: '15' }));
+    expect(created.status).toBe(201);
+    const { gameId } = await created.json() as { gameId: string };
+    expect(gameSettings(gameId)).toEqual({ hunterWindowMinutes: 120, dayDivisor: 10, nightDivisor: 15 });
+  });
+
+  test('the schedule saves the Hunter window and divisors during setup', async () => {
+    const response = await schedule({ ...launchSchedule, hunterWindowHours: 1.5, dayDivisor: 12, nightDivisor: 24 });
+    expect(response.status).toBe(200);
+    expect(gameSettings('game')).toEqual({ hunterWindowMinutes: 90, dayDivisor: 12, nightDivisor: 24 });
+    const event = sqlite.prepare("SELECT payload_json AS payload FROM game_events WHERE event_type = 'GAME_SCHEDULE_UPDATED'").get() as { payload: string };
+    expect(JSON.parse(event.payload)).toMatchObject({ hunterWindowMinutes: 90, dayDivisor: 12, nightDivisor: 24 });
+  });
+
+  test('the schedule keeps the current settings when a request leaves them out', async () => {
+    sqlite.exec("UPDATE games SET hunter_window_minutes = 200, day_divisor = 7, night_divisor = 9 WHERE id = 'game'");
+    expect((await schedule(launchSchedule)).status).toBe(200);
+    expect(gameSettings('game')).toEqual({ hunterWindowMinutes: 200, dayDivisor: 7, nightDivisor: 9 });
+  });
+
+  test.each([
+    [{ dayDivisor: 0 }, 'Players per Day elimination'],
+    [{ nightDivisor: 2.5 }, 'Players per Night elimination'],
+    [{ hunterWindowHours: 0 }, 'Hunter window'],
+  ])('the schedule rejects %j and changes nothing', async (settings, message) => {
+    const response = await schedule({ ...launchSchedule, ...settings });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining(message) });
+    expect((sqlite.prepare("SELECT name FROM games WHERE id = 'game'").get() as { name: string }).name).toBe('Review');
+    expect(gameSettings('game')).toEqual({ hunterWindowMinutes: 60, dayDivisor: 30, nightDivisor: 30 });
   });
 
   test('the launch schedule is read-only after roles are released', async () => {
