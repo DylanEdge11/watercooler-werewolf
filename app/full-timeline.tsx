@@ -1,4 +1,4 @@
-import { describeTimelineEvent, eliminationCause, readableRole, tallyVotes, type PublicTimelineEvent } from '../lib/game/timeline-view';
+import { describeTimelineEvent, eliminationCause, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
 
 interface FullTimelineProps {
   events: PublicTimelineEvent[];
@@ -22,7 +22,6 @@ export default function FullTimeline({ events: unordered, hasMore = false, onBac
           const view = describeTimelineEvent(event);
           const eliminations = event.payload.eliminations ?? [];
           const votes = event.payload.votes ?? [];
-          const tally = tallyVotes(votes);
           return <li className={`timeline-full-entry ${view.tone}`} key={event.id}>
             <div className="timeline-full-heading">
               <p className="eyebrow">{view.eyebrow}</p>
@@ -34,8 +33,9 @@ export default function FullTimeline({ events: unordered, hasMore = false, onBac
                 {eliminations.map((item, index) => <li key={`${event.id}-${item.displayName}-${index}`}><strong>{item.displayName}</strong><span>{readableRole(item.role)}{eliminationCause(item.cause) ? ` · ${eliminationCause(item.cause)}` : ''}</span></li>)}
               </ul>}
               {event.payload.protectedAttackBlocked && <p>Bodyguard protection stopped a pack attack.</p>}
+              {event.payload.publishedAutomatically && <p className="timeline-auto-note">Published automatically after the review window.</p>}
               {view.publicBallot && (votes.length ? <details className="timeline-votes" open={event.id === newestBallotId}>
-                <summary>{votes.length} {votes.length === 1 ? 'vote' : 'votes'}{tally.length ? ` · ${tally.map((item) => `${item.name} ${item.count}`).join(', ')}` : ''}</summary>
+                <summary>{votes.length} {votes.length === 1 ? 'vote' : 'votes'}</summary>
                 <div className="vote-ledger">{votes.map((vote, index) => <div className="vote-ledger-row" key={`${event.id}-${vote.actorName}-${index}`}><strong>{vote.actorName}</strong><span aria-hidden="true">→</span><span>{vote.targetNames.length ? vote.targetNames.join(', ') : 'No target recorded'}</span></div>)}</div>
               </details> : <p className="empty-note">No public votes were recorded.</p>)}
             </> : view.description && <p>{view.description}</p>}

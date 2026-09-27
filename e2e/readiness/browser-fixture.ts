@@ -1,6 +1,8 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, type APIResponse, type Browser, type BrowserContext, type Page, type Response as PageResponse } from '@playwright/test';
 import type { ActionKind, PhaseKind, PhaseResolution, RoleComposition, RoleKey } from '../../lib/game/types';
+import { participationCounter } from '../../lib/game/actions';
+import type { DashboardData } from '../../app/player-dashboard';
 import type { TestInfo } from '@playwright/test';
 import { BASE_URL, DEFAULT_COMPOSITION, E2E_PLAYER_COUNT, E2E_REMOTE, E2E_RUN_ID, MODERATOR_EMAIL, MODERATOR_PASSWORD } from '../constants';
 import { E2E_REQUEST_HEADERS, newBrowserContext } from '../transport';
@@ -57,37 +59,8 @@ export interface BrowserPlayerAccount {
   alive: boolean;
 }
 
-export interface PlayerDashboard {
-  player: {
-    id: string;
-    displayName: string;
-    alive: boolean;
-    role: RoleKey | null;
-    roleDefinition: { name: string; faction: string; summary: string } | null;
-    teammates: Array<{ id: string; displayName: string; alive: boolean }>;
-  };
-  game: {
-    id: string;
-    name: string;
-    status: string;
-    counts: { total: number; living: number };
-  };
-  phase: null | {
-    id: string;
-    sequence: number;
-    kind: PhaseKind;
-    status: string;
-    slots: number;
-    deadline: string | null;
-  };
-  permission: { actionKind: ActionKind | null; maxTargets: number; label: string };
-  candidates: Array<{ id: string; displayName: string }>;
-  currentAction: null | { targetIds: string[]; version: number; submittedAt: string };
-  participation: { submitted: number; eligible: number };
-  timeline: Array<{ eventType: string; payload: Record<string, unknown> }>;
-  notifications: Array<{ type: string; title: string; body: string }>;
-  rooms: Array<{ id: string; type: string; status: string; access: string }>;
-}
+/** The player dashboard response, as the app types it. */
+export type PlayerDashboard = DashboardData;
 
 export interface ModeratorPhase {
   id: string;
@@ -446,6 +419,8 @@ export class BrowserPlayer {
     this.page.on('request', listener);
     await this.page.getByRole('button', { name: 'Save response', exact: true }).dblclick();
     await expect.poll(() => requests).toBe(1);
+    // Wait for the save itself, so a read that follows sees it.
+    await expect(this.page.getByRole('status')).toContainText('Response saved as revision');
     this.page.off('request', listener);
     return requests;
   }
@@ -479,6 +454,8 @@ export interface BrowserGameOptions {
   /** Roster size; must equal the composition total. Defaults to E2E_PLAYER_COUNT. */
   playerCount?: number;
   setupThroughUi?: boolean;
+  /** UI setup only: choose automatic results in the create form instead of the review default. */
+  automaticResults?: boolean;
   mobilePlayerIndex?: number;
 }
 
@@ -514,6 +491,7 @@ export class BrowserGame {
         }
         await expect(gameNameField).toBeVisible();
         await gameNameField.fill(gameName);
+        if (options.automaticResults) await moderator.page.getByRole('group', { name: 'Results', exact: true }).getByLabel('Publish automatically after a review window').check();
         const createResponsePromise = moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/games');
         await moderator.page.getByRole('button', { name: 'Create game', exact: true }).click();
         const created = await json<{ gameId: string }>(await createResponsePromise, 'create browser game');
@@ -528,11 +506,15 @@ export class BrowserGame {
         const created = await post<{ gameId: string }>(moderator.context, '/api/games', {
           name: gameName,
           timezone: 'America/Regina',
-          startDate: '2026-01-01',
+          // The cutoff is in the past so final showdown is available at once; it must fall within the dates.
+          startDate: '2000-01-01',
           endDate: '2099-12-31',
           finalCutoffAt: '2000-01-01T00:00',
           activeWeekdays: [1, 2, 3, 4, 5],
           schedule: { dayCloses: '16:00', nightCloses: '09:00' },
+          // These scripted games drive every lock, Hunter follow-up, and publish by hand, so automatic results stay off.
+          // The UI-created UAT game opts in to automatic results and checks them.
+          publicationMode: 'REVIEW',
         }, 'create browser game');
         gameId = created.gameId;
         const rosterData = await post<{ invites: InviteRow[] }>(moderator.context, `/api/games/${gameId}/roster`, { csv: rosterCsv(suffix, playerCount) }, 'import browser roster');
@@ -714,6 +696,17 @@ export class BrowserGame {
     expect(dashboard.candidates.every((candidate) => Object.keys(candidate).sort().join(',') === 'displayName,id')).toBe(true);
     expect(dashboard.player.teammates.every((teammate) => Object.keys(teammate).sort().join(',') === 'alive,displayName,id')).toBe(true);
     if (!options.allowOwnInvestigation) expect(dashboard.notifications.some((notification) => notification.type === 'INVESTIGATION_RESULT')).toBe(false);
+    // "N of M submitted" may count across players only for Day ballots and the pack's own vote.
+    // Any other action, including a future Night role, is counted for the reader alone.
+    expect(Object.keys(dashboard.participation).sort().join(',')).toBe('eligible,submitted');
+    expect(dashboard.participation).toEqual(participationCounter({
+      actionKind: dashboard.phase ? dashboard.permission.actionKind : null,
+      livingPlayers: dashboard.game.counts.living,
+      livingWerewolves: dashboard.game.counts.werewolvesRemaining,
+      sharedSubmissions: dashboard.participation.submitted,
+      ownSubmission: Boolean(dashboard.currentAction),
+    }));
+    if (dashboard.permission.actionKind === 'WOLF_VOTE') expect(dashboard.player.role).toBe('WEREWOLF');
     const rendered = await player.page.locator('body').innerText();
     expect(rendered).not.toContain('Proposed outcome');
     expect(rendered).not.toContain('Vote tally');

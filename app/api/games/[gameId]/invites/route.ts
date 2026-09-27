@@ -5,8 +5,9 @@ import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
 import { isReservedTestAddress, readSmtpSettings } from '../../../../../lib/email/settings';
 import { openMailer } from '../../../../../lib/email/smtp';
 import { MAX_PLAYERS } from '../../../../../lib/game/player-count';
-import { enforceRateLimit, RateLimitError } from '../../../../../lib/http/rate-limit';
+import { enforceRateLimit } from '../../../../../lib/http/rate-limit';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { routeError } from '../../../../../lib/http/errors';
 import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
 import { inviteMessage } from '../../../../../lib/roster/invite-message';
 
@@ -177,8 +178,6 @@ export async function POST(request: Request, context: RouteContext) {
     results.sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
     return Response.json({ ok: true, sent: results.filter((result) => result.status === 'SENT').length, results });
   } catch (error) {
-    return error instanceof RateLimitError
-      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
-      : jsonError(error instanceof Error ? error.message : 'Unable to email invitations.', 400);
+    return routeError(error, 'Unable to email invitations.');
   }
 }

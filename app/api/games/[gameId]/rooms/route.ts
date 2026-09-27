@@ -1,19 +1,21 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { ensureGameRooms } from '../../../../../lib/chat/rooms';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { ensureGameRoomsExist } from '../../../../../lib/chat/rooms';
+import { assertSameOrigin } from '../../../../../lib/http/security';
+import { HttpError, routeError } from '../../../../../lib/http/errors';
+import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
-    await ensureGameRooms(gameId);
+    await ensureGameRoomsExist(gameId);
     const db = getDb();
     const rooms = await db
       .prepare(
@@ -36,9 +38,9 @@ export async function GET(_request: Request, context: RouteContext) {
       )
       .bind(gameId)
       .all();
-    return Response.json({ ok: true, rooms: rooms.results, recentMessages: messages.results });
+    return respondJsonWithEtag(request, { ok: true, rooms: rooms.results, recentMessages: messages.results });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to load private rooms.', 401);
+    return routeError(error, 'Unable to load private rooms.');
   }
 }
 
@@ -66,7 +68,7 @@ export async function POST(request: Request, context: RouteContext) {
         )
         .bind(body.messageId, gameId)
         .first();
-      if (!message) throw new Error('Message not found.');
+      if (!message) throw new HttpError(404, 'Message not found.');
       await db.batch([
         db
           .prepare('UPDATE chat_messages SET body = NULL, deleted_by_moderator_id = ?, deleted_at = ? WHERE id = ?')
@@ -88,7 +90,7 @@ export async function POST(request: Request, context: RouteContext) {
         .prepare('SELECT status FROM games WHERE id = ? LIMIT 1')
         .bind(gameId)
         .first<{ status: string }>();
-      if (!game) throw new Error('Game not found.');
+      if (!game) throw new HttpError(404, 'Game not found.');
       if (body.status === 'OPEN' && ['STOPPED', 'COMPLETED', 'CANCELLED'].includes(game.status)) {
         throw new Error('Rooms remain read-only after the game has stopped or completed.');
       }
@@ -104,7 +106,7 @@ export async function POST(request: Request, context: RouteContext) {
         .prepare('SELECT chat_retention_days AS retentionDays FROM games WHERE id = ?')
         .bind(gameId)
         .first<{ retentionDays: number }>();
-      if (!game) throw new Error('Game not found.');
+      if (!game) throw new HttpError(404, 'Game not found.');
       const cutoff = new Date(Date.now() - Number(game.retentionDays) * 86_400_000).toISOString();
       const result = await db
         .prepare(
@@ -118,6 +120,6 @@ export async function POST(request: Request, context: RouteContext) {
     }
     throw new Error('Unknown room operation.');
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to update private rooms.', 400);
+    return routeError(error, 'Unable to update private rooms.');
   }
 }

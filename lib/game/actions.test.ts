@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { permissionForRole, validateActionTargets } from './actions';
+import { participationCounter, permissionForRole, validateActionTargets } from './actions';
 import type { PlayerState } from './types';
 
 const players: PlayerState[] = [
@@ -97,5 +97,24 @@ describe('Cupid and Apprentice Seer permissions', () => {
     expect(pair(['cupid', 'villager'])).toEqual([]);
     expect(pair(['villager'])).toContain('Choose exactly two players to link as lovers.');
     expect(pair(['villager', 'gone'])).toContain('Every target must be a living player.');
+  });
+});
+
+describe('participation counter', () => {
+  const base = { livingPlayers: 12, livingWerewolves: 3, sharedSubmissions: 5, ownSubmission: true };
+
+  it('counts every living voter on a Day and the pack on a Night', () => {
+    expect(participationCounter({ ...base, actionKind: 'DAY_VOTE' })).toEqual({ submitted: 5, eligible: 12 });
+    expect(participationCounter({ ...base, actionKind: 'WOLF_VOTE', sharedSubmissions: 2 })).toEqual({ submitted: 2, eligible: 3 });
+    expect(participationCounter({ ...base, actionKind: 'WOLF_VOTE', sharedSubmissions: 9 })).toEqual({ submitted: 3, eligible: 3 });
+  });
+
+  it.each(['INVESTIGATE', 'PROTECT', 'CUPID_PAIR', 'HUNTER_SHOT'] as const)('counts only the reader for %s, whatever others saved', (actionKind) => {
+    expect(participationCounter({ ...base, actionKind, sharedSubmissions: 4 })).toEqual({ submitted: 1, eligible: 1 });
+    expect(participationCounter({ ...base, actionKind, sharedSubmissions: 4, ownSubmission: false })).toEqual({ submitted: 0, eligible: 1 });
+  });
+
+  it('shows nothing to a player with no action', () => {
+    expect(participationCounter({ ...base, actionKind: null })).toEqual({ submitted: 0, eligible: 0 });
   });
 });

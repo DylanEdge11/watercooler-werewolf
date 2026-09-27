@@ -28,10 +28,21 @@ test('an invite result never shows on a game the moderator switched to', async (
   const roster = ['display_name,email', ...[1, 2, 3, 4, 5, 6].map((n) => `Invite Player ${n},invite-${n}-${randomUUID().slice(0, 6)}@e2e.test`)].join('\n');
   expect((await api.post(`/api/games/${sentFrom}/roster`, { headers, data: { csv: roster } })).ok()).toBe(true);
 
-  // Pretend email is configured, and answer the send slowly.
+  // Pretend email is configured, and answer the send slowly. The console reads
+  // the selected game's roster from GET /api/games, and from the roster route.
+  const withEmail = (roster: Record<string, unknown>) => ({ ...roster, emailConfigured: true });
   await page.route(`**/api/games/${sentFrom}/roster`, async (route) => {
     const response = await route.fetch();
-    await route.fulfill({ response, json: { ...(await response.json()), emailConfigured: true } });
+    await route.fulfill({ response, json: withEmail(await response.json()) });
+  });
+  await page.route(/\/api\/games(?:\?|$)/u, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const response = await route.fetch();
+    // A 304 has no body: the page keeps the roster it already shows.
+    if (response.status() !== 200) return route.fulfill({ response });
+    const body = await response.json() as { selected?: { gameId: string; roster: Record<string, unknown> } | null };
+    if (body.selected?.gameId === sentFrom) body.selected.roster = withEmail(body.selected.roster);
+    await route.fulfill({ response, json: body });
   });
   let releaseSend = () => {};
   const sendHeld = new Promise<void>((resolve) => { releaseSend = resolve; });

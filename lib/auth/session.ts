@@ -53,17 +53,31 @@ export async function createModeratorSession(moderatorId: string): Promise<void>
 
 export async function createPlayerSession(seatId: string, sessionVersion: number): Promise<void> {
   await ensureDatabase();
-  const db = getDb();
-  const token = randomToken();
-  const tokenHash = await sha256(token);
-  const expires = expiryDate();
-  await db
+  const session = await preparePlayerSession(seatId, sessionVersion);
+  await getDb()
     .prepare(
       'INSERT INTO seat_sessions (id, seat_id, token_hash, session_version, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     )
-    .bind(crypto.randomUUID(), seatId, tokenHash, sessionVersion, expires.toISOString(), new Date().toISOString())
+    .bind(...session.values)
     .run();
-  await setSessionCookie(PLAYER_COOKIE, token, expires);
+  await session.setCookie();
+}
+
+/**
+ * A player session that a caller inserts inside its own transaction (for
+ * example together with a seat claim). Set the cookie only after that
+ * transaction commits.
+ */
+export async function preparePlayerSession(seatId: string, sessionVersion: number): Promise<{
+  values: [string, string, string, number, string, string];
+  setCookie: () => Promise<void>;
+}> {
+  const token = randomToken();
+  const expires = expiryDate();
+  return {
+    values: [crypto.randomUUID(), seatId, await sha256(token), sessionVersion, expires.toISOString(), new Date().toISOString()],
+    setCookie: () => setSessionCookie(PLAYER_COOKIE, token, expires),
+  };
 }
 
 export async function getCurrentModerator(): Promise<ModeratorIdentity | null> {

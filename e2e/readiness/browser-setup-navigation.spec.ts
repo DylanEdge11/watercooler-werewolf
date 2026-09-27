@@ -33,10 +33,31 @@ test('keeps setup drafts scoped, supports safe restart, and exposes another game
   await moderator.page.getByRole('button', { name: /Game schedule/u }).click();
   await expect(moderator.page.getByRole('heading', { name: 'Game schedule', exact: true })).toBeVisible();
   await moderator.page.getByLabel('Day ballot closes').fill('15:45');
+  // A new game gives the Hunter eight hours; the divisors sit under a collapsed Advanced section with a slot preview.
+  await expect(moderator.page.getByLabel('Hunter window (hours)')).toHaveValue('8');
+  // New games use moderator review; automatic results are opt-in with a 60-minute window.
+  // Scoped to the schedule's Results fieldset: the live panel has the same choice under "Change how results publish".
+  const results = moderator.page.getByRole('group', { name: 'Results', exact: true });
+  await expect(results.getByLabel('I review and publish each result')).toBeChecked();
+  await expect(results.getByLabel('Publish automatically after a review window')).not.toBeChecked();
+  await expect(results.getByLabel('Review window (minutes)')).toHaveValue('60');
+  await moderator.page.getByLabel('Hunter window (hours)').fill('2');
+  await expect(moderator.page.getByLabel('Players per Day elimination')).toBeHidden();
+  await moderator.page.getByText('Advanced: eliminations per phase', { exact: true }).click();
+  await moderator.page.getByLabel('Players per Day elimination').fill('10');
+  await expect(moderator.page.getByRole('table', { name: 'Day elimination slots' }).getByRole('row', { name: '11–20 2' })).toBeVisible();
+  await expect(moderator.page.getByRole('table', { name: 'Night elimination slots' }).getByRole('row', { name: '31–60 2' })).toBeVisible();
   const scheduleUpdate = moderator.page.waitForResponse((response) => response.request().method() === 'PATCH' && new URL(response.url()).pathname === `/api/games/${firstGameId}/schedule`);
   await moderator.page.getByRole('button', { name: 'Save schedule', exact: true }).click();
   expect((await scheduleUpdate).status()).toBe(200);
   await expect(moderator.page.getByText('Game schedule updated.', { exact: false })).toBeVisible();
+  await moderator.page.getByRole('button', { name: 'Close schedule', exact: true }).click();
+  await moderator.page.reload();
+  await moderator.page.getByRole('button', { name: /Game schedule/u }).click();
+  await expect(moderator.page.getByLabel('Hunter window (hours)')).toHaveValue('2');
+  await moderator.page.getByText('Advanced: eliminations per phase', { exact: true }).click();
+  await expect(moderator.page.getByLabel('Players per Day elimination')).toHaveValue('10');
+  await expect(moderator.page.getByLabel('Players per Night elimination')).toHaveValue('30');
   await moderator.page.getByRole('button', { name: 'Close schedule', exact: true }).click();
 
   await moderator.page.getByLabel('Roster CSV').fill(rosterCsv());

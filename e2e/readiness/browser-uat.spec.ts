@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { RoleComposition } from '../../lib/game/types';
 import { BASE_URL } from '../constants';
-import { BrowserGame, closeSharedModerator, verifyExpectedRoleComposition } from './browser-fixture';
+import { BrowserGame, closeSharedModerator, verifyExpectedRoleComposition, type BrowserPlayer } from './browser-fixture';
 import { livingTarget, runDayElimination, runNight } from './game-steps';
 
 // The hosted UAT browser check: one complete, small game played through eight
@@ -32,6 +32,7 @@ test('an eight-player game runs from setup to a Village win with private informa
     composition: UAT_COMPOSITION,
     playerCount: UAT_PLAYER_COUNT,
     setupThroughUi: true,
+    automaticResults: true,
     mobilePlayerIndex: 0,
   });
   try {
@@ -52,21 +53,95 @@ test('an eight-player game runs from setup to a Village win with private informa
     await first.waitForDashboard();
     expect((await first.dashboard()).player.id).toBe(first.account.seatId);
 
+    // The moderator sees who still owes a response and copies a nudge that is safe for a group chat.
+    const moderatorPage = game.moderator.page;
+    await moderatorPage.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(BASE_URL).origin });
+    const copiedNudge = async (expectedCount: number, expectedNames: BrowserPlayer[]): Promise<string> => {
+      await moderatorPage.reload();
+      await expect(moderatorPage.getByText(`Still to respond · ${expectedCount}`, { exact: true })).toBeVisible({ timeout: 30_000 });
+      const list = moderatorPage.locator('.outstanding-list');
+      for (const player of expectedNames) await expect(list.getByText(player.account.displayName, { exact: true })).toBeVisible();
+      await moderatorPage.getByRole('button', { name: 'Copy nudge message', exact: true }).click();
+      await expect(moderatorPage.getByRole('button', { name: 'Copied', exact: true })).toBeVisible();
+      return moderatorPage.evaluate(() => navigator.clipboard.readText());
+    };
+
     // Day 1: a revised vote and a late vote after the lock; the first Werewolf is eliminated.
     const wolfOne = game.chooseLiving((player) => player.account.role === 'WEREWOLF');
-    const firstDay = await runDayElimination(game, wolfOne, { revise: true, lateSubmission: true });
+    const firstDay = await runDayElimination(game, wolfOne, {
+      revise: true,
+      lateSubmission: true,
+      afterOpen: async () => {
+        const nudge = await copiedNudge(UAT_PLAYER_COUNT, game.living());
+        expect(nudge).toMatch(/^Day \d+ ballot closes .+ Still to vote: /u);
+        for (const player of game.living()) expect(nudge).toContain(player.account.displayName);
+      },
+    });
     expect(firstDay.published.winner).toBeNull();
+
+    // This game opted in to automatic results at setup: it publishes 60 minutes after calculation unless paused.
+    const automation = moderatorPage.locator('.automation-block');
+    await moderatorPage.reload();
+    await expect(automation.getByRole('status')).toHaveText('Automatic: each phase you open locks at its deadline and publishes 60 minutes later unless you act.', { timeout: 30_000 });
+    await automation.getByRole('button', { name: 'Pause automation', exact: true }).click();
+    await expect(automation.getByRole('status')).toHaveText(/^Paused\. Deadlines still close voting, but nothing calculates or publishes on its own/u);
+    const watcher = game.living().at(-1)!;
+    await watcher.reload();
+    await expect(watcher.page.locator('.deadline-card')).toContainText('The schedule is paused');
+    await automation.getByRole('button', { name: 'Resume automation', exact: true }).click();
+    await expect(automation.getByRole('button', { name: 'Pause automation', exact: true })).toBeVisible();
 
     // Night 1: the Bodyguard blocks the attack and the Seer finds the last Werewolf.
     const protectedTarget = livingTarget(game, (player) => player.account.role === 'VILLAGER');
-    const firstNight = await runNight(game, { attackTarget: protectedTarget, protectAttack: true });
+    const firstNight = await runNight(game, {
+      attackTarget: protectedTarget,
+      protectAttack: true,
+      afterLock: async () => {
+        // While the calculated result waits for review, the console and players see when it will publish.
+        await moderatorPage.reload();
+        await expect(moderatorPage.locator('.automation-block').getByRole('status')).toHaveText(/^Publishes automatically at .+ unless you publish, override, or pause first\.$/u, { timeout: 30_000 });
+        await watcher.reload();
+        await expect(watcher.page.locator('.deadline-card')).toContainText(/Results publish by .+ unless the moderator reviews them first\./u);
+      },
+      afterOpen: async () => {
+        const nightActors = game.living().filter((player) => ['WEREWOLF', 'SEER', 'BODYGUARD'].includes(player.account.role));
+        const nudge = await copiedNudge(nightActors.length, nightActors);
+        expect(nudge).toContain('If your role has a night action, save it before');
+        for (const player of game.players) expect(nudge).not.toContain(player.account.displayName);
+      },
+    });
     expect(firstNight.proposal.outcome.eliminations).toEqual([]);
     const seer = game.byRole('SEER')[0];
     const ordinary = game.chooseLiving((player) => player.account.role === 'VILLAGER');
-    await expect(seer.page.getByText(/is the werewolf\./iu)).toBeVisible();
-    await expect(ordinary.page.getByText(/is the werewolf\./iu)).toHaveCount(0);
+    await expect(seer.page.getByText(/is a werewolf\./iu)).toBeVisible();
+    await expect(ordinary.page.getByText(/is a werewolf\./iu)).toHaveCount(0);
     await game.assertPlayerPrivacy(ordinary);
     await game.assertPlayerPrivacy(seer, { allowOwnInvestigation: true });
+
+    // An announcement comes with email and chat copy; player feedback reaches the moderator without a name.
+    const announcementForm = moderatorPage.locator('form').filter({ hasText: 'Official announcement' });
+    await announcementForm.getByLabel('Title').fill('Office party pause');
+    await announcementForm.getByLabel('Message').fill('No votes during the Friday party.');
+    await announcementForm.getByRole('button', { name: 'Publish notice', exact: true }).click();
+    await expect(moderatorPage.getByText('Its email and chat copy are ready below.', { exact: false })).toBeVisible();
+    await expect(moderatorPage.locator('.copy-preview').first()).toHaveText(/^Subject: \[Watercooler Werewolf\] Office party pause/u);
+    await moderatorPage.getByRole('button', { name: 'Copy Office party pause for chat', exact: true }).click();
+    // The Windows clipboard stores line breaks as CRLF.
+    expect((await moderatorPage.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/gu, '\n')).toBe(`*Office party pause*\nNo votes during the Friday party.\n\n${new URL(BASE_URL).origin}`);
+
+    const reviewer = game.living().at(-1)!;
+    const feedbackCard = reviewer.page.locator('#feedback');
+    await expect(feedbackCard).toContainText('This is private to the moderators.');
+    await expect(feedbackCard).not.toContainText(/pilot/iu);
+    await feedbackCard.getByLabel('Rating').selectOption('4');
+    await feedbackCard.getByLabel('Comment').fill('The nudges help.');
+    await feedbackCard.getByRole('button', { name: 'Send feedback', exact: true }).click();
+    await expect(feedbackCard.getByRole('status')).toContainText('went privately to the moderators');
+    await moderatorPage.reload();
+    const feedbackBlock = moderatorPage.locator('.feedback-summary');
+    await expect(feedbackBlock).toContainText('The nudges help.', { timeout: 30_000 });
+    await expect(feedbackBlock).toContainText('4/5');
+    await expect(feedbackBlock).not.toContainText(reviewer.account.displayName);
 
     // Day 2: the last Werewolf is eliminated and the Village wins.
     const wolfTwo = game.chooseLiving((player) => player.account.role === 'WEREWOLF');

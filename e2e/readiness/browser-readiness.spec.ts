@@ -97,8 +97,8 @@ test.describe('browser player-readiness scenarios', () => {
       const seer = game.byRole('SEER')[0];
       const ordinary = game.chooseLiving((player) => player.account.role === 'VILLAGER');
       await expect(seer.page.getByRole('heading', { name: 'Private result history', exact: true })).toBeVisible();
-      await expect(seer.page.getByText(/is the werewolf\./iu)).toBeVisible();
-      await expect(ordinary.page.getByText(/is the werewolf\./iu)).toHaveCount(0);
+      await expect(seer.page.getByText(/is a werewolf\./iu)).toBeVisible();
+      await expect(ordinary.page.getByText(/is a werewolf\./iu)).toHaveCount(0);
       // This assertion intentionally covers the complete HTTP response. The
       // reviewed application currently fails it because the public timeline
       // contains the full Night proposal.
@@ -291,6 +291,8 @@ test.describe('browser player-readiness scenarios', () => {
       const partialTarget = game.chooseLiving((player) => player.account.role === 'VILLAGER');
       const partialPhase = await game.openPhase('DAY');
       const partialVoter = game.chooseLiving((player) => player.account.seatId !== partialTarget.account.seatId);
+      // Like every other step here, load the page after the phase opens instead of waiting for a poll to notice it.
+      await partialVoter.reload();
       await partialVoter.prepareTarget(partialTarget.account);
       await partialVoter.submitPrepared();
       const partialProposal = await game.lockAndPropose(partialPhase.phaseId);

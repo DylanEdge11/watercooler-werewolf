@@ -1,7 +1,7 @@
 'use client';
 
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
@@ -10,10 +10,14 @@ import RoleMedallion from './role-medallion';
 import DeathCurtainCall from './death-curtain-call';
 import BrandMark from './brand-mark';
 import { pollWhileVisible } from '../lib/http/poll-while-visible';
-import { describeTimelineEvent, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
+import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
+import { pollInterval } from '../lib/http/poll-interval';
+import { ROLE_VISIBILITY_COOKIE, roleVisibilityCookieValue } from '../lib/player/role-visibility';
+import { currentCycle, describeTimelineEvent, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
 
-export type RoleKey = 'VILLAGER' | 'WEREWOLF' | 'SEER' | 'BODYGUARD' | 'HUNTER' | 'MASON' | 'APPRENTICE_SEER' | 'MAYOR' | 'CUPID';
-export type ActionKind = 'DAY_VOTE' | 'WOLF_VOTE' | 'INVESTIGATE' | 'PROTECT' | 'HUNTER_SHOT' | 'CUPID_PAIR';
+import type { ActionKind, RoleKey } from '../lib/game/types';
+
+export type { ActionKind, RoleKey };
 
 export interface DashboardData {
   player: {
@@ -33,6 +37,8 @@ export interface DashboardData {
     livingPlayers: Array<{ id: string; displayName: string }>;
     eliminatedPlayers: Array<{ id: string; displayName: string; role: RoleKey | null }>;
     stopReason?: string | null;
+    /** A moderator paused automatic results. */
+    automationPaused?: boolean;
   };
   phase: null | {
     id: string;
@@ -41,6 +47,8 @@ export interface DashboardData {
     status: string;
     slots: number;
     deadline: string | null;
+    /** Set while a calculated result waits in automatic mode. */
+    autoPublishAt?: string | null;
   };
   permission: { actionKind: ActionKind | null; maxTargets: number; label: string };
   candidates: Array<{ id: string; displayName: string }>;
@@ -58,10 +66,24 @@ interface PlayerDashboardProps {
   previewData?: DashboardData;
   previewMode?: boolean;
   onExitPreview?: () => void;
+  /** Rendered on the server for the signed-in player; the dashboard then only polls. */
+  initialData?: DashboardData | null;
+  /** The server found no valid player session. */
+  initiallyUnauthenticated?: boolean;
+  /** The seat's "Hide role" choice from its cookie, or null when the server doesn't know it. */
+  initialRoleHidden?: boolean | null;
 }
 
 function initials(name: string): string {
   return name.split(/\s+/u).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+}
+
+function clockTime(iso: string, timeZone: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone });
+  } catch {
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
 }
 
 function deadlineLabel(deadline: string | null): string {
@@ -75,12 +97,38 @@ function deadlineLabel(deadline: string | null): string {
   return `${hours}h ${remainder}m`;
 }
 
+/**
+ * The time left, recounted every 15 seconds by this label alone: a refresh that
+ * finds nothing new no longer re-renders the page, so it can't rely on that.
+ */
+function DeadlineCountdown({ deadline }: { deadline: string | null }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!deadline) return undefined;
+    const timer = window.setInterval(() => setTick((tick) => tick + 1), 15_000);
+    return () => window.clearInterval(timer);
+  }, [deadline]);
+  return <span suppressHydrationWarning>{deadlineLabel(deadline)}</span>;
+}
+
 function roleVisibilityKey(playerId: string): string {
   return `werewolf:v1:role-hidden:${playerId}`;
 }
 
+function rememberRoleVisibility(playerId: string, hidden: boolean): void {
+  window.localStorage.setItem(roleVisibilityKey(playerId), String(hidden));
+  document.cookie = `${ROLE_VISIBILITY_COOKIE}=${roleVisibilityCookieValue(playerId, hidden)}; path=/; max-age=31536000; samesite=lax`;
+}
+
 function deathAlertKey(gameId: string, playerId: string): string {
   return `werewolf:v1:death-alert:${gameId}:${playerId}`;
+}
+
+const subscribeToNothing = () => () => {};
+
+/** false in the server's HTML and while React takes it over; true once buttons respond. */
+function useHydrated(): boolean {
+  return useSyncExternalStore(subscribeToNothing, () => true, () => false);
 }
 
 // Only needed when a stored session has expired, so signed-in players never download it.
@@ -90,12 +138,12 @@ function PublicWelcome() {
   return <LandingShell />;
 }
 
-export default function PlayerDashboard({ previewData, previewMode = false, onExitPreview }: PlayerDashboardProps) {
+export default function PlayerDashboard({ previewData, previewMode = false, onExitPreview, initialData = null, initiallyUnauthenticated = false, initialRoleHidden = null }: PlayerDashboardProps) {
   const router = useRouter();
-  const [data, setData] = useState<DashboardData | null>(() => previewMode ? previewData ?? null : null);
-  const [loading, setLoading] = useState(!previewMode);
-  const [unauthenticated, setUnauthenticated] = useState(false);
-  const [selected, setSelected] = useState<string[]>(() => previewMode ? previewData?.currentAction?.targetIds ?? [] : []);
+  const [data, setData] = useState<DashboardData | null>(() => previewMode ? previewData ?? null : initialData);
+  const [loading, setLoading] = useState(!previewMode && !initialData && !initiallyUnauthenticated);
+  const [unauthenticated, setUnauthenticated] = useState(initiallyUnauthenticated);
+  const [selected, setSelected] = useState<string[]>(() => (previewMode ? previewData : initialData)?.currentAction?.targetIds ?? []);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
@@ -103,7 +151,12 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const [submitting, setSubmitting] = useState(false);
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
-  const [roleHidden, setRoleHidden] = useState(false);
+  const hydrated = useHydrated();
+  const [roleHidden, setRoleHidden] = useState(initialRoleHidden ?? false);
+  // A server-rendered role stays concealed until this device's own "Hide role" setting is read,
+  // unless the cookie already said the role is shown.
+  const [roleVisibilityKnown, setRoleVisibilityKnown] = useState(!initialData || initialRoleHidden !== null);
+  const concealed = roleHidden || !roleVisibilityKnown;
   const [view, setView] = useState<'today' | 'timeline'>('today');
   const [roleJustRevealed, setRoleJustRevealed] = useState(false);
   const [deathAlert, setDeathAlert] = useState<DashboardData['timeline'][number] | null>(null);
@@ -115,20 +168,41 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     data: DashboardData | null;
   }>({ deathAlert: null, selectedTimeline: null, data: null });
   const selectionDirty = useRef(false);
-  const selectionPhaseId = useRef<string | null>(null);
+  const selectionPhaseId = useRef<string | null>(initialData?.phase?.id ?? null);
+  const initialDataRef = useRef(initialData);
   const olderNotifications = useRef<DashboardData['notifications']>([]);
   const refreshSequence = useRef(0);
+  // The ETag of the dashboard on screen (lib/http/conditional-get.ts), and the
+  // phase that sets how often it refreshes (lib/http/poll-interval.ts).
+  const dashboardEtag = useRef<string | null>(null);
+  const pacing = useRef(initialData?.phase ?? null);
 
   useLayoutEffect(() => {
     modalState.current = { deathAlert, selectedTimeline, data };
   }, [deathAlert, selectedTimeline, data]);
 
+  /** What this device remembers: whether the role is hidden, and which elimination was already shown. */
+  const applyDeviceState = useCallback((result: DashboardData) => {
+    const hidden = window.localStorage.getItem(roleVisibilityKey(result.player.id)) === 'true';
+    setRoleHidden(hidden);
+    setRoleVisibilityKnown(true);
+    rememberRoleVisibility(result.player.id, hidden);
+    const latestDeath = result.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED' && event.payload.eliminations?.length);
+    if (latestDeath) {
+      const seenKey = deathAlertKey(result.game.id, result.player.id);
+      if (window.localStorage.getItem(seenKey) !== latestDeath.id) setDeathAlert(latestDeath);
+    }
+  }, []);
+
   const refresh = useCallback(async (preserveLocalSelection = false) => {
     if (previewMode) return;
     const sequence = ++refreshSequence.current;
-    const response = await fetch('/api/player');
+    const response = await conditionalGet('/api/player', dashboardEtag.current);
     if (sequence !== refreshSequence.current) return;
+    // null: nothing changed since the dashboard on screen, so nothing re-renders.
+    if (!response) return;
     if (response.status === 401) {
+      dashboardEtag.current = null;
       setUnauthenticated(true);
       setLoading(false);
       return;
@@ -145,13 +219,10 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       ...result.notifications,
       ...olderNotifications.current.filter((older) => !notificationIds.has(older.id)),
     ];
-    setRoleHidden(window.localStorage.getItem(roleVisibilityKey(result.player.id)) === 'true');
+    dashboardEtag.current = responseEtag(response);
+    pacing.current = result.phase;
+    applyDeviceState(result);
     setData({ ...result, notifications: mergedNotifications });
-    const latestDeath = result.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED' && event.payload.eliminations?.length);
-    if (latestDeath) {
-      const seenKey = deathAlertKey(result.game.id, result.player.id);
-      if (window.localStorage.getItem(seenKey) !== latestDeath.id) setDeathAlert(latestDeath);
-    }
     if (!keepLocalSelection) {
       setSelected(result.currentAction?.targetIds ?? []);
       selectionDirty.current = false;
@@ -159,7 +230,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     selectionPhaseId.current = incomingPhaseId;
     setUnauthenticated(false);
     setLoading(false);
-  }, [previewMode]);
+  }, [previewMode, applyDeviceState]);
 
   async function loadOlderNotifications() {
     if (previewMode) return;
@@ -194,8 +265,11 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
 
   useEffect(() => {
     if (previewMode) return;
+    // The first refresh also applies this device's settings to server-rendered data. That page is
+    // usable before the refresh returns, so like every poll it keeps a target the player already picked.
+    const serverRendered = Boolean(initialDataRef.current);
     const timer = window.setTimeout(() => {
-      void refresh().catch((caught) => {
+      void refresh(serverRendered).catch((caught) => {
         setError(caught instanceof Error ? caught.message : 'Unable to load the game.');
         setLoading(false);
       });
@@ -204,7 +278,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       void refresh(true).catch((caught) => {
         setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.');
       });
-    }, 10_000);
+    }, () => pollInterval(pacing.current));
     return () => {
       window.clearTimeout(timer);
       stopPolling();
@@ -315,9 +389,10 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
 
   function toggleRoleVisibility() {
     if (!data?.player.id) return;
-    const next = !roleHidden;
-    window.localStorage.setItem(roleVisibilityKey(data.player.id), String(next));
+    const next = !concealed;
+    rememberRoleVisibility(data.player.id, next);
     setRoleHidden(next);
+    setRoleVisibilityKnown(true);
     // The reveal flourish plays only when the player chooses to show the role.
     setRoleJustRevealed(!next);
   }
@@ -354,7 +429,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
         return;
       }
       form.reset();
-      setFeedbackMessage('Thanks — your feedback is recorded privately for the pilot review.');
+      setFeedbackMessage('Thanks — your feedback went privately to the moderators.');
     } catch (caught) {
       setFeedbackError(caught instanceof Error ? caught.message : 'Unable to save feedback.');
     } finally {
@@ -385,7 +460,8 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const stageLight = data.phase?.kind === 'NIGHT' ? 'night' : 'day';
 
   return (
-    <main className={`app-shell${previewMode ? ' preview-player-shell' : ''}`} data-stage-light={stageLight}>
+    // The server-rendered page shows before its buttons work; inert until then, so a tap is never silently lost.
+    <main className={`app-shell${previewMode ? ' preview-player-shell' : ''}`} data-stage-light={stageLight} inert={!hydrated}>
       {previewMode && <div className="preview-mode-banner" role="status">
         <span><strong>Player View Studio.</strong> Synthetic sample data; actions, feedback, and chat stay in this page.</span>
         <button className="text-button" type="button" onClick={onExitPreview}>Back to studio controls</button>
@@ -421,7 +497,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           </nav>
           <div className="sidebar-rule" />
           <p className="eyebrow">Your game</p>
-          <div className="mini-stat"><span>Cycle</span><strong>{String(data.phase?.sequence ?? 0).padStart(2, '0')}</strong></div>
+          <div className="mini-stat"><span>Cycle</span><strong>{String(currentCycle(data.phase?.sequence, data.timeline)).padStart(2, '0')}</strong></div>
           <details className="stat-details">
             <summary className="mini-stat stat-trigger"><span>Living</span><strong>{data.game.counts.living}</strong></summary>
             <div className="stat-popover" aria-label="Living players">
@@ -440,20 +516,22 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
 
         {view === 'timeline' ? <FullTimeline events={data.timeline} hasMore={Boolean(data.timelineHasMore)} onBack={() => showView('today')} /> : <section className="main-column" id="today">
           <div className="welcome-row">
-            <div><p className="eyebrow accent">{data.phase ? `${data.phase.kind.replaceAll('_', ' ')} · Cycle ${data.phase.sequence}` : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{data.permission.label}</p></div>
-            <div className="deadline-card"><span>Response window</span><strong>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : deadlineLabel(data.phase?.deadline ?? null)}</strong><small>{data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>
+            <div><p className="eyebrow accent">{data.phase ? phaseName(data.phase.kind, data.phase.sequence) : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{data.permission.label}</p></div>
+            {data.phase?.autoPublishAt && !['COMPLETED', 'STOPPED'].includes(data.game.status)
+              ? <div className="deadline-card"><span>Results</span><strong suppressHydrationWarning>by {clockTime(data.phase.autoPublishAt, data.game.timezone)}</strong><small suppressHydrationWarning>Results publish by {clockTime(data.phase.autoPublishAt, data.game.timezone)} unless the moderator reviews them first.</small></div>
+              : <div className="deadline-card"><span>Response window</span><strong suppressHydrationWarning>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : <DeadlineCountdown deadline={data.phase?.deadline ?? null} />}</strong><small>{data.game.automationPaused && !['COMPLETED', 'STOPPED'].includes(data.game.status) ? 'The schedule is paused' : data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>}
           </div>
           {data.game.status === 'STOPPED' && <p className="notice warning" role="status">{data.game.stopReason ?? 'This game is stopped. Player actions and rooms are read-only.'}</p>}
 
           <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`} data-just-revealed={roleJustRevealed || undefined}>
             {!data.player.alive && <span className="eliminated-banner" role="status">☠ Eliminated · spectator mode</span>}
-            <div className="role-orbit"><RoleMedallion role={data.player.role} hidden={roleHidden} /></div>
+            <div className="role-orbit"><RoleMedallion role={data.player.role} hidden={concealed} /></div>
             <div className="role-copy">
-              <div className="role-copy-heading"><p className="eyebrow">{roleHidden ? 'Private role · concealed' : 'Your private role'}</p><button className="role-visibility-toggle" type="button" aria-pressed={roleHidden} onClick={toggleRoleVisibility}>{roleHidden ? 'Show role' : 'Hide role'}</button></div>
-              <h2>{roleHidden ? 'Hidden' : role?.name ?? 'Not released'}</h2>
-              <p>{roleHidden ? 'Your role and role details are hidden on this device.' : data.player.alive ? role?.summary ?? 'The moderator is preparing assignments.' : 'You have been eliminated. Your role is now public and you may spectate.'}</p>
+              <div className="role-copy-heading"><p className="eyebrow">{concealed ? 'Private role · concealed' : 'Your private role'}</p><button className="role-visibility-toggle" type="button" aria-pressed={concealed} onClick={toggleRoleVisibility}>{concealed ? 'Show role' : 'Hide role'}</button></div>
+              <h2>{concealed ? 'Hidden' : role?.name ?? 'Not released'}</h2>
+              <p>{concealed ? 'Your role and role details are hidden on this device.' : data.player.alive ? role?.summary ?? 'The moderator is preparing assignments.' : 'You have been eliminated. Your role is now public and you may spectate.'}</p>
             </div>
-            <div className="role-faction"><span>Faction</span><strong>{roleHidden ? 'Hidden' : role?.faction ?? 'Hidden'}</strong><small>{data.player.alive ? 'You are alive' : 'Eliminated'}</small></div>
+            <div className="role-faction"><span>Faction</span><strong>{concealed ? 'Hidden' : role?.faction ?? 'Hidden'}</strong><small>{data.player.alive ? 'You are alive' : 'Eliminated'}</small></div>
           </section>
 
           {data.permission.actionKind && data.phase ? (
@@ -495,14 +573,14 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
               </article>;
             })}</div> : <p>No published outcomes yet.</p>}
           </section>
-          <section className="rail-card pilot-feedback-card" id="feedback"><div className="rail-heading"><h2>Pilot feedback</h2><span aria-hidden="true">?</span></div><p>Share a quick signal with the moderator team. This is private to the pilot operators.</p><form className="chat-compose" onSubmit={submitFeedback}><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve?" /></label>{feedbackError && <p className="form-error" role="alert">{feedbackError}</p>}{feedbackMessage && <p className="action-success" role="status">{feedbackMessage}</p>}<button className="secondary-button" type="submit" disabled={sendingFeedback}>{sendingFeedback ? 'Sending…' : 'Send feedback'}</button></form></section>
+          <section className="rail-card pilot-feedback-card" id="feedback"><div className="rail-heading"><h2>Feedback</h2><span aria-hidden="true">?</span></div><p>Share a quick signal with the moderator team. This is private to the moderators.</p><form className="chat-compose" onSubmit={submitFeedback}><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve?" /></label>{feedbackError && <p className="form-error" role="alert">{feedbackError}</p>}{feedbackMessage && <p className="action-success" role="status">{feedbackMessage}</p>}<button className="secondary-button" type="submit" disabled={sendingFeedback}>{sendingFeedback ? 'Sending…' : 'Send feedback'}</button></form></section>
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>
       </div>
       {deathAlert && <DeathCurtainCall key={deathAlert.id} event={deathAlert} onDismiss={dismissDeathAlert} />}
       {selectedTimeline && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTimeline(null); }}>
         <section className="game-modal timeline-modal" role="dialog" aria-modal="true" aria-labelledby="timeline-modal-title">
-          <div className="modal-heading"><div><p className="eyebrow accent">Published ballot</p><h2 id="timeline-modal-title">{selectedTimeline.payload.kind}{selectedTimeline.payload.sequence ? ` · Cycle ${selectedTimeline.payload.sequence}` : ''}</h2><p className="modal-intro">{selectedTimeline.payload.eliminations?.length ? selectedTimeline.payload.eliminations.map((item) => `${item.displayName} · ${readableRole(item.role)}`).join(', ') : 'No elimination published.'}</p></div><button className="icon-button modal-close" type="button" aria-label="Close vote details" onClick={() => setSelectedTimeline(null)}>×</button></div>
+          <div className="modal-heading"><div><p className="eyebrow accent">Published ballot</p><h2 id="timeline-modal-title">{phaseName(selectedTimeline.payload.kind, selectedTimeline.payload.sequence)}</h2><p className="modal-intro">{selectedTimeline.payload.eliminations?.length ? selectedTimeline.payload.eliminations.map((item) => `${item.displayName} · ${readableRole(item.role)}`).join(', ') : 'No elimination published.'}</p></div><button className="icon-button modal-close" type="button" aria-label="Close vote details" onClick={() => setSelectedTimeline(null)}>×</button></div>
           {selectedTimeline.payload.votes?.length ? <div className="vote-ledger">{selectedTimeline.payload.votes.map((vote, index) => <div className="vote-ledger-row" key={`${selectedTimeline.id}-${vote.actorName}-${index}`}><strong>{vote.actorName}</strong><span aria-hidden="true">→</span><span>{vote.targetNames.length ? vote.targetNames.join(', ') : 'No target recorded'}</span></div>)}</div> : <p className="empty-note">No public Day votes were recorded.</p>}
           <p className="timeline-privacy-note">Published Day ballots are public. Night actions and special-role actions remain private.</p>
         </section>

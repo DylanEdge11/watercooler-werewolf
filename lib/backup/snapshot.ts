@@ -2,6 +2,7 @@ import { getDb, type PreparedStatement } from '../../db';
 import { sha256 } from '../auth/crypto';
 import { randomToken } from '../auth/crypto';
 import { backupComposition, backupGameFromRecord, backupSeats, validateBackupForRestore } from './restore';
+import { HttpError } from '../http/errors';
 
 export interface GameBackup {
   schemaVersion: 2;
@@ -27,15 +28,17 @@ export interface GameBackup {
 
 export async function collectGameBackup(gameId: string): Promise<GameBackup> {
   const db = getDb();
-  const [game, moderators, seats, composition, batches, assignments, phases, actions, resolutions, events, rooms, roomMembers, messages, announcements, notifications, operations, feedback] = await Promise.all([
-    db.prepare('SELECT * FROM games WHERE id = ? LIMIT 1').bind(gameId).first(),
+  // One read-only transaction, so a write that lands during the backup can't
+  // leave it disagreeing with itself (for example, an action without its phase).
+  const reads = await db.batch([
+    db.prepare('SELECT * FROM games WHERE id = ? LIMIT 1').bind(gameId),
     db
       .prepare(
         `SELECT ma.id, ma.email, gm.role, gm.added_at AS addedAt
          FROM game_moderators gm JOIN moderator_accounts ma ON ma.id = gm.moderator_id
          WHERE gm.game_id = ?`,
       )
-      .bind(gameId).all(),
+      .bind(gameId),
     db
       .prepare(
         `SELECT id, game_id AS gameId, display_name AS displayName, email, status,
@@ -43,48 +46,50 @@ export async function collectGameBackup(gameId: string): Promise<GameBackup> {
                 claimed_at AS claimedAt, created_at AS createdAt, updated_at AS updatedAt
          FROM seats WHERE game_id = ?`,
       )
-      .bind(gameId).all(),
-    db.prepare('SELECT * FROM game_role_counts WHERE game_id = ?').bind(gameId).all(),
-    db.prepare('SELECT * FROM assignment_batches WHERE game_id = ?').bind(gameId).all(),
-    db.prepare('SELECT * FROM role_assignments WHERE game_id = ?').bind(gameId).all(),
-    db.prepare('SELECT * FROM phases WHERE game_id = ?').bind(gameId).all(),
+      .bind(gameId),
+    db.prepare('SELECT * FROM game_role_counts WHERE game_id = ?').bind(gameId),
+    db.prepare('SELECT * FROM assignment_batches WHERE game_id = ?').bind(gameId),
+    db.prepare('SELECT * FROM role_assignments WHERE game_id = ?').bind(gameId),
+    db.prepare('SELECT * FROM phases WHERE game_id = ?').bind(gameId),
     db
       .prepare(
         `SELECT a.* FROM action_submissions a JOIN phases p ON p.id = a.phase_id
          WHERE p.game_id = ?`,
       )
-      .bind(gameId).all(),
+      .bind(gameId),
     db
       .prepare(
         `SELECT r.* FROM resolution_proposals r JOIN phases p ON p.id = r.phase_id
          WHERE p.game_id = ?`,
       )
-      .bind(gameId).all(),
-    db.prepare('SELECT * FROM game_events WHERE game_id = ? ORDER BY created_at').bind(gameId).all(),
-    db.prepare('SELECT * FROM chat_rooms WHERE game_id = ?').bind(gameId).all(),
+      .bind(gameId),
+    db.prepare('SELECT * FROM game_events WHERE game_id = ? ORDER BY created_at').bind(gameId),
+    db.prepare('SELECT * FROM chat_rooms WHERE game_id = ?').bind(gameId),
     db
       .prepare(
         `SELECT m.* FROM chat_room_members m JOIN chat_rooms r ON r.id = m.room_id
          WHERE r.game_id = ?`,
       )
-      .bind(gameId).all(),
+      .bind(gameId),
     db
       .prepare(
         `SELECT m.* FROM chat_messages m JOIN chat_rooms r ON r.id = m.room_id
          WHERE r.game_id = ? ORDER BY m.created_at`,
       )
-      .bind(gameId).all(),
-    db.prepare('SELECT * FROM announcements WHERE game_id = ? ORDER BY created_at').bind(gameId).all(),
+      .bind(gameId),
+    db.prepare('SELECT * FROM announcements WHERE game_id = ? ORDER BY created_at').bind(gameId),
     db
       .prepare(
         `SELECT n.* FROM notifications n JOIN seats s ON s.id = n.seat_id
          WHERE s.game_id = ? ORDER BY n.created_at`,
       )
-      .bind(gameId).all(),
-    db.prepare('SELECT * FROM operational_events WHERE game_id = ? ORDER BY created_at').bind(gameId).all(),
-    db.prepare('SELECT * FROM pilot_feedback WHERE game_id = ? ORDER BY created_at').bind(gameId).all(),
-  ]);
-  if (!game) throw new Error('Game not found.');
+      .bind(gameId),
+    db.prepare('SELECT * FROM operational_events WHERE game_id = ? ORDER BY created_at').bind(gameId),
+    db.prepare('SELECT * FROM pilot_feedback WHERE game_id = ? ORDER BY created_at').bind(gameId),
+  ], 'read');
+  const [gameRows, moderators, seats, composition, batches, assignments, phases, actions, resolutions, events, rooms, roomMembers, messages, announcements, notifications, operations, feedback] = reads;
+  const game = gameRows.results[0];
+  if (!game) throw new HttpError(404, 'Game not found.');
   return {
     schemaVersion: 2,
     exportedAt: new Date().toISOString(),
@@ -214,7 +219,7 @@ export async function restoreGameBackup(
     db.prepare('DELETE FROM seat_sessions WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
     db.prepare("UPDATE seats SET status = 'REMOVED', email = 'archived+' || id || '@invalid.test', pin_hash = NULL, session_version = session_version + 1, alive = 0, predecessor_seat_id = NULL, claimed_at = NULL, updated_at = ? WHERE game_id = ? AND " + restoreGuard).bind(now, gameId, gameId, now, moderatorId),
     db.prepare(
-      "UPDATE games SET name = ?, timezone = ?, start_date = ?, end_date = ?, active_weekdays_json = ?, schedule_json = ?, day_divisor = ?, night_divisor = ?, hunter_window_minutes = ?, final_round_minutes = ?, chat_retention_days = ?, final_cutoff_at = ?, publication_mode = ?, stopped_at = NULL, stopped_by_moderator_id = NULL, stop_reason = NULL, updated_at = ? WHERE id = ? AND status = 'RESTORING' AND reset_at = ? AND reset_by_moderator_id = ?",
+      "UPDATE games SET name = ?, timezone = ?, start_date = ?, end_date = ?, active_weekdays_json = ?, schedule_json = ?, day_divisor = ?, night_divisor = ?, hunter_window_minutes = ?, final_round_minutes = ?, chat_retention_days = ?, final_cutoff_at = ?, publication_mode = ?, automation_paused_at = NULL, stopped_at = NULL, stopped_by_moderator_id = NULL, stop_reason = NULL, updated_at = ? WHERE id = ? AND status = 'RESTORING' AND reset_at = ? AND reset_by_moderator_id = ?",
     ).bind(
       backupGame.name,
       backupGame.timezone,

@@ -124,7 +124,7 @@ export class LibsqlDatabase implements Database {
     return new LibsqlPreparedStatement(this.client, sql);
   }
 
-  async batch(statements: PreparedStatement[]): Promise<Array<QueryResult | RunResult>> {
+  async batch(statements: PreparedStatement[], mode: 'write' | 'read' = 'write'): Promise<Array<QueryResult | RunResult>> {
     const requests = statements.map((statement) => {
       if (!(statement instanceof LibsqlPreparedStatement)) {
         throw new TypeError(
@@ -134,7 +134,7 @@ export class LibsqlDatabase implements Database {
       return statement.toLibsqlStatement();
     });
 
-    const results = await this.client.batch(requests, 'write');
+    const results = await this.client.batch(requests, mode);
     return results.map((result) =>
       result.rows.length || result.columns.length
         ? toQueryResult(result)

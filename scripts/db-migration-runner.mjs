@@ -7,6 +7,7 @@ export const MIGRATION_FILES = [
   '0002_pilot_hardening.sql',
   '0003_reviewed_outcome.sql',
   '0004_operator_bootstrap.sql',
+  '0005_game_automation.sql',
 ];
 
 export function splitMigrationStatements(sql) {

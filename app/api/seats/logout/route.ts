@@ -1,5 +1,6 @@
 import { clearPlayerSession } from '../../../../lib/auth/session';
-import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
+import { assertSameOrigin } from '../../../../lib/http/security';
+import { routeError } from '../../../../lib/http/errors';
 
 export async function POST(request: Request) {
   try {
@@ -7,6 +8,6 @@ export async function POST(request: Request) {
     await clearPlayerSession();
     return Response.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to sign out.', 400);
+    return routeError(error, 'Unable to sign out.');
   }
 }

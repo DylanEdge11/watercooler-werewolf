@@ -25,11 +25,11 @@ Local development (`npm run dev` with a `file:` database) is the only mode where
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `TURSO_DATABASE_URL` | Yes | libSQL URL. Use `file:./work/watercooler.db` locally; deployed functions refuse `file:` URLs. |
+| `TURSO_DATABASE_URL` | Yes | libSQL URL. Use `file:./work/watercooler.db` locally; deployed functions refuse `file:` URLs and reach Turso over HTTP with the libSQL web client, so they don't ship the native SQLite binary. |
 | `TURSO_AUTH_TOKEN` | Remote only | Token scoped to that one database. |
-| `SITE_ORIGIN` | Yes | Exact origin players use, such as `https://watercooler-werewolf.vercel.app`, with no path. Browser writes from any other origin are rejected. |
+| `SITE_ORIGIN` | Recommended | Exact origin players use, such as `https://watercooler-werewolf.vercel.app`, with no path. Browser writes from any other origin are rejected. If unset, each request's own origin is used, which still blocks other sites; set it in Production so writes through any other hostname are refused. Claim links always use the address the moderator is on. |
 | `WATERCOOLER_OWNER_EMAIL` | For bootstrap | Email for the first moderator account. |
-| `CRON_SECRET` | Optional | Enables `/api/scheduler/deadlines` for an external scheduler. Without it, moderators use **Check deadlines**. |
+| `CRON_SECRET` | Optional | Enables `/api/scheduler/deadlines` for an external scheduler. See [Scheduler](#scheduler). |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Optional | Turns on **Email invites**. `SMTP_PORT` defaults to 465. Without all of them, moderators use the invite CSV. See [Invite email](#invite-email). |
 
 Set variables separately for `preview` and `production` in Vercel. Never prefix database credentials with `NEXT_PUBLIC_`. See `.env.example` for local and test variables.
@@ -46,7 +46,7 @@ npm run owner:bootstrap
 npm run dev
 ```
 
-`owner:bootstrap` prompts for a password (12+ characters, not echoed) and prints eight recovery codes once. Then open `http://localhost:3000/`, `/player-login`, `/moderator`, and `/guide`.
+`owner:bootstrap` applies any pending migrations first, then prompts for a password (12+ characters, not echoed) and prints eight recovery codes once. Then open `http://localhost:3000/`, `/player-login`, `/moderator`, and `/guide`.
 
 To fill the local game with 20 fictional players, see [Testing](TESTING.md#rehearse-a-game).
 
@@ -143,11 +143,17 @@ Routine releases go through `main`:
 3. Merge to `main`. Vercel builds and deploys Production.
 4. Confirm the deployment is `READY`, the landing page loads, anonymous `GET /api/games` returns 401, and runtime logs are clean.
 
+## Scheduler
+
+Automatic results never depend on a cron: each due step runs on the next visit to the moderator console or a player dashboard. A scheduler only makes steps happen when nobody is looking, for example a result that should publish overnight.
+
+No Vercel Cron is configured: the Hobby plan allows only one run a day, which adds little, and without `CRON_SECRET` it would only log a refused call. To have automatic results happen with nobody visiting, set `CRON_SECRET` in the Production environment and point a free external scheduler (for example cron-job.org) at `GET https://<your-site>/api/scheduler/deadlines` every five minutes with the header `Authorization: Bearer <CRON_SECRET>`. Never paste the secret into chat or commit it. Each call runs the due automatic steps and also locks expired phases in review-mode and paused games, which only closes voting that the deadline had already closed.
+
 ## Schema changes
 
 1. Edit `db/schema.ts` and run `npm run db:generate`. Inspect the SQL under `drizzle/`.
 2. Add the new file to `MIGRATION_FILES` in `scripts/db-migration-runner.mjs` **and** its version to `MIGRATION_VERSIONS` in `db/readiness.ts`. `db:generate` does not update these lists.
-3. Run `lib/db/migrations.test.ts`.
+3. Run `lib/db/migrations.test.ts`. It fails if either list disagrees with `drizzle/meta/_journal.json`.
 4. Apply with `npm run db:migrate` to Preview, then to Production before release.
 
 The migration runner records each version in `__app_migrations` and refuses to repair a partially applied initial schema.

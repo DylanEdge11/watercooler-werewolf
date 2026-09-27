@@ -20,7 +20,8 @@ For quick iteration, run only the relevant test file. Suites and the hosted Prev
 - The working base is always the one `version-X.Y` branch on origin (`git ls-remote --heads origin 'version-*'`), never `main`. A new one is created from `main` after each release.
 - Each change is a `feat/` or `fix/` branch from the version branch, merged back through a pull request. The version branch reaches `main` through one release pull request. Only an urgent Production fix (`hotfix/`) branches from and merges into `main`.
 - Changes reach `main` only through pull requests. Never push to `main`, never use `vercel deploy --prod`, and never promote a Preview deployment.
-- The workflow is three user-invoked skills in `.claude/skills/`: `/werewolf-dev` (one change, through to a PR and Preview), `/werewolf-uat` (certify the version branch), and `/werewolf-prod` (release it). Each stops at its handoff.
+- The workflow is three user-invoked skills in `.claude/skills/`: `/werewolf-dev` (one change, through to a PR and Preview), `/werewolf-uat` (certify the version branch), and `/werewolf-prod` (release it). Each stops at its handoff. `/project-audit` is separate: an independent, report-only review of the whole repository, run whenever the owner asks.
+- Audit reports are the one exception to the pull-request rule: `/project-audit` commits its report (`docs/AUDIT_<date>.md`, plus moving the previous audit into `docs/archive/`) directly to the version branch. Report files only, never code, and never `main`.
 - GitHub Actions minutes are limited (2,000/month, spending limit $0). CI runs only the fast gates, only on pull requests into `main`. Checks run locally with `npm run verify` / `verify:full`. Don't add jobs or triggers to `.github/workflows`, or start the workflow by hand, without asking. Batch commits; don't push after every small fix.
 
 ## Safety rules

@@ -1,23 +1,8 @@
 import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import type { ActionKind, PhaseKind, RoleKey } from '../lib/game/types';
+import type { ActionKind, GameStatus, PhaseKind, RoleKey } from '../lib/game/types';
 
-export type GameStatus =
-  | 'DRAFT'
-  | 'REGISTRATION'
-  | 'ASSIGNMENT_PREVIEW'
-  | 'ACTIVE'
-  | 'FINAL_SHOWDOWN'
-  | 'COMPLETED'
-  | 'STOPPED'
-  | 'CANCELLED'
-  // These values are short-lived database claims. They are never a player-
-  // facing lifecycle state, but make setup transitions race-safe.
-  | 'COMPOSITION_SAVING'
-  | 'ASSIGNMENT_PREVIEWING'
-  | 'ROSTER_IMPORTING'
-  | 'RESETTING'
-  | 'RESTORING';
+export type { GameStatus };
 export type PhaseStatus =
   | 'SCHEDULED'
   | 'OPEN'
@@ -86,6 +71,10 @@ export const games = sqliteTable(
     chatRetentionDays: integer('chat_retention_days').notNull().default(7),
     finalCutoffAt: text('final_cutoff_at').notNull(),
     publicationMode: text('publication_mode').$type<'REVIEW' | 'AUTOMATIC'>().notNull().default('REVIEW'),
+    // AUTOMATIC mode publishes a calculated result once it has waited this long for review.
+    reviewWindowMinutes: integer('review_window_minutes').notNull().default(60),
+    // Set while a moderator has paused automation; nothing locks, calculates, or publishes on its own.
+    automationPausedAt: text('automation_paused_at'),
     // Incremented whenever setup inputs change. Assignment previews capture
     // this value so an old preview cannot be released after a roster or
     // composition change.

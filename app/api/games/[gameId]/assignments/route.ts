@@ -8,7 +8,10 @@ import { ROLE_CATALOG } from '../../../../../lib/game/catalog';
 import { createSecureRandomRolls } from '../../../../../lib/game/random';
 import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { ensureGameRooms } from '../../../../../lib/chat/rooms';
+import { HttpError, routeError } from '../../../../../lib/http/errors';
+import { respondJsonWithEtag } from '../../../../../lib/http/etag';
+import { roomSyncStatements } from '../../../../../lib/chat/rooms';
+import { loadAssignmentsView, loadComposition } from '../../../../../lib/game/setup-view';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -30,63 +33,15 @@ function changes(result: unknown): number {
 
 const SETUP_STATUSES = "'DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'";
 
-async function loadComposition(gameId: string): Promise<RoleComposition> {
-  const rows = await getDb()
-    .prepare('SELECT role_key AS roleKey, count FROM game_role_counts WHERE game_id = ?')
-    .bind(gameId)
-    .all<{ roleKey: RoleKey; count: number }>();
-  const composition = Object.fromEntries(ROLE_KEYS.map((role) => [role, 0])) as RoleComposition;
-  for (const row of rows.results) composition[canonicalRoleKey(row.roleKey)] = Number(row.count);
-  return composition;
-}
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { gameId } = await context.params;
     await requireGameModerator(gameId);
-    const db = getDb();
-    const game = await getDb()
-      .prepare('SELECT status, setup_revision AS setupRevision FROM games WHERE id = ? LIMIT 1')
-      .bind(gameId)
-      .first<GameSetupRow>();
-    if (!game) throw new Error('Game not found.');
-    const composition = await loadComposition(gameId);
-    const roster = await db
-      .prepare(
-        `SELECT id, display_name AS displayName, status
-         FROM seats WHERE game_id = ? AND status != 'REMOVED'
-         ORDER BY display_name COLLATE NOCASE`,
-      )
-      .bind(gameId)
-      .all();
-    const batches = await db
-      .prepare(
-          `SELECT id, revision, setup_revision AS setupRevision,
-                  roster_fingerprint AS rosterFingerprint, composition_fingerprint AS compositionFingerprint,
-                  assignments_json AS assignmentsJson,
-                 random_evidence_hash AS randomEvidenceHash, released_at AS releasedAt, created_at AS createdAt
-         FROM assignment_batches WHERE game_id = ? ORDER BY revision DESC`,
-      )
-      .bind(gameId)
-      .all();
-    return Response.json({
-      ok: true,
-      game: { status: game.status, setupRevision: Number(game.setupRevision ?? 1) },
-      composition,
-      balance: scoreComposition(composition),
-      roster: roster.results,
-      batches: batches.results.map((batch) => ({
-        ...batch,
-        assignments: (JSON.parse(String(batch.assignmentsJson)) as AssignmentRow[]).map((assignment) => ({
-          ...assignment,
-          role: canonicalRoleKey(assignment.role),
-        })),
-        assignmentsJson: undefined,
-      })),
-    });
+    return respondJsonWithEtag(request, { ok: true, ...(await loadAssignmentsView(gameId)) });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to load assignments.', 401);
+    return routeError(error, 'Unable to load assignments.');
   }
 }
 
@@ -106,7 +61,7 @@ export async function POST(request: Request, context: RouteContext) {
       .prepare('SELECT status, setup_revision AS setupRevision FROM games WHERE id = ? LIMIT 1')
       .bind(gameId)
       .first<GameSetupRow>();
-    if (!game) throw new Error('Game not found.');
+    if (!game) throw new HttpError(404, 'Game not found.');
     const roster = await db
       .prepare("SELECT id, status FROM seats WHERE game_id = ? AND status != 'REMOVED' ORDER BY id")
       .bind(gameId)
@@ -370,16 +325,17 @@ export async function POST(request: Request, context: RouteContext) {
             gameId,
             now,
           ),
+        // Rooms and memberships for the released roles, in the same transaction.
+        ...roomSyncStatements(db, gameId, now),
       ]);
       if (changes(result[0]) !== 1) {
         return jsonError('This assignment preview is no longer current. Refresh and create a new preview.', 409);
       }
-      await ensureGameRooms(gameId);
       return Response.json({ ok: true, releasedAt: now, setupRevision });
     }
 
     throw new Error('Unknown assignment action.');
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to update assignments.', 400);
+    return routeError(error, 'Unable to update assignments.');
   }
 }

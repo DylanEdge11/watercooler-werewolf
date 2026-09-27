@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { LatestRoomRequest } from '../lib/chat/latest-room-request';
 import { pollWhileVisible } from '../lib/http/poll-while-visible';
+import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
+import { RELAXED_POLL_MS, URGENT_POLL_MS } from '../lib/http/poll-interval';
+
+/** A room with a message in the last two minutes counts as in use. */
+const CHAT_ACTIVE_MS = 2 * 60_000;
 
 interface Room {
   id: string;
@@ -59,6 +64,10 @@ export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms:
   if (messageRequest.current === null) {
     messageRequest.current = new LatestRoomRequest(roomId);
   }
+  // Per room: the ETag of the messages on screen (lib/http/conditional-get.ts),
+  // and when its newest message was posted, which sets how often it refreshes.
+  const etagByRoom = useRef<Record<string, string | null>>({});
+  const newestMessageAtByRoom = useRef<Record<string, number>>({});
   const room = rooms.find((candidate) => candidate.id === roomId) ?? rooms[0];
   const messages = previewMode
     ? previewMessagesByRoom[room?.id ?? ''] ?? []
@@ -69,12 +78,19 @@ export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms:
     await messageRequest.current?.run(
       roomId,
       async () => {
-        const response = await fetch(`/api/rooms/${roomId}/messages`);
+        const response = await conditionalGet(`/api/rooms/${roomId}/messages`, etagByRoom.current[roomId] ?? null);
+        // null: nothing changed since the messages on screen.
+        if (!response) return null;
         const data = await response.json() as { messages?: Message[]; error?: string };
         if (!response.ok) throw new Error(data.error ?? 'Unable to load messages.');
-        return data.messages ?? [];
+        return { messages: data.messages ?? [], etag: responseEtag(response) };
       },
-      (messages) => setLoadedMessagesByRoom((current) => ({ ...current, [roomId]: messages })),
+      (result) => {
+        if (!result) return;
+        etagByRoom.current[roomId] = result.etag;
+        newestMessageAtByRoom.current[roomId] = Math.max(0, ...result.messages.map((message) => Date.parse(message.createdAt) || 0));
+        setLoadedMessagesByRoom((current) => ({ ...current, [roomId]: result.messages }));
+      },
       (caught) => setError(caught instanceof Error ? caught.message : 'Unable to load messages.'),
     );
   }, [previewMode, roomId]);
@@ -84,12 +100,14 @@ export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms:
     const initial = window.setTimeout(() => {
       void load().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load messages.'));
     }, 0);
-    const stopPolling = pollWhileVisible(() => void load(), 10_000);
+    // A room with a message in the last two minutes refreshes every 10 s; a quiet one every 30 s.
+    const inUse = () => Date.now() - (newestMessageAtByRoom.current[roomId] ?? 0) < CHAT_ACTIVE_MS;
+    const stopPolling = pollWhileVisible(() => void load(), () => (inUse() ? URGENT_POLL_MS : RELAXED_POLL_MS));
     return () => {
       window.clearTimeout(initial);
       stopPolling();
     };
-  }, [load, previewMode]);
+  }, [load, previewMode, roomId]);
 
   if (!room) return null;
 

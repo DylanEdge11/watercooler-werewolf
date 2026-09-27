@@ -164,11 +164,14 @@ export class GameHarness {
           data: {
             name,
             timezone: 'America/Regina',
-            startDate: '2026-01-01',
-            endDate: '2026-12-31',
+            // The cutoff is in the past so final showdown is available at once; it must fall within the dates.
+            startDate: '2000-01-01',
+            endDate: '2099-12-31',
             finalCutoffAt: '2000-01-01T00:00',
             activeWeekdays: [1, 2, 3, 4, 5],
             schedule: { dayCloses: '16:00', nightCloses: '09:00' },
+            // The bot farm locks and publishes by hand; automatic results would race it.
+            publicationMode: 'REVIEW',
           },
         }),
         'create game',

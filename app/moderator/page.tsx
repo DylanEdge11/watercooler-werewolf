@@ -3,14 +3,18 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- the public entry links intentionally use full-page navigation. */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import GameSettingsFields from './game-settings-fields';
 import { useRouter } from 'next/navigation';
 import LiveGamePanel from './live-game-panel';
 import OperationsPanel from './operations-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
+import { ROLE_KEYS, type RoleKey } from '../../lib/game/types';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
 import BrandMark from '../brand-mark';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
+import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import { createInviteExport } from '../../lib/roster/csv';
 
 const sampleRoster = [
@@ -21,7 +25,7 @@ const sampleRoster = [
   }),
 ].join('\n');
 
-const roleOrder = ['VILLAGER', 'WEREWOLF', 'SEER', 'BODYGUARD', 'HUNTER', 'MASON', 'APPRENTICE_SEER', 'MAYOR', 'CUPID'] as const;
+const roleOrder = ROLE_KEYS;
 const weekdayOptions = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -31,7 +35,6 @@ const weekdayOptions = [
   { value: 6, label: 'Sat' },
   { value: 0, label: 'Sun' },
 ] as const;
-type RoleKey = (typeof roleOrder)[number];
 type Composition = Record<RoleKey, number>;
 
 function dateInput(date: Date): string {
@@ -63,6 +66,12 @@ interface GameSummary {
   finalCutoffLocal: string;
   activeWeekdays: number[];
   schedule: { dayCloses?: string; nightCloses?: string };
+  hunterWindowMinutes?: number;
+  dayDivisor?: number;
+  nightDivisor?: number;
+  publicationMode?: 'REVIEW' | 'AUTOMATIC';
+  reviewWindowMinutes?: number;
+  automationPaused?: boolean;
   moderatorRole?: string;
 }
 
@@ -104,14 +113,26 @@ interface Batch {
 
 const SETUP_STATUSES = new Set(['DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW']);
 
+class RequestError extends Error {
+  constructor(message: string, readonly status: number, readonly body: Record<string, unknown>) {
+    super(message);
+  }
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
     headers: init?.body ? { 'content-type': 'application/json', ...init.headers } : init?.headers,
   });
   const data = (await response.json()) as T & { error?: string; errors?: string[] };
-  if (!response.ok) throw new Error(data.error ?? data.errors?.join(' ') ?? 'Request failed.');
+  if (!response.ok) throw new RequestError(data.error ?? data.errors?.join(' ') ?? 'Request failed.', response.status, data as Record<string, unknown>);
   return data;
+}
+
+interface SelectedGameSetup {
+  gameId: string;
+  roster: { roster: RosterSeat[]; emailConfigured?: boolean };
+  assignments: { composition: Composition; batches: Batch[]; game?: { status: string } };
 }
 
 function BrandHeader() {
@@ -153,6 +174,10 @@ export default function ModeratorPage() {
   const selectedGameRef = useRef('');
   const gamesRequest = useRef(0);
   const gameDetailRequest = useRef(0);
+  // The ETag of the games list and setup on screen (lib/http/conditional-get.ts).
+  // It names the data, not the URL: the first load (no ?gameId=) and the polls
+  // that follow (with it) return the same body, so they share one tag.
+  const gamesEtag = useRef<string | null>(null);
   const compositionDrafts = useRef(new Map<string, Composition>());
 
   function markCompositionDraft(selectedGameId: string, draft: Composition | null) {
@@ -166,13 +191,7 @@ export default function ModeratorPage() {
     });
   }
 
-  const loadGame = useCallback(async (selectedGameId: string) => {
-    const requestId = ++gameDetailRequest.current;
-    const [rosterData, assignmentData] = await Promise.all([
-      requestJson<{ roster: RosterSeat[]; emailConfigured?: boolean }>(`/api/games/${selectedGameId}/roster`),
-      requestJson<{ composition: Composition; batches: Batch[]; game?: { status: string } }>(`/api/games/${selectedGameId}/assignments`),
-    ]);
-    if (requestId !== gameDetailRequest.current || selectedGameRef.current !== selectedGameId) return;
+  const applyGameSetup = useCallback((selectedGameId: string, rosterData: SelectedGameSetup['roster'], assignmentData: SelectedGameSetup['assignments']) => {
     setRoster(rosterData.roster);
     setEmailConfigured(Boolean(rosterData.emailConfigured));
     setComposition(compositionDrafts.current.get(selectedGameId) ?? assignmentData.composition);
@@ -182,25 +201,46 @@ export default function ModeratorPage() {
     }
   }, []);
 
+  const loadGame = useCallback(async (selectedGameId: string) => {
+    const requestId = ++gameDetailRequest.current;
+    const [rosterData, assignmentData] = await Promise.all([
+      requestJson<SelectedGameSetup['roster']>(`/api/games/${selectedGameId}/roster`),
+      requestJson<SelectedGameSetup['assignments']>(`/api/games/${selectedGameId}/assignments`),
+    ]);
+    if (requestId !== gameDetailRequest.current || selectedGameRef.current !== selectedGameId) return;
+    applyGameSetup(selectedGameId, rosterData, assignmentData);
+  }, [applyGameSetup]);
+
+  // One request: the games list carries the selected game's roster and assignments.
   const loadGames = useCallback(async (preferredGameId = selectedGameRef.current) => {
     const requestId = ++gamesRequest.current;
-    const data = await requestJson<{ games: GameSummary[] }>('/api/games');
+    const detailRequestId = ++gameDetailRequest.current;
+    const query = preferredGameId ? `?gameId=${encodeURIComponent(preferredGameId)}` : '';
+    const response = await conditionalGet(`/api/games${query}`, gamesEtag.current);
+    // null: nothing changed since what is on screen.
+    if (!response) return;
+    const data = (await response.json()) as { games: GameSummary[]; selected: SelectedGameSetup | null; error?: string };
+    if (!response.ok) throw new RequestError(data.error ?? 'Request failed.', response.status, data as unknown as Record<string, unknown>);
     if (requestId !== gamesRequest.current) return;
     setAuthenticated(true);
     setGames(data.games);
-    const selected = data.games.find((game) => game.id === preferredGameId) ?? data.games[0];
+    const selected = data.selected;
     if (selected) {
-      selectedGameRef.current = selected.id;
-      setGameId(selected.id);
-      await loadGame(selected.id);
+      selectedGameRef.current = selected.gameId;
+      setGameId(selected.gameId);
+      // A game switch that started after this request wins.
+      const applied = detailRequestId === gameDetailRequest.current;
+      if (applied) applyGameSetup(selected.gameId, selected.roster, selected.assignments);
+      gamesEtag.current = applied ? responseEtag(response) : null;
     } else {
+      gamesEtag.current = responseEtag(response);
       selectedGameRef.current = '';
       setGameId('');
       setRoster([]);
       setComposition(null);
       setBatches([]);
     }
-  }, [loadGame]);
+  }, [applyGameSetup]);
 
   const handleLiveChange = useCallback((action?: string) => {
     if (shouldRefreshOperations(action)) setLiveRefreshToken((token) => token + 1);
@@ -210,10 +250,10 @@ export default function ModeratorPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const bootstrap = await requestJson<{ needsBootstrap: boolean }>('/api/moderators/bootstrap');
-        setNeedsBootstrap(bootstrap.needsBootstrap);
-        if (!bootstrap.needsBootstrap) await loadGames();
-      } catch {
+        await loadGames();
+      } catch (caught) {
+        // Signed out: the 401 also says whether the first moderator account still has to be created.
+        setNeedsBootstrap(caught instanceof RequestError && caught.body.needsBootstrap === true);
         setAuthenticated(false);
       } finally {
         setLoading(false);
@@ -223,9 +263,10 @@ export default function ModeratorPage() {
 
   useEffect(() => {
     if (!authenticated) return;
+    // The live game panel keeps its own, faster pace near deadlines.
     return pollWhileVisible(() => {
       void loadGames(gameId).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.'));
-    }, 10_000);
+    }, RELAXED_POLL_MS);
   }, [authenticated, gameId, loadGames]);
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
@@ -264,6 +305,11 @@ export default function ModeratorPage() {
           finalCutoffAt: form.get('finalCutoffAt'),
           activeWeekdays: form.getAll('activeWeekdays').map(Number),
           schedule: { dayCloses: form.get('dayCloses'), nightCloses: form.get('nightCloses') },
+          hunterWindowHours: form.get('hunterWindowHours'),
+          dayDivisor: form.get('dayDivisor'),
+          nightDivisor: form.get('nightDivisor'),
+          publicationMode: form.get('publicationMode'),
+          reviewWindowMinutes: form.get('reviewWindowMinutes'),
         }),
       });
       setMessage('Game created. Import the player roster next.');
@@ -324,6 +370,11 @@ export default function ModeratorPage() {
           finalCutoffAt: form.get('finalCutoffAt'),
           activeWeekdays: form.getAll('activeWeekdays').map(Number),
           schedule: { dayCloses: form.get('dayCloses'), nightCloses: form.get('nightCloses') },
+          hunterWindowHours: form.get('hunterWindowHours'),
+          dayDivisor: form.get('dayDivisor'),
+          nightDivisor: form.get('nightDivisor'),
+          publicationMode: form.get('publicationMode'),
+          reviewWindowMinutes: form.get('reviewWindowMinutes'),
         }),
       });
       setMessage('Game schedule updated. The launch checklist is ready to continue.');
@@ -628,6 +679,7 @@ export default function ModeratorPage() {
                 <label>Day ballot closes<input name="dayCloses" type="time" defaultValue="16:00" required /></label>
                 <label>Night actions close<input name="nightCloses" type="time" defaultValue="09:00" required /></label>
                 <fieldset className="weekday-picker wide"><legend>Active weekdays</legend><div>{weekdayOptions.map((day) => <label key={day.value}><input name="activeWeekdays" type="checkbox" value={day.value} defaultChecked={[1, 2, 3, 4, 5].includes(day.value)} />{day.label}</label>)}</div></fieldset>
+                <GameSettingsFields />
                 <button className="primary-button" type="submit">Create game</button>
               </form>
             </section>
@@ -635,7 +687,7 @@ export default function ModeratorPage() {
             <>
               {showSchedulePanel && selectedGame && <section className="setup-card" id="game-schedule">
                 <div className="setup-card-heading"><span>01</span><div><h2>Game schedule</h2><p>{setupEditable ? 'Review or update the setup details, then continue where you left off.' : 'Review the launch schedule. It becomes read-only after roles are released.'}</p></div></div>
-                <form className="setup-grid" key={`schedule-${selectedGame.id}-${selectedGame.finalCutoffAt}`} onSubmit={updateSchedule}>
+                <form className="setup-grid" key={`schedule-${selectedGame.id}-${selectedGame.finalCutoffAt}-${selectedGame.hunterWindowMinutes}-${selectedGame.dayDivisor}-${selectedGame.nightDivisor}-${selectedGame.publicationMode}-${selectedGame.reviewWindowMinutes}`} onSubmit={updateSchedule}>
                   <label className="wide">Game name<input name="name" defaultValue={selectedGame.name} disabled={!setupEditable} required /></label>
                   <label>Timezone<input name="timezone" defaultValue={selectedGame.timezone} disabled={!setupEditable} required /></label>
                   <label>Start date<input name="startDate" type="date" defaultValue={selectedGame.startDate} disabled={!setupEditable} required /></label>
@@ -644,6 +696,7 @@ export default function ModeratorPage() {
                   <label>Day ballot closes<input name="dayCloses" type="time" defaultValue={selectedGame.schedule.dayCloses ?? '16:00'} disabled={!setupEditable} required /></label>
                   <label>Night actions close<input name="nightCloses" type="time" defaultValue={selectedGame.schedule.nightCloses ?? '09:00'} disabled={!setupEditable} required /></label>
                   <fieldset className="weekday-picker wide" disabled={!setupEditable}><legend>Active weekdays</legend><div>{weekdayOptions.map((day) => <label key={day.value}><input name="activeWeekdays" type="checkbox" value={day.value} defaultChecked={selectedGame.activeWeekdays.includes(day.value)} />{day.label}</label>)}</div></fieldset>
+                  <GameSettingsFields initial={{ hunterWindowMinutes: selectedGame.hunterWindowMinutes, dayDivisor: selectedGame.dayDivisor, nightDivisor: selectedGame.nightDivisor, publicationMode: selectedGame.publicationMode, reviewWindowMinutes: selectedGame.reviewWindowMinutes }} disabled={!setupEditable} />
                   <div className="button-row wide">
                     {setupEditable && <button className="primary-button" type="submit">Save schedule</button>}
                     <button className="secondary-button" type="button" onClick={() => setShowSchedulePanel(false)}>Close schedule</button>

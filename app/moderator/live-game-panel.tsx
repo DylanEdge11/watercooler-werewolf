@@ -1,9 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { nudgeMessage } from '../../lib/game/moderator-copy';
+import { phaseName } from '../../lib/game/timeline-view';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
+import AutomationControls, { type NextAutomaticStep } from './automation-controls';
+import CopyButton from './copy-button';
 import { formatZonedDateTimeLocal } from '../../lib/game/scheduling';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
+import { pollInterval } from '../../lib/http/poll-interval';
 
 interface Outcome {
   tally: Array<{ playerId: string; votes: number }>;
@@ -25,6 +31,10 @@ interface Phase {
   hunterDeadlineAt: string | null;
   slots: number;
   currentSubmissions: number;
+  /** Open phase only: living players who still owe a response. For the moderator's eyes alone. */
+  outstanding?: Array<{ id: string; displayName: string }>;
+  /** Published by the sweep after the review window, with no moderator attached. */
+  publishedAutomatically?: boolean;
   proposal: null | { id: string; outcome: Outcome; proposedOutcome?: Outcome; reviewedOutcome?: Outcome | null; publishedOutcome?: Outcome | null; overrideReason: string | null; reviewedAt?: string | null };
 }
 
@@ -33,6 +43,33 @@ interface RosterMember {
   displayName: string;
   alive: number | boolean;
   role: string;
+}
+
+function OutstandingBlock({ phase, timeZone }: { phase: Phase; timeZone: string }) {
+  const outstanding = phase.outstanding ?? [];
+  const isNight = phase.kind === 'NIGHT';
+  const nudge = nudgeMessage({
+    kind: phase.kind,
+    sequence: phase.sequence,
+    closesAt: phase.closesAt,
+    timeZone,
+    outstandingNames: outstanding.map((player) => player.displayName),
+    siteUrl: typeof window === 'undefined' ? '' : window.location.origin,
+  });
+  return <div className="outstanding-block" aria-labelledby={`outstanding-${phase.id}`}>
+    <div className="ops-heading">
+      <div>
+        <p className="eyebrow accent" id={`outstanding-${phase.id}`}>Still to respond · {outstanding.length}</p>
+        <p className="field-help">{isNight
+          ? 'Only you can see these names. At night they show who holds a Night role, so the nudge message never names or counts anyone.'
+          : 'Only you can see this list. Every living player votes by day, so the nudge message names who has not voted yet.'}</p>
+      </div>
+      <CopyButton text={nudge} label="Copy nudge message" />
+    </div>
+    {outstanding.length
+      ? <ul className="outstanding-list">{outstanding.map((player) => <li key={player.id}>{player.displayName}</li>)}</ul>
+      : <p className="empty-note">Everyone who can act has saved a response.</p>}
+  </div>;
 }
 
 function localDeadline(minutes = 60, timeZone = 'UTC'): string {
@@ -45,12 +82,16 @@ interface GameState {
   finalCutoffAt: string;
   timezone: string;
   updatedAt: string;
+  publicationMode: 'REVIEW' | 'AUTOMATIC';
+  reviewWindowMinutes: number;
+  automationPausedAt: string | null;
 }
 
 export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameId: string; gameStatus: string; onChanged?: (action?: string) => void }) {
   const [phases, setPhases] = useState<Phase[]>([]);
   const [roster, setRoster] = useState<RosterMember[]>([]);
   const [game, setGame] = useState<GameState | null>(null);
+  const [nextAutomaticStep, setNextAutomaticStep] = useState<NextAutomaticStep | null>(null);
   const [overrideIds, setOverrideIds] = useState<string[]>([]);
   const [overrideReason, setOverrideReason] = useState('');
   const [message, setMessage] = useState('');
@@ -58,15 +99,26 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
   const [deadlineDraft, setDeadlineDraft] = useState<{ gameId: string; timeZone: string; value: string } | null>(null);
   const refreshSequence = useRef(0);
 
+  // The ETag of the phases on screen (lib/http/conditional-get.ts), and the open
+  // phase, which sets how often the panel refreshes (lib/http/poll-interval.ts).
+  const etag = useRef<string | null>(null);
+  const pacing = useRef<{ status: string; deadline: string | null } | null>(null);
+
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
-    const response = await fetch('/api/games/' + gameId + '/phases');
-    const data = await response.json() as { game?: GameState; phases?: Phase[]; roster?: RosterMember[]; error?: string };
+    const response = await conditionalGet('/api/games/' + gameId + '/phases', etag.current);
+    // null: nothing changed since the phases on screen, so nothing re-renders.
+    if (!response) return;
+    const data = await response.json() as { game?: GameState; phases?: Phase[]; roster?: RosterMember[]; nextAutomaticStep?: NextAutomaticStep | null; error?: string };
     if (!response.ok) throw new Error(data.error ?? 'Unable to load the live game.');
     if (sequence !== refreshSequence.current) return;
+    etag.current = responseEtag(response);
+    const open = data.phases?.find((phase) => phase.status === 'OPEN');
+    pacing.current = open ? { status: open.status, deadline: open.closesAt } : null;
     setPhases(data.phases ?? []);
     setRoster(data.roster ?? []);
     setGame(data.game ?? null);
+    setNextAutomaticStep(data.nextAutomaticStep ?? null);
   }, [gameId]);
 
   useEffect(() => {
@@ -75,7 +127,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
     }, 0);
     const stopPolling = pollWhileVisible(() => {
       void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh phases.'));
-    }, 10_000);
+    }, () => pollInterval(pacing.current));
     return () => {
       window.clearTimeout(timer);
       stopPolling();
@@ -179,11 +231,14 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
 
       {!current && effectiveStatus === 'ACTIVE' && latestPublished && <div className="final-showdown-callout"><div><p className="eyebrow accent">Final cutoff · {game?.timezone ?? 'UTC'}</p><strong>{game?.finalCutoffAt ? gameTime(game.finalCutoffAt) : 'Configured in the game schedule'}</strong><p>When the cutoff has passed, enter final showdown to unlock the final ballot.</p></div><button className="secondary-button" type="button" onClick={() => void enterFinalShowdown()}>Enter final showdown</button></div>}
 
+      {game && !['COMPLETED', 'STOPPED', 'CANCELLED'].includes(effectiveStatus) && <AutomationControls gameId={gameId} game={game} nextStep={nextAutomaticStep} formatTime={gameTime} onChanged={refresh} />}
+
       {latest && (
         <div className="phase-review">
-          <div className="phase-status-row"><div><p className="eyebrow accent">Cycle {latest.sequence} · {latest.kind.replaceAll('_', ' ')}</p><h3>{latest.status.replaceAll('_', ' ')}</h3></div><div><strong>{latest.currentSubmissions}</strong><small>current responses</small></div><div><strong>{latest.slots}</strong><small>elimination slots</small></div></div>
+          <div className="phase-status-row"><div><p className="eyebrow accent">{phaseName(latest.kind, latest.sequence)}</p><h3>{latest.status.replaceAll('_', ' ')}</h3></div><div><strong>{latest.currentSubmissions}</strong><small>current responses</small></div><div><strong>{latest.slots}</strong><small>elimination slots</small></div></div>
+          {latest.status === 'OPEN' && <OutstandingBlock phase={latest} timeZone={gameTimeZone} />}
           {['OPEN', 'LOCKED'].includes(latest.status) && <button className="danger-button" type="button" onClick={() => void run('LOCK_AND_PROPOSE', latest.id)}>{latest.status === 'LOCKED' ? 'Calculate locked responses' : 'Lock responses & calculate'}</button>}
-          {latest.status === 'PENDING_HUNTER' && (
+          {(latest.status === 'PENDING_HUNTER' || latest.status === 'HUNTER_FINALIZING') && (
             <div className="hunter-callout"><span aria-hidden="true">➶</span><div><strong>Hunter follow-up required</strong><p>Deadline {latest.hunterDeadlineAt ? gameTime(latest.hunterDeadlineAt) : 'pending'} ({game?.timezone ?? 'UTC'}).</p></div><button className="primary-button" type="button" onClick={() => void run('FINALIZE_HUNTER', latest.id, { skipHunter: latest.hunterDeadlineAt ? new Date(latest.hunterDeadlineAt) <= new Date() : false })}>Finalize Hunter</button></div>
           )}
 
@@ -193,6 +248,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
                 <div><p className="eyebrow">Vote tally</p>{proposedOutcome?.tally.length ? proposedOutcome.tally.map((entry) => <div className="tally-row" key={entry.playerId}><span>{byId.get(entry.playerId)?.displayName ?? 'Player'}</span><strong>{entry.votes}</strong></div>) : <p className="empty-note">No eligible votes were submitted.</p>}</div>
                 <div><p className="eyebrow">{latest.status === 'PUBLISHED' ? 'Authoritative published outcome' : reviewedOutcome ? 'Reviewed outcome awaiting follow-up' : 'Proposed outcome'}</p>{authoritativeOutcome.eliminations.length ? authoritativeOutcome.eliminations.map((item) => <div className="outcome-row" key={item.playerId}><span>{byId.get(item.playerId)?.displayName ?? 'Player'}</span><strong>{byId.get(item.playerId)?.role}</strong><small>{item.cause.replaceAll('_', ' ')}</small></div>) : <p className="empty-note">No elimination.</p>}{authoritativeOutcome.protectedPlayerIds.length > 0 && <p className="protected-note">Protected: {authoritativeOutcome.protectedPlayerIds.map((id) => byId.get(id)?.displayName).join(', ')}</p>}{authoritativeOutcome.randomDraws.length > 0 && <p className="random-note">A recorded random draw resolved a boundary tie.</p>}</div>
               </div>
+              {latest.status === 'PUBLISHED' && latest.publishedAutomatically && <p className="notice success">Published automatically after the review window.</p>}
               {publishedOutcome && proposedOutcome && JSON.stringify(publishedOutcome) !== JSON.stringify(proposedOutcome) && <div className="notice warning"><strong>Override published.</strong> The original calculation remains preserved for audit. {latest.proposal.overrideReason ? 'Reason: ' + latest.proposal.overrideReason : ''}</div>}
               {latest.status === 'PUBLISHED' && latest.proposal.overrideReason && <p className="field-help">Review note: {latest.proposal.overrideReason}{latest.proposal.reviewedAt ? ` Review recorded ${gameTime(latest.proposal.reviewedAt)}.` : ''}</p>}
               {latest.status === 'PENDING_APPROVAL' && (
@@ -212,7 +268,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
         </div>
       )}
 
-      {phases.filter((phase) => phase.status === 'PUBLISHED').length > 0 && <p className="field-help">Published cycles: {phases.filter((phase) => phase.status === 'PUBLISHED').map((phase) => phase.sequence).join(', ')}</p>}
+      {phases.filter((phase) => phase.status === 'PUBLISHED').length > 0 && <p className="field-help">Published: {phases.filter((phase) => phase.status === 'PUBLISHED').map((phase) => phaseName(phase.kind, phase.sequence)).join(', ')}</p>}
     </section>
   );
 }

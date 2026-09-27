@@ -5,8 +5,11 @@ import { createBackupRecord, restoreGameBackup } from '../../../../../lib/backup
 import { canCancelSetup, canResetGame, canStopGame } from '../../../../../lib/game/lifecycle';
 import { reconcileDuePhases } from '../../../../../lib/game/scheduling';
 import { hashSecret, randomToken, sha256 } from '../../../../../lib/auth/crypto';
+import { PIN_LOCKOUT_ATTEMPTS, pinFailureKey } from '../../../../../lib/auth/pin-lockout';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { restoreConfirmation } from '../../../../../lib/backup/restore';
+import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -16,7 +19,7 @@ function changes(result: unknown): number {
   return Number((result as { meta?: { changes?: number } } | null)?.meta?.changes ?? 0);
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
     const { gameId } = await context.params;
@@ -84,18 +87,19 @@ export async function GET(_request: Request, context: RouteContext) {
         .first<{ submittedActions: number; lateRejections: number; lastActionAt: string | null }>(),
       db
         .prepare(
-          `SELECT id, display_name AS displayName, status
-           FROM seats WHERE game_id = ? AND status != 'REMOVED'
-           ORDER BY display_name COLLATE NOCASE`,
+          `SELECT s.id, s.display_name AS displayName, s.status,
+                  COALESCE((SELECT b.attempts FROM rate_limit_buckets b WHERE b.bucket_key = 'pin-failures:' || s.id), 0) >= ? AS pinLocked
+           FROM seats s WHERE s.game_id = ? AND s.status != 'REMOVED'
+           ORDER BY s.display_name COLLATE NOCASE`,
         )
-        .bind(gameId)
-        .all<{ id: string; displayName: string; status: string }>(),
+        .bind(PIN_LOCKOUT_ATTEMPTS, gameId)
+        .all<{ id: string; displayName: string; status: string; pinLocked: number }>(),
     ]);
     const latestBackup = backups.results[0];
     const lastBackup = latestBackup ? { exportedAt: latestBackup.exportedAt, checksum: latestBackup.checksum } : null;
-    return Response.json({ ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, seats: seats.results, lastBackup, backups: backups.results, events: events.results });
+    return respondJsonWithEtag(request, { ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, seats: seats.results.map((seat) => ({ ...seat, pinLocked: Boolean(seat.pinLocked) })), lastBackup, backups: backups.results, events: events.results });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to load operational health.', 401);
+    return routeError(error, 'Unable to load operational health.');
   }
 }
 
@@ -121,7 +125,7 @@ export async function POST(request: Request, context: RouteContext) {
       .prepare('SELECT id, name, status, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1')
       .bind(gameId)
       .first<{ id: string; name: string; status: string; updatedAt: string }>();
-    if (!game) throw new Error('Game not found.');
+    if (!game) throw new HttpError(404, 'Game not found.');
     if (body.action === 'CANCEL_SETUP') {
       await requireGameOwner(gameId);
       const decision = canCancelSetup(game.status, game.name, body.confirmationName?.trim() ?? '', 'OWNER', body.confirmed === true);
@@ -252,6 +256,8 @@ export async function POST(request: Request, context: RouteContext) {
         db.prepare('DELETE FROM assignment_batches WHERE game_id = ? AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare('DELETE FROM game_role_counts WHERE game_id = ? AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare('DELETE FROM notifications WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?) AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
+        // Announcements belong to the run that is being cleared, as with Restore; their audit events stay.
+        db.prepare('DELETE FROM announcements WHERE game_id = ? AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare('DELETE FROM chat_room_members WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare('DELETE FROM chat_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare("UPDATE chat_rooms SET status = 'OPEN' WHERE game_id = ? AND " + resetGuard).bind(gameId, gameId, now, moderator.id),
@@ -281,7 +287,7 @@ export async function POST(request: Request, context: RouteContext) {
       }
       statements.push(
         db
-          .prepare("UPDATE games SET status = 'DRAFT', stopped_at = NULL, stopped_by_moderator_id = NULL, stop_reason = NULL, updated_at = ? WHERE id = ? AND status = 'RESETTING' AND reset_at = ? AND reset_by_moderator_id = ?")
+          .prepare("UPDATE games SET status = 'DRAFT', automation_paused_at = NULL, stopped_at = NULL, stopped_by_moderator_id = NULL, stop_reason = NULL, updated_at = ? WHERE id = ? AND status = 'RESETTING' AND reset_at = ? AND reset_by_moderator_id = ?")
           .bind(now, gameId, now, moderator.id),
       );
       const result = await db.batch(statements);
@@ -318,7 +324,7 @@ export async function POST(request: Request, context: RouteContext) {
         .prepare('SELECT id FROM seats WHERE id = ? AND game_id = ? LIMIT 1')
         .bind(body.seatId, gameId)
         .first();
-      if (!seat) throw new Error('Seat not found.');
+      if (!seat) throw new HttpError(404, 'Seat not found.');
       await db.batch([
         db.prepare('UPDATE seats SET session_version = session_version + 1, updated_at = ? WHERE id = ?').bind(now, body.seatId),
         db.prepare('DELETE FROM seat_sessions WHERE seat_id = ?').bind(body.seatId),
@@ -356,6 +362,8 @@ export async function POST(request: Request, context: RouteContext) {
           )
           .bind(pinHash, now, seat.id, gameId, seat.sessionVersion),
         db.prepare(`DELETE FROM seat_sessions WHERE seat_id = ? AND ${pinResetGuard}`).bind(seat.id, seat.id, gameId, nextVersion, now),
+        // A new PIN unlocks a seat that was locked after too many wrong PINs.
+        db.prepare(`DELETE FROM rate_limit_buckets WHERE bucket_key = ? AND ${pinResetGuard}`).bind(pinFailureKey(seat.id), seat.id, gameId, nextVersion, now),
         db
           .prepare(
             `INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at)
@@ -371,6 +379,6 @@ export async function POST(request: Request, context: RouteContext) {
     }
     throw new Error('Unknown operational action.');
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to update operations.', 400);
+    return routeError(error, 'Unable to update operations.');
   }
 }

@@ -22,10 +22,11 @@ export function fallbackVoteTarget(game: BrowserGame, actor: BrowserPlayer, pref
 export async function runDayElimination(
   game: BrowserGame,
   target: BrowserPlayer,
-  options: { revise?: boolean; lateSubmission?: boolean; resolveHunter?: boolean } = {},
+  options: { revise?: boolean; lateSubmission?: boolean; resolveHunter?: boolean; afterOpen?: (phaseId: string) => Promise<void> } = {},
 ): Promise<{ phaseId: string; proposal: { outcome: PhaseResolution; hunterDeadline?: string | null }; published: { outcome: PhaseResolution; winner: 'VILLAGE' | 'WEREWOLF' | null } }> {
   const phase = await game.openPhase('DAY');
   await refreshPlayers(game);
+  await options.afterOpen?.(phase.phaseId);
   const living = game.living();
   const reviser = options.revise
     ? livingTarget(game, (player) => player.account.role === 'VILLAGER' && player.account.seatId !== target.account.seatId)
@@ -75,10 +76,11 @@ export async function runDayElimination(
 
 export async function runNight(
   game: BrowserGame,
-  options: { attackTarget?: BrowserPlayer; protectAttack?: boolean; protectTarget?: BrowserPlayer } = {},
+  options: { attackTarget?: BrowserPlayer; protectAttack?: boolean; protectTarget?: BrowserPlayer; afterOpen?: (phaseId: string) => Promise<void>; afterLock?: (phaseId: string) => Promise<void> } = {},
 ): Promise<{ phaseId: string; proposal: { outcome: PhaseResolution; hunterDeadline?: string | null }; published: { outcome: PhaseResolution; winner: 'VILLAGE' | 'WEREWOLF' | null } }> {
   const phase = await game.openPhase('NIGHT');
   await refreshPlayers(game);
+  await options.afterOpen?.(phase.phaseId);
   const living = game.living();
   const wolves = living.filter((player) => player.account.role === 'WEREWOLF');
   const attackTarget = options.attackTarget ?? livingTarget(game, (player) => player.account.role !== 'WEREWOLF');
@@ -96,6 +98,7 @@ export async function runNight(
   }
   await game.submitConcurrently(decisions);
   const proposal = await game.lockAndPropose(phase.phaseId);
+  await options.afterLock?.(phase.phaseId);
   const published = await game.publish(phase.phaseId);
   await game.updateAlive(published.outcome);
   await refreshPlayers(game);

@@ -2,12 +2,32 @@ import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentModerator, getCurrentPlayer } from '../../../../../lib/auth/session';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { validatePilotFeedback } from '../../../../../lib/game/feedback';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../../lib/http/rate-limit';
+import { summarizeFeedback, validatePilotFeedback, type FeedbackEntry } from '../../../../../lib/game/feedback';
+import { assertSameOrigin } from '../../../../../lib/http/security';
+import { HttpError, routeError } from '../../../../../lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
+}
+
+/** Moderators read every rating and comment for their game. Entries never say which player sent them. */
+export async function GET(_request: Request, context: RouteContext) {
+  try {
+    await ensureDatabase();
+    const { gameId } = await context.params;
+    await requireGameModerator(gameId);
+    const rows = await getDb()
+      .prepare(
+        `SELECT rating, comment, respondent_type AS respondentType, created_at AS createdAt
+         FROM pilot_feedback WHERE game_id = ? ORDER BY created_at DESC`,
+      )
+      .bind(gameId)
+      .all<FeedbackEntry>();
+    return Response.json({ ok: true, feedback: summarizeFeedback(rows.results) });
+  } catch (error) {
+    return routeError(error, 'Unable to load feedback.');
+  }
 }
 
 export async function POST(request: Request, context: RouteContext) {
@@ -30,7 +50,7 @@ export async function POST(request: Request, context: RouteContext) {
       await enforceRateLimit(requestRateLimitKey(request, `moderator-feedback:${moderator.id}:${gameId}`), 10, 60 * 60_000);
     } else {
       const player = await getCurrentPlayer();
-      if (!player || player.gameId !== gameId) throw new Error('Player authentication required for this game.');
+      if (!player || player.gameId !== gameId) throw new HttpError(401, 'Player authentication required for this game.');
       respondentType = 'PLAYER';
       respondentId = player.seatId;
       await enforceRateLimit(requestRateLimitKey(request, `player-feedback:${player.seatId}:${gameId}`), 3, 60 * 60_000);
@@ -52,8 +72,6 @@ export async function POST(request: Request, context: RouteContext) {
     ]);
     return Response.json({ ok: true, feedbackId, createdAt: now }, { status: 201 });
   } catch (error) {
-    return error instanceof RateLimitError
-      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
-      : jsonError(error instanceof Error ? error.message : 'Unable to record feedback.', 400);
+    return routeError(error, 'Unable to record feedback.');
   }
 }

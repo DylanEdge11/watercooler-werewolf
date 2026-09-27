@@ -34,6 +34,6 @@ Then open `http://localhost:3000`. See [Setup](docs/SETUP.md) for Preview and Pr
 ## Before a real game
 
 - Use the exact site address your organizer gives you. Preview and Production are separate sites with separate data.
-- The app does not send email. Moderators deliver invitations and reminders themselves.
-- Phases never open or publish on their own. The moderator runs every step.
+- The app emails invitations when SMTP is set up ([SETUP](docs/SETUP.md#invite-email)). Announcements and reminders are copied and sent by the moderator.
+- Phases never open on their own. By default the moderator also locks and publishes each result; a game switched to automatic results locks at its deadline and publishes after a review window unless the moderator steps in.
 - Keep invite files, role assignments, private rooms, and backups private.

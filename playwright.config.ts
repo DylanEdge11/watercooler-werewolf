@@ -45,11 +45,6 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], launchOptions: chromiumLaunchOptions },
     },
     {
-      name: 'edge',
-      testMatch: /readiness\/browser-smoke\.spec\.ts$/u,
-      use: { ...devices['Desktop Chrome'], channel: 'msedge', launchOptions: chromiumLaunchOptions },
-    },
-    {
       name: 'webkit',
       testMatch: /readiness\/browser-smoke\.spec\.ts$/u,
       use: { ...devices['Desktop Safari'] },

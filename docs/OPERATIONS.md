@@ -12,19 +12,25 @@ These controls are under **Communications & operations** in the moderator consol
 | Announcements, room moderation, backups | ✓ | |
 | Reset a player's PIN, sign out a player | ✓ | |
 | Stop the game | ✓ | |
-| Add co-moderators | | ✓ |
+| Add or remove co-moderators, transfer ownership | | ✓ |
 | Reset, restore, cancel setup | | ✓ |
 
 ## Quick reference
 
 | Need | Steps | Result |
 | --- | --- | --- |
-| Notify players | **Official announcement** → title and message → **Publish notice** | Appears in every player's updates. No email is sent. |
+| Hold automatic results | **Run the live game** → **Pause automation** | Nothing calculates or publishes on its own until **Resume automation**. A deadline that passes still closes voting and shows the phase as Locked. Players see "The schedule is paused". |
+| Switch to reviewing every result | **Run the live game** → **Change how results publish** → **I review and publish each result** → **Save** | Takes effect at once, including for a result already waiting. Switching back publishes a waiting result once it has waited the window. |
+| Notify players | **Official announcement** → title and message → **Publish notice** | Appears in every player's updates. No email is sent; **Announcement copy** shows the email and a chat version of each announcement with **Copy email** and **Copy for chat**. |
+| Chase missing responses | **Run the live game** → **Still to respond** → **Copy nudge message** | The list names living players who haven't saved a response for the open phase and is for the moderator only. The copied Day message names who hasn't voted; the Night message names and counts nobody, so it is safe to post in a group chat. |
+| Read player feedback | **Feedback** | Every rating and comment for the game, newest first, with the average. The list says player or moderator, not who; the audit log and backups record the sender. |
 | Add a late player | **Import the roster** → **Change the roster** → name and email → **Add player** | A new unclaimed seat and one more Villager. Copy the private link shown once, or **Email** it from **Waiting on N players**. Locked once roles are randomized. |
 | Drop a no-show | **Import the roster** → **Waiting on N players** → **Remove** beside the player | Their link stops working and one Villager is removed. Only unclaimed players can be removed. Locked once roles are randomized. |
 | Re-send a lost invitation | **Import the roster** → **Waiting on N players** → **Resend** beside the player | The player gets a fresh link by email; their old link stops working. Needs [invite email](SETUP.md#invite-email). |
 | Add a helper | **Co-moderator access** → email and a 12+ character password → **Add co-moderator** | A new account shows one-time recovery codes; deliver access privately. An existing moderator keeps their password. |
-| Player forgot their PIN | **Player access recovery** → player, new six-digit PIN, reason (5+ characters) → **Reset player PIN** | The player's old sessions are signed out. Deliver the PIN privately. |
+| Remove a helper | **Co-moderator access** → **Remove** beside them → confirm | They lose access to this game at once. Their account and any other games stay; you can add them again. |
+| Hand the game to someone else | **Co-moderator access** → **Make owner** beside a co-moderator → confirm | They become the owner and you stay on as a co-moderator. Only the owner can reset, restore, cancel setup, or manage moderators, so the new owner has to transfer it back. |
+| Player forgot their PIN, or their seat is locked | **Player access recovery** → player, new six-digit PIN, reason (5+ characters) → **Reset player PIN** | The player's old sessions are signed out and the seat unlocks. A seat locks after 10 wrong PINs in a row and is marked "locked" in the list. Deliver the PIN privately. |
 | Moderator forgot their password | Sign-in page → **Forgot password? Use a recovery code** → email, unused code, new password → **Recover access** | The code is used up and old sessions end. Without a code, contact the operator. There is no email reset. |
 | Moderate chat | **Private rooms** → **Make read-only** / **Reopen**, or **Remove** a message with a reason | Removal and purges blank the message in the game. |
 | Clear old chat | **Purge expired** | Blanks messages older than the retention period (default seven days). |
@@ -38,6 +44,8 @@ These controls are under **Communications & operations** in the moderator consol
 A backup contains the game's configuration, roster, role assignments, phases, actions, results, events, rooms and messages, announcements, notifications, feedback, and operational log. It never contains PIN or password hashes, claim codes, or session tokens.
 
 Each backup has a SHA-256 checksum and is stored with the game. A backup is taken automatically before every Reset and Restore. Chat text in a backup is kept even after the live messages are purged or removed, so treat backups as private.
+
+**Where backups live.** Stored backups are rows in the same Turso database as the game, so they protect against mistakes (a wrong Reset or Restore) but not against losing the database itself. For that, rely on Turso's point-in-time restore for the database, and on the JSON files a moderator downloads with **Download JSON backup**, which are the only copies outside Turso. Keep those files private. A scheduled export outside Turso is planned before the first paying company.
 
 ## Stop
 
@@ -54,7 +62,7 @@ There is no Resume. Stopping twice changes nothing. A completed or cancelled gam
 Owner only; requires the exact game name. A backup is taken first. Reset returns the selected game to `DRAFT` and:
 
 - signs out all players and invalidates every claim link;
-- removes role assignments, phases, submissions, results, notifications, room memberships, and messages; and
+- removes role assignments, phases, submissions, results, notifications, announcements, room memberships, and messages; and
 - keeps the audit history and the backup.
 
 Afterwards, import the roster again, send the new invitations, and release roles again. Resetting a clean draft is harmless; a cancelled game cannot be reset.
@@ -75,8 +83,18 @@ Owner only, for games that were never released. **Cancel setup and start new gam
 - Bootstrap and new co-moderator accounts show eight one-time recovery codes. Store them in a password manager; only hashes are kept.
 - Players sign in with their invitation email and PIN, or their seat code.
 
-## Deadlines
+## Deadlines and automatic results
 
-Phases never open, close, or publish on their own. Server-side deadlines reject late submissions even when no moderator is watching. The Operations panel checks for expired phases every ten seconds while open and locks them; **Check deadlines** does the same on demand. Publishing is always a moderator action.
+Phases never open on their own; the moderator opens each one. Server-side deadlines reject late submissions even when no moderator is watching.
 
-An optional external scheduler can call `GET` or `POST /api/scheduler/deadlines` with `Authorization: Bearer <CRON_SECRET>` to lock expired phases. Without `CRON_SECRET`, the endpoint returns 503.
+New games use **review** mode: the moderator locks, calculates, and publishes each result. A moderator can switch a game to **automatic** mode, when setting it up or at any time in **Run the live game**; it then runs itself. At the deadline the phase locks and the result is calculated. A Hunter follow-up finishes when the Hunter shoots or their window closes. The result publishes once it has waited the **review window** (60 minutes by default). Each automatic step runs on the next visit to the moderator console or a player dashboard after it is due, and on the scheduler route, so no cron is required. Automatic publications record no moderator, are marked "Published automatically after the review window" in the console and the Timeline, and use exactly the same calculation as **Approve & publish**.
+
+The moderator always wins. Before the window ends you can **Approve & publish**, **Override calculated eliminations**, or **Pause automation**; an automatic publish that races any of these changes nothing. **Pause automation** stops automatic calculation, Hunter follow-ups, and publication until **Resume automation**, and players see "The schedule is paused". **Change how results publish** switches between automatic and review mode and sets the window at any time. Each change, pause, and resume is recorded in the audit log. In review mode, including every game created before version 1.4, nothing calculates or publishes by itself. A reset or restore clears a pause.
+
+A passed deadline always closes voting, in every mode and while paused: a late response is refused, and the phase shows as Locked once the moderator console or the scheduler route next checks it. Review mode and Pause only stop the automatic calculating and publishing that would follow.
+
+If an automatic step cannot run, an `AUTOMATION` warning appears in the Operations panel's event log and the step retries on the next check.
+
+In review mode the Operations panel still checks for expired phases every 30 seconds while open and locks them (a late response is refused at the deadline either way); **Check deadlines** does the same on demand.
+
+The scheduler route `GET` or `POST /api/scheduler/deadlines` with `Authorization: Bearer <CRON_SECRET>` runs the automatic steps for every automatic game and locks expired phases in review-mode games. Without `CRON_SECRET`, the endpoint returns 503. See [Scheduler](SETUP.md#scheduler).

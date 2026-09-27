@@ -48,6 +48,22 @@ describe('pollWhileVisible', () => {
     stop();
   });
 
+  it('reads a changing interval before each wait', () => {
+    const { doc } = fakeDocument();
+    const run = vi.fn();
+    let ms = 30_000;
+    const stop = pollWhileVisible(run, () => ms, doc);
+    vi.advanceTimersByTime(30_000);
+    expect(run).toHaveBeenCalledTimes(1);
+    // The deadline got close: the next wait is already scheduled at 30 s, then 10 s after that.
+    ms = 10_000;
+    vi.advanceTimersByTime(30_000);
+    expect(run).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(20_000);
+    expect(run).toHaveBeenCalledTimes(4);
+    stop();
+  });
+
   it('stops polling after cleanup', () => {
     const { doc, setHidden } = fakeDocument();
     const run = vi.fn();

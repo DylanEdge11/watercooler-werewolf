@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeTimelineEvent, eliminationCause, readableRole, tallyVotes, type PublicTimelineEvent } from './timeline-view';
+import { currentCycle, cycleNumber, describeTimelineEvent, eliminationCause, phaseName, readableRole, type PublicTimelineEvent } from './timeline-view';
 
 function event(eventType: string, payload: PublicTimelineEvent['payload']): PublicTimelineEvent {
   return { id: 'e1', eventType, createdAt: '2026-09-24T12:00:00.000Z', payload };
@@ -13,8 +13,8 @@ describe('timeline wording', () => {
       eliminations: [{ displayName: 'Casey Rivera', role: 'WEREWOLF', cause: 'DAY_VOTE' }],
     }));
     expect(view).toMatchObject({
-      eyebrow: 'Day · Cycle 3',
-      title: 'DAY · Cycle 3 resolved',
+      eyebrow: 'Day 2',
+      title: 'Day 2 resolved',
       description: 'Casey Rivera · Werewolf',
       headline: 'Casey Rivera eliminated',
       tone: 'phase',
@@ -44,7 +44,7 @@ describe('timeline wording', () => {
   });
 
   it('treats the final ballot as public', () => {
-    expect(describeTimelineEvent(event('PHASE_PUBLISHED', { kind: 'FINAL_BALLOT', sequence: 9 }))).toMatchObject({ eyebrow: 'Final ballot · Cycle 9', publicBallot: true });
+    expect(describeTimelineEvent(event('PHASE_PUBLISHED', { kind: 'FINAL_BALLOT', sequence: 9 }))).toMatchObject({ eyebrow: 'Final ballot', publicBallot: true });
   });
 
   it.each([
@@ -71,14 +71,23 @@ describe('timeline wording', () => {
   });
 });
 
-describe('vote tally', () => {
-  it('counts every target, most votes first, ties by name', () => {
-    expect(tallyVotes([
-      { targetNames: ['Casey'] },
-      { targetNames: ['Morgan'] },
-      { targetNames: ['Casey'] },
-      { targetNames: ['Avery'] },
-      { targetNames: [] },
-    ])).toEqual([{ name: 'Casey', count: 2 }, { name: 'Avery', count: 1 }, { name: 'Morgan', count: 1 }]);
+describe('phase names', () => {
+  it('numbers a Day and the Night after it as one cycle', () => {
+    expect([1, 2, 3, 4, 5].map(cycleNumber)).toEqual([1, 1, 2, 2, 3]);
+    const published = (sequence: number): PublicTimelineEvent => ({ id: `p${sequence}`, eventType: 'PHASE_PUBLISHED', createdAt: '', payload: { kind: sequence % 2 ? 'DAY' : 'NIGHT', sequence } });
+    const note: PublicTimelineEvent = { id: 'a', eventType: 'ANNOUNCEMENT', createdAt: '', payload: { title: 'Hi' } };
+    // Between phases the counter keeps the latest published cycle instead of dropping to 0.
+    expect(currentCycle(null, [note, published(3), published(2)])).toBe(2);
+    expect(currentCycle(5, [published(4)])).toBe(3);
+    expect(currentCycle(null, [note])).toBe(0);
+    expect(phaseName('DAY', 1)).toBe('Day 1');
+    expect(phaseName('NIGHT', 2)).toBe('Night 1');
+    expect(phaseName('DAY', 3)).toBe('Day 2');
+    expect(phaseName('NIGHT', 4)).toBe('Night 2');
+  });
+
+  it('names Final ballots without a number and copes with a missing sequence', () => {
+    expect(phaseName('FINAL_BALLOT', 9)).toBe('Final ballot');
+    expect(phaseName('DAY', null)).toBe('Day');
   });
 });

@@ -2,8 +2,11 @@ import { getDb } from '../../../../db';
 import { ensureDatabase } from '../../../../db/migrate';
 import { sha256, verifySecret } from '../../../../lib/auth/crypto';
 import { createPlayerSession } from '../../../../lib/auth/session';
+import { clearPinFailures, isPinLocked, PIN_LOCKED_MESSAGE, pinFailureCounts, recordPinFailure } from '../../../../lib/auth/pin-lockout';
 import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
-import { enforceRateLimit, requestRateLimitKey, RateLimitError } from '../../../../lib/http/rate-limit';
+import { routeError } from '../../../../lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
+import { isSingleEmailAddress } from '../../../../lib/roster/email-address';
 
 interface LoginSeat {
   id: string;
@@ -21,7 +24,8 @@ export async function POST(request: Request) {
     const identifier = body.identifier?.trim() ?? body.seatCode?.trim() ?? '';
     const pin = body.pin?.trim() ?? '';
     if (!identifier || !pin) throw new Error('Email or seat code and PIN are required.');
-    const isEmail = /^\S+@\S+\.\S+$/u.test(identifier);
+    // Seat codes never contain "@"; anything that is one plain address is looked up as an email.
+    const isEmail = isSingleEmailAddress(identifier.toLowerCase());
     const loginKey = identifier.toLowerCase().slice(0, 80);
     await enforceRateLimit(requestRateLimitKey(request, `seat-login:${loginKey}`), 8, 15 * 60_000);
 
@@ -48,8 +52,11 @@ export async function POST(request: Request) {
         .first<LoginSeat>();
       candidateSeats = seat ? [seat] : [];
     }
+    // A seat that has had too many wrong PINs in a row is skipped until a moderator resets its PIN.
+    const failures = await pinFailureCounts(db, candidateSeats.map((seat) => seat.id));
+    const openSeats = candidateSeats.filter((seat) => !isPinLocked(failures.get(seat.id)));
     const matches: LoginSeat[] = [];
-    for (const seat of candidateSeats) {
+    for (const seat of openSeats) {
       if (seat.pinHash && await verifySecret(pin, seat.pinHash)) matches.push(seat);
     }
     if (matches.length > 1) {
@@ -57,13 +64,15 @@ export async function POST(request: Request) {
     }
     const seat = matches[0];
     if (!seat) {
+      const now = new Date().toISOString();
+      if (openSeats.length) await db.batch(openSeats.map((candidate) => recordPinFailure(db, candidate.id, now)));
+      if (candidateSeats.length && !openSeats.length) return jsonError(PIN_LOCKED_MESSAGE, 423);
       return jsonError('Email or seat code and PIN were not accepted.', 401);
     }
+    if (failures.has(seat.id)) await clearPinFailures(db, seat.id).run();
     await createPlayerSession(seat.id, seat.sessionVersion);
     return Response.json({ ok: true, seat: { displayName: seat.displayName, gameId: seat.gameId } });
   } catch (error) {
-    return error instanceof RateLimitError
-      ? jsonError(error.message, 429, { 'retry-after': String(error.retryAfterSeconds) })
-      : jsonError(error instanceof Error ? error.message : 'Unable to sign in.', 400);
+    return routeError(error, 'Unable to sign in.');
   }
 }

@@ -3,12 +3,16 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
+import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
+import type { FeedbackSummary } from '../../lib/game/feedback';
+import { AnnouncementCopies, FeedbackBlock, type AnnouncementRecord } from './communications';
 
 interface Operations {
   viewerRole: string | null;
   game: { name: string; status: string; chatRetentionDays: number; finalCutoffAt: string; stoppedAt?: string | null; stopReason?: string | null };
   counts: { total: number; claimed: number; living: number };
-  seats: Array<{ id: string; displayName: string; status: string }>;
+  seats: Array<{ id: string; displayName: string; status: string; pinLocked?: boolean }>;
   overduePhase: null | { id: string; kind: string; closesAt: string };
   reconciledPhaseIds?: string[];
   activePlayerSessions: number;
@@ -40,10 +44,19 @@ interface Moderator {
   role: string;
 }
 
+/** How often a poll also reloads the lists that rarely change. */
+const SLOW_REFRESH_MS = 60_000;
+
 async function parse<T>(response: Response): Promise<T> {
   const data = await response.json() as T & { error?: string };
   if (!response.ok) throw new Error(data.error ?? 'Request failed.');
   return data;
+}
+
+/** A conditional GET (lib/http/conditional-get.ts): null when nothing changed since `etag`. */
+async function parseIfChanged<T>(url: string, etag: string | null): Promise<{ data: T; etag: string | null } | null> {
+  const response = await conditionalGet(url, etag);
+  return response ? { data: await parse<T>(response), etag: responseEtag(response) } : null;
 }
 
 export default function OperationsPanel({ gameId, refreshToken = 0, onGameChanged }: { gameId: string; refreshToken?: number; onGameChanged?: () => void }) {
@@ -52,6 +65,9 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [moderators, setModerators] = useState<Moderator[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
+  const [latestAnnouncementId, setLatestAnnouncementId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackSummary | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [pinSeatId, setPinSeatId] = useState('');
   const [restoreBackupId, setRestoreBackupId] = useState('');
@@ -61,19 +77,52 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
   const [error, setError] = useState('');
   const refreshSequence = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const lastFullRefresh = useRef(0);
+  // The ETags of the operations and rooms data on screen, by URL.
+  const etags = useRef(new Map<string, string | null>());
+
+  /**
+   * Operations and rooms change during play and refresh on every poll, as
+   * conditional requests that skip unchanged data. The co-moderator list,
+   * announcements, and feedback rarely change, so a poll reloads them at most
+   * once a minute; opening the panel and the moderator's own changes (which
+   * call refresh()) always reload everything.
+   */
+  const refresh = useCallback(async (options: { onlyLive?: boolean } = {}) => {
     const sequence = ++refreshSequence.current;
-    const [ops, roomData, moderatorData] = await Promise.all([
-      fetch(`/api/games/${gameId}/operations`).then(parse<Operations>),
-      fetch(`/api/games/${gameId}/rooms`).then(parse<{ rooms: Room[]; recentMessages: RoomMessage[] }>),
-      fetch(`/api/games/${gameId}/moderators`).then(parse<{ moderators: Moderator[] }>),
+    const full = !options.onlyLive || Date.now() - lastFullRefresh.current >= SLOW_REFRESH_MS;
+    const operationsUrl = `/api/games/${gameId}/operations`;
+    const roomsUrl = `/api/games/${gameId}/rooms`;
+    const [opsResult, roomResult, slow] = await Promise.all([
+      parseIfChanged<Operations>(operationsUrl, etags.current.get(operationsUrl) ?? null),
+      parseIfChanged<{ rooms: Room[]; recentMessages: RoomMessage[] }>(roomsUrl, etags.current.get(roomsUrl) ?? null),
+      full
+        ? Promise.all([
+            fetch(`/api/games/${gameId}/moderators`).then(parse<{ moderators: Moderator[] }>),
+            fetch(`/api/games/${gameId}/announcements`).then(parse<{ announcements: AnnouncementRecord[] }>),
+            fetch(`/api/games/${gameId}/feedback`).then(parse<{ feedback: FeedbackSummary }>),
+          ])
+        : Promise.resolve(null),
     ]);
     if (sequence !== refreshSequence.current) return;
-    setOperations(ops);
-    setRooms(roomData.rooms);
-    setMessages(roomData.recentMessages);
-    setModerators(moderatorData.moderators);
-    setRestoreBackupId((current) => current && ops.backups?.some((backup) => backup.id === current) ? current : ops.backups?.[0]?.id ?? '');
+    if (roomResult) {
+      etags.current.set(roomsUrl, roomResult.etag);
+      setRooms(roomResult.data.rooms);
+      setMessages(roomResult.data.recentMessages);
+    }
+    if (slow) {
+      lastFullRefresh.current = Date.now();
+      const [moderatorData, announcementData, feedbackData] = slow;
+      setModerators(moderatorData.moderators);
+      setAnnouncements(announcementData.announcements);
+      setFeedback(feedbackData.feedback);
+    }
+    if (opsResult) {
+      etags.current.set(operationsUrl, opsResult.etag);
+      const ops = opsResult.data;
+      setOperations(ops);
+      setRestoreBackupId((current) => current && ops.backups?.some((backup) => backup.id === current) ? current : ops.backups?.[0]?.id ?? '');
+    }
   }, [gameId]);
 
   useEffect(() => {
@@ -81,8 +130,8 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
       void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load operations.'));
     }, 0);
     const stopPolling = pollWhileVisible(() => {
-      void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh operations.'));
-    }, 10_000);
+      void refresh({ onlyLive: true }).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh operations.'));
+    }, RELAXED_POLL_MS);
     return () => {
       window.clearTimeout(timer);
       stopPolling();
@@ -100,9 +149,11 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     const form = event.currentTarget;
     const data = new FormData(form);
     try {
-      await post(`/api/games/${gameId}/announcements`, { title: data.get('title'), body: data.get('body') });
+      const response = await fetch(`/api/games/${gameId}/announcements`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: data.get('title'), body: data.get('body') }) });
+      const created = await parse<{ announcement: AnnouncementRecord }>(response);
       form.reset();
-      setMessage('Announcement published in-app. Email-ready copy was generated with it.');
+      setLatestAnnouncementId(created.announcement.id);
+      setMessage('Announcement published in the app. Its email and chat copy are ready below.');
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to publish announcement.');
@@ -126,6 +177,41 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to add co-moderator.');
+    }
+  }
+
+  async function removeModerator(moderator: Moderator) {
+    if (!window.confirm(`Remove ${moderator.email} from this game? They lose access to it at once. Their account stays, so you can add them again.`)) return;
+    setError('');
+    setBusyAction('moderator');
+    try {
+      await parse(await fetch(`/api/games/${gameId}/moderators/${moderator.id}`, { method: 'DELETE' }));
+      setMessage(`${moderator.email} was removed from this game.`);
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to remove the co-moderator.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function makeOwner(moderator: Moderator) {
+    if (!window.confirm(`Make ${moderator.email} the owner of this game? You stay on as a co-moderator, and only the new owner can reset, restore, cancel setup, or manage moderators.`)) return;
+    setError('');
+    setBusyAction('moderator');
+    try {
+      await parse(await fetch(`/api/games/${gameId}/moderators/${moderator.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role: 'OWNER' }),
+      }));
+      setMessage(`${moderator.email} now owns this game. You are a co-moderator.`);
+      await refresh();
+      onGameChanged?.();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to transfer ownership.');
+    } finally {
+      setBusyAction(null);
     }
   }
 
@@ -306,7 +392,7 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     try {
       await post(`/api/games/${gameId}/feedback`, { rating: Number(data.get('rating')), comment: data.get('comment') });
       form.reset();
-      setMessage('Pilot feedback recorded for the operational review.');
+      setMessage('Your feedback was recorded.');
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to record pilot feedback.');
@@ -346,13 +432,17 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
 
       <div className="operations-columns">
         <form className="ops-block" onSubmit={announce}><p className="eyebrow accent">Official announcement</p><label>Title<input name="title" required /></label><label>Message<textarea name="body" rows={4} required /></label><button className="primary-button" type="submit">Publish notice</button></form>
-        <form className="ops-block" onSubmit={addModerator}><p className="eyebrow accent">Co-moderator access</p><p className="field-help">Current: {moderators.map((moderator) => moderator.email).join(', ')}</p><label>Email<input name="email" type="email" required /></label><label>Moderator password<input name="password" type="password" minLength={12} required /></label><p className="field-help">There is no forced expiry; the moderator can recover with a one-time code.</p><button className="secondary-button" type="submit">Add co-moderator</button>{recoveryCodes.length > 0 && <code className="recovery-list">{recoveryCodes.join(' · ')}</code>}</form>
-        <form className="ops-block" onSubmit={resetPlayerPin}><p className="eyebrow accent">Player access recovery</p><p className="field-help">Use when a claimed player forgets a PIN. The new PIN is shown only to you and prior sessions are revoked.</p><label>Player<select name="seatId" value={pinSeatId} onChange={(event) => setPinSeatId(event.target.value)} required><option value="">Choose a claimed seat</option>{operations.seats.filter((seat) => seat.status === 'CLAIMED').map((seat) => <option key={seat.id} value={seat.id}>{seat.displayName}</option>)}</select></label><label>New six-digit PIN<input name="newPin" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required /></label><label>Reason<textarea name="reason" rows={2} minLength={5} required placeholder="Player forgot the previous PIN" /></label><button className="secondary-button" type="submit">Reset player PIN</button></form>
+        <form className="ops-block" onSubmit={addModerator}><p className="eyebrow accent">Co-moderator access</p><ul className="moderator-list" aria-label="Moderators">{moderators.map((moderator) => <li key={moderator.id}><span className="moderator-email">{moderator.email}</span><small>{moderator.role === 'OWNER' ? 'Owner' : 'Co-moderator'}</small>{operations.viewerRole === 'OWNER' && moderator.role !== 'OWNER' && <span className="moderator-actions"><button type="button" onClick={() => void makeOwner(moderator)} disabled={busyAction !== null}>Make owner</button><button type="button" onClick={() => void removeModerator(moderator)} disabled={busyAction !== null}>Remove</button></span>}</li>)}</ul><label>Email<input name="email" type="email" required /></label><label>Moderator password<input name="password" type="password" minLength={12} required /></label><p className="field-help">There is no forced expiry; the moderator can recover with a one-time code.</p><button className="secondary-button" type="submit">Add co-moderator</button>{recoveryCodes.length > 0 && <code className="recovery-list">{recoveryCodes.join(' · ')}</code>}</form>
+        <form className="ops-block" onSubmit={resetPlayerPin}><p className="eyebrow accent">Player access recovery</p><p className="field-help">Use when a claimed player forgets a PIN or their seat is locked after 10 wrong PINs in a row. The new PIN is shown only to you, prior sessions are revoked, and the seat unlocks.</p><label>Player<select name="seatId" value={pinSeatId} onChange={(event) => setPinSeatId(event.target.value)} required><option value="">Choose a claimed seat</option>{operations.seats.filter((seat) => seat.status === 'CLAIMED').map((seat) => <option key={seat.id} value={seat.id}>{seat.displayName}{seat.pinLocked ? ' (locked: too many wrong PINs)' : ''}</option>)}</select></label><label>New six-digit PIN<input name="newPin" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required /></label><label>Reason<textarea name="reason" rows={2} minLength={5} required placeholder="Player forgot the previous PIN" /></label><button className="secondary-button" type="submit">Reset player PIN</button></form>
       </div>
 
       <div className="ops-block room-operations"><div className="ops-heading"><div><p className="eyebrow accent">Private rooms</p><p className="field-help">Messages expire after {operations.game.chatRetentionDays} days.</p></div><button className="secondary-button" type="button" onClick={purgeRetention}>Purge expired</button></div><div className="room-health-list">{rooms.map((room) => <div key={room.id}><span>{room.type}</span><strong>{room.memberCount} members · {room.messageCount} messages</strong><button type="button" onClick={() => void toggleRoom(room)}>{room.status === 'OPEN' ? 'Make read-only' : 'Reopen'}</button></div>)}</div>{messages.slice(0, 8).map((chat) => <div className="moderation-line" key={chat.id}><span><strong>{chat.authorName}</strong> in {chat.roomType}</span><p>{chat.body ?? 'Removed message'}</p>{chat.body && <button type="button" onClick={() => void removeMessage(chat.id)}>Remove</button>}</div>)}</div>
 
-      <form className="ops-block pilot-feedback" onSubmit={submitFeedback}><p className="eyebrow accent">Pilot feedback</p><p className="field-help">Capture a quick moderator signal while the pilot is running.</p><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve before the next game?" /></label><button className="secondary-button" type="submit">Save feedback</button></form>
+      <AnnouncementCopies announcements={announcements} highlightId={latestAnnouncementId} />
+
+      <FeedbackBlock feedback={feedback} />
+
+      <form className="ops-block pilot-feedback" onSubmit={submitFeedback}><p className="eyebrow accent">Send your own feedback</p><p className="field-help">Add a quick moderator rating; it appears in the Feedback list above.</p><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve before the next game?" /></label><button className="secondary-button" type="submit">Save feedback</button></form>
 
       <div className="backup-row"><div><p className="eyebrow accent">Verified backup</p><strong>{operations.lastBackup ? `Last export ${new Date(operations.lastBackup.exportedAt).toLocaleString()}` : 'No backup exported yet'}</strong><small>{operations.lastBackup?.checksum ? `Checksum ${operations.lastBackup.checksum.slice(0, 18)}…` : 'Includes game state, audit history, and private rooms.'}</small></div><button className="primary-button" type="button" onClick={exportBackup} disabled={busyAction !== null}>{busyAction === 'export' ? 'Creating…' : 'Download JSON backup'}</button></div>
       {operations.viewerRole === 'OWNER' && operations.backups.length > 0 && <div className="ops-block restore-backup-block"><p className="eyebrow accent">Recovery restore</p><p className="field-help">Restore a verified snapshot into this game’s setup state. Secrets are never restored; fresh seat links are generated.</p><div className="button-row"><label className="restore-select">Snapshot<select value={restoreBackupId} onChange={(event) => setRestoreBackupId(event.target.value)} disabled={busyAction !== null}>{operations.backups.map((backup) => <option key={backup.id} value={backup.id}>{new Date(backup.exportedAt).toLocaleString()} · {backup.checksum.slice(0, 12)}…</option>)}</select></label><button className="secondary-button" type="button" onClick={() => void restoreBackup()} disabled={busyAction !== null}>{busyAction === 'restore' ? 'Restoring…' : 'Restore to setup'}</button>{restoreInviteCsv && <button className="secondary-button" type="button" onClick={downloadRestoredInvites}>Download fresh invites</button>}</div></div>}

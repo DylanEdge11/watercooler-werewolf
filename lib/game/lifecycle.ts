@@ -1,18 +1,3 @@
-export type LifecycleGameStatus =
-  | 'DRAFT'
-  | 'REGISTRATION'
-  | 'ASSIGNMENT_PREVIEW'
-  | 'ACTIVE'
-  | 'FINAL_SHOWDOWN'
-  | 'COMPLETED'
-  | 'STOPPED'
-  | 'CANCELLED'
-  | 'COMPOSITION_SAVING'
-  | 'ASSIGNMENT_PREVIEWING'
-  | 'ROSTER_IMPORTING'
-  | 'RESETTING'
-  | 'RESTORING';
-
 export interface LifecycleDecision {
   allowed: boolean;
   idempotent?: boolean;

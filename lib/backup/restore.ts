@@ -3,6 +3,7 @@ import { ROLE_CATALOG } from '../game/catalog';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../game/player-count';
 import { canonicalRoleKey, ROLE_KEYS, type RoleKey } from '../game/types';
 import { assertValidCalendarDate, assertValidTimeZone } from '../game/scheduling';
+import { isSingleEmailAddress } from '../roster/email-address';
 
 export interface BackupRestoreSeat {
   id: string;
@@ -75,7 +76,7 @@ export function validateBackupForRestore(data: GameBackup, expectedGameId: strin
     const id = seat ? readString(seat, 'id') : null;
     const displayName = seat ? readString(seat, 'displayName', 'display_name') : null;
     const email = seat ? readString(seat, 'email') : null;
-    if (!id || !displayName || !email || !/^\S+@\S+\.\S+$/u.test(email)) {
+    if (!id || !displayName || !email || !isSingleEmailAddress(email)) {
       errors.push('Every backup seat must have an id, display name, and valid email.');
       continue;
     }

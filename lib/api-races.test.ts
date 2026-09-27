@@ -21,7 +21,6 @@ vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
 vi.mock('../lib/auth/authorization', () => ({ requireGameModerator: async () => ({ id: 'mod' }) }));
 vi.mock('../lib/auth/session', () => ({ getCurrentPlayer: async () => ({ seatId: 'p0', gameId: 'game', alive: true }) }));
-vi.mock('../lib/chat/rooms', () => ({ ensureGameRooms: async () => {} }));
 
 import { POST as phasePost } from '../app/api/games/[gameId]/phases/route';
 import { POST as actionPost } from '../app/api/phases/[phaseId]/actions/route';
@@ -143,6 +142,14 @@ describe('provider race invariants', () => {
     expect(JSON.parse(proposal.outcomeJson).tally).toEqual([{ playerId: 'p1', votes: 1 }]);
   });
 
+  test('each saved revision records its audit event with the same version, in one transaction', async () => {
+    const first = await (await action({ actionKind: 'DAY_VOTE', targetIds: ['p1'] })).json() as { version: number };
+    const second = await (await action({ actionKind: 'DAY_VOTE', targetIds: ['p2'] })).json() as { version: number };
+    expect([first.version, second.version]).toEqual([1, 2]);
+    const events = sqlite.prepare("SELECT payload_json AS payload FROM game_events WHERE event_type = 'ACTION_SUBMITTED' ORDER BY created_at, payload_json").all() as Array<{ payload: string }>;
+    expect(events.map((event) => JSON.parse(event.payload))).toEqual([{ kind: 'DAY_VOTE', version: 1 }, { kind: 'DAY_VOTE', version: 2 }]);
+  });
+
   test('a submission validated before lock cannot commit after the lock', async () => {
     const gate = gateOn('p.hunter_deadline_at AS hunterDeadlineAt', 'first');
     const pending = action({ actionKind: 'DAY_VOTE', targetIds: ['p1'] });
@@ -153,6 +160,7 @@ describe('provider race invariants', () => {
     const result = await pending;
     expect(result.status).toBe(409);
     expect((sqlite.prepare('SELECT COUNT(*) AS count FROM action_submissions').get() as { count: number }).count).toBe(0);
+    expect((sqlite.prepare("SELECT COUNT(*) AS count FROM game_events WHERE event_type = 'ACTION_SUBMITTED'").get() as { count: number }).count).toBe(0);
   });
 
   test('a scheduler-locked phase can still be proposed without reopening it', async () => {
