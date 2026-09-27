@@ -53,6 +53,68 @@ function parseTargetIds(json: string): string[] {
 }
 
 /**
+ * Current Day and Final ballot votes of published phases in this run. Callers
+ * add the phase condition and bind (gameId, gameId, ...).
+ */
+const PUBLISHED_BALLOT_VOTES = `SELECT a.id, p.id AS phaseId, s.display_name AS actorName,
+         a.target_ids_json AS targetIdsJson, a.submitted_at AS submittedAt
+  FROM phases p
+  JOIN action_submissions a ON a.phase_id = p.id
+  JOIN seats s ON s.id = a.actor_seat_id
+  WHERE p.game_id = ? AND p.status = 'PUBLISHED'
+    AND p.kind IN ('DAY', 'FINAL_BALLOT')
+    AND a.kind = 'DAY_VOTE' AND a.superseded_at IS NULL
+    AND p.created_at > COALESCE(${RUN_BOUNDARY}, '')`;
+const BALLOT_VOTE_ORDER = 'ORDER BY a.submitted_at ASC, a.id ASC';
+/** The phases of the timeline events a dashboard returns. Binds (gameId, gameId, gameId). */
+const SHOWN_PHASE_IDS = `SELECT shown.phase_id FROM (
+    SELECT ge.phase_id FROM game_events ge INDEXED BY idx_game_events_type
+    WHERE ${PUBLIC_EVENT_FILTER}
+    ORDER BY ge.created_at DESC LIMIT ${TIMELINE_LIMIT}
+  ) shown WHERE shown.phase_id IS NOT NULL`;
+
+export interface BallotVote {
+  actorName: string;
+  targetNames: string[];
+}
+
+function ballotVotes(rows: PublicVoteRow[], displayNameById: Map<string, string>): BallotVote[] {
+  return rows.map((vote) => ({
+    actorName: vote.actorName,
+    targetNames: parseTargetIds(vote.targetIdsJson)
+      .map((targetId) => displayNameById.get(targetId))
+      .filter((name): name is string => Boolean(name)),
+  }));
+}
+
+/**
+ * Who voted for whom in one published Day or Final ballot of the player's
+ * game. These are public once published; the dashboard sends only the newest
+ * ballot's votes and the timeline asks for older ones here. Null when the
+ * phase is not a published ballot of this game's current run.
+ */
+export async function loadBallotVotes(gameId: string, phaseId: string): Promise<BallotVote[] | null> {
+  const db = getDb();
+  const [phase, voteRows, seatRows] = await Promise.all([
+    db
+      .prepare(
+        `SELECT id FROM phases
+         WHERE id = ? AND game_id = ? AND status = 'PUBLISHED' AND kind IN ('DAY', 'FINAL_BALLOT')
+           AND created_at > COALESCE(${RUN_BOUNDARY}, '') LIMIT 1`,
+      )
+      .bind(phaseId, gameId, gameId)
+      .first<{ id: string }>(),
+    db.prepare(`${PUBLISHED_BALLOT_VOTES} AND p.id = ? ${BALLOT_VOTE_ORDER}`).bind(gameId, gameId, phaseId).all<PublicVoteRow>(),
+    db
+      .prepare("SELECT id, display_name AS displayName FROM seats WHERE game_id = ? AND status = 'CLAIMED'")
+      .bind(gameId)
+      .all<{ id: string; displayName: string }>(),
+  ]);
+  if (!phase) return null;
+  return ballotVotes(voteRows.results, new Map(seatRows.results.map((seat) => [seat.id, seat.displayName])));
+}
+
+/**
  * Everything the player dashboard shows, for one seat. Returns null when the
  * seat does not exist. The reads run in three rounds: the seat, then every
  * read that needs only the game, then the reads that need the open phase and
@@ -89,7 +151,7 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
   const gameId = player.gameId;
 
   // Round 2: everything that needs only the game and the seat.
-  const [, phase, rosterRows, loverPair, timelineRows, publicVoteRows, roomRows] = await Promise.all([
+  const [, phase, rosterRows, loverPair, timelineRows, newestBallotRows, ballotCountRows, roomRows] = await Promise.all([
     // Membership is kept current by release and publish; this only repairs missing rooms.
     player.role ? ensureGameRoomsExist(gameId) : Promise.resolve(),
     db
@@ -130,29 +192,37 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
       )
       .bind(gameId, gameId, gameId)
       .all<{ id: string; eventType: string; phaseId: string | null; phaseSequence: number | null; payloadJson: string; createdAt: string }>(),
-    // Public Day and Final ballot votes, only for the phases in the timeline this response returns.
+    // Who voted for whom, for the newest published ballot in the timeline only. Older ballots
+    // send a count, and the timeline loads their votes on request, so a long
+    // game's refresh doesn't resend every vote ever cast.
     db
       .prepare(
-        `SELECT a.id, p.id AS phaseId, s.display_name AS actorName,
-                a.target_ids_json AS targetIdsJson, a.submitted_at AS submittedAt
+        `${PUBLISHED_BALLOT_VOTES}
+           AND p.id = (
+             SELECT newest.id FROM phases newest
+             WHERE newest.game_id = ? AND newest.status = 'PUBLISHED' AND newest.kind IN ('DAY', 'FINAL_BALLOT')
+               AND newest.id IN (${SHOWN_PHASE_IDS})
+             ORDER BY newest.sequence DESC LIMIT 1
+           )
+         ${BALLOT_VOTE_ORDER}`,
+      )
+      .bind(gameId, gameId, gameId, gameId, gameId, gameId)
+      .all<PublicVoteRow>(),
+    // Vote counts for the ballots in the timeline this response returns.
+    db
+      .prepare(
+        `SELECT p.id AS phaseId, COUNT(*) AS count
          FROM phases p
          JOIN action_submissions a ON a.phase_id = p.id
-         JOIN seats s ON s.id = a.actor_seat_id
          WHERE p.game_id = ? AND p.status = 'PUBLISHED'
            AND p.kind IN ('DAY', 'FINAL_BALLOT')
            AND a.kind = 'DAY_VOTE' AND a.superseded_at IS NULL
            AND p.created_at > COALESCE(${RUN_BOUNDARY}, '')
-           AND p.id IN (
-             SELECT shown.phase_id FROM (
-               SELECT ge.phase_id FROM game_events ge INDEXED BY idx_game_events_type
-               WHERE ${PUBLIC_EVENT_FILTER}
-               ORDER BY ge.created_at DESC LIMIT ${TIMELINE_LIMIT}
-             ) shown WHERE shown.phase_id IS NOT NULL
-           )
-         ORDER BY p.sequence ASC, a.submitted_at ASC, a.id ASC`,
+           AND p.id IN (${SHOWN_PHASE_IDS})
+         GROUP BY p.id`,
       )
       .bind(gameId, gameId, gameId, gameId, gameId)
-      .all<PublicVoteRow>(),
+      .all<{ phaseId: string; count: number }>(),
     db
       .prepare(
         `SELECT cr.id, cr.type, cr.status, crm.access
@@ -272,15 +342,9 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
   });
 
   const displayNameById = new Map(roster.map((seat) => [seat.id, seat.displayName]));
-  const publicVotesByPhase = new Map<string, Array<{ actorName: string; targetNames: string[] }>>();
-  for (const vote of publicVoteRows.results) {
-    const targetNames = parseTargetIds(vote.targetIdsJson)
-      .map((targetId) => displayNameById.get(targetId))
-      .filter((name): name is string => Boolean(name));
-    const phaseVotes = publicVotesByPhase.get(vote.phaseId) ?? [];
-    phaseVotes.push({ actorName: vote.actorName, targetNames });
-    publicVotesByPhase.set(vote.phaseId, phaseVotes);
-  }
+  const newestBallotPhaseId = newestBallotRows.results[0]?.phaseId ?? null;
+  const newestBallotVotes = ballotVotes(newestBallotRows.results, displayNameById);
+  const ballotVoteCounts = new Map(ballotCountRows.results.map((row) => [row.phaseId, Number(row.count)]));
 
   // One extra row tells the full Timeline that older updates were left out.
   const timelineHasMore = timelineRows.results.length > TIMELINE_LIMIT;
@@ -329,9 +393,13 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
           protectedAttackBlocked,
           winner: payload.winner ?? null,
           publishedAutomatically: payload.source === 'SCHEDULER',
-          votes: ['DAY', 'FINAL_BALLOT'].includes(String(payload.kind)) && event.phaseId
-            ? publicVotesByPhase.get(event.phaseId) ?? []
-            : undefined,
+          ...(['DAY', 'FINAL_BALLOT'].includes(String(payload.kind)) && event.phaseId
+            ? {
+                voteCount: ballotVoteCounts.get(event.phaseId) ?? 0,
+                // Absent for older ballots: GET /api/phases/:phaseId/votes returns them.
+                votes: event.phaseId === newestBallotPhaseId ? newestBallotVotes : undefined,
+              }
+            : {}),
         },
       };
     }

@@ -6,7 +6,7 @@ import { loadMigrations, runMigrations } from '../../scripts/db-migration-runner
 const shared = vi.hoisted(() => ({ db: null as LibsqlDatabase | null }));
 vi.mock('../../db', () => ({ getDb: () => shared.db }));
 
-import { loadDashboard } from './dashboard-data';
+import { loadBallotVotes, loadDashboard } from './dashboard-data';
 
 let client: Client;
 const exec = (sql: string, args: Array<string | number | null> = []) => client.execute({ sql, args });
@@ -62,13 +62,48 @@ describe('loadDashboard', () => {
     expect(dashboard?.timeline).toHaveLength(100);
     expect(dashboard?.timelineHasMore).toBe(true);
     expect(dashboard?.timeline.some((event) => event.id === 'published-old-day')).toBe(false);
-    // Run the vote query again to see what it read: nothing, although the old Day has two votes.
-    const voteCall = prepare.mock.calls.findIndex(([sql]) => sql.includes("a.kind = 'DAY_VOTE'"));
-    const voteQuery = prepare.mock.results[voteCall].value as { all: () => Promise<{ results: unknown[] }> };
-    expect((await voteQuery.all()).results).toEqual([]);
+    // Run both vote queries (the newest ballot's votes and the counts) again to see
+    // what they read: nothing, although the old Day has two votes.
+    const voteCalls = prepare.mock.calls.flatMap(([sql], index) => sql.includes("a.kind = 'DAY_VOTE'") ? [index] : []);
+    expect(voteCalls).toHaveLength(2);
+    for (const call of voteCalls) {
+      const voteQuery = prepare.mock.results[call].value as { all: () => Promise<{ results: unknown[] }> };
+      expect((await voteQuery.all()).results).toEqual([]);
+    }
+  });
+
+  test('sends who voted for whom for the newest ballot only, and a vote count for every ballot', async () => {
+    await publishDay('day-1', 1, '2026-01-02T10:00:00.000Z', ['s1', 's3']);
+    await publishDay('day-2', 2, '2026-01-03T10:00:00.000Z', ['s1']);
+    const dashboard = await loadDashboard('s1');
+    const byId = new Map(dashboard?.timeline.map((event) => [event.id, event.payload as { votes?: unknown[]; voteCount?: number }]));
+    expect(byId.get('published-day-2')).toMatchObject({ voteCount: 1, votes: [{ actorName: 'Player s1', targetNames: ['Player s2'] }] });
+    expect(byId.get('published-day-1')?.voteCount).toBe(2);
+    expect(byId.get('published-day-1')?.votes).toBeUndefined();
   });
 
   test('returns null for a seat that does not exist', async () => {
     expect(await loadDashboard('missing')).toBeNull();
+  });
+});
+
+describe('loadBallotVotes', () => {
+  test('returns an older published ballot of the game', async () => {
+    await publishDay('day-1', 1, '2026-01-02T10:00:00.000Z', ['s3', 's1']);
+    expect(await loadBallotVotes('game', 'day-1')).toEqual([
+      { actorName: 'Player s1', targetNames: ['Player s2'] },
+      { actorName: 'Player s3', targetNames: ['Player s2'] },
+    ]);
+  });
+
+  test('refuses another game, an unpublished phase, a Night, or a ballot from before a reset', async () => {
+    await publishDay('day-1', 1, '2026-01-02T10:00:00.000Z', ['s1']);
+    expect(await loadBallotVotes('other-game', 'day-1')).toBeNull();
+    await exec("INSERT INTO phases (id,game_id,sequence,kind,status,opens_at,closes_at,slots,divisor_snapshot,created_at,updated_at) VALUES ('open-day','game',2,'DAY','OPEN','2026-01-03','2099-01-01',1,30,'2026-01-03','2026-01-03')");
+    expect(await loadBallotVotes('game', 'open-day')).toBeNull();
+    await exec("INSERT INTO phases (id,game_id,sequence,kind,status,opens_at,closes_at,slots,divisor_snapshot,created_at,updated_at,published_at) VALUES ('night','game',3,'NIGHT','PUBLISHED','2026-01-03','2026-01-03',1,30,'2026-01-03','2026-01-03','2026-01-03')");
+    expect(await loadBallotVotes('game', 'night')).toBeNull();
+    await exec("INSERT INTO game_events (id,game_id,event_type,payload_json,created_at) VALUES ('reset','game','GAME_RESET','{}','2026-01-05T00:00:00.000Z')");
+    expect(await loadBallotVotes('game', 'day-1')).toBeNull();
   });
 });
