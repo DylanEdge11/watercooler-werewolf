@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import PrivateRoomChat from './private-room-chat';
 import FullTimeline from './full-timeline';
+import { useBallotVotes, VoteLedger } from './ballot-votes';
 import RoleMedallion from './role-medallion';
 import DeathCurtainCall from './death-curtain-call';
 import BrandMark from './brand-mark';
@@ -161,6 +162,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const [roleJustRevealed, setRoleJustRevealed] = useState(false);
   const [deathAlert, setDeathAlert] = useState<DashboardData['timeline'][number] | null>(null);
   const [selectedTimeline, setSelectedTimeline] = useState<DashboardData['timeline'][number] | null>(null);
+  const { votesFor, requestVotes } = useBallotVotes(previewMode);
   const activeModal = deathAlert ? 'death' : selectedTimeline ? 'votes' : null;
   const modalState = useRef<{
     deathAlert: DashboardData['timeline'][number] | null;
@@ -514,7 +516,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           <div className="sidebar-note"><span aria-hidden="true">☾</span><p><strong>Keep it quiet.</strong>Your role is private until you are eliminated.</p></div>
         </aside>
 
-        {view === 'timeline' ? <FullTimeline events={data.timeline} hasMore={Boolean(data.timelineHasMore)} onBack={() => showView('today')} /> : <section className="main-column" id="today">
+        {view === 'timeline' ? <FullTimeline events={data.timeline} hasMore={Boolean(data.timelineHasMore)} onBack={() => showView('today')} votesFor={votesFor} onOpenVotes={(event, retry) => void requestVotes(event, retry)} /> : <section className="main-column" id="today">
           <div className="welcome-row">
             <div><p className="eyebrow accent">{data.phase ? phaseName(data.phase.kind, data.phase.sequence) : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{data.permission.label}</p></div>
             {data.phase?.autoPublishAt && !['COMPLETED', 'STOPPED'].includes(data.game.status)
@@ -566,7 +568,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
                 return <article key={event.id}><strong>{title}</strong><p>{description}</p><small suppressHydrationWarning>{new Date(event.createdAt).toLocaleString()}</small></article>;
               }
               return <article className="timeline-entry" key={event.id}>
-                <button className="timeline-trigger" type="button" onClick={() => setSelectedTimeline(event)} aria-label={`View votes for ${title}`}>
+                <button className="timeline-trigger" type="button" onClick={() => { setSelectedTimeline(event); void requestVotes(event); }} aria-label={`View votes for ${title}`}>
                   <span className="timeline-summary-copy"><strong>{title}</strong><span>{description}</span><small suppressHydrationWarning>{new Date(event.createdAt).toLocaleString()}</small></span>
                   <span className="timeline-summary-hint">View votes</span>
                 </button>
@@ -581,7 +583,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       {selectedTimeline && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTimeline(null); }}>
         <section className="game-modal timeline-modal" role="dialog" aria-modal="true" aria-labelledby="timeline-modal-title">
           <div className="modal-heading"><div><p className="eyebrow accent">Published ballot</p><h2 id="timeline-modal-title">{phaseName(selectedTimeline.payload.kind, selectedTimeline.payload.sequence)}</h2><p className="modal-intro">{selectedTimeline.payload.eliminations?.length ? selectedTimeline.payload.eliminations.map((item) => `${item.displayName} · ${readableRole(item.role)}`).join(', ') : 'No elimination published.'}</p></div><button className="icon-button modal-close" type="button" aria-label="Close vote details" onClick={() => setSelectedTimeline(null)}>×</button></div>
-          {selectedTimeline.payload.votes?.length ? <div className="vote-ledger">{selectedTimeline.payload.votes.map((vote, index) => <div className="vote-ledger-row" key={`${selectedTimeline.id}-${vote.actorName}-${index}`}><strong>{vote.actorName}</strong><span aria-hidden="true">→</span><span>{vote.targetNames.length ? vote.targetNames.join(', ') : 'No target recorded'}</span></div>)}</div> : <p className="empty-note">No public Day votes were recorded.</p>}
+          <VoteLedger state={votesFor(selectedTimeline)} keyPrefix={selectedTimeline.id} emptyText="No public Day votes were recorded." onRetry={() => void requestVotes(selectedTimeline, true)} />
           <p className="timeline-privacy-note">Published Day ballots are public. Night actions and special-role actions remain private.</p>
         </section>
       </div>}

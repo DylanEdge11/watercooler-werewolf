@@ -314,6 +314,10 @@ export const gameEvents = sqliteTable(
   (table) => [
     index('idx_game_events_timeline').on(table.gameId, table.createdAt),
     index('idx_game_events_phase').on(table.phaseId, table.createdAt),
+    // Every vote adds an audit event, so reads of one kind of event (the public
+    // timeline, the reset boundary, Cupid's pair) look them up by type instead
+    // of scanning the whole game's history.
+    index('idx_game_events_type').on(table.gameId, table.eventType, table.createdAt),
   ],
 );
 

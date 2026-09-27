@@ -1,14 +1,18 @@
 import { describeTimelineEvent, eliminationCause, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
+import { VoteLedger, type BallotVotesState } from './ballot-votes';
 
 interface FullTimelineProps {
   events: PublicTimelineEvent[];
   /** The server returned only the latest updates; older ones exist. */
   hasMore?: boolean;
   onBack: () => void;
+  /** Votes for a ballot: sent with the newest one, loaded on request for older ones. */
+  votesFor: (event: PublicTimelineEvent) => BallotVotesState;
+  onOpenVotes: (event: PublicTimelineEvent, retry?: boolean) => void;
 }
 
 /** The whole published record of the campaign, newest first. Public data only. */
-export default function FullTimeline({ events: unordered, hasMore = false, onBack }: FullTimelineProps) {
+export default function FullTimeline({ events: unordered, hasMore = false, onBack, votesFor, onOpenVotes }: FullTimelineProps) {
   const events = [...unordered].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const newestBallotId = events.find((event) => describeTimelineEvent(event).publicBallot)?.id;
   return (
@@ -21,7 +25,7 @@ export default function FullTimeline({ events: unordered, hasMore = false, onBac
         {events.map((event) => {
           const view = describeTimelineEvent(event);
           const eliminations = event.payload.eliminations ?? [];
-          const votes = event.payload.votes ?? [];
+          const voteCount = event.payload.voteCount ?? event.payload.votes?.length ?? 0;
           return <li className={`timeline-full-entry ${view.tone}`} key={event.id}>
             <div className="timeline-full-heading">
               <p className="eyebrow">{view.eyebrow}</p>
@@ -34,9 +38,9 @@ export default function FullTimeline({ events: unordered, hasMore = false, onBac
               </ul>}
               {event.payload.protectedAttackBlocked && <p>Bodyguard protection stopped a pack attack.</p>}
               {event.payload.publishedAutomatically && <p className="timeline-auto-note">Published automatically after the review window.</p>}
-              {view.publicBallot && (votes.length ? <details className="timeline-votes" open={event.id === newestBallotId}>
-                <summary>{votes.length} {votes.length === 1 ? 'vote' : 'votes'}</summary>
-                <div className="vote-ledger">{votes.map((vote, index) => <div className="vote-ledger-row" key={`${event.id}-${vote.actorName}-${index}`}><strong>{vote.actorName}</strong><span aria-hidden="true">→</span><span>{vote.targetNames.length ? vote.targetNames.join(', ') : 'No target recorded'}</span></div>)}</div>
+              {view.publicBallot && (voteCount ? <details className="timeline-votes" open={event.id === newestBallotId} onToggle={(toggle) => { if (toggle.currentTarget.open) onOpenVotes(event); }}>
+                <summary>{voteCount} {voteCount === 1 ? 'vote' : 'votes'}</summary>
+                <VoteLedger state={votesFor(event)} keyPrefix={event.id} emptyText="No public votes were recorded." onRetry={() => onOpenVotes(event, true)} />
               </details> : <p className="empty-note">No public votes were recorded.</p>)}
             </> : view.description && <p>{view.description}</p>}
           </li>;

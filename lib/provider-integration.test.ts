@@ -49,6 +49,7 @@ import { GET as roomsGet } from '../app/api/games/[gameId]/rooms/route';
 import { POST as roomsPost } from '../app/api/games/[gameId]/rooms/route';
 import { GET as operationsGet } from '../app/api/games/[gameId]/operations/route';
 import { GET as playerGet } from '../app/api/player/route';
+import { GET as votesGet } from '../app/api/phases/[phaseId]/votes/route';
 import { ensureGameRooms } from './chat/rooms';
 
 let client: Client;
@@ -461,6 +462,17 @@ describe('real libSQL provider integration', () => {
     ]);
     expect(day?.payload).not.toHaveProperty('tally');
     expect(day?.payload).not.toHaveProperty('voteTotals');
+
+    // The same ledger loads on its own for older ballots, only for players of this game.
+    const votes = () => votesGet(new Request('http://localhost:3000/api/phases/phase/votes'), { params: Promise.resolve({ phaseId: 'phase' }) });
+    shared.currentPlayer = { seatId: 'p6', gameId: 'game' } as { seatId: string };
+    const ledger = await votes();
+    expect(ledger.status).toBe(200);
+    expect((await ledger.json() as { votes: unknown[] }).votes).toEqual(day?.payload.votes);
+    shared.currentPlayer = { seatId: 'x1', gameId: 'another-game' } as { seatId: string };
+    expect((await votes()).status).toBe(404);
+    shared.currentPlayer = null;
+    expect((await votes()).status).toBe(401);
   });
 
   test('a Bodyguard save is announced without naming who was protected', async () => {

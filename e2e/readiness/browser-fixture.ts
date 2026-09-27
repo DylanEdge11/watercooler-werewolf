@@ -19,7 +19,7 @@ const ROLE_NAMES: Record<RoleKey, string> = {
   CUPID: 'Cupid',
 };
 
-const FORBIDDEN_PLAYER_KEYS = new Set([
+export const FORBIDDEN_PLAYER_KEYS = new Set([
   'proposedOutcome',
   'reviewedOutcome',
   'publishedOutcome',

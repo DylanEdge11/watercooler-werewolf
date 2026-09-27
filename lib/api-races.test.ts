@@ -163,6 +163,25 @@ describe('provider race invariants', () => {
     expect((sqlite.prepare("SELECT COUNT(*) AS count FROM game_events WHERE event_type = 'ACTION_SUBMITTED'").get() as { count: number }).count).toBe(0);
   });
 
+  test('the rate limit and the saved action share one transaction: the 31st save in ten minutes is refused and not saved', async () => {
+    for (let attempt = 1; attempt <= 30; attempt += 1) {
+      const saved = await action({ actionKind: 'DAY_VOTE', targetIds: [attempt % 2 ? 'p1' : 'p2'] });
+      expect(saved.status).toBe(200);
+    }
+    const refused = await action({ actionKind: 'DAY_VOTE', targetIds: ['p3'] });
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get('retry-after')).toBeTruthy();
+    const current = sqlite.prepare('SELECT target_ids_json AS targets, version FROM action_submissions WHERE superseded_at IS NULL').all() as Array<{ targets: string; version: number }>;
+    expect(current).toEqual([{ targets: '["p2"]', version: 30 }]);
+    expect((sqlite.prepare("SELECT COUNT(*) AS count FROM game_events WHERE event_type = 'ACTION_SUBMITTED'").get() as { count: number }).count).toBe(30);
+  });
+
+  test('an invalid action is refused without saving anything', async () => {
+    const refused = await action({ actionKind: 'DAY_VOTE', targetIds: ['p0'] });
+    expect(refused.status).toBe(400);
+    expect((sqlite.prepare('SELECT COUNT(*) AS count FROM action_submissions').get() as { count: number }).count).toBe(0);
+  });
+
   test('a scheduler-locked phase can still be proposed without reopening it', async () => {
     sqlite.exec("UPDATE phases SET status = 'LOCKED', closes_at = '2026-01-01T00:00:00.000Z'");
     const result = await phase({ action: 'LOCK_AND_PROPOSE', phaseId: 'phase' });

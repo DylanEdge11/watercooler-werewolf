@@ -8,6 +8,7 @@ export const MIGRATION_FILES = [
   '0003_reviewed_outcome.sql',
   '0004_operator_bootstrap.sql',
   '0005_game_automation.sql',
+  '0006_game_events_type_index.sql',
 ];
 
 export function splitMigrationStatements(sql) {

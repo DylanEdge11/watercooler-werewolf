@@ -15,7 +15,10 @@ export interface PublicTimelineEvent {
     body?: string;
     winner?: string | null;
     eliminations?: Array<{ displayName: string; role: string; cause: string; isYou?: boolean }>;
+    /** Present for the newest ballot only; older ballots load through GET /api/phases/:phaseId/votes. */
     votes?: Array<{ actorName: string; targetNames: string[] }>;
+    /** How many players' votes a Day or Final ballot recorded. */
+    voteCount?: number;
     protectedAttackBlocked?: boolean;
     /** Published by the sweep after the review window rather than by a moderator. */
     publishedAutomatically?: boolean;

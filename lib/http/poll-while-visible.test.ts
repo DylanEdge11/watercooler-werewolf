@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pollWhileVisible } from './poll-while-visible';
+import { POLL_JITTER, pollWhileVisible } from './poll-while-visible';
+
+/** A random source at the midpoint, so waits equal the interval exactly. */
+const steady = () => 0.5;
 
 function fakeDocument() {
   const target = new EventTarget();
@@ -18,7 +21,7 @@ describe('pollWhileVisible', () => {
   it('polls on the interval while visible', () => {
     const { doc } = fakeDocument();
     const run = vi.fn();
-    const stop = pollWhileVisible(run, 10_000, doc);
+    const stop = pollWhileVisible(run, 10_000, doc, steady);
     vi.advanceTimersByTime(30_000);
     expect(run).toHaveBeenCalledTimes(3);
     stop();
@@ -27,7 +30,7 @@ describe('pollWhileVisible', () => {
   it('skips turns while hidden and catches up once on return', () => {
     const { doc, setHidden } = fakeDocument();
     const run = vi.fn();
-    const stop = pollWhileVisible(run, 10_000, doc);
+    const stop = pollWhileVisible(run, 10_000, doc, steady);
     setHidden(true);
     vi.advanceTimersByTime(60_000);
     expect(run).not.toHaveBeenCalled();
@@ -41,7 +44,7 @@ describe('pollWhileVisible', () => {
   it('refreshes on return even if the browser suspended timers while hidden', () => {
     const { doc, setHidden } = fakeDocument();
     const run = vi.fn();
-    const stop = pollWhileVisible(run, 10_000, doc);
+    const stop = pollWhileVisible(run, 10_000, doc, steady);
     setHidden(true);
     setHidden(false);
     expect(run).toHaveBeenCalledTimes(1);
@@ -52,7 +55,7 @@ describe('pollWhileVisible', () => {
     const { doc } = fakeDocument();
     const run = vi.fn();
     let ms = 30_000;
-    const stop = pollWhileVisible(run, () => ms, doc);
+    const stop = pollWhileVisible(run, () => ms, doc, steady);
     vi.advanceTimersByTime(30_000);
     expect(run).toHaveBeenCalledTimes(1);
     // The deadline got close: the next wait is already scheduled at 30 s, then 10 s after that.
@@ -67,11 +70,26 @@ describe('pollWhileVisible', () => {
   it('stops polling after cleanup', () => {
     const { doc, setHidden } = fakeDocument();
     const run = vi.fn();
-    const stop = pollWhileVisible(run, 10_000, doc);
+    const stop = pollWhileVisible(run, 10_000, doc, steady);
     stop();
     setHidden(true);
     vi.advanceTimersByTime(20_000);
     setHidden(false);
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it('spreads each wait up to 20% either side of the interval', () => {
+    const { doc } = fakeDocument();
+    const early = vi.fn();
+    const late = vi.fn();
+    const stopEarly = pollWhileVisible(early, 10_000, doc, () => 0);
+    const stopLate = pollWhileVisible(late, 10_000, doc, () => 0.999_999);
+    vi.advanceTimersByTime(10_000 * (1 - POLL_JITTER));
+    expect(early).toHaveBeenCalledTimes(1);
+    expect(late).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(10_000 * 2 * POLL_JITTER);
+    expect(late).toHaveBeenCalledTimes(1);
+    stopEarly();
+    stopLate();
   });
 });
