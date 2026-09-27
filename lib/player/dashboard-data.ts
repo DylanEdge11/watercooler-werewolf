@@ -34,6 +34,11 @@ interface PublicVoteRow {
  */
 const RUN_BOUNDARY = `(SELECT MAX(created_at) FROM game_events
   WHERE game_id = ? AND event_type IN ('GAME_RESET', 'GAME_RESTORED'))`;
+/**
+ * Queries using this filter name `INDEXED BY idx_game_events_type`. Left to
+ * itself SQLite walks every event of the game newest first, including one
+ * audit event per vote, to find the few public ones.
+ */
 const PUBLIC_EVENT_FILTER = `ge.game_id = ?
   AND (ge.created_at > COALESCE(${RUN_BOUNDARY}, '') OR (ge.created_at = ${RUN_BOUNDARY} AND ge.event_type NOT IN ('GAME_RESET', 'GAME_RESTORED')))
   AND ge.event_type IN ('PHASE_PUBLISHED', 'GAME_COMPLETED', 'ANNOUNCEMENT', 'GAME_STOPPED', 'FINAL_SHOWDOWN_ENTERED')`;
@@ -119,7 +124,7 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
       .prepare(
         `SELECT ge.id, ge.event_type AS eventType, ge.phase_id AS phaseId,
                 p.sequence AS phaseSequence, ge.payload_json AS payloadJson, ge.created_at AS createdAt
-         FROM game_events ge LEFT JOIN phases p ON p.id = ge.phase_id
+         FROM game_events ge INDEXED BY idx_game_events_type LEFT JOIN phases p ON p.id = ge.phase_id
          WHERE ${PUBLIC_EVENT_FILTER}
          ORDER BY ge.created_at DESC LIMIT ${TIMELINE_LIMIT + 1}`,
       )
@@ -139,7 +144,7 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
            AND p.created_at > COALESCE(${RUN_BOUNDARY}, '')
            AND p.id IN (
              SELECT shown.phase_id FROM (
-               SELECT ge.phase_id FROM game_events ge
+               SELECT ge.phase_id FROM game_events ge INDEXED BY idx_game_events_type
                WHERE ${PUBLIC_EVENT_FILTER}
                ORDER BY ge.created_at DESC LIMIT ${TIMELINE_LIMIT}
              ) shown WHERE shown.phase_id IS NOT NULL

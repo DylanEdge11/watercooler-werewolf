@@ -43,6 +43,13 @@
       "when": 1790430997964,
       "tag": "0005_game_automation",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790481999296,
+      "tag": "0006_game_events_type_index",
+      "breakpoints": true
     }
   ]
 }
