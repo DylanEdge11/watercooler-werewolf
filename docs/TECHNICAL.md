@@ -89,7 +89,13 @@ There are no WebSockets; pages poll. How often (`lib/http/poll-interval.ts`):
 - A chat room refreshes every 10 seconds while its newest message is under two minutes old, and every 30 seconds otherwise.
 - The rest of the console (games list and setup, operations, rooms) refreshes every 30 seconds.
 
+Each wait is the interval give or take 20% (`pollWhileVisible` in `lib/http/poll-while-visible.ts`), so pages opened together, or all sped up by the same deadline, drift apart instead of reaching the server at once.
+
 Every polled `GET` answers through `respondJsonWithEtag` (`lib/http/etag.ts`): the `ETag` is a hash of the JSON body, and a request whose `If-None-Match` matches gets an empty 304. Pollers use `conditionalGet` (`lib/http/conditional-get.ts`) and keep each tag next to the data it describes, so a 304 skips the state update and the re-render, and a response the page drops (a newer request won) never leaves it holding a tag for data it isn't showing. `/api/*` keeps `Cache-Control: private, no-store`: the browser stores nothing, which matters on shared devices, and the tag comes from the page's own memory.
+
+A dashboard refresh sends who voted for whom only for the newest published ballot in its timeline; every other ballot carries `voteCount`. The Timeline and **View votes** load an older ballot's votes from `GET /api/phases/:phaseId/votes` the first time it is opened (`app/ballot-votes.tsx`). That route answers only a signed-in player of the same game, and only for a published Day or Final ballot of the current run (`loadBallotVotes`).
+
+Timeline reads look up public events through `idx_game_events_type` (`INDEXED BY`), because every saved action also writes an `ACTION_SUBMITTED` audit event to the same table. Saving an action reads the phase, roster, and lover pair in parallel, then counts the attempt against the rate limit (30 per player per phase per 10 minutes) and saves the action in one transaction; an attempt over the limit saves nothing and answers 429.
 
 The moderator console loads and refreshes with one request: `GET /api/games` returns the games list plus the selected game's roster and assignments (`?gameId=`, or the newest game; `lib/game/setup-view.ts`), and its signed-out 401 carries `needsBootstrap`. The Communications & operations panel refreshes operations and rooms on every tick, the co-moderator list, announcements, and feedback at most once a minute, and everything after the moderator's own changes.
 
