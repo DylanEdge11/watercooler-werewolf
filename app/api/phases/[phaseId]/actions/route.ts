@@ -6,8 +6,12 @@ import { permissionForRole, validateActionTargets } from '../../../../../lib/gam
 import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type PlayerState, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { routeError } from '../../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
+import { checkRateLimitRow, rateLimitStatements, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
 import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
+
+/** Saved actions per player per phase: 30 every 10 minutes, enough for many revisions. */
+const ACTION_RATE_LIMIT = 30;
+const ACTION_RATE_WINDOW_MS = 10 * 60_000;
 
 interface RouteContext {
   params: Promise<{ phaseId: string }>;
@@ -23,23 +27,35 @@ export async function POST(request: Request, context: RouteContext) {
     const { phaseId } = await context.params;
     const body = (await request.json()) as { actionKind?: ActionKind; targetIds?: string[] };
     const db = getDb();
-    const phase = await db
-      .prepare(
-        `SELECT p.id, p.game_id AS gameId, p.kind, p.status, p.slots, p.closes_at AS closesAt,
-                p.hunter_deadline_at AS hunterDeadlineAt, g.status AS gameStatus
-         FROM phases p JOIN games g ON g.id = p.game_id WHERE p.id = ? LIMIT 1`,
-      )
-      .bind(phaseId)
-      .first<{
-        id: string;
-        gameId: string;
-        kind: PhaseKind;
-        status: string;
-        slots: number;
-        closesAt: string;
-        hunterDeadlineAt: string | null;
-        gameStatus: string;
-      }>();
+    // The three reads need only the player's game, so they share one round trip.
+    const [phase, playerRows, loverPair] = await Promise.all([
+      db
+        .prepare(
+          `SELECT p.id, p.game_id AS gameId, p.kind, p.status, p.slots, p.closes_at AS closesAt,
+                  p.hunter_deadline_at AS hunterDeadlineAt, g.status AS gameStatus
+           FROM phases p JOIN games g ON g.id = p.game_id WHERE p.id = ? LIMIT 1`,
+        )
+        .bind(phaseId)
+        .first<{
+          id: string;
+          gameId: string;
+          kind: PhaseKind;
+          status: string;
+          slots: number;
+          closesAt: string;
+          hunterDeadlineAt: string | null;
+          gameStatus: string;
+        }>(),
+      db
+        .prepare(
+          `SELECT s.id, s.display_name AS displayName, ra.role_key AS role, s.alive
+           FROM seats s JOIN role_assignments ra ON ra.seat_id = s.id AND ra.game_id = s.game_id
+           WHERE s.game_id = ? AND s.status = 'CLAIMED'`,
+        )
+        .bind(identity.gameId)
+        .all<{ id: string; displayName: string; role: RoleKey; alive: number }>(),
+      loadCurrentLoverPair(identity.gameId),
+    ]);
     if (!phase || phase.gameId !== identity.gameId) return jsonError('Phase not found.', 404);
     if (phase.gameStatus === 'STOPPED') throw new Error('This game has been stopped by a moderator.');
     const pendingHunter = phase.status === 'PENDING_HUNTER';
@@ -70,19 +86,9 @@ export async function POST(request: Request, context: RouteContext) {
       throw new Error('The response window has closed.');
     }
 
-    const playerRows = await db
-      .prepare(
-        `SELECT s.id, s.display_name AS displayName, ra.role_key AS role, s.alive
-         FROM seats s JOIN role_assignments ra ON ra.seat_id = s.id AND ra.game_id = s.game_id
-         WHERE s.game_id = ? AND s.status = 'CLAIMED'`,
-      )
-      .bind(identity.gameId)
-      .all<{ id: string; displayName: string; role: RoleKey; alive: number }>();
     const players: PlayerState[] = playerRows.results.map((row) => ({ ...row, role: canonicalRoleKey(row.role), alive: Boolean(row.alive) }));
     const actor = players.find((player) => player.id === identity.seatId);
     if (!actor?.alive) throw new Error('Eliminated players cannot submit this action.');
-    await enforceRateLimit(requestRateLimitKey(request, `player-action:${identity.seatId}:${phaseId}`), 30, 10 * 60_000);
-    const loverPair = await loadCurrentLoverPair(identity.gameId);
     const permission = permissionForRole(actor.role, phase.kind, Number(phase.slots), pendingHunter, {
       seerAlive: players.some((player) => player.alive && player.role === 'SEER'),
       cupidPairExists: Boolean(loverPair),
@@ -115,12 +121,17 @@ export async function POST(request: Request, context: RouteContext) {
     });
     if (errors.length) return Response.json({ ok: false, errors }, { status: 400 });
 
-    const now = new Date().toISOString();
+    const nowDate = new Date();
+    const now = nowDate.toISOString();
     const actionId = crypto.randomUUID();
+    const rateLimitKey = requestRateLimitKey(request, `player-action:${identity.seatId}:${phaseId}`);
     const acceptedWindow = pendingHunter
       ? "p.status = 'PENDING_HUNTER' AND p.hunter_deadline_at > ?"
       : "p.status = 'OPEN' AND p.closes_at > ?";
+    // One transaction counts the attempt against the rate limit and saves the
+    // action only when the attempt is within it, so a vote costs one write.
     const result = await db.batch([
+      ...rateLimitStatements(db, rateLimitKey, ACTION_RATE_WINDOW_MS, now),
       db
         .prepare(
           `INSERT INTO action_submissions
@@ -135,7 +146,8 @@ export async function POST(request: Request, context: RouteContext) {
              AND EXISTS (
                SELECT 1 FROM seats s
                WHERE s.id = ? AND s.game_id = p.game_id AND s.status = 'CLAIMED' AND s.alive = 1
-             )`,
+             )
+             AND (SELECT attempts FROM rate_limit_buckets WHERE bucket_key = ?) <= ?`,
         )
         .bind(
           actionId,
@@ -151,6 +163,8 @@ export async function POST(request: Request, context: RouteContext) {
           identity.gameId,
           now,
           actor.id,
+          rateLimitKey,
+          ACTION_RATE_LIMIT,
         ),
       db
         .prepare(
@@ -170,11 +184,12 @@ export async function POST(request: Request, context: RouteContext) {
         .bind(crypto.randomUUID(), identity.gameId, phase.id, actor.id, now, actionId),
       db.prepare('SELECT version FROM action_submissions WHERE id = ? LIMIT 1').bind(actionId),
     ]);
-    if (changes(result[0]) !== 1) {
+    checkRateLimitRow(result[2]?.results[0], ACTION_RATE_LIMIT, ACTION_RATE_WINDOW_MS, nowDate);
+    if (changes(result[3]) !== 1) {
       await recordLateAttempt();
       return jsonError('The phase closed while your response was being saved. Refresh and try again if a response window is still open.', 409);
     }
-    const version = Number((result[3]?.results[0] as { version?: number } | undefined)?.version ?? 1);
+    const version = Number((result[6]?.results[0] as { version?: number } | undefined)?.version ?? 1);
     return Response.json({ ok: true, actionId, version, targetIds, submittedAt: now });
   } catch (error) {
     return routeError(error, 'Unable to submit this action.');
