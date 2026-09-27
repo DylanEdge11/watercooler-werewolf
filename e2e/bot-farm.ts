@@ -132,10 +132,10 @@ function csvValue(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
-function rosterCsv(suffix: string): string {
+function rosterCsv(suffix: string, playerCount: number): string {
   return [
     'display_name,email',
-    ...Array.from({ length: E2E_PLAYER_COUNT }, (_, index) => {
+    ...Array.from({ length: playerCount }, (_, index) => {
       const number = String(index + 1).padStart(2, '0');
       return `${csvValue(`Bot ${number}`)},${csvValue(`bot${number}-${suffix}@e2e.test`)}`;
     }),
@@ -151,15 +151,32 @@ export class GameHarness {
     public readonly composition: RoleComposition,
   ) {}
 
-  static async create(options: { name?: string; composition?: RoleComposition } = {}): Promise<GameHarness> {
+  static async create(options: {
+    name?: string;
+    composition?: RoleComposition;
+    playerCount?: number;
+    /** Extra game settings, such as dayDivisor, sent when the game is created. */
+    settings?: Record<string, unknown>;
+    /** Receives the duration of each setup step, for load measurements. */
+    onStep?: (step: string, milliseconds: number) => void;
+  } = {}): Promise<GameHarness> {
     const moderator = await moderatorContext();
+    const playerCount = options.playerCount ?? E2E_PLAYER_COUNT;
+    const step = async <T>(label: string, run: () => Promise<T>): Promise<T> => {
+      const started = performance.now();
+      try {
+        return await run();
+      } finally {
+        options.onStep?.(label, performance.now() - started);
+      }
+    };
     const contexts: APIRequestContext[] = [];
     const name = options.name ?? `Playwright Bot Farm ${E2E_RUN_ID} ${randomUUID().slice(0, 8)}`;
     const composition = options.composition ?? DEFAULT_COMPOSITION;
     const suffix = `${Date.now()}-${randomUUID().slice(0, 6)}`;
 
     try {
-      const created = await requireOk<{ gameId: string }>(
+      const created = await step('create game', async () => requireOk<{ gameId: string }>(
         await moderator.post('/api/games', {
           data: {
             name,
@@ -172,22 +189,23 @@ export class GameHarness {
             schedule: { dayCloses: '16:00', nightCloses: '09:00' },
             // The bot farm locks and publishes by hand; automatic results would race it.
             publicationMode: 'REVIEW',
+            ...options.settings,
           },
         }),
         'create game',
-      );
+      ));
 
-      const imported = await requireOk<{ invites: Invite[] }>(
-        await moderator.post(`/api/games/${created.gameId}/roster`, { data: { csv: rosterCsv(suffix) } }),
-        `import ${E2E_PLAYER_COUNT}-player roster`,
-      );
-      const roster = await requireOk<{ roster: Array<{ id: string; displayName: string }> }>(
+      const imported = await step('import roster', async () => requireOk<{ invites: Invite[] }>(
+        await moderator.post(`/api/games/${created.gameId}/roster`, { data: { csv: rosterCsv(suffix, playerCount) } }),
+        `import ${playerCount}-player roster`,
+      ));
+      const roster = await step('load roster', async () => requireOk<{ roster: Array<{ id: string; displayName: string }> }>(
         await moderator.get(`/api/games/${created.gameId}/roster`),
         'load imported roster',
-      );
+      ));
       const seatByName = new Map(roster.roster.map((seat) => [seat.displayName, seat.id]));
 
-      const bots = await Promise.all(imported.invites.map(async (invite, index) => {
+      const bots = await step('claim every seat', async () => Promise.all(imported.invites.map(async (invite, index) => {
         const context = await newRequestContext();
         contexts.push(context);
         const pin = String(410000 + index).slice(-6);
@@ -208,29 +226,29 @@ export class GameHarness {
           role: 'VILLAGER' as RoleKey,
           alive: true,
         } satisfies Bot;
-      }));
+      })));
 
-      await requireOk<{ ok: true }>(
+      await step('save composition', async () => requireOk<{ ok: true }>(
         await moderator.post(`/api/games/${created.gameId}/assignments`, { data: { action: 'SAVE_COMPOSITION', composition } }),
         'save role composition',
-      );
-      const preview = await requireOk<{ batchId: string; assignments: Array<{ seatId: string; role: RoleKey }> }>(
+      ));
+      const preview = await step('preview roles', async () => requireOk<{ batchId: string; assignments: Array<{ seatId: string; role: RoleKey }> }>(
         await moderator.post(`/api/games/${created.gameId}/assignments`, { data: { action: 'PREVIEW' } }),
         'preview roles',
-      );
+      ));
       const roleBySeat = new Map(preview.assignments.map((assignment) => [assignment.seatId, assignment.role]));
       for (const bot of bots) {
         const role = roleBySeat.get(bot.seatId);
         if (!role) throw new Error(`No role assignment was returned for ${bot.displayName}.`);
         bot.role = role;
       }
-      await requireOk<{ ok: true }>(
+      await step('release roles', async () => requireOk<{ ok: true }>(
         await moderator.post(`/api/games/${created.gameId}/assignments`, { data: { action: 'RELEASE', batchId: preview.batchId } }),
         'release roles',
-      );
+      ));
 
       const farm = new GameHarness(moderator, created.gameId, name, bots, composition);
-      const dashboards = await Promise.all(bots.map((bot) => farm.dashboard(bot)));
+      const dashboards = await step('load every dashboard', async () => Promise.all(bots.map((bot) => farm.dashboard(bot))));
       for (const dashboard of dashboards) {
         const bot = bots.find((candidate) => candidate.seatId === dashboard.player.id);
         if (!bot || dashboard.player.role !== bot.role) {
