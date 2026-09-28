@@ -40,6 +40,12 @@ export default defineConfig({
       testMatch: /(?:scripted|randomized)-20-player\.spec\.ts$/u,
     },
     {
+      // Load test, run on request only: node scripts/run-playwright.mjs --project=stress
+      name: 'stress',
+      testMatch: /stress-80-player\.spec\.ts$/u,
+      use: { ...devices['Desktop Chrome'], launchOptions: chromiumLaunchOptions },
+    },
+    {
       name: 'chromium',
       testMatch: /readiness\/.*\.spec\.ts$/u,
       use: { ...devices['Desktop Chrome'], launchOptions: chromiumLaunchOptions },

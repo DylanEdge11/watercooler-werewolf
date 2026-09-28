@@ -163,10 +163,29 @@ test('an eight-player game runs from setup to a Village win with private informa
       const firstDayEntry = timeline.locator('.timeline-full-entry').filter({ hasText: `${wolfOne.account.displayName} eliminated` });
       await expect(firstDayEntry).toContainText('Werewolf · village vote');
       await expect(timeline.locator('details.timeline-votes[open] .vote-ledger-row').first()).toBeVisible();
+      // Day 1 is an older ballot: its votes arrive only when it is opened.
+      const olderBallot = firstDayEntry.locator('details.timeline-votes');
+      await expect(olderBallot).not.toHaveAttribute('open');
+      const votesLoaded = viewer.page.waitForResponse((response) => /\/api\/phases\/[^/]+\/votes$/u.test(new URL(response.url()).pathname));
+      await olderBallot.locator('summary').click();
+      expect((await votesLoaded).status()).toBe(200);
+      await expect(olderBallot.locator('.vote-ledger-row').first()).toBeVisible();
       await expect(timeline.locator('.timeline-cap-note')).toHaveCount(0);
       await timeline.getByRole('button', { name: 'Back to today', exact: true }).click();
       await expect(viewer.page.locator('#full-timeline')).toHaveCount(0);
       await expect(viewer.page.locator('#today')).toBeVisible();
+    }
+
+    // View votes on an older ballot loads its votes into the dialog.
+    {
+      const viewer = game.players[1];
+      const oldestBallot = viewer.page.locator('#timeline .timeline-trigger').filter({ visible: true }).last();
+      await oldestBallot.scrollIntoViewIfNeeded();
+      await oldestBallot.click();
+      const dialog = viewer.page.getByRole('dialog');
+      await expect(dialog.locator('.vote-ledger-row').first()).toBeVisible();
+      await dialog.getByRole('button', { name: 'Close vote details' }).click();
+      await expect(dialog).toHaveCount(0);
     }
 
     // A long campaign holds more than the latest 100 updates; the Timeline says so.

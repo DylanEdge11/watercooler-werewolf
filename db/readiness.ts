@@ -8,6 +8,7 @@ export const MIGRATION_VERSIONS = [
   '0003_reviewed_outcome',
   '0004_operator_bootstrap',
   '0005_game_automation',
+  '0006_game_events_type_index',
 ] as const;
 
 export async function verifyDatabaseReady(db: Database): Promise<void> {

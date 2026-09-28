@@ -55,32 +55,34 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const now = new Date().toISOString();
+    const pinHash = await hashSecret(pin);
     const session = await preparePlayerSession(seat.id, Number(seat.sessionVersion));
     // One transaction: the claim, its audit event, and the new session. The
     // claim is conditional on the seat still being INVITED, so when two
-    // requests race, the loser changes nothing and gets no session.
-    const claimedGuard = "EXISTS (SELECT 1 FROM seats WHERE id = ? AND status = 'CLAIMED' AND claimed_at = ? AND session_version = ?)";
+    // requests race, the loser changes nothing and gets no session. The salted
+    // PIN hash identifies this request's claim; two claims can share a timestamp.
+    const claimedGuard = "EXISTS (SELECT 1 FROM seats WHERE id = ? AND status = 'CLAIMED' AND claimed_at = ? AND pin_hash = ? AND session_version = ?)";
     const result = await db.batch([
       db
         .prepare(
           `UPDATE seats SET status = 'CLAIMED', pin_hash = ?, claimed_at = ?, updated_at = ?
            WHERE id = ? AND status = 'INVITED' AND session_version = ?`,
         )
-        .bind(await hashSecret(pin), now, now, seat.id, seat.sessionVersion),
+        .bind(pinHash, now, now, seat.id, seat.sessionVersion),
       db
         .prepare(
           `INSERT INTO game_events
            (id, game_id, event_type, actor_seat_id, payload_json, created_at)
            SELECT ?, ?, 'SEAT_CLAIMED', ?, ?, ? WHERE ${claimedGuard}`,
         )
-        .bind(crypto.randomUUID(), seat.gameId, seat.id, JSON.stringify({ displayName: seat.displayName }), now, seat.id, now, seat.sessionVersion),
+        .bind(crypto.randomUUID(), seat.gameId, seat.id, JSON.stringify({ displayName: seat.displayName }), now, seat.id, now, pinHash, seat.sessionVersion),
       db
         .prepare(
           `INSERT INTO seat_sessions (id, seat_id, token_hash, session_version, expires_at, created_at)
            SELECT ?, ?, ?, ?, ?, ? WHERE ${claimedGuard}`,
         )
-        .bind(...session.values, seat.id, now, seat.sessionVersion),
-      db.prepare(`DELETE FROM rate_limit_buckets WHERE bucket_key = ? AND ${claimedGuard}`).bind(pinFailureKey(seat.id), seat.id, now, seat.sessionVersion),
+        .bind(...session.values, seat.id, now, pinHash, seat.sessionVersion),
+      db.prepare(`DELETE FROM rate_limit_buckets WHERE bucket_key = ? AND ${claimedGuard}`).bind(pinFailureKey(seat.id), seat.id, now, pinHash, seat.sessionVersion),
     ]);
     if (changes(result[0]) !== 1) return jsonError('This seat was claimed by another request. Use seat sign-in instead.', 409);
     await session.setCookie();

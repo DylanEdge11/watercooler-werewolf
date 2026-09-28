@@ -1,0 +1,1 @@
+CREATE INDEX `idx_game_events_type` ON `game_events` (`game_id`,`event_type`,`created_at`);
