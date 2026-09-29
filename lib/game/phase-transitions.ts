@@ -8,6 +8,7 @@ import { createSecureRandomRolls } from './random';
 import { loadCurrentLoverPair } from './relationships';
 import type { PhaseKind, PhaseResolution } from './types';
 import { HttpError } from '../http/errors';
+import { notifyResultPublished, runAfterResponse } from '../notify/notifications';
 
 /**
  * Lock-and-calculate, Hunter follow-up, and publication for one phase.
@@ -512,6 +513,8 @@ export async function runPhaseAction(
       }
       return conflict('The phase was changed before publication could commit. Refresh and review the authoritative result.');
     }
+    // Only the caller whose batch committed gets here, so the recap email goes out once per result.
+    runAfterResponse(() => notifyResultPublished(gameId, phase.id));
     return done({ ok: true, outcome, proposedOutcome, reviewedOutcome: outcome, publishedOutcome: outcome, eliminated, winner: win.winner, overrideReason, reviewedByModeratorId: actor.moderatorId, reviewedAt: now });
   }
 

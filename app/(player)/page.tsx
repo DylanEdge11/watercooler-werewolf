@@ -5,6 +5,9 @@ import { advanceGameSafely } from '../../lib/game/automation-sweep';
 import { loadDashboard } from '../../lib/player/dashboard-data';
 import { parseRoleVisibility, ROLE_VISIBILITY_COOKIE } from '../../lib/player/role-visibility';
 
+// Player email is sent after the response, within this function's time limit: a result story, then up to 80 emails.
+export const maxDuration = 60;
+
 // Only visitors with a player session reach this page (proxy.ts sends everyone else to the landing page).
 export const dynamic = 'force-dynamic';
 
