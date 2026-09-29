@@ -178,6 +178,7 @@ button { color: inherit; }
 .auth-card h1, .console-title h1, .setup-card h2 { font-family: Georgia, serif; letter-spacing: -.035em; }
 .auth-card h1 { font-size: 34px; margin: 7px 0 12px; }
 .auth-card > p:not(.eyebrow, .form-error, .privacy-note) { color: var(--muted); font-size: 13px; line-height: 1.65; }
+.auth-card .unsubscribe-action { margin-top: 20px; }
 .form-stack { display: grid; gap: 17px; margin-top: 25px; }
 .form-stack label, .setup-grid label, .role-composer label { color: #485950; display: grid; font-size: 11px; font-weight: 800; gap: 7px; }
 input, textarea, select { background: #fbfaf6; border: 1px solid #d9ddd8; border-radius: 9px; color: var(--ink); font: inherit; font-size: 13px; padding: 11px 12px; width: 100%; }
