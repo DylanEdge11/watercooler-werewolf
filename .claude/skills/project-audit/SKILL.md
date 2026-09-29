@@ -1,7 +1,7 @@
 ---
 name: project-audit
-description: Independent, report-only audit of the whole repository — code, tests, config, dependencies, git history, branches and open PRs, docs, agent instructions, and user-facing text. Builds its own view from the code before reading docs or earlier audits, reproduces every defect, has each finding challenged by a second reviewer, and commits a dated report with stable finding IDs. Changes no code.
-argument-hint: "[optional scope: a path, an area, 'PR #N', or a branch] [--full to add the long test suite]"
+description: Independent, report-only audit of the repository — by default only what changed since the last audit, with cheap baseline checks first and at most three reviewers; --deep audits everything. Covers code, tests, config, dependencies, git history, branches and open PRs, docs, agent instructions, and user-facing text. Builds its own view from the code before reading docs or earlier audits, reproduces every defect, has each finding challenged by a second reviewer, and commits a dated report with stable finding IDs. Changes no code.
+argument-hint: "[optional scope: a path, an area, 'PR #N', or a branch] [--deep for the full ten-area audit] [--full to add the long test suite]"
 disable-model-invocation: true
 ---
 
@@ -14,6 +14,19 @@ This skill holds no facts about any particular project, and the owner doesn't ed
 - [reviewer-brief.md](reviewer-brief.md): the prompts for area reviewers and verifiers.
 - [language-review.md](language-review.md): the prompt and rubric for the docs, instructions, and language pass.
 - [report-template.md](report-template.md): the report's structure.
+
+## Cost: two modes
+
+A full audit runs a dozen or more agents that each read their files in full, and can use up a session's usage in minutes. So the default is a light run, and the full run is opt-in.
+
+| | Standard (default) | `--deep` |
+| --- | --- | --- |
+| Scope | Files changed since the last audit's SHA (or the owner's narrower scope), plus their direct callers and tests | Every tracked file |
+| Reviewers | At most 3 (see step 3) | One per area, plus language |
+| Verification | One verifier for all P1/P2 candidates; the lead re-runs P3s | One verifier per area with findings |
+| Use when | Between releases, or any time | Before a major release, after a long gap, or when the owner asks |
+
+Cheap checks always come first (step 1). If the baseline is red, report that and stop before spending on reviewers, unless the owner says to continue.
 
 ## Principles
 
@@ -48,11 +61,11 @@ Find out as much as you can yourself, then confirm it with the owner in one shor
 
 1. Read the repository's instruction files for operational facts only: the working base branch, how to install and test, where audit reports may be committed, safety rules, and who the owner is. Their descriptions of the code are audited in pass 2.
 2. **Candidate:** the working base branch the instructions name, otherwise the default branch. `git fetch` and note its head SHA.
-3. **Scope:** everything, unless the owner's arguments narrow it to a path, an area, a PR, or a branch. A narrowed audit still runs pass 3 for the IDs in its scope.
+3. **Scope:** in standard mode, the files changed between the **baseline** and the candidate (`git diff --name-only <baseline>..<candidate>`), plus their direct callers and tests. The baseline is the SHA in the newest audit report's header; with no earlier audit, review the riskiest paths instead (authentication and authorization, routes returning private data, core game rules, migrations). With `--deep`, everything. The owner's arguments can narrow either to a path, an area, a PR, or a branch. A narrowed audit still runs pass 3 for the IDs in its scope.
 4. **Survey:** uncommitted changes in the working tree; open PRs and branches on origin; whether a release is pending (an open release PR, a certification handoff naming a SHA); whether a current, non-archived audit report exists; whether dependencies are installed; whether the clone is shallow.
 5. **Setup round.** Ask the owner, using a structured question tool if one is available, with a recommended answer for each question. Skip any question the arguments already answer:
    - **Candidate:** the branch and short SHA you found (recommended), or another. If you found none or several, the question has no default.
-   - **Scope:** everything (recommended), or a narrower scope.
+   - **Scope:** changes since the last audit at `<short SHA>`, <n> files (recommended), everything (`--deep`, say it costs several times more), or a narrower scope.
    - **Long test suite:** no (recommended; say roughly how long it takes), or yes.
    - Only when the survey calls for it: how to handle uncommitted changes (don't stash, reset, or clean them yourself); how to install or run the tests when the repository doesn't say; where to commit the report when the instructions don't say; whether to hold the report's commit until a pending release is out (recommended).
 
@@ -73,13 +86,13 @@ Find out as much as you can yourself, then confirm it with the owner in one shor
 
 Run these before anything else is written into the working tree, so scratch files can't affect the results:
 
-- The fast gates the repository defines (tests, lint, types, build, dependency audit), and its quick integration suite if it has one. Add the long suite only when the owner passed `--full`.
+- The fast gates the repository defines (tests, lint, types, build, dependency audit). Skip the quick integration suite in standard mode unless a changed file is one it covers; run it in `--deep`. Add the long suite only when the owner passed `--full`.
 - Don't run hosted, remote, or production-facing suites. Those belong to release certification.
-- Record each command, exit code, pass/fail/skip counts, and elapsed time. A failing gate is a finding, not a reason to stop. If a check can't run, record why.
+- Record each command, exit code, pass/fail/skip counts, and elapsed time. Give the results to every reviewer so none reruns a gate. A failing gate is a finding. If tests or the build fail outright, stop after this step and report (see Cost) unless the owner says to continue. If a check can't run, record why.
 
 ## 2. Map the system (lead, from code only)
 
-Before reading any docs, build a short map from the code, manifests, schema, config, tests, and git log (use the log for what changed when; its messages are claims):
+Standard mode maps only the in-scope files and what they touch; do not read the rest of the repository. Before reading any docs, build a short map from the code, manifests, schema, config, tests, and git log (use the log for what changed when; its messages are claims):
 
 - every entry point (routes, pages, jobs, scripts), who may call it, and what it reads and writes;
 - the data model, and every state machine with its states and the transitions out of each;
@@ -87,7 +100,7 @@ Before reading any docs, build a short map from the code, manifests, schema, con
 - external services, and the config and environment variables the code actually reads;
 - which tests cover which parts.
 
-Then assign every tracked file (`git ls-files`) to exactly one owning area for the coverage ledger. Others may still read it. Lockfiles, generated files, and binary media can be recorded as skipped with the reason instead, unless something about them is itself under review (size, secrets, how they are generated). Start from these areas, and add one when the code has a risk none of them covers:
+Then assign every in-scope file (every tracked file with `--deep`, via `git ls-files`) to exactly one owning area for the coverage ledger. Others may still read it. Lockfiles, generated files, and binary media can be recorded as skipped with the reason instead, unless something about them is itself under review (size, secrets, how they are generated). Start from these areas, and add one when the code has a risk none of them covers:
 
 | Area | What it looks for |
 | --- | --- |
@@ -104,7 +117,17 @@ Then assign every tracked file (`git ls-files`) to exactly one owning area for t
 
 ## 3. Pass 1: blind review, in parallel
 
-Start one reviewer per area except docs and language, all at once. Use a general-purpose agent that can read files and run commands, on the strongest model available. Fill in the area brief from [reviewer-brief.md](reviewer-brief.md) for each: the area, its owned files, the map, the SHA, the commands, and the safety rules.
+**Standard mode:** start at most three reviewers, all at once, by grouping the areas below:
+
+1. Security and privacy, plus data, concurrency, and migrations.
+2. Domain rules, plus entry points and errors, plus UI, copy, and accessibility.
+3. Tests and tooling, plus dependencies, config, build, and deploy, plus the docs, instructions, and language pass (step 4).
+
+Drop a group whose areas have no in-scope files. The lead covers git and process (branches, open PRs, history) from metadata with no agent, and performance and cost from the diff, unless a changed file is on a hot path.
+
+Each reviewer reads its in-scope files and the callers and tests it needs, not the whole area. Say so in the brief.
+
+**`--deep`:** start one reviewer per area except docs and language, all at once. Use a general-purpose agent that can read files and run commands, on the strongest model available. Fill in the area brief from [reviewer-brief.md](reviewer-brief.md) for each: the area, its owned files, the map, the SHA, the commands, and the safety rules.
 
 Reviewers don't read docs, the archive, earlier audits, or the skills folder. Agents may load the repository's instruction file automatically; the brief tells them to use it for commands and safety rules and to treat its descriptions of the code as unverified.
 
@@ -112,11 +135,11 @@ Reviewers may run single test files and scripts. A reproduction that needs a bui
 
 ## 4. Pass 2: docs, instructions, and language
 
-Start this at the same time as pass 1; it needs the map, not pass 1's findings. Brief one reviewer with [language-review.md](language-review.md), or two when there is a lot of text (one for instruction files and skills, one for maintainer docs and user-facing text). It covers the README and docs; the instruction files; every skill, including this one; user-facing text (in-app guide, on-screen copy, emails); and code comments that make claims. The archive gets a boundary check, and archived records may be opened to trace where a current line came from.
+In standard mode this is folded into reviewer group 3 and limited to in-scope text plus any instruction or skill file that a changed file makes wrong. With `--deep`, start it at the same time as pass 1; it needs the map, not pass 1's findings. Brief one reviewer with [language-review.md](language-review.md), or two when there is a lot of text (one for instruction files and skills, one for maintainer docs and user-facing text). It covers the README and docs; the instruction files; every skill, including this one; user-facing text (in-app guide, on-screen copy, emails); and code comments that make claims. The archive gets a boundary check, and archived records may be opened to trace where a current line came from.
 
 ## 5. Pass 3: earlier audits
 
-Only after passes 1 and 2 have returned, read the current audit reports (any non-archived audit, review, or brief with open items; there may be more than one), plus archived reviews where they help. Give each earlier finding ID a verdict at the candidate SHA:
+Only after passes 1 and 2 have returned, read the current audit reports (any non-archived audit, review, or brief with open items; there may be more than one), plus archived reviews where they help. In standard mode, check only IDs still open; in `--deep`, give every earlier finding ID a verdict at the candidate SHA:
 
 | Verdict | Needs |
 | --- | --- |
@@ -135,7 +158,7 @@ Then:
 
 ## 6. Verification
 
-For each area with findings, start a separate verifier (not the agent that found them) with the verifier brief from [reviewer-brief.md](reviewer-brief.md). A verifier re-runs each reproduction and tries to prove the finding wrong. It looks for a guard elsewhere, a test that already covers it, an owner decision that makes it intended, or a misread. It returns Confirmed, Plausible, or Rejected, with a priority check.
+Start a separate verifier (not the agent that found them) with the verifier brief from [reviewer-brief.md](reviewer-brief.md). Standard mode: one verifier for every P1 and P2 candidate together; the lead re-runs P3 reproductions itself and leaves any it can't reproduce as Plausible. `--deep`: one verifier per area with findings. A verifier re-runs each reproduction and tries to prove the finding wrong. It looks for a guard elsewhere, a test that already covers it, an owner decision that makes it intended, or a misread. It returns Confirmed, Plausible, or Rejected, with a priority check.
 
 Drop Rejected findings. Record how many were rejected, and give a one-line reason for each rejected P1 or P2 candidate. Merge duplicates across areas.
 
@@ -145,7 +168,7 @@ Ask once more, after verification, and only what the owner has to decide: produc
 
 ## 8. Write the report
 
-Follow [report-template.md](report-template.md).
+Follow [report-template.md](report-template.md). The header records the mode and the baseline SHA, which is what the next standard audit diffs against.
 
 - **File:** use the existing audit report's folder and naming if the repository has one; otherwise `docs/AUDIT_<YYYY-MM-DD>.md`, adding `-2` if that name is taken.
 - **IDs:** carried-over findings keep their IDs. New findings continue each prefix's numbering from the highest number any superseded audit used. If two earlier reports used the same ID for different things, prefix the carried ID with its source (for example `PERF-3`).
