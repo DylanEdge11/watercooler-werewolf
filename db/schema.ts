@@ -233,6 +233,8 @@ export const phases = sqliteTable(
     slots: integer('slots').notNull(),
     divisorSnapshot: integer('divisor_snapshot').notNull(),
     hunterDeadlineAt: text('hunter_deadline_at'),
+    // Set once by whichever caller sends this phase's "closes soon" emails, so a reminder goes out once.
+    closingReminderAt: text('closing_reminder_at'),
     version: integer('version').notNull().default(1),
     publishedAt: text('published_at'),
     createdAt: text('created_at').notNull(),
@@ -407,6 +409,25 @@ export const notifications = sqliteTable(
     createdAt: text('created_at').notNull(),
   },
   (table) => [index('idx_notifications_seat_unread').on(table.seatId, table.readAt, table.createdAt)],
+);
+
+/**
+ * A player's choice to receive game email (phase opened, closes soon, result). Off until the
+ * player turns it on. The token is the unsubscribe link in every email; it can only switch
+ * this one seat's email off. Kept out of backups so exports never carry it.
+ */
+export const emailPreferences = sqliteTable(
+  'email_preferences',
+  {
+    seatId: text('seat_id')
+      .primaryKey()
+      .references(() => seats.id, { onDelete: 'cascade' }),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
+    unsubscribeToken: text('unsubscribe_token').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [uniqueIndex('idx_email_preferences_token').on(table.unsubscribeToken)],
 );
 
 export const backupExports = sqliteTable(
