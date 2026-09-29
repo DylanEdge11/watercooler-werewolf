@@ -11,7 +11,7 @@ Repository: <absolute path>, checked out at <full SHA>. Don't check out anything
 
 Your area: <area name>. What it looks for: <that row of the area table>.
 
-Files you own: <list or globs>. Read every one in full. If you only skim one, say which and why.
+Files you own: <list or globs>. In a standard run this is only the files changed since the baseline; in a deep run it is the whole area. Read every one in full. If you only skim one, say which and why. Baseline check results (already run by the lead, do not rerun): <gate results>.
 You may also read any other code, test, config, or schema file you need to follow a path end to end.
 
 System map, built from the code by the lead:
@@ -25,7 +25,7 @@ Reproductions use local, in-memory, or throwaway resources and fictional data on
 
 How to look. Beyond the area's list: trace each entry point in your area from input to storage and back. For every state machine you touch, check that every state has a way out, and that each transition re-checks the state it expects inside the write. Compare what users are told on screen with what the code does. If you notice a risk outside your area, list it under "Outside my area" in a line or two rather than investigating it.
 
-Evidence. Every code defect needs a reproduction: a scratch test or script that fails, or shows the wrong result, at this commit. Name each scratch file `audit-scratch-<area-slug>-<n>.<ext>` and put it where the project's test runner will pick it up. Run only that file: <single-file test command>. Don't run full suites, builds, or anything that starts a server or binds a port. Write those reproductions anyway and mark them "needs lead run". If you can't reproduce something, say what stopped you; it will be reported as Plausible.
+Evidence. Every code defect needs a reproduction: a scratch test or script that fails, or shows the wrong result, at this commit. Name each scratch file `audit-scratch-<area-slug>-<n>.<ext>` and put it where the project's test runner will pick it up. Run only that file: <single-file test command>. Don't run full suites, builds, lint, type checks, or anything that starts a server or binds a port. Write those reproductions anyway and mark them "needs lead run". If you can't reproduce something, say what stopped you; it will be reported as Plausible.
 
 Priority scale:
 <pasted scale>
