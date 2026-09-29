@@ -24,6 +24,10 @@ For quick iteration, run only the relevant test file. Suites and the hosted Prev
 - Audit reports are the one exception to the pull-request rule: `/project-audit` commits its report (`docs/AUDIT_<date>.md`, plus moving the previous audit into `docs/archive/`) directly to the version branch. Report files only, never code, and never `main`.
 - GitHub Actions minutes are limited (2,000/month, spending limit $0). CI runs only the fast gates, only on pull requests into `main`. Checks run locally with `npm run verify` / `verify:full`. Don't add jobs or triggers to `.github/workflows`, or start the workflow by hand, without asking. Batch commits; don't push after every small fix.
 
+## Usage limits
+
+The owner's five-hour and weekly usage windows are shared by all sessions, and a task that hits the wall mid-step loses its place. In a session that has `get_session`, read `external_metadata.rate_limit_info.status` at the start of any long task, before launching agents, and between phases. If it is `allowed_warning`, or the next step would launch agents, follow `.claude/skills/usage-checkpoint/SKILL.md`: it saves a restart point and schedules the session to resume after the reset. Its checkpoint push goes to the working branch only, and is the one exception to running `npm run verify` before every push.
+
 ## Safety rules
 
 - Never point tests, pilot scripts, migrations, or the Vercel bypass secret at Production. Preview and Production have separate databases.
