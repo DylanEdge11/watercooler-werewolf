@@ -26,7 +26,7 @@ For quick iteration, run only the relevant test file. Suites and the hosted Prev
 
 ## Usage limits
 
-The owner's five-hour and weekly usage windows are shared by all sessions, and a task that hits the wall mid-step loses its place. In a session that has `get_session`, read `external_metadata.rate_limit_info.status` at the start of any long task, before launching agents, and between phases. If it is `allowed_warning`, or the next step would launch agents, follow `.claude/skills/usage-checkpoint/SKILL.md`: it saves a restart point and schedules the session to resume after the reset. Its checkpoint push goes to the working branch only, and is the one exception to running `npm run verify` before every push.
+The owner's five-hour and weekly usage windows are shared by all sessions, and a task that hits the wall mid-step loses its place. Warnings are not a reason to stop. In a session that has `list_events`, read usage as `.claude/skills/usage-checkpoint/SKILL.md` describes, at the start of any long task, before launching agents, and between phases. When either window reaches 95%, follow that skill: it saves a restart point and schedules the session to resume after the reset, and the session keeps working meanwhile. Its checkpoint push goes to the working branch only, and is the one exception to running `npm run verify` before every push.
 
 ## Safety rules
 
