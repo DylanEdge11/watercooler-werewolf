@@ -16,13 +16,13 @@ import { storyInputFromPublishedEvent, writeStory, type StoryWriter } from './st
  * game action: it does nothing when email is not set up, and it never throws.
  */
 
-const inFlight = new Set<Promise<void>>();
+const inFlight = new Set<Promise<unknown>>();
 
 /**
  * Runs `task` once the response has been sent, so a slow mail server never delays a
  * page or a moderator's click. Outside a request (tests, scripts) it just starts the task.
  */
-export function runAfterResponse(task: () => Promise<void>): void {
+export function runAfterResponse(task: () => Promise<unknown>): void {
   const guarded = () => task().catch((error) => console.error('Email task failed', { name: error instanceof Error ? error.name : 'Error' }));
   try {
     after(guarded);
@@ -112,19 +112,22 @@ export async function notifyPhaseOpened(gameId: string, phaseId: string): Promis
 /**
  * Thirty minutes before a deadline, reminds the players who have not saved a move. The
  * first caller to mark the phase sends; every other caller (another poll, the scheduler)
- * finds it marked and does nothing, so the reminder goes out once.
+ * finds it marked and does nothing, so the reminder goes out once. The mark comes first,
+ * so a send that fails is reported to the moderator but not retried: retrying could mail
+ * some players twice, and a broken mail account would be retried on every page visit.
+ * Returns whether this call was the one that sent it.
  */
-export async function notifyClosingSoon(gameId: string, phaseId: string): Promise<void> {
+export async function notifyClosingSoon(gameId: string, phaseId: string): Promise<boolean> {
   try {
     const origin = siteOrigin();
-    if (!origin || !emailNotificationsAvailable()) return;
+    if (!origin || !emailNotificationsAvailable()) return false;
     const context = await loadPhaseContext(gameId, phaseId);
-    if (!context || context.phase.status !== 'OPEN' || !RUNNING.has(context.gameStatus)) return;
+    if (!context || context.phase.status !== 'OPEN' || !RUNNING.has(context.gameStatus)) return false;
     const claimed = await getDb()
       .prepare("UPDATE phases SET closing_reminder_at = ? WHERE id = ? AND game_id = ? AND status = 'OPEN' AND closing_reminder_at IS NULL")
       .bind(new Date().toISOString(), phaseId, gameId)
       .run();
-    if (Number(claimed.meta.changes) !== 1) return;
+    if (Number(claimed.meta.changes) !== 1) return false;
     const recipients = await playersWhoMustAct(gameId, context.phase);
     await deliver({
       gameId,
@@ -134,8 +137,10 @@ export async function notifyClosingSoon(gameId: string, phaseId: string): Promis
       details: { kind: 'CLOSING_SOON', phaseId },
       compose: (recipient) => closingSoonMessage(origin, recipient, { gameName: context.gameName, kind: context.phase.kind, sequence: context.phase.sequence, closesAt: context.phase.closesAt, timeZone: context.timeZone }),
     });
+    return true;
   } catch (error) {
     console.error('Closing-soon email failed', { name: error instanceof Error ? error.name : 'Error' });
+    return false;
   }
 }
 
@@ -154,6 +159,7 @@ export function closingReminderDue(phase: { status: string; opensAt: string; clo
  * The scheduler's entry point: every running game whose open phase is inside its
  * reminder window. Players' and moderators' page refreshes do the same check for their
  * own game, so reminders still go out when no scheduler is set up and someone is looking.
+ * Returns how many phases this call sent a reminder for.
  */
 export async function sweepClosingReminders(now = new Date()): Promise<number> {
   if (!emailNotificationsAvailable()) return 0;
@@ -170,8 +176,7 @@ export async function sweepClosingReminders(now = new Date()): Promise<number> {
   let started = 0;
   for (const phase of due.results) {
     if (!closingReminderDue(phase, now)) continue;
-    await notifyClosingSoon(phase.gameId, phase.phaseId);
-    started += 1;
+    if (await notifyClosingSoon(phase.gameId, phase.phaseId)) started += 1;
   }
   return started;
 }

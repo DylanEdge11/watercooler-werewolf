@@ -320,8 +320,9 @@ describe('closes soon', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ ok: true, reminders: 1 });
     expect(recipients()).toEqual(['p5@office.io']);
-    // A second sweep, or a visit, finds it already sent.
-    await schedulerGet(new Request('http://localhost:3000/api/scheduler/deadlines', { headers: { authorization: 'Bearer fictional-cron-secret' } }));
+    // A second sweep, or a visit, finds it already sent, and the sweep says it sent nothing.
+    const second = await schedulerGet(new Request('http://localhost:3000/api/scheduler/deadlines', { headers: { authorization: 'Bearer fictional-cron-secret' } }));
+    expect(await second.json()).toMatchObject({ reminders: 0 });
     await visit('p9');
     expect(shared.sent).toHaveLength(1);
   });
