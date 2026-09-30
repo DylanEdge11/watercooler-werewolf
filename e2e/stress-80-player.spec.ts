@@ -340,7 +340,8 @@ class StressGame {
     for (const bot of this.farm.bots) {
       const dashboard = sweep.dashboards.get(bot.seatId)!;
       if (!bot.alive) {
-        expect(dashboard.permission.actionKind).toBeNull();
+        // Eliminated players may cast only the optional Afterlife tiebreak vote.
+        expect(dashboard.permission.actionKind).toBe('AFTERLIFE_VOTE');
         continue;
       }
       expect(dashboard.phase?.id).toBe(opened.phaseId);

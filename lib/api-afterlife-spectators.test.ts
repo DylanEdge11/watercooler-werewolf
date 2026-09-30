@@ -131,7 +131,8 @@ afterEach(() => {
 describe('Afterlife tiebreak vote', () => {
   test('eliminated players cast an optional vote that breaks a tie in the living vote', async () => {
     // The Afterlife may use only its own ballot; the living may not use it.
-    expect((await vote('p6', 'DAY_VOTE', ['p0'])).status).toBe(400);
+    const deadDayVote = await vote('p6', 'DAY_VOTE', ['p0']);
+    expect(deadDayVote).toEqual({ status: 400, body: { ok: false, error: 'Eliminated players cannot submit this action.' } });
     expect((await vote('p0', 'AFTERLIFE_VOTE', ['p1'])).status).toBe(400);
     expect((await vote('p6', 'AFTERLIFE_VOTE', ['p7'])).status).toBe(400);
 
