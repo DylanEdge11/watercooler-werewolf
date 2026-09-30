@@ -8,6 +8,7 @@ const shared = vi.hoisted(() => ({
 vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
 vi.mock('../lib/game/automation-sweep', () => ({ sweepAutomation: async () => [] }));
+vi.mock('../lib/notify/notifications', () => ({ sweepClosingReminders: async () => 0 }));
 vi.mock('../lib/maintenance', () => ({ purgeExpiredRows: async () => ({ moderatorSessions: 0, seatSessions: 0, rateLimitBuckets: 0 }) }));
 vi.mock('../lib/game/scheduling', () => ({
   sweepDuePhases: async () => {
