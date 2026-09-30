@@ -89,6 +89,7 @@ export async function POST(request: Request, context: RouteContext) {
     const players: PlayerState[] = playerRows.results.map((row) => ({ ...row, role: canonicalRoleKey(row.role), alive: Boolean(row.alive) }));
     const actor = players.find((player) => player.id === identity.seatId);
     if (!actor) throw new Error('Only seated players can submit this action.');
+    if (!actor.alive && body.actionKind !== 'AFTERLIFE_VOTE') throw new Error('Eliminated players cannot submit this action.');
     // Eliminated players have only the optional Afterlife tiebreak vote.
     const permission = actor.alive
       ? permissionForRole(actor.role, phase.kind, Number(phase.slots), pendingHunter, {
