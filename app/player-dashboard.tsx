@@ -21,6 +21,8 @@ import type { ActionKind, RoleKey } from '../lib/game/types';
 export type { ActionKind, RoleKey };
 
 export interface DashboardData {
+  /** Set to SPECTATOR for a spectator's view: no role, no vote, no private results. Absent for players. */
+  viewer?: 'PLAYER' | 'SPECTATOR';
   player: {
     id: string;
     displayName: string;
@@ -460,6 +462,8 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       : 'The village is between phases.';
 
   const stageLight = data.phase?.kind === 'NIGHT' ? 'night' : 'day';
+  const spectating = data.viewer === 'SPECTATOR';
+  const roomLabel = spectating ? 'Afterlife' : 'Private room';
 
   return (
     // The server-rendered page shows before its buttons work; inert until then, so a tap is never silently lost.
@@ -476,7 +480,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
         <div className="game-switcher"><span className="status-dot" aria-hidden="true" />{data.game.name}<span className="chevron" aria-hidden="true">⌄</span></div>
         <div className="profile">
           <div className="avatar">{initials(data.player.displayName)}</div>
-          <span className="profile-name">{data.player.displayName}</span>
+          <span className="profile-name">{data.player.displayName}{spectating && <small className="profile-role-tag"> · spectator</small>}</span>
           <button className="icon-button signout-button" type="button" aria-label={previewMode ? 'Back to studio controls' : 'Sign out'} onClick={signOut}>↗</button>
         </div>
       </header>
@@ -485,20 +489,20 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
         <nav className="mobile-nav" aria-label="Game sections">
           <button type="button" aria-pressed={view === 'today'} onClick={() => showView('today')}>Today</button>
           {data.player.teammates.length > 0 && <a href="#team">Teammates</a>}
-          {data.rooms.length > 0 && <a href="#private-room">Private room</a>}
+          {data.rooms.length > 0 && <a href="#private-room">{roomLabel}</a>}
           <button type="button" aria-pressed={view === 'timeline'} onClick={() => showView('timeline')}>Timeline</button>
           {data.notifications.length > 0 && <a href="#notifications">Updates</a>}
-          <a href="#feedback">Feedback</a>
+          {!spectating && <a href="#feedback">Feedback</a>}
         </nav>
         <aside className="sidebar" aria-label="Game navigation">
           <p className="eyebrow">Game room</p>
           <nav>
             <button className={`nav-item${view === 'today' ? ' active' : ''}`} type="button" aria-current={view === 'today' ? 'page' : undefined} onClick={() => showView('today')}><span aria-hidden="true">◐</span>Today</button>
             <button className={`nav-item${view === 'timeline' ? ' active' : ''}`} type="button" aria-current={view === 'timeline' ? 'page' : undefined} onClick={() => showView('timeline')}><span aria-hidden="true">≋</span>Timeline</button>
-            {data.rooms.length > 0 && <a className="nav-item" href="#private-room"><span aria-hidden="true">◆</span>Private room</a>}
+            {data.rooms.length > 0 && <a className="nav-item" href="#private-room"><span aria-hidden="true">◆</span>{roomLabel}</a>}
           </nav>
           <div className="sidebar-rule" />
-          <p className="eyebrow">Your game</p>
+          <p className="eyebrow">{spectating ? 'The game' : 'Your game'}</p>
           <div className="mini-stat"><span>Cycle</span><strong>{String(currentCycle(data.phase?.sequence, data.timeline)).padStart(2, '0')}</strong></div>
           <details className="stat-details">
             <summary className="mini-stat stat-trigger"><span>Living</span><strong>{data.game.counts.living}</strong></summary>
@@ -513,7 +517,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
             </div>
           </details>
           <div className="mini-stat wolf-stat"><span>Werewolves left</span><strong>{data.game.counts.werewolvesRemaining}</strong></div>
-          <div className="sidebar-note"><span aria-hidden="true">☾</span><p><strong>Keep it quiet.</strong>Your role is private until you are eliminated.</p></div>
+          <div className="sidebar-note"><span aria-hidden="true">☾</span>{spectating ? <p><strong>Watch quietly.</strong>Keep what you read in the Afterlife away from living players.</p> : <p><strong>Keep it quiet.</strong>Your role is private until you are eliminated.</p>}</div>
         </aside>
 
         {view === 'timeline' ? <FullTimeline events={data.timeline} hasMore={Boolean(data.timelineHasMore)} onBack={() => showView('today')} votesFor={votesFor} onOpenVotes={(event, retry) => void requestVotes(event, retry)} /> : <section className="main-column" id="today">
@@ -525,7 +529,14 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           </div>
           {data.game.status === 'STOPPED' && <p className="notice warning" role="status">{data.game.stopReason ?? 'This game is stopped. Player actions and rooms are read-only.'}</p>}
 
-          <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`} data-just-revealed={roleJustRevealed || undefined}>
+          {spectating ? <section className="role-card spectator-role" aria-labelledby="spectator-title">
+            <div className="role-copy">
+              <p className="eyebrow">Spectator</p>
+              <h2 id="spectator-title">You’re watching this game</h2>
+              <p>You have no role and no vote. You can follow who is alive, read every published result and ballot, and chat with eliminated players in the Afterlife.</p>
+            </div>
+            <div className="role-faction"><span>Seat</span><strong>Gallery</strong><small>Spectator</small></div>
+          </section> : <section className={`role-card ${data.player.alive ? '' : 'eliminated-role'}`} data-just-revealed={roleJustRevealed || undefined}>
             {!data.player.alive && <span className="eliminated-banner" role="status">☠ Eliminated · spectator mode</span>}
             <div className="role-orbit"><RoleMedallion role={data.player.role} hidden={concealed} /></div>
             <div className="role-copy">
@@ -534,11 +545,12 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
               <p>{concealed ? 'Your role and role details are hidden on this device.' : data.player.alive ? role?.summary ?? 'The moderator is preparing assignments.' : 'You have been eliminated. Your role is now public and you may spectate.'}</p>
             </div>
             <div className="role-faction"><span>Faction</span><strong>{concealed ? 'Hidden' : role?.faction ?? 'Hidden'}</strong><small>{data.player.alive ? 'You are alive' : 'Eliminated'}</small></div>
-          </section>
+          </section>}
 
           {data.permission.actionKind && data.phase ? (
             <section className="ballot-card">
               <div className="card-heading"><h2>{data.permission.label}</h2><span className="submission-count">{data.participation.submitted}/{data.participation.eligible} submitted</span></div>
+              {data.permission.actionKind === 'AFTERLIFE_VOTE' && <p className="field-help afterlife-vote-note">Voting is optional. The Afterlife’s votes count only if the living village ties; then the tied player with the most Afterlife votes is eliminated. If the Afterlife ties too, a random draw decides.</p>}
               <div className="selection-summary"><span>{selected.length} / {data.permission.maxTargets} selected</span><div className="progress-track"><span style={{ width: `${(selected.length / data.permission.maxTargets) * 100}%` }} /></div><small>{selectedNames.join(' · ') || 'Choose living players below'}</small></div>
               <div className="candidate-grid">
                 {data.candidates.map((candidate) => {
@@ -551,7 +563,9 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
               <div className="ballot-footer"><p><span>●</span> {previewMode ? 'This response is staged locally for the preview.' : 'Your latest revision counts when the phase locks.'}</p><button className="primary-button" type="button" onClick={submitAction} disabled={submitting || selected.length === 0 || (data.permission.actionKind === 'CUPID_PAIR' && selected.length !== 2)}>{submitting ? 'Saving…' : previewMode ? 'Stage response' : 'Save response'}</button></div>
             </section>
           ) : (
-            <section className="ballot-card waiting-card"><span className="waiting-icon" aria-hidden="true">◐</span><div><h2>{data.permission.label}</h2><p>{data.game.status === 'COMPLETED' ? 'This campaign is complete. Review the official timeline and your private result history below.' : data.player.alive ? 'You can step away. This page will show the next official action when it opens.' : 'Published outcomes and game announcements will continue to appear here.'}</p></div><button className="secondary-button" type="button" onClick={() => previewMode ? setMessage('This staged sample does not refresh from a live game.') : void refresh()}>{previewMode ? 'Preview mode' : 'Check for updates'}</button></section>
+            <section className="ballot-card waiting-card"><span className="waiting-icon" aria-hidden="true">◐</span><div><h2>{data.permission.label}</h2><p>{spectating
+                ? data.game.status === 'COMPLETED' ? 'This campaign is complete. Review the official timeline.' : 'Published outcomes, ballots, and announcements appear here as the moderator publishes them.'
+                : data.game.status === 'COMPLETED' ? 'This campaign is complete. Review the official timeline and your private result history below.' : data.player.alive ? 'You can step away. This page will show the next official action when it opens.' : 'Published outcomes and game announcements will continue to appear here.'}</p>{spectating && data.participation.eligible > 0 && <p className="field-help">{data.participation.submitted} of {data.participation.eligible} living players have voted so far.</p>}</div><button className="secondary-button" type="button" onClick={() => previewMode ? setMessage('This staged sample does not refresh from a live game.') : void refresh()}>{previewMode ? 'Preview mode' : 'Check for updates'}</button></section>
           )}
         </section>}
 
@@ -575,7 +589,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
               </article>;
             })}</div> : <p>No published outcomes yet.</p>}
           </section>
-          <section className="rail-card pilot-feedback-card" id="feedback"><div className="rail-heading"><h2>Feedback</h2><span aria-hidden="true">?</span></div><p>Share a quick signal with the moderator team. This is private to the moderators.</p><form className="chat-compose" onSubmit={submitFeedback}><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve?" /></label>{feedbackError && <p className="form-error" role="alert">{feedbackError}</p>}{feedbackMessage && <p className="action-success" role="status">{feedbackMessage}</p>}<button className="secondary-button" type="submit" disabled={sendingFeedback}>{sendingFeedback ? 'Sending…' : 'Send feedback'}</button></form></section>
+          {!spectating && <section className="rail-card pilot-feedback-card" id="feedback"><div className="rail-heading"><h2>Feedback</h2><span aria-hidden="true">?</span></div><p>Share a quick signal with the moderator team. This is private to the moderators.</p><form className="chat-compose" onSubmit={submitFeedback}><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve?" /></label>{feedbackError && <p className="form-error" role="alert">{feedbackError}</p>}{feedbackMessage && <p className="action-success" role="status">{feedbackMessage}</p>}<button className="secondary-button" type="submit" disabled={sendingFeedback}>{sendingFeedback ? 'Sending…' : 'Send feedback'}</button></form></section>}
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>
       </div>

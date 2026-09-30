@@ -2,7 +2,7 @@ import { getDb } from '../../../../../db';
 import { changes } from '../../../../../db/results';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentPlayer } from '../../../../../lib/auth/session';
-import { permissionForRole, validateActionTargets } from '../../../../../lib/game/actions';
+import { afterlifePermission, permissionForRole, validateActionTargets } from '../../../../../lib/game/actions';
 import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type PlayerState, type RoleKey } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { routeError } from '../../../../../lib/http/errors';
@@ -88,11 +88,14 @@ export async function POST(request: Request, context: RouteContext) {
 
     const players: PlayerState[] = playerRows.results.map((row) => ({ ...row, role: canonicalRoleKey(row.role), alive: Boolean(row.alive) }));
     const actor = players.find((player) => player.id === identity.seatId);
-    if (!actor?.alive) throw new Error('Eliminated players cannot submit this action.');
-    const permission = permissionForRole(actor.role, phase.kind, Number(phase.slots), pendingHunter, {
-      seerAlive: players.some((player) => player.alive && player.role === 'SEER'),
-      cupidPairExists: Boolean(loverPair),
-    });
+    if (!actor) throw new Error('Only seated players can submit this action.');
+    // Eliminated players have only the optional Afterlife tiebreak vote.
+    const permission = actor.alive
+      ? permissionForRole(actor.role, phase.kind, Number(phase.slots), pendingHunter, {
+          seerAlive: players.some((player) => player.alive && player.role === 'SEER'),
+          cupidPairExists: Boolean(loverPair),
+        })
+      : afterlifePermission(phase.kind, Number(phase.slots), pendingHunter);
     if (!permission.actionKind || body.actionKind !== permission.actionKind) throw new Error('This action is not available to your role.');
 
     let hunterEliminatedIds: string[] | undefined;
@@ -145,7 +148,7 @@ export async function POST(request: Request, context: RouteContext) {
              AND ${acceptedWindow}
              AND EXISTS (
                SELECT 1 FROM seats s
-               WHERE s.id = ? AND s.game_id = p.game_id AND s.status = 'CLAIMED' AND s.alive = 1
+               WHERE s.id = ? AND s.game_id = p.game_id AND s.status = 'CLAIMED' AND s.alive = ?
              )
              AND (SELECT attempts FROM rate_limit_buckets WHERE bucket_key = ?) <= ?`,
         )
@@ -163,6 +166,7 @@ export async function POST(request: Request, context: RouteContext) {
           identity.gameId,
           now,
           actor.id,
+          permission.actionKind === 'AFTERLIFE_VOTE' ? 0 : 1,
           rateLimitKey,
           ACTION_RATE_LIMIT,
         ),

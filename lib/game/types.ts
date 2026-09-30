@@ -46,7 +46,10 @@ export type ActionKind =
   | 'INVESTIGATE'
   | 'PROTECT'
   | 'HUNTER_SHOT'
-  | 'CUPID_PAIR';
+  | 'CUPID_PAIR'
+  // Optional ballot of eliminated players during a Day or Final ballot. It
+  // never eliminates anyone by itself; it only breaks a tie among the living vote.
+  | 'AFTERLIFE_VOTE';
 
 export interface PlayerState {
   id: string;
@@ -69,6 +72,19 @@ export interface RandomDraw {
   candidates: string[];
   selected: string[];
   rolls: number[];
+}
+
+/**
+ * How the Afterlife broke a tie at the elimination boundary. `afterlifeVotes`
+ * counts only votes for the tied candidates. `selected` are those the
+ * Afterlife decided; any slot it could not decide went to a random draw.
+ */
+export interface AfterlifeTiebreak {
+  candidates: string[];
+  afterlifeVotes: TallyEntry[];
+  selected: string[];
+  /** true when the Afterlife settled every tied slot, with no random draw. */
+  decided: boolean;
 }
 
 export interface TallyEntry {
@@ -119,6 +135,10 @@ export interface PhaseResolution {
   investigations: InvestigationResult[];
   hunterRequiredIds: string[];
   randomDraws: RandomDraw[];
+  /** Day and Final ballots only: the Afterlife's votes for living players. Absent on older results. */
+  afterlifeTally?: TallyEntry[];
+  /** Present when a boundary tie went to the Afterlife. */
+  afterlifeTiebreak?: AfterlifeTiebreak | null;
   warnings: ResolutionWarning[];
 }
 

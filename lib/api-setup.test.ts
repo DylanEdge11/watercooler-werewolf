@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { MIGRATION_FILES } from '../scripts/db-migration-runner.mjs';
 import { readFileSync } from 'node:fs';
 import { defaultComposition } from './game/balance';
 
@@ -119,7 +120,7 @@ function providerCompatible(): TestDatabase {
 }
 
 function seedSetupGame(playerCount = 20): void {
-  for (const file of ['0000_dashing_smiling_tiger.sql', '0001_bodyguard_and_lifecycle.sql', '0002_pilot_hardening.sql', '0003_reviewed_outcome.sql', '0004_operator_bootstrap.sql', '0005_game_automation.sql']) {
+  for (const file of MIGRATION_FILES) {
     sqlite.exec(readFileSync(new URL('../drizzle/' + file, import.meta.url), 'utf8'));
   }
   sqlite.exec("INSERT INTO moderator_accounts (id,email,password_hash,recovery_codes_json,created_at,updated_at) VALUES ('mod','review@pilot.test','fake','[]','2026-01-01','2026-01-01'); INSERT INTO games (id,name,status,timezone,start_date,end_date,active_weekdays_json,schedule_json,final_cutoff_at,created_by_moderator_id,created_at,updated_at) VALUES ('game','Review','REGISTRATION','UTC','2026-01-01','2027-01-01','[1]','{}','2099-01-01','mod','2026-01-01','2026-01-01'); INSERT INTO game_moderators (game_id,moderator_id,role,added_at) VALUES ('game','mod','OWNER','2026-01-01');");
@@ -327,8 +328,17 @@ describe('setup and publication invariants', () => {
     sqlite.exec("UPDATE games SET automation_paused_at = '2026-01-02T00:00:00.000Z' WHERE id = 'game'");
     sqlite.prepare("INSERT INTO announcements (id,game_id,moderator_id,title,body,email_subject,email_body,created_at) VALUES ('old-note','game','mod','Old run','From before the reset','s','b','2026-01-01')").run();
     sqlite.prepare("INSERT INTO game_events (id,game_id,event_type,actor_moderator_id,payload_json,created_at) VALUES ('old-note-event','game','ANNOUNCEMENT','mod','{}','2026-01-01')").run();
+    // A spectator of the old run, signed in, with an Afterlife message.
+    sqlite.exec("INSERT INTO chat_rooms (id,game_id,type,status,created_at) VALUES ('dead-room','game','DEAD','OPEN','2026-01-01')");
+    sqlite.exec("INSERT INTO spectators (id,game_id,display_name,email,status,claim_code_hash,created_at,updated_at) VALUES ('watcher','game','Watcher','watcher@pilot.test','ACTIVE','watcher-hash','2026-01-01','2026-01-01')");
+    sqlite.exec("INSERT INTO spectator_sessions (id,spectator_id,token_hash,session_version,expires_at,created_at) VALUES ('watcher-session','watcher','token',1,'2099-01-01','2026-01-01')");
+    sqlite.exec("INSERT INTO spectator_messages (id,room_id,spectator_id,body,created_at) VALUES ('watcher-message','dead-room','watcher','Hello','2026-01-01')");
     const response = await operations({ action: 'RESET', confirmed: true, confirmationName: 'Review' });
     expect(response.status).toBe(200);
+    // Spectators belong to the run that was reset: their access and messages go.
+    expect(sqlite.prepare("SELECT status FROM spectators WHERE id = 'watcher'").get()).toMatchObject({ status: 'REMOVED' });
+    expect((sqlite.prepare('SELECT COUNT(*) AS count FROM spectator_sessions').get() as { count: number }).count).toBe(0);
+    expect((sqlite.prepare('SELECT COUNT(*) AS count FROM spectator_messages').get() as { count: number }).count).toBe(0);
     // The previous run's announcements go, as with Restore; the audit event stays.
     expect((sqlite.prepare("SELECT COUNT(*) AS count FROM announcements WHERE game_id = 'game'").get() as { count: number }).count).toBe(0);
     expect(sqlite.prepare("SELECT id FROM game_events WHERE id = 'old-note-event'").get()).toBeTruthy();

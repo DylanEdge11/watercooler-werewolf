@@ -47,6 +47,130 @@ describe('tally selection', () => {
   });
 });
 
+describe('afterlife tiebreak', () => {
+  const tiedTally = [
+    { playerId: 'a', votes: 5 },
+    { playerId: 'b', votes: 3 },
+    { playerId: 'c', votes: 3 },
+    { playerId: 'd', votes: 3 },
+  ];
+
+  it('lets the Afterlife settle a boundary tie without a random draw', () => {
+    const result = selectFromTally(tiedTally, 2, [], [
+      { playerId: 'd', votes: 2 },
+      { playerId: 'b', votes: 1 },
+      { playerId: 'a', votes: 4 },
+    ]);
+    expect(result.selected).toEqual(['a', 'd']);
+    expect(result.randomDraws).toEqual([]);
+    expect(result.afterlifeTiebreak).toEqual({
+      candidates: ['b', 'c', 'd'],
+      afterlifeVotes: [{ playerId: 'd', votes: 2 }, { playerId: 'b', votes: 1 }],
+      selected: ['d'],
+      decided: true,
+    });
+  });
+
+  it('draws at random only among the players the Afterlife also tied', () => {
+    const result = selectFromTally(tiedTally, 3, [0.99], [
+      { playerId: 'c', votes: 1 },
+      { playerId: 'd', votes: 1 },
+    ]);
+    // Two slots are open for b, c, d; the Afterlife ties c and d with one vote each, so both go.
+    expect(result.selected).toEqual(['a', 'c', 'd']);
+    expect(result.randomDraws).toEqual([]);
+
+    const split = selectFromTally(tiedTally, 2, [0.99], [
+      { playerId: 'c', votes: 1 },
+      { playerId: 'd', votes: 1 },
+    ]);
+    expect(split.selected).toEqual(['a', 'd']);
+    expect(split.randomDraws).toEqual([{ kind: 'BOUNDARY_TIE', candidates: ['c', 'd'], selected: ['d'], rolls: [0.99] }]);
+    expect(split.afterlifeTiebreak).toMatchObject({ selected: [], decided: false });
+  });
+
+  it('falls back to the plain random draw when the Afterlife did not vote for any tied player', () => {
+    const result = selectFromTally(tiedTally, 2, [0], [{ playerId: 'a', votes: 3 }]);
+    expect(result.selected).toEqual(['a', 'b']);
+    expect(result.afterlifeTiebreak).toBeNull();
+    expect(result.randomDraws).toEqual([{ kind: 'BOUNDARY_TIE', candidates: ['b', 'c', 'd'], selected: ['b'], rolls: [0] }]);
+  });
+
+  it('counts votes from eliminated players on a Day ballot only', () => {
+    const withDead: PlayerState[] = players.map((player) =>
+      player.id === 'mason-2' || player.id === 'villager-2' ? { ...player, alive: false } : player,
+    );
+    const day = resolvePhase({
+      phaseId: 'day-2',
+      kind: 'DAY',
+      slots: 1,
+      players: withDead,
+      randomRolls: [0],
+      actions: [
+        action('v1', 'seer', 'DAY_VOTE', ['wolf-1']),
+        action('v2', 'bodyguard', 'DAY_VOTE', ['wolf-2']),
+        action('d1', 'mason-2', 'AFTERLIFE_VOTE', ['wolf-2']),
+        action('d2', 'villager-2', 'AFTERLIFE_VOTE', ['villager-2']),
+        // A living player's afterlife vote does not count.
+        action('d3', 'hunter', 'AFTERLIFE_VOTE', ['wolf-1']),
+      ],
+    });
+    expect(day.afterlifeTally).toEqual([{ playerId: 'wolf-2', votes: 1 }]);
+    expect(day.eliminations).toEqual([{ playerId: 'wolf-2', cause: 'DAY_VOTE' }]);
+    expect(day.randomDraws).toEqual([]);
+    expect(day.afterlifeTiebreak?.decided).toBe(true);
+    expect(day.warnings.length).toBe(2);
+
+    // Without a tie the Afterlife changes nothing, however it voted.
+    const clear = resolvePhase({
+      phaseId: 'day-3',
+      kind: 'DAY',
+      slots: 1,
+      players: withDead,
+      actions: [
+        action('v1', 'seer', 'DAY_VOTE', ['wolf-1']),
+        action('v2', 'bodyguard', 'DAY_VOTE', ['wolf-1']),
+        action('v3', 'hunter', 'DAY_VOTE', ['wolf-2']),
+        action('d1', 'mason-2', 'AFTERLIFE_VOTE', ['wolf-2']),
+      ],
+    });
+    expect(clear.eliminations.map((item) => item.playerId)).toEqual(['wolf-1']);
+    expect(clear.afterlifeTiebreak).toBeNull();
+
+    const night = resolvePhase({
+      phaseId: 'night-2',
+      kind: 'NIGHT',
+      slots: 1,
+      players: withDead,
+      randomRolls: [0],
+      actions: [
+        action('w1', 'wolf-1', 'WOLF_VOTE', ['seer']),
+        action('w2', 'wolf-2', 'WOLF_VOTE', ['hunter']),
+        action('d1', 'mason-2', 'AFTERLIFE_VOTE', ['seer']),
+      ],
+    });
+    expect(night).not.toHaveProperty('afterlifeTally');
+    expect(night.randomDraws).toHaveLength(1);
+    expect(night.eliminations).toEqual([{ playerId: 'hunter', cause: 'WEREWOLF_ATTACK' }]);
+  });
+
+  it('drops the Afterlife tiebreak when a moderator overrides the eliminations', () => {
+    const outcome = resolvePhase({
+      phaseId: 'day-4',
+      kind: 'DAY',
+      slots: 1,
+      players: players.map((player) => player.id === 'mason-2' ? { ...player, alive: false } : player),
+      actions: [
+        action('v1', 'seer', 'DAY_VOTE', ['wolf-1']),
+        action('v2', 'bodyguard', 'DAY_VOTE', ['wolf-2']),
+        action('d1', 'mason-2', 'AFTERLIFE_VOTE', ['wolf-2']),
+      ],
+    });
+    expect(outcome.afterlifeTiebreak?.decided).toBe(true);
+    expect(applyEliminationOverride(outcome, ['wolf-1'], players).afterlifeTiebreak).toBeNull();
+  });
+});
+
 describe('day resolution', () => {
   it('counts up to the slot count, ignores self-targets, and uses latest revisions', () => {
     const result = resolvePhase({

@@ -19,6 +19,8 @@ interface Outcome {
   investigations: Array<{ seerId: string; targetId: string; role: string }>;
   hunterRequiredIds: string[];
   randomDraws: Array<{ candidates: string[]; selected: string[]; rolls: number[] }>;
+  afterlifeTally?: Array<{ playerId: string; votes: number }>;
+  afterlifeTiebreak?: { candidates: string[]; afterlifeVotes: Array<{ playerId: string; votes: number }>; selected: string[]; decided: boolean } | null;
   warnings: Array<{ reason: string }>;
 }
 
@@ -31,6 +33,8 @@ interface Phase {
   hunterDeadlineAt: string | null;
   slots: number;
   currentSubmissions: number;
+  /** Optional Afterlife tiebreak votes saved on a Day or Final ballot. */
+  afterlifeSubmissions?: number;
   /** Open phase only: living players who still owe a response. For the moderator's eyes alone. */
   outstanding?: Array<{ id: string; displayName: string }>;
   /** Published by the sweep after the review window, with no moderator attached. */
@@ -235,7 +239,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
 
       {latest && (
         <div className="phase-review">
-          <div className="phase-status-row"><div><p className="eyebrow accent">{phaseName(latest.kind, latest.sequence)}</p><h3>{latest.status.replaceAll('_', ' ')}</h3></div><div><strong>{latest.currentSubmissions}</strong><small>current responses</small></div><div><strong>{latest.slots}</strong><small>elimination slots</small></div></div>
+          <div className="phase-status-row"><div><p className="eyebrow accent">{phaseName(latest.kind, latest.sequence)}</p><h3>{latest.status.replaceAll('_', ' ')}</h3></div><div><strong>{latest.currentSubmissions}</strong><small>current responses</small></div>{latest.kind !== 'NIGHT' && <div><strong>{latest.afterlifeSubmissions ?? 0}</strong><small>Afterlife votes</small></div>}<div><strong>{latest.slots}</strong><small>elimination slots</small></div></div>
           {latest.status === 'OPEN' && <OutstandingBlock phase={latest} timeZone={gameTimeZone} />}
           {['OPEN', 'LOCKED'].includes(latest.status) && <button className="danger-button" type="button" onClick={() => void run('LOCK_AND_PROPOSE', latest.id)}>{latest.status === 'LOCKED' ? 'Calculate locked responses' : 'Lock responses & calculate'}</button>}
           {(latest.status === 'PENDING_HUNTER' || latest.status === 'HUNTER_FINALIZING') && (
@@ -245,8 +249,8 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
           {latest.proposal && authoritativeOutcome && (
             <>
               <div className="resolution-columns">
-                <div><p className="eyebrow">Vote tally</p>{proposedOutcome?.tally.length ? proposedOutcome.tally.map((entry) => <div className="tally-row" key={entry.playerId}><span>{byId.get(entry.playerId)?.displayName ?? 'Player'}</span><strong>{entry.votes}</strong></div>) : <p className="empty-note">No eligible votes were submitted.</p>}</div>
-                <div><p className="eyebrow">{latest.status === 'PUBLISHED' ? 'Authoritative published outcome' : reviewedOutcome ? 'Reviewed outcome awaiting follow-up' : 'Proposed outcome'}</p>{authoritativeOutcome.eliminations.length ? authoritativeOutcome.eliminations.map((item) => <div className="outcome-row" key={item.playerId}><span>{byId.get(item.playerId)?.displayName ?? 'Player'}</span><strong>{byId.get(item.playerId)?.role}</strong><small>{item.cause.replaceAll('_', ' ')}</small></div>) : <p className="empty-note">No elimination.</p>}{authoritativeOutcome.protectedPlayerIds.length > 0 && <p className="protected-note">Protected: {authoritativeOutcome.protectedPlayerIds.map((id) => byId.get(id)?.displayName).join(', ')}</p>}{authoritativeOutcome.randomDraws.length > 0 && <p className="random-note">A recorded random draw resolved a boundary tie.</p>}</div>
+                <div><p className="eyebrow">Vote tally</p>{proposedOutcome?.tally.length ? proposedOutcome.tally.map((entry) => <div className="tally-row" key={entry.playerId}><span>{byId.get(entry.playerId)?.displayName ?? 'Player'}</span><strong>{entry.votes}</strong></div>) : <p className="empty-note">No eligible votes were submitted.</p>}{proposedOutcome?.afterlifeTally && <><p className="eyebrow">Afterlife tiebreak votes</p>{proposedOutcome.afterlifeTally.length ? proposedOutcome.afterlifeTally.map((entry) => <div className="tally-row" key={`afterlife-${entry.playerId}`}><span>{byId.get(entry.playerId)?.displayName ?? 'Player'}</span><strong>{entry.votes}</strong></div>) : <p className="empty-note">The Afterlife did not vote.</p>}</>}</div>
+                <div><p className="eyebrow">{latest.status === 'PUBLISHED' ? 'Authoritative published outcome' : reviewedOutcome ? 'Reviewed outcome awaiting follow-up' : 'Proposed outcome'}</p>{authoritativeOutcome.eliminations.length ? authoritativeOutcome.eliminations.map((item) => <div className="outcome-row" key={item.playerId}><span>{byId.get(item.playerId)?.displayName ?? 'Player'}</span><strong>{byId.get(item.playerId)?.role}</strong><small>{item.cause.replaceAll('_', ' ')}</small></div>) : <p className="empty-note">No elimination.</p>}{authoritativeOutcome.protectedPlayerIds.length > 0 && <p className="protected-note">Protected: {authoritativeOutcome.protectedPlayerIds.map((id) => byId.get(id)?.displayName).join(', ')}</p>}{authoritativeOutcome.afterlifeTiebreak && authoritativeOutcome.afterlifeTiebreak.selected.length > 0 && <p className="random-note">The Afterlife broke a boundary tie: {authoritativeOutcome.afterlifeTiebreak.selected.map((id) => byId.get(id)?.displayName ?? 'Player').join(', ')}.</p>}{authoritativeOutcome.randomDraws.length > 0 && <p className="random-note">A recorded random draw resolved a boundary tie{authoritativeOutcome.afterlifeTiebreak ? ' the Afterlife could not settle' : ''}.</p>}</div>
               </div>
               {latest.status === 'PUBLISHED' && latest.publishedAutomatically && <p className="notice success">Published automatically after the review window.</p>}
               {publishedOutcome && proposedOutcome && JSON.stringify(publishedOutcome) !== JSON.stringify(proposedOutcome) && <div className="notice warning"><strong>Override published.</strong> The original calculation remains preserved for audit. {latest.proposal.overrideReason ? 'Reason: ' + latest.proposal.overrideReason : ''}</div>}

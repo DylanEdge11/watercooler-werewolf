@@ -31,6 +31,7 @@ interface PhaseRow {
   hunterDeadlineAt: string | null;
   publishedAt: string | null;
   currentSubmissions: number;
+  afterlifeSubmissions: number;
 }
 
 interface ProposalRow {
@@ -65,7 +66,8 @@ export async function GET(request: Request, context: RouteContext) {
         .prepare(
           `SELECT p.id, p.sequence, p.kind, p.status, p.opens_at AS opensAt, p.closes_at AS closesAt,
                   p.slots, p.hunter_deadline_at AS hunterDeadlineAt, p.published_at AS publishedAt,
-                  COUNT(a.id) AS currentSubmissions
+                  COUNT(CASE WHEN a.kind != 'AFTERLIFE_VOTE' THEN a.id END) AS currentSubmissions,
+                  COUNT(CASE WHEN a.kind = 'AFTERLIFE_VOTE' THEN a.id END) AS afterlifeSubmissions
            FROM phases p
            LEFT JOIN action_submissions a ON a.phase_id = p.id AND a.superseded_at IS NULL
            WHERE p.game_id = ? GROUP BY p.id ORDER BY p.sequence DESC`,
@@ -153,6 +155,7 @@ export async function GET(request: Request, context: RouteContext) {
         return {
           ...phase,
           currentSubmissions: Number(phase.currentSubmissions),
+          afterlifeSubmissions: Number(phase.afterlifeSubmissions),
           outstanding: phase.id === openPhase?.id ? outstanding : [],
           // Published with no moderator attached: the sweep published it after the review window.
           publishedAutomatically: phase.status === 'PUBLISHED' && reviewByPhase.has(phase.id) && !reviewByPhase.get(phase.id)?.reviewedByModeratorId,

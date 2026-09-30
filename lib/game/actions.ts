@@ -34,6 +34,18 @@ export function permissionForRole(
   return { actionKind: null, maxTargets: 0, label: 'No private action this night' };
 }
 
+/**
+ * What an eliminated player may do. On an open Day or Final ballot the
+ * Afterlife may cast an optional vote that only breaks a tie in the living
+ * vote; otherwise they watch.
+ */
+export function afterlifePermission(phaseKind: PhaseKind, slots: number, pendingHunter = false): ActionPermission {
+  if (!pendingHunter && (phaseKind === 'DAY' || phaseKind === 'FINAL_BALLOT')) {
+    return { actionKind: 'AFTERLIFE_VOTE', maxTargets: slots, label: 'Optional Afterlife tiebreak vote' };
+  }
+  return { actionKind: null, maxTargets: 0, label: 'Spectating the village' };
+}
+
 export function validateActionTargets(input: {
   actor: PlayerState;
   players: PlayerState[];
@@ -66,11 +78,12 @@ export function validateActionTargets(input: {
 }
 
 /** Actions that several players share. Only these may be counted across players. */
-const SHARED_ACTION_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>(['DAY_VOTE', 'WOLF_VOTE']);
+const SHARED_ACTION_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>(['DAY_VOTE', 'WOLF_VOTE', 'AFTERLIFE_VOTE']);
 
 /**
  * The "N of M submitted" counter a player sees. Day ballots count every living
- * voter and the pack counts its own members, which Werewolves already know.
+ * voter, the pack counts its own members, which Werewolves already know, and
+ * the Afterlife counts every eliminated player, which is public.
  * Every other action is counted for the reader alone, so the counter can never
  * reveal how many players hold another Night role, including roles added later.
  */
@@ -78,13 +91,16 @@ export function participationCounter(input: {
   actionKind: ActionKind | null;
   livingPlayers: number;
   livingWerewolves: number;
+  eliminatedPlayers?: number;
   /** Distinct players with a saved action of this kind; used only for shared actions. */
   sharedSubmissions: number;
   ownSubmission: boolean;
 }): { submitted: number; eligible: number } {
   if (!input.actionKind) return { submitted: 0, eligible: 0 };
   if (!SHARED_ACTION_KINDS.has(input.actionKind)) return { submitted: input.ownSubmission ? 1 : 0, eligible: 1 };
-  const eligible = input.actionKind === 'DAY_VOTE' ? input.livingPlayers : input.livingWerewolves;
+  const eligible = input.actionKind === 'DAY_VOTE'
+    ? input.livingPlayers
+    : input.actionKind === 'AFTERLIFE_VOTE' ? input.eliminatedPlayers ?? 0 : input.livingWerewolves;
   return { submitted: Math.min(input.sharedSubmissions, eligible), eligible };
 }
 

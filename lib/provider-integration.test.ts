@@ -30,6 +30,7 @@ vi.mock('../lib/auth/session', () => ({
     setCookie: async () => {},
   }),
   getCurrentPlayer: async () => shared.currentPlayer,
+  getCurrentSpectator: async () => null,
 }));
 vi.mock('../lib/http/rate-limit', () => {
   class TestRateLimitError extends Error {

@@ -37,6 +37,7 @@ export default function FullTimeline({ events: unordered, hasMore = false, onBac
                 {eliminations.map((item, index) => <li key={`${event.id}-${item.displayName}-${index}`}><strong>{item.displayName}</strong><span>{readableRole(item.role)}{eliminationCause(item.cause) ? ` · ${eliminationCause(item.cause)}` : ''}</span></li>)}
               </ul>}
               {event.payload.protectedAttackBlocked && <p>Bodyguard protection stopped a pack attack.</p>}
+              {event.payload.afterlifeBrokeTie && <p>The village vote tied, and the Afterlife broke the tie.</p>}
               {event.payload.publishedAutomatically && <p className="timeline-auto-note">Published automatically after the review window.</p>}
               {view.publicBallot && (voteCount ? <details className="timeline-votes" open={event.id === newestBallotId} onToggle={(toggle) => { if (toggle.currentTarget.open) onOpenVotes(event); }}>
                 <summary>{voteCount} {voteCount === 1 ? 'vote' : 'votes'}</summary>

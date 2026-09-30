@@ -3,6 +3,7 @@ import { sha256 } from '../auth/crypto';
 import { randomToken } from '../auth/crypto';
 import { backupComposition, backupGameFromRecord, backupSeats, validateBackupForRestore } from './restore';
 import { HttpError } from '../http/errors';
+import { endSpectatorsStatements } from '../roster/spectators';
 
 export interface GameBackup {
   schemaVersion: 2;
@@ -215,6 +216,7 @@ export async function restoreGameBackup(
     db.prepare('DELETE FROM announcements WHERE game_id = ? AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
     db.prepare('DELETE FROM chat_room_members WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
     db.prepare('DELETE FROM chat_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    ...endSpectatorsStatements(db, gameId, now, restoreGuard, [gameId, now, moderatorId]),
     db.prepare("UPDATE chat_rooms SET status = 'OPEN' WHERE game_id = ? AND " + restoreGuard).bind(gameId, gameId, now, moderatorId),
     db.prepare('DELETE FROM seat_sessions WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
     db.prepare("UPDATE seats SET status = 'REMOVED', email = 'archived+' || id || '@invalid.test', pin_hash = NULL, session_version = session_version + 1, alive = 0, predecessor_seat_id = NULL, claimed_at = NULL, updated_at = ? WHERE game_id = ? AND " + restoreGuard).bind(now, gameId, gameId, now, moderatorId),

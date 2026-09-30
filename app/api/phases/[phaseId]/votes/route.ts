@@ -1,5 +1,5 @@
 import { ensureDatabase } from '../../../../../db/migrate';
-import { getCurrentPlayer } from '../../../../../lib/auth/session';
+import { getCurrentPlayer, getCurrentSpectator } from '../../../../../lib/auth/session';
 import { routeError } from '../../../../../lib/http/errors';
 import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 import { jsonError } from '../../../../../lib/http/security';
@@ -9,11 +9,11 @@ interface RouteContext {
   params: Promise<{ phaseId: string }>;
 }
 
-/** Who voted for whom in one published Day or Final ballot of the player's own game. */
+/** Who voted for whom in one published Day or Final ballot of the player's (or spectator's) own game. */
 export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
-    const identity = await getCurrentPlayer();
+    const identity = (await getCurrentPlayer()) ?? (await getCurrentSpectator());
     if (!identity) return jsonError('Player authentication required.', 401);
     const { phaseId } = await context.params;
     const votes = await loadBallotVotes(identity.gameId, phaseId);
