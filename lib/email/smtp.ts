@@ -5,6 +5,8 @@ export interface OutgoingEmail {
   to: string;
   subject: string;
   text: string;
+  /** Extra message headers, such as List-Unsubscribe. */
+  headers?: Record<string, string>;
 }
 
 export type DeliveryResult = { ok: true } | { ok: false; reason: string };
@@ -48,15 +50,15 @@ export function openMailer(settings: SmtpSettings): Mailer {
         await transport.verify();
         return { ok: true };
       } catch (error) {
-        return { ok: false, reason: describeFailure('Invite email sign-in failed', error) };
+        return { ok: false, reason: describeFailure('Email sign-in failed', error) };
       }
     },
     async send(email) {
       try {
-        await transport.sendMail({ from: settings.from, to: email.to, subject: email.subject, text: email.text });
+        await transport.sendMail({ from: settings.from, to: email.to, subject: email.subject, text: email.text, ...(email.headers ? { headers: email.headers } : {}) });
         return { ok: true };
       } catch (error) {
-        return { ok: false, reason: describeFailure('Invite email delivery failed', error) };
+        return { ok: false, reason: describeFailure('Email delivery failed', error) };
       }
     },
     close() {

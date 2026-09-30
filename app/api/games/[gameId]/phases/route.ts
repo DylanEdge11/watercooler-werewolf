@@ -13,8 +13,12 @@ import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
 import { parseScheduledDate } from '../../../../../lib/game/scheduling';
 import { canonicalRoleKey, type PhaseKind, type PhaseResolution, type PlayerState } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { notifyPhaseOpened, runAfterResponse } from '../../../../../lib/notify/notifications';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { respondJsonWithEtag } from '../../../../../lib/http/etag';
+
+// Player email is sent after the response, within this function's time limit: a result story, then up to 80 emails.
+export const maxDuration = 60;
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -300,6 +304,8 @@ export async function POST(request: Request, context: RouteContext) {
           .bind(crypto.randomUUID(), gameId, id, moderator.id, JSON.stringify({ kind: body.kind, slots, closesAt: closesAt.toISOString() }), now, id),
       ]);
       if (changes(result[0]) !== 1) return jsonError('The game or current phase changed before this phase could open. Refresh and try again.', 409);
+      // Players who turned email on and have something to do are told after this response is sent.
+      runAfterResponse(() => notifyPhaseOpened(gameId, id));
       return Response.json({ ok: true, phaseId: id, slots });
     }
 

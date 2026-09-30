@@ -9,7 +9,8 @@ export const MIGRATION_VERSIONS = [
   '0004_operator_bootstrap',
   '0005_game_automation',
   '0006_game_events_type_index',
-  '0007_spectators',
+  '0007_email_notifications',
+  '0008_spectators',
 ] as const;
 
 export async function verifyDatabaseReady(db: Database): Promise<void> {

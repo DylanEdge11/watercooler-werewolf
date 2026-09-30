@@ -4,8 +4,10 @@ import { afterlifePermission, participationCounter, participationCountsAcrossPla
 import { automaticStepDueAt } from '../game/automation';
 import type { advanceGameSafely } from '../game/automation-sweep';
 import { ROLE_CATALOG } from '../game/catalog';
+import { protectedAttackBlocked } from '../game/public-result';
 import { spectatorCanPost } from '../game/spectators';
 import { loadCurrentLoverPair } from '../game/relationships';
+import { emailNotificationsAvailable } from '../notify/config';
 import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type RoleKey } from '../game/types';
 
 const TIMELINE_LIMIT = 100;
@@ -248,26 +250,11 @@ function buildTimeline(
       const publishedOutcome = payload.publishedOutcome && typeof payload.publishedOutcome === 'object'
         ? payload.publishedOutcome as Record<string, unknown>
         : null;
-      const selectedTargets = Array.isArray(publishedOutcome?.selectedTargets)
-        ? publishedOutcome.selectedTargets.filter((id): id is string => typeof id === 'string')
-        : [];
-      const protectedPlayerIds = Array.isArray(publishedOutcome?.protectedPlayerIds)
-        ? publishedOutcome.protectedPlayerIds.filter((id): id is string => typeof id === 'string')
-        : [];
-      const packEliminatedIds = new Set(rawEliminations
-        .map((item) => item as Record<string, unknown>)
-        .filter((item) => item.cause === 'WEREWOLF_ATTACK')
-        .map((item) => item.playerId)
-        .filter((id): id is string => typeof id === 'string'));
       // Only that the Afterlife decided a tie is public; its votes stay with the moderators.
       const afterlifeTiebreak = publishedOutcome?.afterlifeTiebreak && typeof publishedOutcome.afterlifeTiebreak === 'object'
         ? publishedOutcome.afterlifeTiebreak as { selected?: unknown }
         : null;
       const afterlifeBrokeTie = Array.isArray(afterlifeTiebreak?.selected) && afterlifeTiebreak.selected.length > 0;
-      const protectedAttackBlocked = selectedTargets.some((id) =>
-        protectedPlayerIds.includes(id)
-        && !packEliminatedIds.has(id),
-      );
       return {
         id: event.id,
         eventType: event.eventType,
@@ -277,7 +264,7 @@ function buildTimeline(
           sequence: event.phaseSequence,
           kind: payload.kind,
           eliminations,
-          protectedAttackBlocked,
+          protectedAttackBlocked: protectedAttackBlocked(payload),
           ...(afterlifeBrokeTie ? { afterlifeBrokeTie } : {}),
           winner: payload.winner ?? null,
           publishedAutomatically: payload.source === 'SCHEDULER',
@@ -318,9 +305,11 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
   const player = await db
     .prepare(
       `SELECT s.id, s.display_name AS displayName, s.alive, g.id AS gameId, g.name AS gameName,
-              g.status AS gameStatus, g.timezone, g.stop_reason AS stopReason, ra.role_key AS role
+              g.status AS gameStatus, g.timezone, g.stop_reason AS stopReason, ra.role_key AS role,
+              COALESCE(ep.enabled, 0) AS emailEnabled
        FROM seats s JOIN games g ON g.id = s.game_id
        LEFT JOIN role_assignments ra ON ra.game_id = s.game_id AND ra.seat_id = s.id
+       LEFT JOIN email_preferences ep ON ep.seat_id = s.id
        WHERE s.id = ? LIMIT 1`,
     )
     .bind(seatId)
@@ -334,6 +323,7 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
       timezone: string;
       stopReason: string | null;
       role: RoleKey | null;
+      emailEnabled: number;
     }>();
   if (!player) return null;
   if (player.role) player.role = canonicalRoleKey(player.role);
@@ -508,6 +498,8 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
     participation,
     timeline,
     timelineHasMore,
+    // The player's own email switch. Absent from the choice when this site cannot send email.
+    emailNotifications: { available: emailNotificationsAvailable(), enabled: Boolean(player.emailEnabled) },
     notifications: notificationRows.results,
     notificationsHasMore,
     notificationsNextCursor: notificationsHasMore && lastNotification ? { createdAt: lastNotification.createdAt, id: lastNotification.id } : null,

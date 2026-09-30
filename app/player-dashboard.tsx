@@ -62,6 +62,8 @@ export interface DashboardData {
   notifications: Array<{ id: string; type: string; title: string; body: string; createdAt: string }>;
   notificationsHasMore?: boolean;
   notificationsNextCursor?: { createdAt: string; id: string } | null;
+  /** The player's own email switch. `available` is false when the site cannot send email. */
+  emailNotifications?: { available: boolean; enabled: boolean };
   rooms: Array<{ id: string; type: 'WEREWOLF' | 'MASON' | 'DEAD'; status: string; access: string }>;
 }
 
@@ -153,6 +155,8 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const [feedbackError, setFeedbackError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sendingFeedback, setSendingFeedback] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
   const hydrated = useHydrated();
   const [roleHidden, setRoleHidden] = useState(initialRoleHidden ?? false);
@@ -408,6 +412,29 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     setDeathAlert(null);
   }
 
+  async function changeEmailChoice(enabled: boolean) {
+    if (savingEmail || !data) return;
+    setEmailError('');
+    setSavingEmail(true);
+    try {
+      const response = await fetch('/api/player/email', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) {
+        setEmailError(result.error ?? 'Unable to save your email choice.');
+        return;
+      }
+      setData((current) => current ? { ...current, emailNotifications: { available: true, enabled } } : current);
+    } catch (caught) {
+      setEmailError(caught instanceof Error ? caught.message : 'Unable to save your email choice.');
+    } finally {
+      setSavingEmail(false);
+    }
+  }
+
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (sendingFeedback) return;
@@ -589,6 +616,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
               </article>;
             })}</div> : <p>No published outcomes yet.</p>}
           </section>
+          {data.emailNotifications?.available && !previewMode && <section className="rail-card email-card" id="email"><div className="rail-heading"><h2>Email</h2><span aria-hidden="true">@</span></div><p>{data.emailNotifications.enabled ? 'You will get an email when a phase opens and you have something to do, half an hour before it closes if you have not acted, and when a result is published.' : 'Get an email when a phase opens and you have something to do, a nudge half an hour before it closes, and a short story when each result is published. Off unless you turn it on.'}</p>{emailError && <p className="form-error" role="alert">{emailError}</p>}<button className="secondary-button" type="button" aria-pressed={data.emailNotifications.enabled} disabled={savingEmail} onClick={() => void changeEmailChoice(!data.emailNotifications?.enabled)}>{savingEmail ? 'Saving…' : data.emailNotifications.enabled ? 'Turn email off' : 'Turn email on'}</button></section>}
           {!spectating && <section className="rail-card pilot-feedback-card" id="feedback"><div className="rail-heading"><h2>Feedback</h2><span aria-hidden="true">?</span></div><p>Share a quick signal with the moderator team. This is private to the moderators.</p><form className="chat-compose" onSubmit={submitFeedback}><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve?" /></label>{feedbackError && <p className="form-error" role="alert">{feedbackError}</p>}{feedbackMessage && <p className="action-success" role="status">{feedbackMessage}</p>}<button className="secondary-button" type="submit" disabled={sendingFeedback}>{sendingFeedback ? 'Sending…' : 'Send feedback'}</button></form></section>}
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>

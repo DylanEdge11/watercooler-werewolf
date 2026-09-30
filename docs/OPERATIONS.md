@@ -84,6 +84,16 @@ Owner only, for games that were never released. **Cancel setup and start new gam
 - Bootstrap and new co-moderator accounts show eight one-time recovery codes. Store them in a password manager; only hashes are kept.
 - Players sign in with their invitation email and PIN, or their seat code.
 
+## Player email
+
+When the site operator has set up email ([SETUP](SETUP.md#player-email)), each player can turn on emails from their dashboard. They are off until a player chooses. You do nothing to send them.
+
+- **Phase opened** goes out when you open a phase, to opted-in players who have something to do. On a Night, only players with a Night action are emailed; the wording never says what the action is.
+- **Closes soon** goes out half an hour before a deadline to the same players if they have not saved yet. It is skipped for phases of an hour or less.
+- **Result published** goes to every opted-in player, alive or eliminated, when a result is published by you or automatically. It is a short themed story built from the public result only.
+
+Each batch leaves a line in the Operations event log ("Day 2 opened: emailed 7 players.") and a warning if any email failed. A mail failure never blocks opening, locking, or publishing. Players who turned email on and later leave the game, or whose address is on a reserved test domain, are skipped.
+
 ## Deadlines and automatic results
 
 Phases never open on their own; the moderator opens each one. Server-side deadlines reject late submissions even when no moderator is watching.

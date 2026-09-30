@@ -4,8 +4,12 @@ import { ensureDatabase } from '../../../../db/migrate';
 import { sweepAutomation } from '../../../../lib/game/automation-sweep';
 import { sweepDuePhases } from '../../../../lib/game/scheduling';
 import { purgeExpiredRows } from '../../../../lib/maintenance';
+import { sweepClosingReminders } from '../../../../lib/notify/notifications';
 import { jsonError } from '../../../../lib/http/security';
 import { routeError } from '../../../../lib/http/errors';
+
+// Player email is sent after the response, within this function's time limit: a result story, then up to 80 emails.
+export const maxDuration = 60;
 
 function configuredSchedulerToken(): string | undefined {
   return process.env.CRON_SECRET?.trim() || undefined;
@@ -41,7 +45,9 @@ async function sweep(request: Request) {
     const result = await sweepDuePhases(getDb());
     // Housekeeping never fails the sweep.
     const purged = await purgeExpiredRows(getDb()).catch((error) => { console.error('Expired-row cleanup failed', error); return null; });
-    return Response.json({ ok: true, games: result, lockedPhaseCount: result.reduce((total, game) => total + game.phaseIds.length, 0), automation, purged, ranAt: new Date().toISOString() });
+    // Closes-soon emails, for every running game. A mail problem never fails the sweep.
+    const reminders = await sweepClosingReminders().catch((error) => { console.error('Closing-soon sweep failed', error); return null; });
+    return Response.json({ ok: true, games: result, lockedPhaseCount: result.reduce((total, game) => total + game.phaseIds.length, 0), automation, purged, reminders, ranAt: new Date().toISOString() });
   } catch (error) {
     return routeError(error, 'Unable to sweep phase deadlines.');
   }

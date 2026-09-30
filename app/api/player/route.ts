@@ -6,6 +6,9 @@ import { routeError } from '../../../lib/http/errors';
 import { loadDashboard, loadSpectatorDashboard, type NotificationCursor } from '../../../lib/player/dashboard-data';
 import { respondJsonWithEtag } from '../../../lib/http/etag';
 
+// Player email is sent after the response, within this function's time limit: a result story, then up to 80 emails.
+export const maxDuration = 60;
+
 export async function GET(request: Request) {
   try {
     await ensureDatabase();
