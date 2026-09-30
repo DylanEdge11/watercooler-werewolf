@@ -162,6 +162,54 @@ export const seatSessions = sqliteTable(
   ],
 );
 
+/**
+ * People watching a game that has started. They are not seats: they hold no
+ * role, never vote, and are never counted as players. They sign in with their
+ * own private link and PIN, see what players see publicly, and may read and
+ * post in the Afterlife.
+ */
+export const spectators = sqliteTable(
+  'spectators',
+  {
+    id: text('id').primaryKey(),
+    gameId: text('game_id')
+      .notNull()
+      .references(() => games.id, { onDelete: 'cascade' }),
+    displayName: text('display_name').notNull(),
+    email: text('email').notNull(),
+    status: text('status').$type<'INVITED' | 'ACTIVE' | 'REMOVED'>().notNull().default('INVITED'),
+    claimCodeHash: text('claim_code_hash').notNull(),
+    pinHash: text('pin_hash'),
+    sessionVersion: integer('session_version').notNull().default(1),
+    addedByModeratorId: text('added_by_moderator_id').references(() => moderatorAccounts.id),
+    claimedAt: text('claimed_at'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('idx_spectators_claim_code').on(table.claimCodeHash),
+    index('idx_spectators_game_status').on(table.gameId, table.status),
+  ],
+);
+
+export const spectatorSessions = sqliteTable(
+  'spectator_sessions',
+  {
+    id: text('id').primaryKey(),
+    spectatorId: text('spectator_id')
+      .notNull()
+      .references(() => spectators.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    sessionVersion: integer('session_version').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('idx_spectator_sessions_token').on(table.tokenHash),
+    index('idx_spectator_sessions_owner').on(table.spectatorId, table.expiresAt),
+  ],
+);
+
 export const gameRoleCounts = sqliteTable(
   'game_role_counts',
   {
@@ -374,6 +422,26 @@ export const chatMessages = sqliteTable(
     createdAt: text('created_at').notNull(),
   },
   (table) => [index('idx_chat_messages_room_time').on(table.roomId, table.createdAt)],
+);
+
+/** Afterlife messages written by spectators. Player messages stay in chat_messages. */
+export const spectatorMessages = sqliteTable(
+  'spectator_messages',
+  {
+    id: text('id').primaryKey(),
+    roomId: text('room_id')
+      .notNull()
+      .references(() => chatRooms.id, { onDelete: 'cascade' }),
+    spectatorId: text('spectator_id')
+      .notNull()
+      .references(() => spectators.id, { onDelete: 'cascade' }),
+    body: text('body'),
+    deletedByModeratorId: text('deleted_by_moderator_id').references(() => moderatorAccounts.id),
+    deletedAt: text('deleted_at'),
+    purgedAt: text('purged_at'),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [index('idx_spectator_messages_room_time').on(table.roomId, table.createdAt)],
 );
 
 export const announcements = sqliteTable(

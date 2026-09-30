@@ -20,6 +20,8 @@ export interface PublicTimelineEvent {
     /** How many players' votes a Day or Final ballot recorded. */
     voteCount?: number;
     protectedAttackBlocked?: boolean;
+    /** The Afterlife's optional votes broke a tie in this ballot. Its votes themselves are not public. */
+    afterlifeBrokeTie?: boolean;
     /** Published by the sweep after the review window rather than by a moderator. */
     publishedAutomatically?: boolean;
   };
@@ -135,6 +137,7 @@ export function describeTimelineEvent(event: PublicTimelineEvent): TimelineEntry
     : payload.protectedAttackBlocked
       ? 'Bodyguard protection stopped a pack attack. No one died.'
       : 'No elimination published.';
+  const tiebreakNote = payload.afterlifeBrokeTie ? ' · the Afterlife broke a tie' : '';
   const names = eliminations.map((item) => item.displayName);
   const headline = names.length === 0
     ? 'No one was eliminated'
@@ -142,7 +145,7 @@ export function describeTimelineEvent(event: PublicTimelineEvent): TimelineEntry
   return {
     eyebrow: phaseName(payload.kind, payload.sequence),
     title: `${phaseName(payload.kind, payload.sequence)} resolved`,
-    description,
+    description: `${description}${tiebreakNote}`,
     headline,
     tone: 'phase',
     publicBallot: ['DAY', 'FINAL_BALLOT'].includes(payload.kind ?? ''),

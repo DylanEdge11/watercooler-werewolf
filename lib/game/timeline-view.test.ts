@@ -43,6 +43,16 @@ describe('timeline wording', () => {
     expect(view.description).toBe('Bodyguard protection stopped a pack attack. No one died.');
   });
 
+  it('notes when the Afterlife broke a tie', () => {
+    const view = describeTimelineEvent(event('PHASE_PUBLISHED', {
+      kind: 'DAY',
+      sequence: 3,
+      eliminations: [{ displayName: 'Casey Rivera', role: 'WEREWOLF', cause: 'DAY_VOTE' }],
+      afterlifeBrokeTie: true,
+    }));
+    expect(view.description).toBe('Casey Rivera · Werewolf · the Afterlife broke a tie');
+  });
+
   it('treats the final ballot as public', () => {
     expect(describeTimelineEvent(event('PHASE_PUBLISHED', { kind: 'FINAL_BALLOT', sequence: 9 }))).toMatchObject({ eyebrow: 'Final ballot', publicBallot: true });
   });

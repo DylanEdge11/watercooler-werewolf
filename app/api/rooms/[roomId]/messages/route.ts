@@ -1,7 +1,8 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
-import { getCurrentPlayer } from '../../../../../lib/auth/session';
+import { getCurrentPlayer, getCurrentSpectator, type PlayerIdentity, type SpectatorIdentity } from '../../../../../lib/auth/session';
 import { normalizeChatBody } from '../../../../../lib/chat/rooms';
+import { spectatorAuthorName } from '../../../../../lib/game/spectators';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
@@ -11,19 +12,44 @@ interface RouteContext {
   params: Promise<{ roomId: string }>;
 }
 
-async function requireRoomAccess(roomId: string) {
+interface RoomAccess {
+  id: string;
+  gameId: string;
+  type: string;
+  status: string;
+  access: string;
+}
+
+type RoomViewer =
+  | { kind: 'PLAYER'; identity: PlayerIdentity; room: RoomAccess }
+  | { kind: 'SPECTATOR'; identity: SpectatorIdentity; room: RoomAccess };
+
+/** A player reaches the rooms they are a member of; a spectator reaches only their game's Afterlife. */
+async function requireRoomAccess(roomId: string): Promise<RoomViewer> {
   const identity = await getCurrentPlayer();
-  if (!identity) throw new HttpError(401, 'Player authentication required.');
+  if (identity) {
+    const room = await getDb()
+      .prepare(
+        `SELECT cr.id, cr.game_id AS gameId, cr.type, cr.status, crm.access
+         FROM chat_rooms cr JOIN chat_room_members crm ON crm.room_id = cr.id
+         WHERE cr.id = ? AND crm.seat_id = ? AND crm.access != 'REVOKED' LIMIT 1`,
+      )
+      .bind(roomId, identity.seatId)
+      .first<RoomAccess>();
+    if (!room || room.gameId !== identity.gameId) throw new HttpError(403, 'Private room access denied.');
+    return { kind: 'PLAYER', identity, room };
+  }
+  const spectator = await getCurrentSpectator();
+  if (!spectator) throw new HttpError(401, 'Player authentication required.');
   const room = await getDb()
     .prepare(
-      `SELECT cr.id, cr.game_id AS gameId, cr.type, cr.status, crm.access
-       FROM chat_rooms cr JOIN chat_room_members crm ON crm.room_id = cr.id
-       WHERE cr.id = ? AND crm.seat_id = ? AND crm.access != 'REVOKED' LIMIT 1`,
+      `SELECT id, game_id AS gameId, type, status, 'WRITE' AS access
+       FROM chat_rooms WHERE id = ? AND game_id = ? AND type = 'DEAD' LIMIT 1`,
     )
-    .bind(roomId, identity.seatId)
-    .first<{ id: string; gameId: string; type: string; status: string; access: string }>();
-  if (!room || room.gameId !== identity.gameId) throw new HttpError(403, 'Private room access denied.');
-  return { identity, room };
+    .bind(roomId, spectator.gameId)
+    .first<RoomAccess>();
+  if (!room) throw new HttpError(403, 'Private room access denied.');
+  return { kind: 'SPECTATOR', identity: spectator, room };
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -31,18 +57,32 @@ export async function GET(request: Request, context: RouteContext) {
     await ensureDatabase();
     const { roomId } = await context.params;
     const { room } = await requireRoomAccess(roomId);
+    // Spectators write only in the Afterlife; their messages are kept apart and labelled.
     const messages = await getDb()
       .prepare(
         `SELECT * FROM (
-           SELECT cm.id, cm.author_seat_id AS authorSeatId, s.display_name AS authorName,
+           SELECT cm.id, cm.author_seat_id AS authorSeatId, s.display_name AS authorName, 0 AS bySpectator,
                   cm.body, cm.deleted_at AS deletedAt, cm.purged_at AS purgedAt, cm.created_at AS createdAt
            FROM chat_messages cm JOIN seats s ON s.id = cm.author_seat_id
-           WHERE cm.room_id = ? ORDER BY cm.created_at DESC LIMIT 100
+           WHERE cm.room_id = ?
+           UNION ALL
+           SELECT sm.id, NULL, sp.display_name, 1,
+                  sm.body, sm.deleted_at, sm.purged_at, sm.created_at
+           FROM spectator_messages sm JOIN spectators sp ON sp.id = sm.spectator_id
+           WHERE sm.room_id = ?
+           ORDER BY createdAt DESC LIMIT 100
          ) recent ORDER BY createdAt ASC`,
       )
-      .bind(roomId)
-      .all();
-    return respondJsonWithEtag(request, { ok: true, room, messages: messages.results });
+      .bind(roomId, roomId)
+      .all<{ authorName: string; bySpectator: number }>();
+    return respondJsonWithEtag(request, {
+      ok: true,
+      room,
+      messages: messages.results.map(({ bySpectator, ...message }) => ({
+        ...message,
+        authorName: Number(bySpectator) ? spectatorAuthorName(message.authorName) : message.authorName,
+      })),
+    });
   } catch (error) {
     return routeError(error, 'Unable to load this room.');
   }
@@ -53,14 +93,44 @@ export async function POST(request: Request, context: RouteContext) {
     assertSameOrigin(request);
     await ensureDatabase();
     const { roomId } = await context.params;
-    const { identity, room } = await requireRoomAccess(roomId);
+    const viewer = await requireRoomAccess(roomId);
+    const { room } = viewer;
     if (room.status !== 'OPEN' || room.access !== 'WRITE') throw new Error('This room is read-only.');
-    await enforceRateLimit(requestRateLimitKey(request, `chat:${identity.seatId}:${roomId}`), 30, 10 * 60_000);
+    const authorId = viewer.kind === 'PLAYER' ? viewer.identity.seatId : viewer.identity.spectatorId;
+    await enforceRateLimit(requestRateLimitKey(request, `chat:${authorId}:${roomId}`), 30, 10 * 60_000);
     const body = (await request.json()) as { body?: string };
     const message = normalizeChatBody(body.body ?? '');
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const db = getDb();
+    if (viewer.kind === 'SPECTATOR') {
+      const result = await db.batch([
+        db
+          .prepare(
+            `INSERT INTO spectator_messages (id, room_id, spectator_id, body, created_at)
+             SELECT ?, ?, ?, ?, ?
+             FROM chat_rooms cr
+             JOIN games g ON g.id = cr.game_id
+             JOIN spectators sp ON sp.id = ? AND sp.game_id = cr.game_id
+             WHERE cr.id = ? AND cr.type = 'DEAD' AND cr.status = 'OPEN'
+               AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN')
+               AND sp.status = 'ACTIVE'`,
+          )
+          .bind(id, roomId, authorId, message, now, authorId, roomId),
+        db
+          .prepare(
+            `INSERT INTO game_events (id, game_id, event_type, payload_json, created_at)
+             SELECT ?, ?, 'SPECTATOR_CHAT_MESSAGE_SENT', ?, ?
+             WHERE EXISTS (SELECT 1 FROM spectator_messages WHERE id = ? AND room_id = ? AND spectator_id = ?)`,
+          )
+          .bind(crypto.randomUUID(), room.gameId, JSON.stringify({ roomId, messageId: id, spectatorId: authorId }), now, id, roomId, authorId),
+      ]);
+      if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
+        return jsonError('The Afterlife or your spectator access changed before the message could be saved. Refresh and try again.', 409);
+      }
+      return Response.json({ ok: true, message: { id, body: message, authorName: spectatorAuthorName(viewer.identity.displayName), createdAt: now } }, { status: 201 });
+    }
+    const identity = viewer.identity;
     const result = await db.batch([
       db
         .prepare(

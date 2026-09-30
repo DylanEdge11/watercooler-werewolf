@@ -10,6 +10,7 @@ import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { restoreConfirmation } from '../../../../../lib/backup/restore';
 import { respondJsonWithEtag } from '../../../../../lib/http/etag';
+import { endSpectatorsStatements } from '../../../../../lib/roster/spectators';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -260,6 +261,7 @@ export async function POST(request: Request, context: RouteContext) {
         db.prepare('DELETE FROM announcements WHERE game_id = ? AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare('DELETE FROM chat_room_members WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare('DELETE FROM chat_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
+        ...endSpectatorsStatements(db, gameId, now, resetGuard, [gameId, now, moderator.id]),
         db.prepare("UPDATE chat_rooms SET status = 'OPEN' WHERE game_id = ? AND " + resetGuard).bind(gameId, gameId, now, moderator.id),
         db.prepare('DELETE FROM seat_sessions WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?) AND ' + resetGuard).bind(gameId, gameId, now, moderator.id),
         db
