@@ -1,5 +1,7 @@
 # Watercooler Werewolf
 
+## Overview
+
 Watercooler Werewolf is a slow-burn Werewolf game for a workplace: players act from their own phones or desktops over days, and a moderator publishes each result.
 
 ## Role
@@ -13,7 +15,7 @@ You are the developer on this repository. The owner is the product manager and r
 - Hosted on `Vercel`. Node 24 (`.nvmrc`).
 - Tests: `Vitest` for unit and integration tests, `Playwright` for API and browser suites.
 
-## Architecture
+## Architecture and directory layout
 
 ```text
 app/            Next.js pages and components; app/api/ holds the route handlers
@@ -41,11 +43,9 @@ docs/           setup, operations, testing, and technical reference
 
 ## Commands and validation
 
-```sh
-npm test                 # Vitest, lib/**/*.test.ts
-npm run verify           # fast gates: tests, lint, types, build, audit. Run before every push.
-npm run verify:full      # verify + 20-player API and browser suites. Once per release candidate.
-```
+- `npm test`: `Vitest` unit and integration tests (`lib/**/*.test.ts`).
+- `npm run verify`: the fast gates (tests, lint, types, build, dependency audit). Run it before every push.
+- `npm run verify:full`: `npm run verify` plus the 20-player API and browser suites. Run it once per release candidate.
 
 ## Testing
 
@@ -53,14 +53,14 @@ Run only the relevant `*.test.ts` file with `npx vitest run <path>` while iterat
 
 ## Workflow
 
-1. Find the working base: the one `version-X.Y` branch on origin (`git ls-remote --heads origin 'version-*'`). A new one is created from `main` after each release. *Never base work on `main`.*
+1. Find the working base: the one `version-X.Y` branch on origin (`git ls-remote --heads origin 'version-*'`). A new one is created from `main` after each release.
 2. Create a `feat/` or `fix/` branch from the version branch and merge it back through a pull request. An urgent Production fix uses a `hotfix/` branch from `main` instead, merged into `main`.
 3. Release the version branch to `main` through one release pull request. `Vercel` builds a Preview for every pushed branch and deploys Production from `main`.
 4. Follow the three user-invoked skills in `.claude/skills/`: `/werewolf-dev` (one change, through to a PR and Preview), `/werewolf-uat` (certify the version branch), and `/werewolf-prod` (release it). Each stops at its handoff. `/project-audit` is a separate, report-only review of the repository, run when the owner asks.
 5. Commit `/project-audit` reports (`docs/AUDIT_<date>.md`, plus moving the previous audit into `docs/archive/`) directly to the version branch; this is the one exception to the pull-request rule. *Commit report files only, never code, and never to `main`.*
 6. Run checks locally with `npm run verify` / `npm run verify:full`. `GitHub` Actions minutes are limited (2,000/month, spending limit $0), so CI runs only the fast gates, only on pull requests into `main`. Batch commits and push once a change is ready. *Ask before adding jobs or triggers to `.github/workflows` or starting the workflow by hand.*
 
-Changes reach `main` only through pull requests. *Never push to `main`, never use `vercel deploy --prod`, and never promote a Preview deployment.*
+Changes reach `main` only through pull requests. *Never base work on `main`, never push to `main`, never use `vercel deploy --prod`, and never promote a Preview deployment.*
 
 ## Security and data boundaries
 

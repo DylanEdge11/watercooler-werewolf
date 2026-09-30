@@ -42,9 +42,10 @@ Start both checks at once; they don't interfere.
 
 Rules for both checks:
 
-- Cite file paths for `.env.e2e.local` values, secrets, and Playwright reports. *Never print their contents.*
-- If the hosted preflight fails, stop before creating any data and report why. *Never edit or bypass the preflight.*
+- Cite file paths for `.env.e2e.local` values, secrets, and Playwright reports instead of their contents.
+- If the hosted preflight fails, stop before creating any data and report why.
 - Start the `GitHub` Actions workflow by hand only when the owner asks, because one run costs about 100 minutes.
+- *Never print those values or report contents, and never edit or bypass the preflight.*
 
 ## 5. Walkthrough
 

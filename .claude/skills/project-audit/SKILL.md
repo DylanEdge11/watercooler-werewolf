@@ -87,7 +87,7 @@ Find out as much as you can yourself, then confirm it with the owner in one shor
 Run these before anything else is written into the working tree, so scratch files can't affect the results:
 
 - The fast gates the repository defines (tests, lint, types, build, dependency audit). Skip the quick integration suite in standard mode unless a changed file is one it covers; run it in `--deep`. Add the long suite only when the owner passed `--full`.
-- Run only local suites; hosted, remote, and production-facing suites belong to release certification. *Don't run them here.*
+- Run only local suites; hosted, remote, and production-facing suites belong to release certification.
 - Record each command, exit code, pass/fail/skip counts, and elapsed time. Give the results to every reviewer so none reruns a gate. A failing gate is a finding. If tests or the build fail outright, stop after this step and report (see Cost) unless the owner says to continue. If a check can't run, record why.
 
 ## 2. System map (lead, from code only)
@@ -112,7 +112,7 @@ Then assign every in-scope file (every tracked file with `--deep`, via `git ls-f
 | Performance and cost | Work per request and per poll; sequential round trips; writes on read paths; payload, bundle, and function sizes; cold starts; polling intervals; repository size. |
 | Tests and tooling | Behavior with no test; tests that exercise a copy instead of the real code; weak assertions; flaky or order-dependent tests; whether the gates catch what they claim to; lint and type settings. |
 | Dependencies, config, build, and deploy | Outdated or vulnerable packages; version mismatches (engines, type packages, runtime); environment variables the code reads versus those in example env files and deploy config; leftover config from old hosting; build, deploy, and CI config. |
-| Git and process | Each branch on origin (ahead and behind, age, purpose, a keep/merge/delete recommendation); each open PR at its head (what it changes, which findings it carries or fixes, conflicts, whether its description matches its diff); history (large or repeatedly re-committed files, secrets ever committed, reported by location only); whether the history shows the workflow the instructions describe. |
+| `git` and process | Each branch on origin (ahead and behind, age, purpose, a keep/merge/delete recommendation); each open PR at its head (what it changes, which findings it carries or fixes, conflicts, whether its description matches its diff); history (large or repeatedly re-committed files, secrets ever committed, reported by location only); whether the history shows the workflow the instructions describe. |
 | Docs, instructions, and language | Pass 2, below. |
 
 ## 3. Blind review (pass 1)
