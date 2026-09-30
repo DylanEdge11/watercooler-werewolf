@@ -130,7 +130,7 @@ export default function GuidePage() {
           </table>
           <p>The players with the most votes fill the slots. No votes means no elimination, and a Bodyguard’s protection can leave a slot empty.</p>
           <h3>Ties and the Afterlife</h3>
-          <p>During each Day and Final ballot, eliminated players may cast an optional <strong>Afterlife tiebreak vote</strong>. It only matters if the living vote ties for the last slot: then the tied player with the most Afterlife votes goes. If the Afterlife ties too, or didn’t vote for any of the tied players, a recorded random draw decides. The timeline notes when the Afterlife broke a tie, but its votes aren’t published. Night ties among the pack are always settled by a random draw.</p>
+          <p>During each Day and Final ballot, eliminated players may cast an optional <strong>Afterlife tiebreak vote</strong>. It only matters if the living vote ties for the last slot: then the tied player with the most Afterlife votes goes. If the Afterlife ties too, or didn’t vote for any of the tied players, a recorded random draw decides. The timeline notes when the Afterlife settled a tie on its own, but its votes aren’t published. Night ties among the pack are always settled by a random draw.</p>
           <h3>Final showdown</h3>
           <p>If no team has won by the organizer’s final cutoff, the moderator can start a Final showdown: repeated Final ballots, with no more Nights, until one team wins.</p>
         </section>

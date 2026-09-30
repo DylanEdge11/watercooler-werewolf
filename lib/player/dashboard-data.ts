@@ -250,11 +250,12 @@ function buildTimeline(
       const publishedOutcome = payload.publishedOutcome && typeof payload.publishedOutcome === 'object'
         ? payload.publishedOutcome as Record<string, unknown>
         : null;
-      // Only that the Afterlife decided a tie is public; its votes stay with the moderators.
+      // Only that the Afterlife settled a tie is public; its votes stay with the moderators. A tie
+      // it settled only in part also went to a random draw, so it gets no note.
       const afterlifeTiebreak = publishedOutcome?.afterlifeTiebreak && typeof publishedOutcome.afterlifeTiebreak === 'object'
-        ? publishedOutcome.afterlifeTiebreak as { selected?: unknown }
+        ? publishedOutcome.afterlifeTiebreak as { decided?: unknown }
         : null;
-      const afterlifeBrokeTie = Array.isArray(afterlifeTiebreak?.selected) && afterlifeTiebreak.selected.length > 0;
+      const afterlifeBrokeTie = afterlifeTiebreak?.decided === true;
       return {
         id: event.id,
         eventType: event.eventType,

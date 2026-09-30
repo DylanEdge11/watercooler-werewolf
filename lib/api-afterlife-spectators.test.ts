@@ -179,6 +179,24 @@ describe('Afterlife tiebreak vote', () => {
     expect(published?.payload).not.toHaveProperty('afterlifeBrokeTie');
   });
 
+  test('a tie the Afterlife settles only in part goes to a draw and gets no public note', async () => {
+    await client.execute("UPDATE phases SET slots = 2");
+    // P1, P2, and P3 tie with one vote each for two slots; the Afterlife backs only P1.
+    await vote('p0', 'DAY_VOTE', ['p1']);
+    await vote('p1', 'DAY_VOTE', ['p2']);
+    await vote('p2', 'DAY_VOTE', ['p3']);
+    await vote('p6', 'AFTERLIFE_VOTE', ['p1']);
+    const locked = await phaseAction({ action: 'LOCK_AND_PROPOSE' });
+    const outcome = locked.body.outcome as { selectedTargets: string[]; randomDraws: Array<{ candidates: string[] }>; afterlifeTiebreak: { selected: string[]; decided: boolean } };
+    expect(outcome.selectedTargets[0]).toBe('p1');
+    expect(outcome.afterlifeTiebreak).toMatchObject({ selected: ['p1'], decided: false });
+    expect(outcome.randomDraws[0].candidates).toEqual(['p2', 'p3']);
+    expect((await phaseAction({ action: 'PUBLISH' })).status).toBe(200);
+    asPlayer('p0');
+    const published = ((await dashboard()).body.timeline as Array<{ eventType: string; payload: Record<string, unknown> }>).find((event) => event.eventType === 'PHASE_PUBLISHED');
+    expect(published?.payload).not.toHaveProperty('afterlifeBrokeTie');
+  });
+
   test('a Night has no Afterlife ballot', async () => {
     await client.execute("UPDATE phases SET kind = 'NIGHT'");
     expect((await vote('p6', 'AFTERLIFE_VOTE', ['p0'])).status).toBe(400);
