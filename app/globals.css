@@ -230,10 +230,12 @@ textarea { line-height: 1.55; resize: vertical; }
 .slot-preview-warning { background: #fff4d6; border-left: 3px solid #c98a12; border-radius: 6px; font-size: 11px; margin: 8px 0 0; padding: 6px 8px; }
 .schedule-heading { font-size: 12px; margin: 16px 0 6px; }
 .elimination-schedule { display: grid; gap: 8px; }
-.schedule-toggle { align-items: center; display: flex; flex-direction: row; gap: 8px; }
-.schedule-toggle input { margin: 0; width: auto; }
+.elimination-schedule .schedule-toggle { align-items: center; display: flex; flex-direction: row; gap: 8px; }
+.elimination-schedule .schedule-toggle input { accent-color: var(--mint-strong); margin: 0; width: auto; }
 .schedule-stages { display: grid; gap: 8px; }
 .schedule-stage { align-items: end; border: 1px solid #e2e3dc; border-radius: 10px; display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; margin: 0; padding: 8px 10px 10px; }
+.schedule-stage label { color: #485950; display: grid; font-size: 11px; font-weight: 800; gap: 7px; }
+.elimination-schedule .schedule-toggle { font-size: 12px; font-weight: 800; }
 .schedule-stage legend { color: #485950; font-size: 11px; font-weight: 800; padding: 0 4px; }
 .schedule-until-end { color: var(--muted); font-size: 11px; margin: 0 0 10px; }
 .elimination-schedule > .secondary-button { justify-self: start; }
