@@ -1,0 +1,1 @@
+ALTER TABLE `games` ADD `elimination_schedule_json` text;

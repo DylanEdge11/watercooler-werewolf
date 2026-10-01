@@ -66,6 +66,8 @@ export const games = sqliteTable(
     scheduleJson: text('schedule_json').notNull(),
     dayDivisor: integer('day_divisor').notNull().default(30),
     nightDivisor: integer('night_divisor').notNull().default(30),
+    // Fixed Day/Night eliminations by game day (lib/game/elimination-schedule.ts). NULL uses the divisors.
+    eliminationScheduleJson: text('elimination_schedule_json'),
     hunterWindowMinutes: integer('hunter_window_minutes').notNull().default(60),
     finalRoundMinutes: integer('final_round_minutes').notNull().default(60),
     chatRetentionDays: integer('chat_retention_days').notNull().default(7),
