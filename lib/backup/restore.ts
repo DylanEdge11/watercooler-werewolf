@@ -2,6 +2,7 @@ import type { GameBackup } from './snapshot';
 import { ROLE_CATALOG } from '../game/catalog';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../game/player-count';
 import { canonicalRoleKey, ROLE_KEYS, type RoleKey } from '../game/types';
+import { parseEliminationSchedule, serializeEliminationSchedule } from '../game/elimination-schedule';
 import { assertValidCalendarDate, assertValidTimeZone } from '../game/scheduling';
 import { isSingleEmailAddress } from '../roster/email-address';
 
@@ -32,6 +33,8 @@ export interface BackupRestoreGame {
   chatRetentionDays: number;
   finalCutoffAt: string;
   publicationMode: 'REVIEW' | 'AUTOMATIC';
+  /** Null for no schedule, including backups taken before schedules existed. */
+  eliminationScheduleJson: string | null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -144,6 +147,9 @@ export function backupGameFromRecord(game: Record<string, unknown>): BackupResto
     chatRetentionDays,
     finalCutoffAt,
     publicationMode: publicationMode as BackupRestoreGame['publicationMode'],
+    eliminationScheduleJson: serializeEliminationSchedule(
+      parseEliminationSchedule(readString(game, 'eliminationScheduleJson', 'elimination_schedule_json')),
+    ),
   };
 }
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
+import { MIGRATION_FILES } from '../scripts/db-migration-runner.mjs';
 
 interface TestProviderStatement {
   readonly sql: string;
@@ -96,7 +97,7 @@ function gateOn(pattern: string, kind: 'first' | 'all') {
 
 beforeEach(() => {
   sqlite = new DatabaseSync(':memory:');
-  for (const file of ['0000_dashing_smiling_tiger.sql', '0001_bodyguard_and_lifecycle.sql', '0002_pilot_hardening.sql', '0003_reviewed_outcome.sql']) {
+  for (const file of MIGRATION_FILES) {
     sqlite.exec(readFileSync(new URL('../drizzle/' + file, import.meta.url), 'utf8'));
   }
   shared.gate = null;

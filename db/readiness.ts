@@ -11,6 +11,7 @@ export const MIGRATION_VERSIONS = [
   '0006_game_events_type_index',
   '0007_email_notifications',
   '0008_spectators',
+  '0009_elimination_schedule',
 ] as const;
 
 export async function verifyDatabaseReady(db: Database): Promise<void> {

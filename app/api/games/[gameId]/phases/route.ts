@@ -1,7 +1,7 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { calculateEliminationSlots } from '../../../../../lib/game/balance';
+import { parseEliminationSchedule, phaseSlots } from '../../../../../lib/game/elimination-schedule';
 import { validateFinalShowdownEntry, validatePhaseOpen } from '../../../../../lib/game/phase-policy';
 import { automaticStepDueAt } from '../../../../../lib/game/automation';
 import { advanceGameSafely } from '../../../../../lib/game/automation-sweep';
@@ -64,8 +64,8 @@ export async function GET(request: Request, context: RouteContext) {
     const [gameRow, phaseRows, proposalRows, reviewRows, rosterRows] = await Promise.all([
       db.prepare(`SELECT status, final_cutoff_at AS finalCutoffAt, timezone, updated_at AS updatedAt,
                 publication_mode AS publicationMode, review_window_minutes AS reviewWindowMinutes,
-                automation_paused_at AS automationPausedAt
-         FROM games WHERE id = ? LIMIT 1`).bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string; updatedAt: string; publicationMode: string; reviewWindowMinutes: number; automationPausedAt: string | null }>(),
+                automation_paused_at AS automationPausedAt, elimination_schedule_json AS eliminationScheduleJson
+         FROM games WHERE id = ? LIMIT 1`).bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string; updatedAt: string; publicationMode: string; reviewWindowMinutes: number; automationPausedAt: string | null; eliminationScheduleJson: string | null }>(),
       db
         .prepare(
           `SELECT p.id, p.sequence, p.kind, p.status, p.opens_at AS opensAt, p.closes_at AS closesAt,
@@ -140,7 +140,9 @@ export async function GET(request: Request, context: RouteContext) {
       : [];
     return respondJsonWithEtag(request, {
       ok: true,
-      game: gameRow,
+      game: gameRow
+        ? { ...gameRow, eliminationScheduleJson: undefined, eliminationSchedule: parseEliminationSchedule(gameRow.eliminationScheduleJson) }
+        : null,
       // The next automatic step and when it happens, or null in review mode, while paused, or when nothing is pending.
       nextAutomaticStep: automation ? automaticStepDueAt(automation.game, automation.phase) : null,
       roster: rosterRows.results.map((row) => ({ ...row, role: canonicalRoleKey(String(row.role)) })),
@@ -205,11 +207,12 @@ export async function POST(request: Request, context: RouteContext) {
       .prepare(
         `SELECT status, day_divisor AS dayDivisor, night_divisor AS nightDivisor,
                 hunter_window_minutes AS hunterWindowMinutes,
-                final_cutoff_at AS finalCutoffAt, timezone
+                final_cutoff_at AS finalCutoffAt, timezone,
+                elimination_schedule_json AS eliminationScheduleJson
          FROM games WHERE id = ? LIMIT 1`,
       )
       .bind(gameId)
-      .first<{ status: string; dayDivisor: number; nightDivisor: number; hunterWindowMinutes: number; finalCutoffAt: string; timezone: string }>();
+      .first<{ status: string; dayDivisor: number; nightDivisor: number; hunterWindowMinutes: number; finalCutoffAt: string; timezone: string; eliminationScheduleJson: string | null }>();
     if (!game) throw new HttpError(404, 'Game not found.');
 
     if (body.action === 'ENTER_FINAL_SHOWDOWN') {
@@ -272,12 +275,21 @@ export async function POST(request: Request, context: RouteContext) {
         .prepare("SELECT COUNT(*) AS count FROM seats WHERE game_id = ? AND status = 'CLAIMED' AND alive = 1")
         .bind(gameId)
         .first<{ count: number }>();
-      const divisor = body.kind === 'NIGHT' ? Number(game.nightDivisor) : Number(game.dayDivisor);
-      const slots = calculateEliminationSlots(Number(living?.count ?? 0), divisor);
       const sequenceRow = await db
         .prepare('SELECT COALESCE(MAX(sequence), 0) AS sequence FROM phases WHERE game_id = ?')
         .bind(gameId)
         .first<{ sequence: number }>();
+      const sequence = Number(sequenceRow?.sequence ?? 0) + 1;
+      const divisor = body.kind === 'NIGHT' ? Number(game.nightDivisor) : Number(game.dayDivisor);
+      // Days and Nights follow the elimination schedule when the game has one; otherwise the divisor.
+      const slots = phaseSlots({
+        kind: body.kind,
+        sequence,
+        livingPlayers: Number(living?.count ?? 0),
+        dayDivisor: Number(game.dayDivisor),
+        nightDivisor: Number(game.nightDivisor),
+        schedule: parseEliminationSchedule(game.eliminationScheduleJson),
+      });
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       const result = await db.batch([
@@ -286,13 +298,17 @@ export async function POST(request: Request, context: RouteContext) {
             `INSERT INTO phases
              (id, game_id, sequence, kind, status, opens_at, closes_at, slots, divisor_snapshot, version, created_at, updated_at)
              SELECT ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, 1, ?, ?
-             WHERE EXISTS (SELECT 1 FROM games WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN'))
+             WHERE EXISTS (
+                 SELECT 1 FROM games WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN')
+                   -- A schedule saved since it was read answers 409, so the slots never use a stale schedule.
+                   AND elimination_schedule_json IS ?
+               )
                AND NOT EXISTS (
                  SELECT 1 FROM phases
                  WHERE game_id = ? AND status IN ('OPEN', 'LOCKED', 'PENDING_HUNTER', 'PENDING_APPROVAL', 'HUNTER_FINALIZING', 'PUBLISHING')
                )`,
           )
-          .bind(id, gameId, Number(sequenceRow?.sequence ?? 0) + 1, body.kind, now, closesAt.toISOString(), slots, divisor, now, now, gameId, gameId),
+          .bind(id, gameId, sequence, body.kind, now, closesAt.toISOString(), slots, divisor, now, now, gameId, game.eliminationScheduleJson ?? null, gameId),
         db
           .prepare(
             `INSERT INTO game_events

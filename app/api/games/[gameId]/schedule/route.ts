@@ -2,6 +2,7 @@ import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { resolveAutomationSettings, type PublicationMode } from '../../../../../lib/game/automation';
+import { parseEliminationSchedule, resolveEliminationSchedule, serializeEliminationSchedule } from '../../../../../lib/game/elimination-schedule';
 import { resolveGameSettings, type GameSettingsInput } from '../../../../../lib/game/game-settings';
 import { validateGameSetup, type GameSetupInput } from '../../../../../lib/game/game-setup';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
@@ -14,6 +15,7 @@ interface RouteContext {
 interface UpdateScheduleBody extends GameSettingsInput, GameSetupInput {
   publicationMode?: unknown;
   reviewWindowMinutes?: unknown;
+  eliminationSchedule?: unknown;
 }
 
 interface SetupGameRow {
@@ -25,6 +27,7 @@ interface SetupGameRow {
   reviewWindowMinutes: number;
   dayDivisor: number;
   nightDivisor: number;
+  eliminationScheduleJson: string | null;
 }
 
 function changes(result: unknown): number {
@@ -46,7 +49,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       .prepare(
         `SELECT name, status, updated_at AS updatedAt, hunter_window_minutes AS hunterWindowMinutes,
                 day_divisor AS dayDivisor, night_divisor AS nightDivisor,
-                publication_mode AS publicationMode, review_window_minutes AS reviewWindowMinutes
+                publication_mode AS publicationMode, review_window_minutes AS reviewWindowMinutes,
+                elimination_schedule_json AS eliminationScheduleJson
          FROM games WHERE id = ? LIMIT 1`,
       )
       .bind(gameId)
@@ -66,6 +70,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       reviewWindowMinutes: Number(game.reviewWindowMinutes),
     });
     if (automationErrors.length) throw new Error(automationErrors.join(' '));
+    const previousSchedule = parseEliminationSchedule(game.eliminationScheduleJson);
+    const { schedule: eliminationSchedule, errors: eliminationErrors } = resolveEliminationSchedule(body.eliminationSchedule, previousSchedule);
+    if (eliminationErrors.length) throw new Error(eliminationErrors.join(' '));
+    const eliminationScheduleJson = serializeEliminationSchedule(eliminationSchedule);
+    const scheduleChanged = eliminationScheduleJson !== serializeEliminationSchedule(previousSchedule);
 
     const now = new Date().toISOString();
     const updateGuard = `EXISTS (
@@ -78,7 +87,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           `UPDATE games
            SET name = ?, timezone = ?, start_date = ?, end_date = ?, active_weekdays_json = ?,
                schedule_json = ?, final_cutoff_at = ?, hunter_window_minutes = ?, day_divisor = ?,
-               night_divisor = ?, publication_mode = ?, review_window_minutes = ?, updated_at = ?
+               night_divisor = ?, publication_mode = ?, review_window_minutes = ?, elimination_schedule_json = ?, updated_at = ?
            WHERE id = ? AND updated_at = ? AND status IN ('DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW')`,
         )
         .bind(
@@ -94,6 +103,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           settings.nightDivisor,
           automation.publicationMode,
           automation.reviewWindowMinutes,
+          eliminationScheduleJson,
           now,
           gameId,
           game.updatedAt,
@@ -113,6 +123,24 @@ export async function PATCH(request: Request, context: RouteContext) {
           gameId,
           now,
         ),
+      // The elimination schedule has its own audit entry, with before and after, whenever it changes.
+      ...(scheduleChanged
+        ? [db
+          .prepare(
+            `INSERT INTO game_events
+             (id, game_id, event_type, actor_moderator_id, payload_json, created_at)
+             SELECT ?, ?, 'ELIMINATION_SCHEDULE_UPDATED', ?, ?, ? WHERE ${updateGuard}`,
+          )
+          .bind(
+            crypto.randomUUID(),
+            gameId,
+            moderator.id,
+            JSON.stringify({ previous: previousSchedule, schedule: eliminationSchedule, status: game.status }),
+            now,
+            gameId,
+            now,
+          )]
+        : []),
     ]);
     if (changes(result[0]) !== 1) {
       return jsonError('The game changed while its schedule was being saved. Refresh and try again.', 409);
