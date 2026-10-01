@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Analytics } from '@vercel/analytics/next';
 import { landingFontVariables } from './landing/fonts';
 import './globals.css';
 import './paper-theatre.css';
@@ -40,6 +41,7 @@ export default function RootLayout({
         className="antialiased"
       >
         {children}
+        <Analytics />
       </body>
     </html>
   );
