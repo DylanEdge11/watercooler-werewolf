@@ -11,6 +11,7 @@ import SpectatorsPanel from './spectators-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
 import { ROLE_KEYS, type RoleKey } from '../../lib/game/types';
+import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
 import BrandMark from '../brand-mark';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
@@ -70,6 +71,7 @@ interface GameSummary {
   hunterWindowMinutes?: number;
   dayDivisor?: number;
   nightDivisor?: number;
+  eliminationSchedule?: EliminationSchedule | null;
   publicationMode?: 'REVIEW' | 'AUTOMATIC';
   reviewWindowMinutes?: number;
   automationPaused?: boolean;
@@ -309,6 +311,8 @@ export default function ModeratorPage() {
           hunterWindowHours: form.get('hunterWindowHours'),
           dayDivisor: form.get('dayDivisor'),
           nightDivisor: form.get('nightDivisor'),
+          // Empty clears the schedule; a missing field (a disabled form) leaves it unchanged.
+          eliminationSchedule: form.get('eliminationSchedule') ?? undefined,
           publicationMode: form.get('publicationMode'),
           reviewWindowMinutes: form.get('reviewWindowMinutes'),
         }),
@@ -374,6 +378,8 @@ export default function ModeratorPage() {
           hunterWindowHours: form.get('hunterWindowHours'),
           dayDivisor: form.get('dayDivisor'),
           nightDivisor: form.get('nightDivisor'),
+          // Empty clears the schedule; a missing field (a disabled form) leaves it unchanged.
+          eliminationSchedule: form.get('eliminationSchedule') ?? undefined,
           publicationMode: form.get('publicationMode'),
           reviewWindowMinutes: form.get('reviewWindowMinutes'),
         }),
@@ -688,7 +694,7 @@ export default function ModeratorPage() {
             <>
               {showSchedulePanel && selectedGame && <section className="setup-card" id="game-schedule">
                 <div className="setup-card-heading"><span>01</span><div><h2>Game schedule</h2><p>{setupEditable ? 'Review or update the setup details, then continue where you left off.' : 'Review the launch schedule. It becomes read-only after roles are released.'}</p></div></div>
-                <form className="setup-grid" key={`schedule-${selectedGame.id}-${selectedGame.finalCutoffAt}-${selectedGame.hunterWindowMinutes}-${selectedGame.dayDivisor}-${selectedGame.nightDivisor}-${selectedGame.publicationMode}-${selectedGame.reviewWindowMinutes}`} onSubmit={updateSchedule}>
+                <form className="setup-grid" key={`schedule-${selectedGame.id}-${selectedGame.finalCutoffAt}-${selectedGame.hunterWindowMinutes}-${selectedGame.dayDivisor}-${selectedGame.nightDivisor}-${JSON.stringify(selectedGame.eliminationSchedule ?? null)}-${selectedGame.publicationMode}-${selectedGame.reviewWindowMinutes}`} onSubmit={updateSchedule}>
                   <label className="wide">Game name<input name="name" defaultValue={selectedGame.name} disabled={!setupEditable} required /></label>
                   <label>Timezone<input name="timezone" defaultValue={selectedGame.timezone} disabled={!setupEditable} required /></label>
                   <label>Start date<input name="startDate" type="date" defaultValue={selectedGame.startDate} disabled={!setupEditable} required /></label>
@@ -697,7 +703,7 @@ export default function ModeratorPage() {
                   <label>Day ballot closes<input name="dayCloses" type="time" defaultValue={selectedGame.schedule.dayCloses ?? '16:00'} disabled={!setupEditable} required /></label>
                   <label>Night actions close<input name="nightCloses" type="time" defaultValue={selectedGame.schedule.nightCloses ?? '09:00'} disabled={!setupEditable} required /></label>
                   <fieldset className="weekday-picker wide" disabled={!setupEditable}><legend>Active weekdays</legend><div>{weekdayOptions.map((day) => <label key={day.value}><input name="activeWeekdays" type="checkbox" value={day.value} defaultChecked={selectedGame.activeWeekdays.includes(day.value)} />{day.label}</label>)}</div></fieldset>
-                  <GameSettingsFields initial={{ hunterWindowMinutes: selectedGame.hunterWindowMinutes, dayDivisor: selectedGame.dayDivisor, nightDivisor: selectedGame.nightDivisor, publicationMode: selectedGame.publicationMode, reviewWindowMinutes: selectedGame.reviewWindowMinutes }} disabled={!setupEditable} />
+                  <GameSettingsFields initial={{ hunterWindowMinutes: selectedGame.hunterWindowMinutes, dayDivisor: selectedGame.dayDivisor, nightDivisor: selectedGame.nightDivisor, eliminationSchedule: selectedGame.eliminationSchedule ?? null, publicationMode: selectedGame.publicationMode, reviewWindowMinutes: selectedGame.reviewWindowMinutes }} disabled={!setupEditable} />
                   <div className="button-row wide">
                     {setupEditable && <button className="primary-button" type="submit">Save schedule</button>}
                     <button className="secondary-button" type="button" onClick={() => setShowSchedulePanel(false)}>Close schedule</button>

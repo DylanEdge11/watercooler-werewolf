@@ -11,6 +11,7 @@ export const MIGRATION_FILES = [
   '0006_game_events_type_index.sql',
   '0007_email_notifications.sql',
   '0008_spectators.sql',
+  '0009_elimination_schedule.sql',
 ];
 
 export function splitMigrationStatements(sql) {

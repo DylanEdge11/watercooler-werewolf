@@ -221,7 +221,7 @@ export async function restoreGameBackup(
     db.prepare('DELETE FROM seat_sessions WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
     db.prepare("UPDATE seats SET status = 'REMOVED', email = 'archived+' || id || '@invalid.test', pin_hash = NULL, session_version = session_version + 1, alive = 0, predecessor_seat_id = NULL, claimed_at = NULL, updated_at = ? WHERE game_id = ? AND " + restoreGuard).bind(now, gameId, gameId, now, moderatorId),
     db.prepare(
-      "UPDATE games SET name = ?, timezone = ?, start_date = ?, end_date = ?, active_weekdays_json = ?, schedule_json = ?, day_divisor = ?, night_divisor = ?, hunter_window_minutes = ?, final_round_minutes = ?, chat_retention_days = ?, final_cutoff_at = ?, publication_mode = ?, automation_paused_at = NULL, stopped_at = NULL, stopped_by_moderator_id = NULL, stop_reason = NULL, updated_at = ? WHERE id = ? AND status = 'RESTORING' AND reset_at = ? AND reset_by_moderator_id = ?",
+      "UPDATE games SET name = ?, timezone = ?, start_date = ?, end_date = ?, active_weekdays_json = ?, schedule_json = ?, day_divisor = ?, night_divisor = ?, hunter_window_minutes = ?, final_round_minutes = ?, chat_retention_days = ?, final_cutoff_at = ?, publication_mode = ?, elimination_schedule_json = ?, automation_paused_at = NULL, stopped_at = NULL, stopped_by_moderator_id = NULL, stop_reason = NULL, updated_at = ? WHERE id = ? AND status = 'RESTORING' AND reset_at = ? AND reset_by_moderator_id = ?",
     ).bind(
       backupGame.name,
       backupGame.timezone,
@@ -236,6 +236,7 @@ export async function restoreGameBackup(
       backupGame.chatRetentionDays,
       backupGame.finalCutoffAt,
       backupGame.publicationMode,
+      backupGame.eliminationScheduleJson,
       now,
       gameId,
       now,

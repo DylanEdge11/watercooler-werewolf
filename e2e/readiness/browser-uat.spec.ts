@@ -91,6 +91,15 @@ test('an eight-player game runs from setup to a Village win with private informa
     await automation.getByRole('button', { name: 'Resume automation', exact: true }).click();
     await expect(automation.getByRole('button', { name: 'Pause automation', exact: true })).toBeVisible();
 
+    // The elimination schedule names the next phase a change affects. One per Day and Night keeps this game's slots.
+    const eliminations = moderatorPage.locator('.schedule-block');
+    await expect(eliminations.locator('.schedule-status')).toHaveText('Latest phase: Day 1. A saved change applies from Night 1, the next phase to open. Phases already opened keep their slots.');
+    await eliminations.getByText('Change the elimination schedule', { exact: true }).click();
+    await eliminations.getByLabel('Use a fixed elimination schedule').check();
+    await eliminations.getByRole('button', { name: 'Save schedule', exact: true }).click();
+    await expect(eliminations.getByText('Saved. The change applies from Night 1.', { exact: true })).toBeVisible();
+    await expect(eliminations.getByRole('list', { name: 'Elimination schedule' }).first()).toContainText('Day 1 until the end: 1 Day / 1 NightCurrent');
+
     // Night 1: the Bodyguard blocks the attack and the Seer finds the last Werewolf.
     const protectedTarget = livingTarget(game, (player) => player.account.role === 'VILLAGER');
     const firstNight = await runNight(game, {
