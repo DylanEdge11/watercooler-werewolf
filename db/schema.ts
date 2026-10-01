@@ -446,6 +446,26 @@ export const spectatorMessages = sqliteTable(
   (table) => [index('idx_spectator_messages_room_time').on(table.roomId, table.createdAt)],
 );
 
+/** Messages a moderator posts in a private room. Players see them as "Moderator", never the moderator's email. */
+export const moderatorMessages = sqliteTable(
+  'moderator_messages',
+  {
+    id: text('id').primaryKey(),
+    roomId: text('room_id')
+      .notNull()
+      .references(() => chatRooms.id, { onDelete: 'cascade' }),
+    moderatorId: text('moderator_id')
+      .notNull()
+      .references(() => moderatorAccounts.id),
+    body: text('body'),
+    deletedByModeratorId: text('deleted_by_moderator_id').references(() => moderatorAccounts.id),
+    deletedAt: text('deleted_at'),
+    purgedAt: text('purged_at'),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [index('idx_moderator_messages_room_time').on(table.roomId, table.createdAt)],
+);
+
 export const announcements = sqliteTable(
   'announcements',
   {
