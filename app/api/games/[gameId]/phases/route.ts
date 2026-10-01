@@ -13,8 +13,12 @@ import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
 import { parseScheduledDate } from '../../../../../lib/game/scheduling';
 import { canonicalRoleKey, type PhaseKind, type PhaseResolution, type PlayerState } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
+import { notifyPhaseOpened, runAfterResponse } from '../../../../../lib/notify/notifications';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { respondJsonWithEtag } from '../../../../../lib/http/etag';
+
+// Player email is sent after the response, within this function's time limit: a result story, then up to 80 emails.
+export const maxDuration = 60;
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -31,6 +35,7 @@ interface PhaseRow {
   hunterDeadlineAt: string | null;
   publishedAt: string | null;
   currentSubmissions: number;
+  afterlifeSubmissions: number;
 }
 
 interface ProposalRow {
@@ -65,7 +70,8 @@ export async function GET(request: Request, context: RouteContext) {
         .prepare(
           `SELECT p.id, p.sequence, p.kind, p.status, p.opens_at AS opensAt, p.closes_at AS closesAt,
                   p.slots, p.hunter_deadline_at AS hunterDeadlineAt, p.published_at AS publishedAt,
-                  COUNT(a.id) AS currentSubmissions
+                  COUNT(CASE WHEN a.kind != 'AFTERLIFE_VOTE' THEN a.id END) AS currentSubmissions,
+                  COUNT(CASE WHEN a.kind = 'AFTERLIFE_VOTE' THEN a.id END) AS afterlifeSubmissions
            FROM phases p
            LEFT JOIN action_submissions a ON a.phase_id = p.id AND a.superseded_at IS NULL
            WHERE p.game_id = ? GROUP BY p.id ORDER BY p.sequence DESC`,
@@ -153,6 +159,7 @@ export async function GET(request: Request, context: RouteContext) {
         return {
           ...phase,
           currentSubmissions: Number(phase.currentSubmissions),
+          afterlifeSubmissions: Number(phase.afterlifeSubmissions),
           outstanding: phase.id === openPhase?.id ? outstanding : [],
           // Published with no moderator attached: the sweep published it after the review window.
           publishedAutomatically: phase.status === 'PUBLISHED' && reviewByPhase.has(phase.id) && !reviewByPhase.get(phase.id)?.reviewedByModeratorId,
@@ -297,6 +304,8 @@ export async function POST(request: Request, context: RouteContext) {
           .bind(crypto.randomUUID(), gameId, id, moderator.id, JSON.stringify({ kind: body.kind, slots, closesAt: closesAt.toISOString() }), now, id),
       ]);
       if (changes(result[0]) !== 1) return jsonError('The game or current phase changed before this phase could open. Refresh and try again.', 409);
+      // Players who turned email on and have something to do are told after this response is sent.
+      runAfterResponse(() => notifyPhaseOpened(gameId, id));
       return Response.json({ ok: true, phaseId: id, slots });
     }
 

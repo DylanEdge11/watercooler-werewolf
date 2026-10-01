@@ -5,11 +5,18 @@ import { randomToken, sha256 } from './crypto';
 
 const MODERATOR_COOKIE = 'ww_mod_session';
 const PLAYER_COOKIE = 'ww_player_session';
+export const SPECTATOR_COOKIE = 'ww_spectator_session';
 const SESSION_DAYS = 7;
 
 export interface ModeratorIdentity {
   id: string;
   email: string;
+}
+
+export interface SpectatorIdentity {
+  spectatorId: string;
+  gameId: string;
+  displayName: string;
 }
 
 export interface PlayerIdentity {
@@ -34,6 +41,10 @@ async function setSessionCookie(name: string, token: string, expires: Date): Pro
     expires,
     path: '/',
   });
+  // One device shows one game view: signing in as a player ends a spectator
+  // session there, and the other way round.
+  if (name === PLAYER_COOKIE) store.delete(SPECTATOR_COOKIE);
+  if (name === SPECTATOR_COOKIE) store.delete(PLAYER_COOKIE);
 }
 
 export async function createModeratorSession(moderatorId: string): Promise<void> {
@@ -78,6 +89,45 @@ export async function preparePlayerSession(seatId: string, sessionVersion: numbe
     values: [crypto.randomUUID(), seatId, await sha256(token), sessionVersion, expires.toISOString(), new Date().toISOString()],
     setCookie: () => setSessionCookie(PLAYER_COOKIE, token, expires),
   };
+}
+
+/**
+ * A spectator session a caller inserts inside its own transaction (for
+ * example together with the spectator's first sign-in). Set the cookie only
+ * after that transaction commits.
+ */
+export async function prepareSpectatorSession(spectatorId: string, sessionVersion: number): Promise<{
+  values: [string, string, string, number, string, string];
+  setCookie: () => Promise<void>;
+}> {
+  const token = randomToken();
+  const expires = expiryDate();
+  return {
+    values: [crypto.randomUUID(), spectatorId, await sha256(token), sessionVersion, expires.toISOString(), new Date().toISOString()],
+    setCookie: () => setSessionCookie(SPECTATOR_COOKIE, token, expires),
+  };
+}
+
+export async function getCurrentSpectator(): Promise<SpectatorIdentity | null> {
+  await ensureDatabase();
+  const token = (await cookies()).get(SPECTATOR_COOKIE)?.value;
+  if (!token) return null;
+  const tokenHash = await sha256(token);
+  return (
+    (await getDb()
+      .prepare(
+        `SELECT sp.id AS spectatorId, sp.game_id AS gameId, sp.display_name AS displayName
+         FROM spectator_sessions ss
+         JOIN spectators sp ON sp.id = ss.spectator_id
+         WHERE ss.token_hash = ?
+           AND ss.expires_at > ?
+           AND ss.session_version = sp.session_version
+           AND sp.status = 'ACTIVE'
+         LIMIT 1`,
+      )
+      .bind(tokenHash, new Date().toISOString())
+      .first<SpectatorIdentity>()) ?? null
+  );
 }
 
 export async function getCurrentModerator(): Promise<ModeratorIdentity | null> {
@@ -147,3 +197,16 @@ export async function clearPlayerSession(): Promise<void> {
   store.delete(PLAYER_COOKIE);
 }
 
+
+export async function clearSpectatorSession(): Promise<void> {
+  const store = await cookies();
+  const token = store.get(SPECTATOR_COOKIE)?.value;
+  if (token) {
+    await ensureDatabase();
+    await getDb()
+      .prepare('DELETE FROM spectator_sessions WHERE token_hash = ?')
+      .bind(await sha256(token))
+      .run();
+  }
+  store.delete(SPECTATOR_COOKIE);
+}

@@ -76,6 +76,7 @@ button { color: inherit; }
 .deadline-card span, .deadline-card small { color: var(--muted); display: block; font-size: 10px; }
 .deadline-card strong { color: var(--coral); display: block; font-family: Georgia, serif; font-size: 24px; margin: 3px 0; }
 .role-card { align-items: center; background: linear-gradient(125deg, var(--night), var(--night-2)); border-radius: 20px; box-shadow: 0 18px 45px rgba(21, 43, 39, .14); color: white; display: grid; gap: 20px; grid-template-columns: 88px 1fr 130px; margin-bottom: 22px; overflow: hidden; padding: 25px 28px; position: relative; }
+.role-card.spectator-role { grid-template-columns: 1fr 130px; }
 .role-card::after { border: 1px solid rgba(184, 227, 207, .14); border-radius: 50%; content: ''; height: 180px; left: -60px; position: absolute; top: -80px; width: 180px; }
 .role-orbit { align-items: center; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.13); border-radius: 50%; display: flex; height: 72px; justify-content: center; position: relative; width: 72px; z-index: 1; }
 .role-medallion { display: block; height: 82%; width: 82%; }
@@ -153,6 +154,7 @@ button { color: inherit; }
   .welcome-row { align-items: flex-start; }
   .deadline-card { flex-basis: 125px; }
   .role-card { grid-template-columns: 58px 1fr; padding: 20px; }
+  .role-card.spectator-role { grid-template-columns: 1fr; }
   .role-orbit { height: 54px; width: 54px; }
   .role-faction { border-left: 0; border-top: 1px solid rgba(255,255,255,.14); grid-column: 1 / -1; grid-template-columns: auto auto 1fr; padding: 12px 0 0; }
 }
@@ -178,6 +180,7 @@ button { color: inherit; }
 .auth-card h1, .console-title h1, .setup-card h2 { font-family: Georgia, serif; letter-spacing: -.035em; }
 .auth-card h1 { font-size: 34px; margin: 7px 0 12px; }
 .auth-card > p:not(.eyebrow, .form-error, .privacy-note) { color: var(--muted); font-size: 13px; line-height: 1.65; }
+.auth-card .unsubscribe-action { margin-top: 20px; }
 .form-stack { display: grid; gap: 17px; margin-top: 25px; }
 .form-stack label, .setup-grid label, .role-composer label { color: #485950; display: grid; font-size: 11px; font-weight: 800; gap: 7px; }
 input, textarea, select { background: #fbfaf6; border: 1px solid #d9ddd8; border-radius: 9px; color: var(--ink); font: inherit; font-size: 13px; padding: 11px 12px; width: 100%; }

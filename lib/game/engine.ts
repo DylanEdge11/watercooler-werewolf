@@ -1,6 +1,7 @@
 import { ROLE_CATALOG } from './catalog';
 import type {
   ActionKind,
+  AfterlifeTiebreak,
   ActionSubmission,
   Elimination,
   HunterResolutionInput,
@@ -22,6 +23,7 @@ interface TallyResult {
 interface SelectionResult {
   selected: string[];
   randomDraws: RandomDraw[];
+  afterlifeTiebreak: AfterlifeTiebreak | null;
 }
 
 function latestActions(actions: ActionSubmission[]): ActionSubmission[] {
@@ -78,13 +80,21 @@ function tallyActions(
   return { tally, warnings };
 }
 
+/**
+ * Picks the eliminated players from a tally, most votes first. When players
+ * tie at the boundary (more tied than slots left), the Afterlife's votes for
+ * those tied players decide, most votes first. Only what the Afterlife
+ * cannot settle (no votes, or its own tie) goes to a recorded random draw.
+ */
 export function selectFromTally(
   tally: TallyEntry[],
   slots: number,
   randomRolls: number[] = [],
+  afterlifeTally?: TallyEntry[],
 ): SelectionResult {
   const selected: string[] = [];
   const randomDraws: RandomDraw[] = [];
+  let afterlifeTiebreak: AfterlifeTiebreak | null = null;
   let rollCursor = 0;
   let index = 0;
 
@@ -103,29 +113,64 @@ export function selectFromTally(
     }
 
     tied.sort();
-    const pool = [...tied];
+    let pool = [...tied];
     const picked: string[] = [];
-    const usedRolls: number[] = [];
-    while (picked.length < remaining) {
-      const roll = randomRolls[rollCursor];
-      if (roll === undefined || roll < 0 || roll >= 1) {
-        throw new Error('A recorded random roll in the range [0, 1) is required for each tied slot.');
+
+    const afterlifeCounts = new Map((afterlifeTally ?? []).map((entry) => [entry.playerId, entry.votes]));
+    const ranked = tied
+      .map((playerId) => ({ playerId, votes: afterlifeCounts.get(playerId) ?? 0 }))
+      .sort((a, b) => b.votes - a.votes || a.playerId.localeCompare(b.playerId));
+    if (ranked.some((entry) => entry.votes > 0)) {
+      let rankIndex = 0;
+      while (picked.length < remaining && rankIndex < ranked.length) {
+        const count = ranked[rankIndex].votes;
+        const group: string[] = [];
+        while (rankIndex < ranked.length && ranked[rankIndex].votes === count) {
+          group.push(ranked[rankIndex].playerId);
+          rankIndex += 1;
+        }
+        if (group.length <= remaining - picked.length) {
+          picked.push(...group);
+        } else {
+          pool = group;
+          break;
+        }
       }
-      rollCursor += 1;
-      usedRolls.push(roll);
-      const selectedIndex = Math.floor(roll * pool.length);
-      picked.push(pool.splice(selectedIndex, 1)[0]);
+      afterlifeTiebreak = {
+        candidates: tied,
+        afterlifeVotes: ranked.filter((entry) => entry.votes > 0),
+        selected: [...picked],
+        decided: picked.length === remaining,
+      };
+    }
+
+    if (picked.length < remaining) {
+      pool = pool.filter((playerId) => !picked.includes(playerId));
+      const candidates = [...pool];
+      const drawn: string[] = [];
+      const usedRolls: number[] = [];
+      while (picked.length + drawn.length < remaining) {
+        const roll = randomRolls[rollCursor];
+        if (roll === undefined || roll < 0 || roll >= 1) {
+          throw new Error('A recorded random roll in the range [0, 1) is required for each tied slot.');
+        }
+        rollCursor += 1;
+        usedRolls.push(roll);
+        const selectedIndex = Math.floor(roll * pool.length);
+        drawn.push(pool.splice(selectedIndex, 1)[0]);
+      }
+      picked.push(...drawn);
+      randomDraws.push({
+        kind: 'BOUNDARY_TIE',
+        candidates,
+        selected: drawn,
+        rolls: usedRolls,
+      });
     }
     selected.push(...picked);
-    randomDraws.push({
-      kind: 'BOUNDARY_TIE',
-      candidates: tied,
-      selected: picked,
-      rolls: usedRolls,
-    });
   }
 
-  return { selected, randomDraws };
+  return { selected, randomDraws, afterlifeTiebreak };
 }
 
 function firstValidSingleTargetAction(
@@ -187,7 +232,19 @@ export function resolvePhase(input: PhaseResolutionInput): PhaseResolution {
       target.alive && actor.id !== target.id && (isDay || target.role !== 'WEREWOLF'),
     (actor) => isDay && actor.role === 'MAYOR' ? 2 : 1,
   );
-  const selection = selectFromTally(tallied.tally, input.slots, input.randomRolls);
+  // The Afterlife (eliminated players) may vote for living players on a Day or
+  // Final ballot. One vote each, used only to break a tie in the living vote.
+  const afterlife = isDay
+    ? tallyActions(
+        actions,
+        'AFTERLIFE_VOTE',
+        input.slots,
+        players,
+        (actor) => !actor.alive,
+        (_actor, target) => target.alive,
+      )
+    : null;
+  const selection = selectFromTally(tallied.tally, input.slots, input.randomRolls, afterlife?.tally);
   const protectedPlayerIds: string[] = [];
   const investigations: PhaseResolution['investigations'] = [];
 
@@ -233,7 +290,8 @@ export function resolvePhase(input: PhaseResolutionInput): PhaseResolution {
     investigations,
     hunterRequiredIds,
     randomDraws: selection.randomDraws,
-    warnings: tallied.warnings,
+    ...(afterlife ? { afterlifeTally: afterlife.tally, afterlifeTiebreak: selection.afterlifeTiebreak } : {}),
+    warnings: [...tallied.warnings, ...(afterlife?.warnings ?? [])],
   };
 }
 
@@ -252,6 +310,8 @@ export function applyEliminationOverride(
   const roles = new Map(players.map((player) => [player.id, player.role]));
   return {
     ...proposedOutcome,
+    // The moderator chose these eliminations, so no tiebreak decided them.
+    ...(proposedOutcome.afterlifeTiebreak ? { afterlifeTiebreak: null } : {}),
     selectedTargets: ids,
     eliminations,
     hunterRequiredIds: eliminations.filter((item) => roles.get(item.playerId) === 'HUNTER').map((item) => item.playerId),

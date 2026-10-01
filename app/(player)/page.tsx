@@ -1,11 +1,14 @@
 import { cookies } from 'next/headers';
 import PlayerDashboard, { type DashboardData } from '../player-dashboard';
-import { getCurrentPlayer } from '../../lib/auth/session';
+import { getCurrentPlayer, getCurrentSpectator } from '../../lib/auth/session';
 import { advanceGameSafely } from '../../lib/game/automation-sweep';
-import { loadDashboard } from '../../lib/player/dashboard-data';
+import { loadDashboard, loadSpectatorDashboard } from '../../lib/player/dashboard-data';
 import { parseRoleVisibility, ROLE_VISIBILITY_COOKIE } from '../../lib/player/role-visibility';
 
-// Only visitors with a player session reach this page (proxy.ts sends everyone else to the landing page).
+// Player email is sent after the response, within this function's time limit: a result story, then up to 80 emails.
+export const maxDuration = 60;
+
+// Only visitors with a player or spectator session reach this page (proxy.ts sends everyone else to the landing page).
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
@@ -13,7 +16,13 @@ export default async function Home() {
   let unauthenticated = false;
   try {
     const identity = await getCurrentPlayer();
-    if (!identity) {
+    const spectator = identity ? null : await getCurrentSpectator();
+    if (spectator) {
+      const automation = await advanceGameSafely(spectator.gameId);
+      const view = await loadSpectatorDashboard(spectator.spectatorId, { automation });
+      if (view) initialData = JSON.parse(JSON.stringify(view)) as DashboardData;
+      else unauthenticated = true;
+    } else if (!identity) {
       unauthenticated = true;
     } else {
       // The same steps as GET /api/player, so the first paint matches the first refresh.

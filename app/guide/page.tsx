@@ -43,7 +43,7 @@ const HELP_ROWS = [
   ['Save response is unavailable', 'Select a legal player first. The phase may also be closed, your role may have no action this phase, or you may be eliminated.'],
   ['“Too many attempts”', 'Stop retrying and wait as long as the message says (usually up to 15 minutes for sign-in).'],
   ['Moderator: Randomize is disabled', 'Every seat must be claimed and any edited role counts must be saved. Remove anyone who has decided not to play.'],
-  ['Moderator: I can’t add or remove a player', 'The roster locks once roles are randomized. Select Save composition to discard the preview and unlock it. After release, the roster is final.'],
+  ['Moderator: I can’t add or remove a player', 'The roster locks once roles are randomized. Select Save composition to discard the preview and unlock it. After release, the roster is final, but you can add someone as a spectator.'],
   ['Moderator: Hunter cannot be finalized', 'Wait for the Hunter to submit or for their window to expire, then try again.'],
   ['Moderator: an action shows an error', 'Refresh first. Another moderator may have completed it already.'],
 ] as const;
@@ -128,7 +128,9 @@ export default function GuidePage() {
             <thead><tr><th scope="col">Living players</th><th scope="col">Slots</th></tr></thead>
             <tbody>{SLOT_ROWS.map(([living, slots]) => <tr key={living}><td>{living}</td><td>{slots}</td></tr>)}</tbody>
           </table>
-          <p>The players with the most votes fill the slots. A tie for the last slot is settled by a recorded random draw. No votes means no elimination, and a Bodyguard’s protection can leave a slot empty.</p>
+          <p>The players with the most votes fill the slots. No votes means no elimination, and a Bodyguard’s protection can leave a slot empty.</p>
+          <h3>Ties and the Afterlife</h3>
+          <p>During each Day and Final ballot, eliminated players may cast an optional <strong>Afterlife tiebreak vote</strong>. It only matters if the living vote ties for the last slot: then the tied player with the most Afterlife votes goes. If the Afterlife ties too, or didn’t vote for any of the tied players, a recorded random draw decides. The timeline notes when the Afterlife settled a tie on its own, but its votes aren’t published. Night ties among the pack are always settled by a random draw.</p>
           <h3>Final showdown</h3>
           <p>If no team has won by the organizer’s final cutoff, the moderator can start a Final showdown: repeated Final ballots, with no more Nights, until one team wins.</p>
         </section>
@@ -171,11 +173,14 @@ export default function GuidePage() {
           <h3>4. Follow the story</h3>
           <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page (the latest 100 updates), with who voted for whom each Day. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
           <Shot src="/guide/player-timeline.webp" alt="Player dashboard showing the full Timeline of published results" caption="The full Timeline: each published result, who was eliminated and their role, and how everyone voted." />
+          <h3>5. Get email nudges (optional)</h3>
+          <p>If your site operator has turned email on, your dashboard has an <strong>Email</strong> card. It is off until you select <strong>Turn email on</strong>. Once it is on you get an email when a phase opens and you have something to do, another half an hour before it closes if you haven’t saved yet, and a short, silly story when each result is published. The emails never say what your role is or what your action is. They do go only to players with something to do, so if your screen is visible to others, know that getting a phase email on a Night means you have a Night action. Every email has a link to turn them off again.</p>
           <h3>Good to know</h3>
           <ul>
             <li>Werewolves and Masons get a private room to chat with their team. Eliminated players can talk in the <strong>Afterlife</strong> room.</li>
             <li>Playing where others can see your screen? Use <strong>Hide role</strong> on your role card.</li>
-            <li>Once eliminated, you can watch but not vote. Please don’t pass information back to living players.</li>
+            <li>Once eliminated, you can watch but no longer vote in the village ballot. On each Day you can cast the optional Afterlife tiebreak vote. Please don’t pass information back to living players.</li>
+            <li>The moderator may add <strong>spectators</strong> after the game starts. They have no role or vote, see what every player sees publicly, and can chat in the Afterlife, where their name is marked “(spectator)”.</li>
           </ul>
         </section>
 
@@ -197,7 +202,7 @@ export default function GuidePage() {
             <li><strong>Collect.</strong> <strong>Still to respond</strong> lists, for your eyes only, the living players who haven’t saved a response. Select <strong>Copy nudge message</strong> and paste it into your group chat. On a Day it names who hasn’t voted. At Night it names nobody, because the list would reveal who has a Night role.</li>
             <li><strong>Lock and calculate.</strong> Voting always closes at the deadline, and the console then shows the phase as Locked. With automatic results, the result is also calculated by itself. In review mode or while paused, or to close early, select <strong>Lock responses &amp; calculate</strong>.</li>
             <li><strong>Hunter.</strong> If a Hunter is eliminated, they get the game’s Hunter window (8 hours by default) to shoot. With automatic results the game finishes this as soon as the Hunter shoots, or when the window closes. In review mode, select <strong>Finalize Hunter</strong>.</li>
-            <li><strong>Review and publish.</strong> Check the tally and proposed outcome. With automatic results, the console says when it will publish; do nothing and it publishes then, marked “Published automatically after the review window”. Select <strong>Approve &amp; publish</strong> to publish sooner, <strong>Override calculated eliminations</strong> to correct it, or <strong>Pause automation</strong> to hold it. In review mode, nothing publishes until you select <strong>Approve &amp; publish</strong>. Only publishing eliminates players, reveals roles, and checks for a winner.</li>
+            <li><strong>Review and publish.</strong> Check the tally and proposed outcome. On a Day, the console also lists the Afterlife’s tiebreak votes and says when they broke a tie. With automatic results, the console says when it will publish; do nothing and it publishes then, marked “Published automatically after the review window”. Select <strong>Approve &amp; publish</strong> to publish sooner, <strong>Override calculated eliminations</strong> to correct it, or <strong>Pause automation</strong> to hold it. In review mode, nothing publishes until you select <strong>Approve &amp; publish</strong>. Only publishing eliminates players, reveals roles, and checks for a winner.</li>
           </ol>
           <Shot src="/guide/moderator-live-game.webp" alt="Moderator console reviewing a calculated result" caption="Reviewing a calculated Day result before publishing it." />
           <p>If a result must be corrected, <strong>Override calculated eliminations</strong> lets you publish a different list with a written reason. The original calculation stays on record. If the corrected list eliminates the Hunter, the Hunter gets a fresh window and chooses their shot again.</p>
@@ -205,10 +210,12 @@ export default function GuidePage() {
           <p>The game completes as soon as a published result produces a winner. After the final cutoff, you can instead <strong>Enter final showdown</strong> and run Final ballots until someone wins. Afterwards, select <strong>Download JSON backup</strong> to keep a private record.</p>
           <h3>Moderator tools</h3>
           <ul>
+            <li><strong>Player email is each player’s choice.</strong> When the site operator has turned email on, players can switch on emails for a phase opening, a half-hour warning, and a themed recap of each result. Phase and warning emails go only to players who have something to do; the recap goes to everyone who turned email on. Your <strong>Operations</strong> event log shows how many players each batch reached, and flags any that failed. Nothing is required from you.</li>
             <li><strong>Announcements</strong> appear in every player’s updates. <strong>Announcement copy</strong> then shows each one ready to paste into an email or a group chat, with <strong>Copy email</strong> and <strong>Copy for chat</strong>.</li>
             <li><strong>Feedback</strong> lists the ratings and comments players and moderators send from the feedback card, with the average. It shows whether each came from a player or a moderator. The list doesn’t name the sender, but the audit log and backups record who sent each one.</li>
             <li><strong>Player access recovery</strong> sets a new PIN for a player who forgot theirs, and unlocks a seat locked after 10 wrong PINs (marked “locked” in the list).</li>
             <li><strong>Private rooms</strong> can be made read-only, and individual messages removed with a reason.</li>
+            <li><strong>Spectators</strong> can be added once roles are released and while the game runs. Enter a name and email, select <strong>Add spectator</strong>, and send them the private link shown once. They choose a PIN when they first open it and use the link and PIN to sign in again. They have no role or vote, see the public game (who is alive, published results and ballots), and can read and post in the Afterlife. A player in the game can’t be a spectator. <strong>Remove</strong> ends their access; to replace a lost link, remove them and add them again. Resetting the game removes its spectators.</li>
             <li><strong>Co-moderators</strong> can be added by the game owner, who can also <strong>Remove</strong> one or <strong>Make owner</strong> to hand the game over and stay on as a co-moderator.</li>
             <li><strong>Pause automation</strong> in <strong>Run the live game</strong> stops automatic calculation and publication (for an offsite or a long weekend) until you select <strong>Resume automation</strong>. Deadlines still close voting. Players see “The schedule is paused”.</li>
             <li><strong>Stop game</strong> ends play permanently. <strong>Reset to setup</strong> (owner only) clears the game back to setup after taking a backup.</li>

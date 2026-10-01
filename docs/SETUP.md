@@ -30,9 +30,25 @@ Local development (`npm run dev` with a `file:` database) is the only mode where
 | `SITE_ORIGIN` | Recommended | Exact origin players use, such as `https://watercooler-werewolf.vercel.app`, with no path. Browser writes from any other origin are rejected. If unset, each request's own origin is used, which still blocks other sites; set it in Production so writes through any other hostname are refused. Claim links always use the address the moderator is on. |
 | `WATERCOOLER_OWNER_EMAIL` | For bootstrap | Email for the first moderator account. |
 | `CRON_SECRET` | Optional | Enables `/api/scheduler/deadlines` for an external scheduler. See [Scheduler](#scheduler). |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Optional | Turns on **Email invites**. `SMTP_PORT` defaults to 465. Without all of them, moderators use the invite CSV. See [Invite email](#invite-email). |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Optional | Turns on **Email invites** and, with `SITE_ORIGIN`, [player email](#player-email). `SMTP_PORT` defaults to 465. Without all of them, moderators use the invite CSV and players see no email switch. See [Invite email](#invite-email). |
+| `ANTHROPIC_API_KEY` | Optional | Lets the app write the themed story in each result email with Claude. Without it the emails use a built-in themed story. See [Player email](#player-email). |
+| `STORY_MODEL` | Optional | Overrides the Claude model that writes result stories. Defaults to `claude-opus-5-5`. |
 
 Set variables separately for `preview` and `production` in Vercel. Never prefix database credentials with `NEXT_PUBLIC_`. See `.env.example` for local and test variables.
+
+## Player email
+
+Players can opt in, from their dashboard, to emails about the game. It uses the same SMTP settings as [invite email](#invite-email), plus `SITE_ORIGIN` for the links in each message (on Vercel, the deployment's own address is used when `SITE_ORIGIN` is unset). Until both are set, players see no email switch.
+
+Three emails, all off until a player turns them on:
+
+- **Phase opened**, when the moderator opens a Day, Night, or final ballot, to opted-in players who have something to do. On a Night that means only players with a Night action.
+- **Closes soon**, half an hour before the deadline, to the same players if they have not saved a move. Phases of an hour or less get none. It goes out on the next scheduler call or page visit after the half-hour mark, so set up the [scheduler](#scheduler) to make it reliable.
+- **Result published**, to every opted-in player, including those who were eliminated: a short story about the result, written from the same public facts the Timeline shows. Private results (a Seer's vision, protections, who holds a Night role) never reach the story or the email.
+
+**The story.** With `ANTHROPIC_API_KEY` set, Claude writes the story: one request per result, shared by every recipient, from public facts only (names, revealed roles, how each elimination happened). The key is an API key from [console.anthropic.com](https://console.anthropic.com) with billing on; it is separate from a Claude.ai subscription. Player display names are sent to Anthropic when a story is written, so leave the key unset for a customer who does not want that. If the key is missing, the model declines or fails, or its answer names the wrong people or contains a link, the built-in themed story is used instead, and the Operations event log records which one went out.
+
+Every email has an unsubscribe link and the standard `List-Unsubscribe` headers. Opening the link shows a page with a button; only the button turns email off, because mail scanners open every link. A failed send never fails a game action. The moderator's Operations event log shows one line per batch and flags failures.
 
 ## Run locally
 
@@ -148,6 +164,8 @@ Routine releases go through `main`:
 Automatic results never depend on a cron: each due step runs on the next visit to the moderator console or a player dashboard. A scheduler only makes steps happen when nobody is looking, for example a result that should publish overnight.
 
 No Vercel Cron is configured: the Hobby plan allows only one run a day, which adds little, and without `CRON_SECRET` it would only log a refused call. To have automatic results happen with nobody visiting, set `CRON_SECRET` in the Production environment and point a free external scheduler (for example cron-job.org) at `GET https://<your-site>/api/scheduler/deadlines` every five minutes with the header `Authorization: Bearer <CRON_SECRET>`. Never paste the secret into chat or commit it. Each call runs the due automatic steps and also locks expired phases in review-mode and paused games, which only closes voting that the deadline had already closed.
+
+Closes-soon emails use the same scheduler call. Without one they still go out when any player or moderator opens a page inside that half hour.
 
 ## Schema changes
 

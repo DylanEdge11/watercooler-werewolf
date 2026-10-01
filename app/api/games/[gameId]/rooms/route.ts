@@ -2,6 +2,8 @@ import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { ensureGameRoomsExist } from '../../../../../lib/chat/rooms';
+import { spectatorAuthorName } from '../../../../../lib/game/spectators';
+import { changes } from '../../../../../db/results';
 import { assertSameOrigin } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { respondJsonWithEtag } from '../../../../../lib/http/etag';
@@ -22,7 +24,8 @@ export async function GET(request: Request, context: RouteContext) {
         `SELECT cr.id, cr.type, cr.status, cr.expires_at AS expiresAt,
                 (SELECT COUNT(*) FROM chat_room_members crm
                  WHERE crm.room_id = cr.id AND crm.access != 'REVOKED') AS memberCount,
-                (SELECT COUNT(*) FROM chat_messages cm WHERE cm.room_id = cr.id) AS messageCount
+                (SELECT COUNT(*) FROM chat_messages cm WHERE cm.room_id = cr.id)
+                  + (SELECT COUNT(*) FROM spectator_messages sm WHERE sm.room_id = cr.id) AS messageCount
          FROM chat_rooms cr
          WHERE cr.game_id = ? ORDER BY cr.type`,
       )
@@ -30,15 +33,26 @@ export async function GET(request: Request, context: RouteContext) {
       .all();
     const messages = await db
       .prepare(
-        `SELECT cm.id, cm.room_id AS roomId, cr.type AS roomType, s.display_name AS authorName,
+        `SELECT cm.id, cm.room_id AS roomId, cr.type AS roomType, s.display_name AS authorName, 0 AS bySpectator,
                 cm.body, cm.deleted_at AS deletedAt, cm.purged_at AS purgedAt, cm.created_at AS createdAt
          FROM chat_messages cm JOIN chat_rooms cr ON cr.id = cm.room_id
          JOIN seats s ON s.id = cm.author_seat_id
-         WHERE cr.game_id = ? ORDER BY cm.created_at DESC LIMIT 60`,
+         WHERE cr.game_id = ?
+         UNION ALL
+         SELECT sm.id, sm.room_id, cr.type, sp.display_name, 1,
+                sm.body, sm.deleted_at, sm.purged_at, sm.created_at
+         FROM spectator_messages sm JOIN chat_rooms cr ON cr.id = sm.room_id
+         JOIN spectators sp ON sp.id = sm.spectator_id
+         WHERE cr.game_id = ?
+         ORDER BY createdAt DESC LIMIT 60`,
       )
-      .bind(gameId)
-      .all();
-    return respondJsonWithEtag(request, { ok: true, rooms: rooms.results, recentMessages: messages.results });
+      .bind(gameId, gameId)
+      .all<{ authorName: string; bySpectator: number }>();
+    const recentMessages = messages.results.map(({ bySpectator, ...message }) => ({
+      ...message,
+      authorName: Number(bySpectator) ? spectatorAuthorName(message.authorName) : message.authorName,
+    }));
+    return respondJsonWithEtag(request, { ok: true, rooms: rooms.results, recentMessages });
   } catch (error) {
     return routeError(error, 'Unable to load private rooms.');
   }
@@ -61,17 +75,23 @@ export async function POST(request: Request, context: RouteContext) {
     const now = new Date().toISOString();
     if (body.action === 'DELETE_MESSAGE') {
       if (!body.messageId || (body.reason?.trim().length ?? 0) < 5) throw new Error('Choose a message and enter a moderation reason.');
+      // A message id names either a player's or a spectator's message; exactly one table holds it.
       const message = await db
         .prepare(
-          `SELECT cm.id FROM chat_messages cm JOIN chat_rooms cr ON cr.id = cm.room_id
-           WHERE cm.id = ? AND cr.game_id = ? LIMIT 1`,
+          `SELECT 'chat_messages' AS source FROM chat_messages cm JOIN chat_rooms cr ON cr.id = cm.room_id
+           WHERE cm.id = ? AND cr.game_id = ?
+           UNION ALL
+           SELECT 'spectator_messages' FROM spectator_messages sm JOIN chat_rooms cr ON cr.id = sm.room_id
+           WHERE sm.id = ? AND cr.game_id = ?
+           LIMIT 1`,
         )
-        .bind(body.messageId, gameId)
-        .first();
+        .bind(body.messageId, gameId, body.messageId, gameId)
+        .first<{ source: 'chat_messages' | 'spectator_messages' }>();
       if (!message) throw new HttpError(404, 'Message not found.');
+      const table = message.source === 'spectator_messages' ? 'spectator_messages' : 'chat_messages';
       await db.batch([
         db
-          .prepare('UPDATE chat_messages SET body = NULL, deleted_by_moderator_id = ?, deleted_at = ? WHERE id = ?')
+          .prepare(`UPDATE ${table} SET body = NULL, deleted_by_moderator_id = ?, deleted_at = ? WHERE id = ?`)
           .bind(moderator.id, now, body.messageId),
         db
           .prepare(
@@ -108,15 +128,14 @@ export async function POST(request: Request, context: RouteContext) {
         .first<{ retentionDays: number }>();
       if (!game) throw new HttpError(404, 'Game not found.');
       const cutoff = new Date(Date.now() - Number(game.retentionDays) * 86_400_000).toISOString();
-      const result = await db
+      const result = await db.batch(['chat_messages', 'spectator_messages'].map((table) => db
         .prepare(
-          `UPDATE chat_messages SET body = NULL, purged_at = ?
+          `UPDATE ${table} SET body = NULL, purged_at = ?
            WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?)
            AND created_at < ? AND purged_at IS NULL`,
         )
-        .bind(now, gameId, cutoff)
-        .run();
-      return Response.json({ ok: true, purged: Number(result.meta.changes ?? 0), cutoff });
+        .bind(now, gameId, cutoff)));
+      return Response.json({ ok: true, purged: result.reduce((total, item) => total + changes(item), 0), cutoff });
     }
     throw new Error('Unknown room operation.');
   } catch (error) {

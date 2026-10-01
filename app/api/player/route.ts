@@ -1,16 +1,27 @@
 import { ensureDatabase } from '../../../db/migrate';
-import { getCurrentPlayer } from '../../../lib/auth/session';
+import { getCurrentPlayer, getCurrentSpectator } from '../../../lib/auth/session';
 import { advanceGameSafely } from '../../../lib/game/automation-sweep';
 import { jsonError } from '../../../lib/http/security';
 import { routeError } from '../../../lib/http/errors';
-import { loadDashboard, type NotificationCursor } from '../../../lib/player/dashboard-data';
+import { loadDashboard, loadSpectatorDashboard, type NotificationCursor } from '../../../lib/player/dashboard-data';
 import { respondJsonWithEtag } from '../../../lib/http/etag';
+
+// Player email is sent after the response, within this function's time limit: a result story, then up to 80 emails.
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   try {
     await ensureDatabase();
     const identity = await getCurrentPlayer();
-    if (!identity) return jsonError('Player authentication required.', 401);
+    if (!identity) {
+      // A spectator's device polls the same endpoint and gets the public, role-free view.
+      const spectator = await getCurrentSpectator();
+      if (!spectator) return jsonError('Player authentication required.', 401);
+      const automation = await advanceGameSafely(spectator.gameId);
+      const view = await loadSpectatorDashboard(spectator.spectatorId, { automation });
+      if (!view) return jsonError('Spectator not found.', 404);
+      return respondJsonWithEtag(request, { ok: true, ...view });
+    }
     const requestUrl = new URL(request.url);
     const notificationBefore = requestUrl.searchParams.get('notificationBefore');
     const notificationBeforeId = requestUrl.searchParams.get('notificationBeforeId');

@@ -50,6 +50,20 @@
       "when": 1790481999296,
       "tag": "0006_game_events_type_index",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790658483163,
+      "tag": "0007_email_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790742656868,
+      "tag": "0008_spectators",
+      "breakpoints": true
     }
   ]
 }

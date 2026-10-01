@@ -30,6 +30,9 @@ export const FORBIDDEN_PLAYER_KEYS = new Set([
   'hunterRequiredIds',
   'randomDraws',
   'tally',
+  'afterlifeTally',
+  'afterlifeTiebreak',
+  'afterlifeVotes',
   'warnings',
   'privateData',
   'privateActionTallies',
@@ -696,13 +699,14 @@ export class BrowserGame {
     expect(dashboard.candidates.every((candidate) => Object.keys(candidate).sort().join(',') === 'displayName,id')).toBe(true);
     expect(dashboard.player.teammates.every((teammate) => Object.keys(teammate).sort().join(',') === 'alive,displayName,id')).toBe(true);
     if (!options.allowOwnInvestigation) expect(dashboard.notifications.some((notification) => notification.type === 'INVESTIGATION_RESULT')).toBe(false);
-    // "N of M submitted" may count across players only for Day ballots and the pack's own vote.
+    // "N of M submitted" may count across players only for Day ballots, the pack's own vote, and the Afterlife ballot.
     // Any other action, including a future Night role, is counted for the reader alone.
     expect(Object.keys(dashboard.participation).sort().join(',')).toBe('eligible,submitted');
     expect(dashboard.participation).toEqual(participationCounter({
       actionKind: dashboard.phase ? dashboard.permission.actionKind : null,
       livingPlayers: dashboard.game.counts.living,
       livingWerewolves: dashboard.game.counts.werewolvesRemaining,
+      eliminatedPlayers: dashboard.game.counts.total - dashboard.game.counts.living,
       sharedSubmissions: dashboard.participation.submitted,
       ownSubmission: Boolean(dashboard.currentAction),
     }));

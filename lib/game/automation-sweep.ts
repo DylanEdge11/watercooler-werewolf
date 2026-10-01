@@ -1,6 +1,8 @@
 import { getDb } from '../../db';
 import { nextAutomaticStep, type AutomationGame, type AutomationPhase, type AutomaticStep, type PublicationMode } from './automation';
 import { runPhaseAction } from './phase-transitions';
+import { emailNotificationsAvailable } from '../notify/config';
+import { closingReminderDue, notifyClosingSoon, runAfterResponse } from '../notify/notifications';
 
 export interface AutomationState {
   game: AutomationGame & { hunterWindowMinutes: number };
@@ -17,7 +19,7 @@ export async function loadAutomationState(gameId: string): Promise<AutomationSta
       `SELECT g.status AS gameStatus, g.publication_mode AS publicationMode, g.review_window_minutes AS reviewWindowMinutes,
               g.automation_paused_at AS pausedAt, g.hunter_window_minutes AS hunterWindowMinutes,
               p.id AS phaseId, p.status AS phaseStatus, p.closes_at AS closesAt, p.hunter_deadline_at AS hunterDeadlineAt,
-              p.updated_at AS phaseUpdatedAt,
+              p.updated_at AS phaseUpdatedAt, p.opens_at AS opensAt, p.closing_reminder_at AS closingReminderAt,
               EXISTS (SELECT 1 FROM action_submissions a WHERE a.phase_id = p.id AND a.kind = 'HUNTER_SHOT' AND a.superseded_at IS NULL) AS hunterShotSaved
        FROM games g
        LEFT JOIN phases p ON p.game_id = g.id AND p.status IN ('OPEN', 'LOCKED', 'PENDING_HUNTER', 'HUNTER_FINALIZING', 'PENDING_APPROVAL')
@@ -28,6 +30,7 @@ export async function loadAutomationState(gameId: string): Promise<AutomationSta
     .first<{
       gameStatus: string; publicationMode: PublicationMode; reviewWindowMinutes: number; pausedAt: string | null; hunterWindowMinutes: number;
       phaseId: string | null; phaseStatus: string | null; closesAt: string | null; hunterDeadlineAt: string | null; phaseUpdatedAt: string | null; hunterShotSaved: number | null;
+      opensAt: string | null; closingReminderAt: string | null;
     }>();
   if (!row) return null;
   return {
@@ -39,7 +42,7 @@ export async function loadAutomationState(gameId: string): Promise<AutomationSta
       hunterWindowMinutes: Number(row.hunterWindowMinutes),
     },
     phase: row.phaseId && row.phaseStatus && row.closesAt && row.phaseUpdatedAt
-      ? { id: row.phaseId, status: row.phaseStatus, closesAt: row.closesAt, hunterDeadlineAt: row.hunterDeadlineAt, updatedAt: row.phaseUpdatedAt, hunterShotSaved: Boolean(row.hunterShotSaved) }
+      ? { id: row.phaseId, status: row.phaseStatus, closesAt: row.closesAt, hunterDeadlineAt: row.hunterDeadlineAt, updatedAt: row.phaseUpdatedAt, hunterShotSaved: Boolean(row.hunterShotSaved), opensAt: row.opensAt ?? undefined, closingReminderAt: row.closingReminderAt }
       : null,
   };
 }
@@ -90,7 +93,16 @@ async function advance(gameId: string, now: Date): Promise<{ steps: AutomaticSte
  */
 export async function advanceGameSafely(gameId: string, now = new Date()): Promise<AutomationState | null> {
   try {
-    return (await advance(gameId, now)).state;
+    const { state } = await advance(gameId, now);
+    // Every visit also checks whether the open phase is inside its "closes soon" window. In memory only
+    // until it is: the phase's own row, read above, says whether the reminder has already gone out.
+    const phase = state?.phase;
+    if (phase && (state.game.status === 'ACTIVE' || state.game.status === 'FINAL_SHOWDOWN')
+      && phase.opensAt && closingReminderDue({ status: phase.status, opensAt: phase.opensAt, closesAt: phase.closesAt, closingReminderAt: phase.closingReminderAt ?? null }, now)
+      && emailNotificationsAvailable()) {
+      runAfterResponse(() => notifyClosingSoon(gameId, phase.id));
+    }
+    return state;
   } catch (error) {
     const state = await loadAutomationState(gameId).catch(() => null);
     try {

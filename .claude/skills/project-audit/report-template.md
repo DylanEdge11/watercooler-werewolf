@@ -7,7 +7,7 @@ The lead fills this in when writing the report; the owner doesn't edit this file
 
 - **Candidate:** `<branch>` at `<short SHA>` (`<full SHA>`). <If the branch moved during the audit: "Landed since, not reviewed: <commits>".>
 - **Scope:** <everything: code, tests, config, CI, dependencies, git history, branches, open PRs, docs, instruction files, skills, user-facing text; or the narrowed scope>
-- **Method:** independent review in three passes: the code first; then docs, instructions, and language checked against it; then earlier audits. <n> area reviewers worked in parallel, and a separate verifier challenged every finding. Every code defect was reproduced unless marked Plausible.
+- **Method:** independent review in three passes: the code first; then docs, instructions, and language checked against it; then earlier audits. Mode: <standard, diffed from `<baseline short SHA>`, <n> files | deep>. <n> reviewers worked in parallel, and a separate verifier challenged the P1/P2 findings (every finding in deep mode). Every code defect was reproduced unless marked Plausible.
 - **Purpose:** a worklist. Each finding has a stable ID for fix branches and PRs to cite. The next audit archives this file.
 
 ## 1. Summary for the owner
@@ -114,6 +114,8 @@ Priority: **P1** <scale line>. **P2** <scale line>. **P3** <scale line>.
 <For each: the decision, the new evidence, and what the owner might consider. Or "None found.">
 
 ## 14. Coverage
+
+In standard mode, list the in-scope files by area and state that everything else was out of scope (unchanged since the baseline).
 
 | Area | Files owned | Read in full | Skimmed | Not read (why) |
 | --- | --- | --- | --- | --- |

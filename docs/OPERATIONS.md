@@ -32,6 +32,7 @@ These controls are under **Communications & operations** in the moderator consol
 | Hand the game to someone else | **Co-moderator access** → **Make owner** beside a co-moderator → confirm | They become the owner and you stay on as a co-moderator. Only the owner can reset, restore, cancel setup, or manage moderators, so the new owner has to transfer it back. |
 | Player forgot their PIN, or their seat is locked | **Player access recovery** → player, new six-digit PIN, reason (5+ characters) → **Reset player PIN** | The player's old sessions are signed out and the seat unlocks. A seat locks after 10 wrong PINs in a row and is marked "locked" in the list. Deliver the PIN privately. |
 | Moderator forgot their password | Sign-in page → **Forgot password? Use a recovery code** → email, unused code, new password → **Recover access** | The code is used up and old sessions end. Without a code, contact the operator. There is no email reset. |
+| Let someone watch | **Spectators** → name and email → **Add spectator** | Copy the private link shown once and send it to them. They choose a PIN when they first open it. They have no role or vote, see the public game, and can chat in the Afterlife. Only while the game runs, and never with a player's email. **Remove** ends their access; remove and add again to replace a lost link. Reset removes all spectators. |
 | Moderate chat | **Private rooms** → **Make read-only** / **Reopen**, or **Remove** a message with a reason | Removal and purges blank the message in the game. |
 | Clear old chat | **Purge expired** | Blanks messages older than the retention period (default seven days). |
 | Keep a record | **Download JSON backup** | A private file with roles and room contents. |
@@ -41,7 +42,7 @@ These controls are under **Communications & operations** in the moderator consol
 
 ## Backups
 
-A backup contains the game's configuration, roster, role assignments, phases, actions, results, events, rooms and messages, announcements, notifications, feedback, and operational log. It never contains PIN or password hashes, claim codes, or session tokens.
+A backup contains the game's configuration, roster, role assignments, phases, actions, results, events, rooms and messages, announcements, notifications, feedback, and operational log. It never contains PIN or password hashes, claim codes, or session tokens. Spectators and their Afterlife messages are not included.
 
 Each backup has a SHA-256 checksum and is stored with the game. A backup is taken automatically before every Reset and Restore. Chat text in a backup is kept even after the live messages are purged or removed, so treat backups as private.
 
@@ -82,6 +83,16 @@ Owner only, for games that were never released. **Cancel setup and start new gam
 - The first moderator account is created by the operator with `npm run owner:bootstrap` (see [Setup](SETUP.md)). There is no public sign-up.
 - Bootstrap and new co-moderator accounts show eight one-time recovery codes. Store them in a password manager; only hashes are kept.
 - Players sign in with their invitation email and PIN, or their seat code.
+
+## Player email
+
+When the site operator has set up email ([SETUP](SETUP.md#player-email)), each player can turn on emails from their dashboard. They are off until a player chooses. You do nothing to send them.
+
+- **Phase opened** goes out when you open a phase, to opted-in players who have something to do. On a Night, only players with a Night action are emailed; the wording never says what the action is.
+- **Closes soon** goes out half an hour before a deadline to the same players if they have not saved yet. It is skipped for phases of an hour or less.
+- **Result published** goes to every opted-in player, alive or eliminated, when a result is published by you or automatically. It is a short themed story built from the public result only.
+
+Each batch leaves a line in the Operations event log ("Day 2 opened: emailed 7 players.") and a warning if any email failed. A mail failure never blocks opening, locking, or publishing. Players who turned email on and later leave the game, or whose address is on a reserved test domain, are skipped.
 
 ## Deadlines and automatic results
 

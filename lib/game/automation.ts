@@ -28,6 +28,9 @@ export interface AutomationPhase {
   /** When the phase last changed status; for PENDING_APPROVAL, when the result became ready for review. */
   updatedAt: string;
   hunterShotSaved: boolean;
+  /** When the phase opened, and when its "closes soon" email went out; the sweep uses both to time that email. */
+  opensAt?: string;
+  closingReminderAt?: string | null;
 }
 
 export type AutomaticStep =
