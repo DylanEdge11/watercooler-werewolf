@@ -2,6 +2,7 @@ import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { getCurrentPlayer, getCurrentSpectator, type PlayerIdentity, type SpectatorIdentity } from '../../../../../lib/auth/session';
 import { normalizeChatBody } from '../../../../../lib/chat/rooms';
+import { loadRoomMessages } from '../../../../../lib/chat/room-messages';
 import { spectatorAuthorName } from '../../../../../lib/game/spectators';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
@@ -57,31 +58,12 @@ export async function GET(request: Request, context: RouteContext) {
     await ensureDatabase();
     const { roomId } = await context.params;
     const { room } = await requireRoomAccess(roomId);
-    // Spectators write only in the Afterlife; their messages are kept apart and labelled.
-    const messages = await getDb()
-      .prepare(
-        `SELECT * FROM (
-           SELECT cm.id, cm.author_seat_id AS authorSeatId, s.display_name AS authorName, 0 AS bySpectator,
-                  cm.body, cm.deleted_at AS deletedAt, cm.purged_at AS purgedAt, cm.created_at AS createdAt
-           FROM chat_messages cm JOIN seats s ON s.id = cm.author_seat_id
-           WHERE cm.room_id = ?
-           UNION ALL
-           SELECT sm.id, NULL, sp.display_name, 1,
-                  sm.body, sm.deleted_at, sm.purged_at, sm.created_at
-           FROM spectator_messages sm JOIN spectators sp ON sp.id = sm.spectator_id
-           WHERE sm.room_id = ?
-           ORDER BY createdAt DESC LIMIT 100
-         ) recent ORDER BY createdAt ASC`,
-      )
-      .bind(roomId, roomId)
-      .all<{ authorName: string; bySpectator: number }>();
+    // Spectator and moderator messages are kept in their own tables and labelled; a moderator shows as "Moderator".
+    const { messages } = await loadRoomMessages(getDb(), roomId, { limit: 100 });
     return respondJsonWithEtag(request, {
       ok: true,
       room,
-      messages: messages.results.map(({ bySpectator, ...message }) => ({
-        ...message,
-        authorName: Number(bySpectator) ? spectatorAuthorName(message.authorName) : message.authorName,
-      })),
+      messages: messages.map(({ authorKind, ...message }) => ({ ...message, byModerator: authorKind === 'MODERATOR' })),
     });
   } catch (error) {
     return routeError(error, 'Unable to load this room.');

@@ -7,6 +7,7 @@ import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import type { FeedbackSummary } from '../../lib/game/feedback';
 import { AnnouncementCopies, FeedbackBlock, type AnnouncementRecord } from './communications';
+import RoomHistory from './room-history';
 
 interface Operations {
   viewerRole: string | null;
@@ -74,6 +75,9 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
   const [operations, setOperations] = useState<Operations | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
+  // The room whose full history is open, and a counter that tells it to reload after the console changes a room.
+  const [historyRoomId, setHistoryRoomId] = useState<string | null>(null);
+  const [roomChanges, setRoomChanges] = useState(0);
   const [moderators, setModerators] = useState<Moderator[]>([]);
   const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
   const [latestAnnouncementId, setLatestAnnouncementId] = useState<string | null>(null);
@@ -271,6 +275,7 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
   async function toggleRoom(room: Room) {
     try {
       await post(`/api/games/${gameId}/rooms`, { action: 'SET_ROOM_STATUS', roomId: room.id, status: room.status === 'OPEN' ? 'READ_ONLY' : 'OPEN' });
+      setRoomChanges((count) => count + 1);
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to update room.');
@@ -291,15 +296,19 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     }
   }
 
-  async function removeMessage(messageId: string) {
+  /** Resolves true once the message is removed; false if the moderator cancelled or the removal failed. */
+  async function removeMessage(messageId: string): Promise<boolean> {
     const reason = window.prompt('Why should this message be removed?');
-    if (!reason) return;
+    if (!reason) return false;
     try {
       await post(`/api/games/${gameId}/rooms`, { action: 'DELETE_MESSAGE', messageId, reason });
-      await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to remove message.');
+      return false;
     }
+    setRoomChanges((count) => count + 1);
+    await refresh().catch(() => undefined);
+    return true;
   }
 
   async function stopGame() {
@@ -448,7 +457,7 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
         <form className="ops-block" onSubmit={resetPlayerPin}><p className="eyebrow accent">Player access recovery</p><p className="field-help">Use when a claimed player forgets a PIN or their seat is locked after 10 wrong PINs in a row. The new PIN is shown only to you, prior sessions are revoked, and the seat unlocks.</p><label>Player<select name="seatId" value={pinSeatId} onChange={(event) => setPinSeatId(event.target.value)} required><option value="">Choose a claimed seat</option>{operations.seats.filter((seat) => seat.status === 'CLAIMED').map((seat) => <option key={seat.id} value={seat.id}>{seat.displayName}{seat.pinLocked ? ' (locked: too many wrong PINs)' : ''}</option>)}</select></label><label>New six-digit PIN<input name="newPin" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required /></label><label>Reason<textarea name="reason" rows={2} minLength={5} required placeholder="Player forgot the previous PIN" /></label><button className="secondary-button" type="submit">Reset player PIN</button></form>
       </div>
 
-      <div className="ops-block room-operations"><div className="ops-heading"><div><p className="eyebrow accent">Private rooms</p><p className="field-help">Messages expire after {operations.game.chatRetentionDays} days.</p></div><button className="secondary-button" type="button" onClick={purgeRetention}>Purge expired</button></div><div className="room-health-list">{rooms.map((room) => <div key={room.id}><span>{room.type}</span><strong>{room.memberCount} members · {room.messageCount} messages</strong><button type="button" onClick={() => void toggleRoom(room)}>{room.status === 'OPEN' ? 'Make read-only' : 'Reopen'}</button></div>)}</div>{messages.slice(0, 8).map((chat) => <div className="moderation-line" key={chat.id}><span><strong>{chat.authorName}</strong> in {chat.roomType}</span><p>{chat.body ?? 'Removed message'}</p>{chat.body && <button type="button" onClick={() => void removeMessage(chat.id)}>Remove</button>}</div>)}</div>
+      <div className="ops-block room-operations"><div className="ops-heading"><div><p className="eyebrow accent">Private rooms</p><p className="field-help">Messages expire after {operations.game.chatRetentionDays} days.</p></div><button className="secondary-button" type="button" onClick={purgeRetention}>Purge expired</button></div><div className="room-health-list">{rooms.map((room) => <div key={room.id}><span>{room.type}</span><strong>{room.memberCount} members · {room.messageCount} messages</strong><button className="room-open" type="button" aria-pressed={historyRoomId === room.id} onClick={() => setHistoryRoomId(room.id)}>Open room</button><button type="button" onClick={() => void toggleRoom(room)}>{room.status === 'OPEN' ? 'Make read-only' : 'Reopen'}</button></div>)}</div>{historyRoomId && rooms.some((room) => room.id === historyRoomId) && <RoomHistory key={historyRoomId} gameId={gameId} rooms={rooms} roomId={historyRoomId} reloadToken={roomChanges} onSelect={setHistoryRoomId} onClose={() => setHistoryRoomId(null)} onRemove={removeMessage} onPosted={() => void refresh().catch(() => undefined)} />}{messages.slice(0, 8).map((chat) => <div className="moderation-line" key={chat.id}><span><strong>{chat.authorName}</strong> in {chat.roomType}</span><p>{chat.body ?? 'Removed message'}</p>{chat.body && <button type="button" onClick={() => void removeMessage(chat.id)}>Remove</button>}</div>)}</div>
 
       <AnnouncementCopies announcements={announcements} highlightId={latestAnnouncementId} />
 

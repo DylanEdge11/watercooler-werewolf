@@ -333,12 +333,15 @@ describe('setup and publication invariants', () => {
     sqlite.exec("INSERT INTO spectators (id,game_id,display_name,email,status,claim_code_hash,created_at,updated_at) VALUES ('watcher','game','Watcher','watcher@pilot.test','ACTIVE','watcher-hash','2026-01-01','2026-01-01')");
     sqlite.exec("INSERT INTO spectator_sessions (id,spectator_id,token_hash,session_version,expires_at,created_at) VALUES ('watcher-session','watcher','token',1,'2099-01-01','2026-01-01')");
     sqlite.exec("INSERT INTO spectator_messages (id,room_id,spectator_id,body,created_at) VALUES ('watcher-message','dead-room','watcher','Hello','2026-01-01')");
+    sqlite.exec("INSERT INTO moderator_messages (id,room_id,moderator_id,body,created_at) VALUES ('moderator-message','dead-room','mod','Welcome','2026-01-01')");
     const response = await operations({ action: 'RESET', confirmed: true, confirmationName: 'Review' });
     expect(response.status).toBe(200);
     // Spectators belong to the run that was reset: their access and messages go.
     expect(sqlite.prepare("SELECT status FROM spectators WHERE id = 'watcher'").get()).toMatchObject({ status: 'REMOVED' });
     expect((sqlite.prepare('SELECT COUNT(*) AS count FROM spectator_sessions').get() as { count: number }).count).toBe(0);
     expect((sqlite.prepare('SELECT COUNT(*) AS count FROM spectator_messages').get() as { count: number }).count).toBe(0);
+    // So do the moderator's room messages.
+    expect((sqlite.prepare('SELECT COUNT(*) AS count FROM moderator_messages').get() as { count: number }).count).toBe(0);
     // The previous run's announcements go, as with Restore; the audit event stays.
     expect((sqlite.prepare("SELECT COUNT(*) AS count FROM announcements WHERE game_id = 'game'").get() as { count: number }).count).toBe(0);
     expect(sqlite.prepare("SELECT id FROM game_events WHERE id = 'old-note-event'").get()).toBeTruthy();

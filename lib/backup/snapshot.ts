@@ -21,6 +21,8 @@ export interface GameBackup {
   chatRooms: unknown[];
   chatRoomMembers: unknown[];
   chatMessages: unknown[];
+  /** Messages moderators posted in private rooms. Absent from backups made before moderators could post. */
+  moderatorMessages?: unknown[];
   announcements: unknown[];
   notifications: unknown[];
   operationalEvents: unknown[];
@@ -78,6 +80,12 @@ export async function collectGameBackup(gameId: string): Promise<GameBackup> {
          WHERE r.game_id = ? ORDER BY m.created_at`,
       )
       .bind(gameId),
+    db
+      .prepare(
+        `SELECT m.* FROM moderator_messages m JOIN chat_rooms r ON r.id = m.room_id
+         WHERE r.game_id = ? ORDER BY m.created_at`,
+      )
+      .bind(gameId),
     db.prepare('SELECT * FROM announcements WHERE game_id = ? ORDER BY created_at').bind(gameId),
     db
       .prepare(
@@ -88,7 +96,7 @@ export async function collectGameBackup(gameId: string): Promise<GameBackup> {
     db.prepare('SELECT * FROM operational_events WHERE game_id = ? ORDER BY created_at').bind(gameId),
     db.prepare('SELECT * FROM pilot_feedback WHERE game_id = ? ORDER BY created_at').bind(gameId),
   ], 'read');
-  const [gameRows, moderators, seats, composition, batches, assignments, phases, actions, resolutions, events, rooms, roomMembers, messages, announcements, notifications, operations, feedback] = reads;
+  const [gameRows, moderators, seats, composition, batches, assignments, phases, actions, resolutions, events, rooms, roomMembers, messages, moderatorMessages, announcements, notifications, operations, feedback] = reads;
   const game = gameRows.results[0];
   if (!game) throw new HttpError(404, 'Game not found.');
   return {
@@ -107,6 +115,7 @@ export async function collectGameBackup(gameId: string): Promise<GameBackup> {
     chatRooms: rooms.results,
     chatRoomMembers: roomMembers.results,
     chatMessages: messages.results,
+    moderatorMessages: moderatorMessages.results,
     announcements: announcements.results,
     notifications: notifications.results,
     operationalEvents: operations.results,
@@ -216,6 +225,7 @@ export async function restoreGameBackup(
     db.prepare('DELETE FROM announcements WHERE game_id = ? AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
     db.prepare('DELETE FROM chat_room_members WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
     db.prepare('DELETE FROM chat_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
+    db.prepare('DELETE FROM moderator_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
     ...endSpectatorsStatements(db, gameId, now, restoreGuard, [gameId, now, moderatorId]),
     db.prepare("UPDATE chat_rooms SET status = 'OPEN' WHERE game_id = ? AND " + restoreGuard).bind(gameId, gameId, now, moderatorId),
     db.prepare('DELETE FROM seat_sessions WHERE seat_id IN (SELECT id FROM seats WHERE game_id = ?) AND ' + restoreGuard).bind(gameId, gameId, now, moderatorId),
