@@ -46,6 +46,7 @@ const HELP_ROWS = [
   ['Moderator: I can’t add or remove a player', 'The roster locks once roles are randomized. Select Save composition to discard the preview and unlock it. After release, the roster is final, but you can add someone as a spectator.'],
   ['Moderator: Hunter cannot be finalized', 'Wait for the Hunter to submit or for their window to expire, then try again.'],
   ['Moderator: an action shows an error', 'Refresh first. Another moderator may have completed it already.'],
+  ['Moderator: did the emails go out?', 'Check the Event log under Communications & operations. Each email batch, failed emails, and automatic steps that could not run are listed there, newest first.'],
 ] as const;
 
 function Shot({ src, alt, caption, width = 1440, height = 900, narrow = false }: { src: string; alt: string; caption: string; width?: number; height?: number; narrow?: boolean }) {
@@ -170,7 +171,7 @@ export default function GuidePage() {
             <li>Select <strong>Save response</strong> and wait for the confirmation. Selecting cards alone does not count.</li>
             <li>You can change your mind and save again until the phase closes. Only your latest saved response counts.</li>
           </ol>
-          <Shot src="/guide/player-day-ballot.webp" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself: every 10 seconds in the last 15 minutes before a deadline, otherwise every 30 seconds." />
+          <Shot src="/guide/player-day-ballot.webp" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself: every 10 seconds in the last 15 minutes before a deadline, otherwise every 30 seconds. After five minutes without a tap or key press it pauses and says so; tap anywhere to catch up. Once the game ends it stops refreshing." />
           <h3>4. Follow the story</h3>
           <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page (the latest 100 updates), with who voted for whom each Day. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
           <Shot src="/guide/player-timeline.webp" alt="Player dashboard showing the full Timeline of published results" caption="The full Timeline: each published result, who was eliminated and their role, and how everyone voted." />
