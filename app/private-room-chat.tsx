@@ -19,6 +19,8 @@ interface Room {
 interface Message {
   id: string;
   authorName: string;
+  /** Posted by a moderator; shown as "Moderator" and styled apart. */
+  byModerator?: boolean;
   body: string | null;
   deletedAt: string | null;
   purgedAt: string | null;
@@ -158,7 +160,7 @@ export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms:
       <div className="rail-heading"><h2>{roomNames[room.type]}</h2><span>{messages.length}</span></div>
       {rooms.length > 1 && <div className="room-tabs">{rooms.map((candidate) => <button className={candidate.id === room.id ? 'active' : ''} key={candidate.id} type="button" aria-pressed={candidate.id === room.id} onClick={() => { messageRequest.current?.select(candidate.id); setRoomId(candidate.id); }}>{roomNames[candidate.type]}</button>)}</div>}
       <div className="chat-scroll">
-        {messages.length ? messages.map((message) => <article key={message.id} className="chat-line"><div><strong>{message.authorName}</strong><small suppressHydrationWarning>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small></div><p>{message.body ?? (message.purgedAt ? 'Message expired.' : 'Message removed by a moderator.')}</p></article>) : <p className="empty-note">No messages yet. This room is visible only to its members.</p>}
+        {messages.length ? messages.map((message) => <article key={message.id} className={message.byModerator ? 'chat-line moderator' : 'chat-line'}><div><strong>{message.authorName}</strong><small suppressHydrationWarning>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small></div><p>{message.body ?? (message.purgedAt ? 'Message expired.' : 'Message removed by a moderator.')}</p></article>) : <p className="empty-note">No messages yet. This room is visible only to its members.</p>}
       </div>
       {room.status === 'OPEN' && room.access === 'WRITE' ? <form className="chat-compose" onSubmit={send}><label><span className="sr-only">Message</span><textarea name="body" rows={2} maxLength={1000} placeholder="Write a private message…" required /></label><button className="primary-button" type="submit">{previewMode ? 'Add preview message' : 'Send'}</button></form> : <p className="field-help">This room is read-only.</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
