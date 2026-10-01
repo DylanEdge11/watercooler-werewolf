@@ -2,7 +2,7 @@ import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { parseEliminationSchedule, phaseSlots } from '../../../../../lib/game/elimination-schedule';
-import { validateFinalShowdownEntry, validatePhaseOpen } from '../../../../../lib/game/phase-policy';
+import { validateDeadlineExtension, validateFinalShowdownEntry, validatePhaseOpen } from '../../../../../lib/game/phase-policy';
 import { automaticStepDueAt } from '../../../../../lib/game/automation';
 import { advanceGameSafely } from '../../../../../lib/game/automation-sweep';
 import { outstandingResponders } from '../../../../../lib/game/outstanding';
@@ -10,7 +10,7 @@ import { applyEliminationOverride } from '../../../../../lib/game/engine';
 import { changes, loadActions, overrideIdsFromJson } from '../../../../../lib/game/phase-store';
 import { runPhaseAction } from '../../../../../lib/game/phase-transitions';
 import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
-import { parseScheduledDate } from '../../../../../lib/game/scheduling';
+import { parseScheduledDate, type ScheduleDefinition } from '../../../../../lib/game/scheduling';
 import { canonicalRoleKey, type PhaseKind, type PhaseResolution, type PlayerState } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { notifyPhaseOpened, runAfterResponse } from '../../../../../lib/notify/notifications';
@@ -53,6 +53,21 @@ interface ProposalRow {
   createdAt: string;
 }
 
+function parseCloseSchedule(scheduleJson: string, activeWeekdaysJson: string): ScheduleDefinition | null {
+  try {
+    const schedule = JSON.parse(scheduleJson) as Partial<ScheduleDefinition>;
+    const weekdays = JSON.parse(activeWeekdaysJson) as unknown;
+    if (typeof schedule.dayCloses !== 'string' || typeof schedule.nightCloses !== 'string') return null;
+    return {
+      dayCloses: schedule.dayCloses,
+      nightCloses: schedule.nightCloses,
+      activeWeekdays: Array.isArray(weekdays) ? weekdays.filter((day): day is number => Number.isInteger(day)) : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
@@ -64,8 +79,9 @@ export async function GET(request: Request, context: RouteContext) {
     const [gameRow, phaseRows, proposalRows, reviewRows, rosterRows] = await Promise.all([
       db.prepare(`SELECT status, final_cutoff_at AS finalCutoffAt, timezone, updated_at AS updatedAt,
                 publication_mode AS publicationMode, review_window_minutes AS reviewWindowMinutes,
-                automation_paused_at AS automationPausedAt, elimination_schedule_json AS eliminationScheduleJson
-         FROM games WHERE id = ? LIMIT 1`).bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string; updatedAt: string; publicationMode: string; reviewWindowMinutes: number; automationPausedAt: string | null; eliminationScheduleJson: string | null }>(),
+                automation_paused_at AS automationPausedAt, elimination_schedule_json AS eliminationScheduleJson,
+                schedule_json AS scheduleJson, active_weekdays_json AS activeWeekdaysJson
+         FROM games WHERE id = ? LIMIT 1`).bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string; updatedAt: string; publicationMode: string; reviewWindowMinutes: number; automationPausedAt: string | null; eliminationScheduleJson: string | null; scheduleJson: string; activeWeekdaysJson: string }>(),
       db
         .prepare(
           `SELECT p.id, p.sequence, p.kind, p.status, p.opens_at AS opensAt, p.closes_at AS closesAt,
@@ -141,7 +157,15 @@ export async function GET(request: Request, context: RouteContext) {
     return respondJsonWithEtag(request, {
       ok: true,
       game: gameRow
-        ? { ...gameRow, eliminationScheduleJson: undefined, eliminationSchedule: parseEliminationSchedule(gameRow.eliminationScheduleJson) }
+        ? {
+            ...gameRow,
+            eliminationScheduleJson: undefined,
+            eliminationSchedule: parseEliminationSchedule(gameRow.eliminationScheduleJson),
+            scheduleJson: undefined,
+            activeWeekdaysJson: undefined,
+            // The Day and Night close times, so the console can suggest each phase's deadline.
+            schedule: parseCloseSchedule(gameRow.scheduleJson, gameRow.activeWeekdaysJson),
+          }
         : null,
       // The next automatic step and when it happens, or null in review mode, while paused, or when nothing is pending.
       nextAutomaticStep: automation ? automaticStepDueAt(automation.game, automation.phase) : null,
@@ -194,7 +218,7 @@ export async function POST(request: Request, context: RouteContext) {
     const { gameId } = await context.params;
     const moderator = await requireGameModerator(gameId);
     const body = (await request.json()) as {
-      action?: 'OPEN' | 'ENTER_FINAL_SHOWDOWN' | 'LOCK_AND_PROPOSE' | 'FINALIZE_HUNTER' | 'PUBLISH';
+      action?: 'OPEN' | 'EXTEND_DEADLINE' | 'ENTER_FINAL_SHOWDOWN' | 'LOCK_AND_PROPOSE' | 'FINALIZE_HUNTER' | 'PUBLISH';
       phaseId?: string;
       kind?: PhaseKind;
       closesAt?: string;
@@ -244,6 +268,47 @@ export async function POST(request: Request, context: RouteContext) {
       ]);
       if (changes(result[0]) !== 1) return jsonError('The game changed before final showdown could begin. Refresh and review its current state.', 409);
       return Response.json({ ok: true, status: 'FINAL_SHOWDOWN' });
+    }
+
+    if (body.action === 'EXTEND_DEADLINE') {
+      if (!body.phaseId) throw new Error('Choose the open phase to extend.');
+      const phase = await db
+        .prepare('SELECT id, status, closes_at AS closesAt FROM phases WHERE id = ? AND game_id = ? LIMIT 1')
+        .bind(body.phaseId, gameId)
+        .first<{ id: string; status: string; closesAt: string }>();
+      if (!phase) throw new HttpError(404, 'Phase not found.');
+      const closesAt = parseScheduledDate(body.closesAt ?? '', game.timezone);
+      const nowDate = new Date();
+      const policyError = validateDeadlineExtension({
+        gameStatus: game.status,
+        phaseStatus: phase.status,
+        currentClosesAt: phase.closesAt,
+        requestedClosesAt: closesAt,
+        now: nowDate,
+      });
+      if (policyError) throw new Error(policyError);
+      const now = nowDate.toISOString();
+      const result = await db.batch([
+        // Still open, still the deadline that was read, and not yet passed; otherwise 409.
+        // Clearing the reminder lets the closing-soon email go out before the new deadline.
+        db
+          .prepare(
+            `UPDATE phases SET closes_at = ?, closing_reminder_at = NULL, version = version + 1, updated_at = ?
+             WHERE id = ? AND game_id = ? AND status = 'OPEN' AND closes_at = ? AND closes_at > ?
+               AND EXISTS (SELECT 1 FROM games WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN'))`,
+          )
+          .bind(closesAt.toISOString(), now, phase.id, gameId, phase.closesAt, now, gameId),
+        db
+          .prepare(
+            `INSERT INTO game_events
+             (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
+             SELECT ?, ?, ?, 'PHASE_DEADLINE_EXTENDED', ?, ?, ?
+             WHERE EXISTS (SELECT 1 FROM phases WHERE id = ? AND status = 'OPEN' AND closes_at = ? AND updated_at = ?)`,
+          )
+          .bind(crypto.randomUUID(), gameId, phase.id, moderator.id, JSON.stringify({ from: phase.closesAt, to: closesAt.toISOString() }), now, phase.id, closesAt.toISOString(), now),
+      ]);
+      if (changes(result[0]) !== 1) return jsonError('The phase changed before its deadline could be extended. Refresh and try again.', 409);
+      return Response.json({ ok: true, phaseId: phase.id, closesAt: closesAt.toISOString() });
     }
 
     if (body.action === 'OPEN') {

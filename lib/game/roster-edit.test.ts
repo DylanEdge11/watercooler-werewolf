@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultComposition } from './balance';
 import { MAX_PLAYERS, MIN_PLAYERS } from './player-count';
-import { adjustCompositionForRosterChange, canAddSeat, canEditRoster, canRemoveSeat } from './roster-edit';
+import { adjustCompositionForRosterChange, canAddLateVillager, canAddSeat, canEditRoster, canRemoveSeat } from './roster-edit';
 
 describe('single-seat roster edits', () => {
   it('are open only before roles are randomized', () => {
@@ -40,5 +40,21 @@ describe('single-seat roster edits', () => {
 
   it('fall back to the preset when the saved counts no longer match the roster', () => {
     expect(adjustCompositionForRosterChange(defaultComposition(20), 22, 1)).toEqual({ composition: defaultComposition(22), resetToPreset: true });
+  });
+});
+
+describe('late Villagers', () => {
+  it('are allowed in a running game until the second Day opens', () => {
+    expect(canAddLateVillager('ACTIVE', true, 0, 20)).toEqual({ allowed: true });
+    expect(canAddLateVillager('ACTIVE', true, 1, 20)).toEqual({ allowed: true });
+    expect(canAddLateVillager('ACTIVE', true, 2, 20)).toEqual({ allowed: true });
+    expect(canAddLateVillager('ACTIVE', true, 3, 20)).toMatchObject({ allowed: false, error: expect.stringMatching(/first Day and Night/u) });
+  });
+
+  it('are refused before roles are released, outside a running game, or at the player limit', () => {
+    expect(canAddLateVillager('REGISTRATION', false, 0, 20)).toMatchObject({ allowed: false, error: expect.stringMatching(/Change the roster/u) });
+    expect(canAddLateVillager('FINAL_SHOWDOWN', true, 2, 20).allowed).toBe(false);
+    expect(canAddLateVillager('STOPPED', true, 1, 20).allowed).toBe(false);
+    expect(canAddLateVillager('ACTIVE', true, 1, MAX_PLAYERS)).toMatchObject({ allowed: false, error: expect.stringMatching(/at most/u) });
   });
 });

@@ -60,3 +60,23 @@ export function validateFinalShowdownEntry(input: FinalShowdownPolicyInput): str
   if (input.now < cutoff) return 'Final showdown cannot begin before the final cutoff.';
   return null;
 }
+
+export interface DeadlineExtensionInput {
+  gameStatus: string;
+  phaseStatus: string;
+  currentClosesAt: string;
+  requestedClosesAt: Date;
+  now: Date;
+}
+
+/** A moderator may move an open phase's deadline later, never earlier, and only while voting is still open. */
+export function validateDeadlineExtension(input: DeadlineExtensionInput): string | null {
+  if (!['ACTIVE', 'FINAL_SHOWDOWN'].includes(input.gameStatus)) return 'Only a running game\'s deadline can be changed.';
+  if (input.phaseStatus !== 'OPEN') return 'Only an open phase\'s deadline can be changed.';
+  const current = new Date(input.currentClosesAt);
+  if (Number.isNaN(current.valueOf())) return 'The current deadline is invalid.';
+  if (current <= input.now) return 'Voting has already closed for this phase, so its deadline can no longer be changed.';
+  if (Number.isNaN(input.requestedClosesAt.valueOf())) return 'The new deadline is not a valid date and time.';
+  if (input.requestedClosesAt <= current) return 'The new deadline must be later than the current one. Deadlines can be extended, not shortened.';
+  return null;
+}

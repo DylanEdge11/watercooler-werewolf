@@ -6,9 +6,11 @@ import { phaseName } from '../../lib/game/timeline-view';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import AutomationControls, { type NextAutomaticStep } from './automation-controls';
 import EliminationSchedulePanel from './elimination-schedule-panel';
+import LateVillagerForm from './late-villager-form';
 import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
 import CopyButton from './copy-button';
-import { formatZonedDateTimeLocal } from '../../lib/game/scheduling';
+import { LATE_JOIN_LAST_PHASE_SEQUENCE } from '../../lib/game/roster-edit';
+import { formatZonedDateTimeLocal, nextScheduledClose, type ScheduleDefinition } from '../../lib/game/scheduling';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { pollInterval } from '../../lib/http/poll-interval';
@@ -92,6 +94,8 @@ interface GameState {
   reviewWindowMinutes: number;
   automationPausedAt: string | null;
   eliminationSchedule?: EliminationSchedule | null;
+  /** The game's Day and Night close times, which the Deadline field suggests. */
+  schedule?: ScheduleDefinition | null;
 }
 
 export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameId: string; gameStatus: string; onChanged?: (action?: string) => void }) {
@@ -167,6 +171,18 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
     }
   }
 
+  async function extendDeadline(event: FormEvent<HTMLFormElement>, phaseId: string) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      // The server interprets datetime-local in the game's configured timezone.
+      await mutate({ action: 'EXTEND_DEADLINE', phaseId, closesAt: String(form.get('closesAt')) });
+      setMessage('Deadline extended. Players see the new time on their next refresh.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to extend the deadline.');
+    }
+  }
+
   async function enterFinalShowdown() {
     try {
       await mutate({ action: 'ENTER_FINAL_SHOWDOWN' });
@@ -205,7 +221,12 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
       : 'DAY';
   const byId = useMemo(() => new Map(roster.map((player) => [player.id, player])), [roster]);
   const gameTimeZone = game?.timezone ?? 'UTC';
-  const defaultDeadline = useMemo(() => localDeadline(60, gameTimeZone), [gameTimeZone]);
+  const gameSchedule = game?.schedule ?? null;
+  // The next Day or Night close from the game's schedule; an hour from now only if it has none.
+  const defaultDeadline = useMemo(
+    () => (gameSchedule && nextScheduledClose(nextKind, gameSchedule, gameTimeZone)) ?? localDeadline(60, gameTimeZone),
+    [gameSchedule, nextKind, gameTimeZone],
+  );
   const deadlineInput = deadlineDraft?.gameId === gameId && deadlineDraft.timeZone === gameTimeZone
     ? deadlineDraft.value
     : defaultDeadline;
@@ -241,11 +262,20 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
 
       {game && !['COMPLETED', 'STOPPED', 'CANCELLED'].includes(effectiveStatus) && <AutomationControls gameId={gameId} game={game} nextStep={nextAutomaticStep} formatTime={gameTime} onChanged={refresh} />}
 
+      {game && effectiveStatus === 'ACTIVE' && (phases[0]?.sequence ?? 0) <= LATE_JOIN_LAST_PHASE_SEQUENCE && <LateVillagerForm gameId={gameId} onAdded={() => { void refresh(); onChanged?.('LATE_VILLAGER_ADDED'); }} />}
+
       {game && ['ACTIVE', 'FINAL_SHOWDOWN'].includes(effectiveStatus) && <EliminationSchedulePanel gameId={gameId} status={effectiveStatus} schedule={game.eliminationSchedule ?? null} latest={latestRegular ? { kind: latestRegular.kind, sequence: latestRegular.sequence, status: latestRegular.status } : null} onChanged={refresh} />}
 
       {latest && (
         <div className="phase-review">
           <div className="phase-status-row"><div><p className="eyebrow accent">{phaseName(latest.kind, latest.sequence)}</p><h3>{latest.status.replaceAll('_', ' ')}</h3></div><div><strong>{latest.currentSubmissions}</strong><small>current responses</small></div>{latest.kind !== 'NIGHT' && <div><strong>{latest.afterlifeSubmissions ?? 0}</strong><small>Afterlife votes</small></div>}<div><strong>{latest.slots}</strong><small>elimination slots</small></div></div>
+          {latest.status === 'OPEN' && (
+            <form className="phase-open-row deadline-extend-row" key={`${latest.id}-${latest.closesAt}`} onSubmit={(event) => void extendDeadline(event, latest.id)}>
+              <label>Deadline ({gameTimeZone})<input name="closesAt" type="datetime-local" defaultValue={formatZonedDateTimeLocal(new Date(latest.closesAt), gameTimeZone)} required /></label>
+              <button className="secondary-button" type="submit">Change deadline</button>
+              <small className="field-hint">Voting closes {gameTime(latest.closesAt)}. A deadline can be moved later, not earlier.</small>
+            </form>
+          )}
           {latest.status === 'OPEN' && <OutstandingBlock phase={latest} timeZone={gameTimeZone} />}
           {['OPEN', 'LOCKED'].includes(latest.status) && <button className="danger-button" type="button" onClick={() => void run('LOCK_AND_PROPOSE', latest.id)}>{latest.status === 'LOCKED' ? 'Calculate locked responses' : 'Lock responses & calculate'}</button>}
           {(latest.status === 'PENDING_HUNTER' || latest.status === 'HUNTER_FINALIZING') && (
