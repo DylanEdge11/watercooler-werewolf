@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import type { Database } from '../../db/contracts';
-import { isValidCalendarDate, parseScheduledDate, sweepDuePhases, validateSchedule, zonedDateTimeToUtcIso } from './scheduling';
+import { isValidCalendarDate, nextScheduledClose, parseScheduledDate, sweepDuePhases, validateSchedule, zonedDateTimeToUtcIso } from './scheduling';
+
+describe('next scheduled close', () => {
+  const schedule = { dayCloses: '16:00', nightCloses: '09:00', activeWeekdays: [1, 2, 3, 4, 5] };
+
+  it('uses today\'s Day close in the game timezone while it is still ahead', () => {
+    // Thursday 2026-10-01, 10:14 in Regina (UTC-6).
+    expect(nextScheduledClose('DAY', schedule, 'America/Regina', new Date('2026-10-01T16:14:00Z'))).toBe('2026-10-01T16:00');
+    expect(nextScheduledClose('FINAL_BALLOT', schedule, 'America/Regina', new Date('2026-10-01T16:14:00Z'))).toBe('2026-10-01T16:00');
+  });
+
+  it('uses the Night close for Night actions, rolling to the next day once passed', () => {
+    expect(nextScheduledClose('NIGHT', schedule, 'America/Regina', new Date('2026-10-01T22:30:00Z'))).toBe('2026-10-02T09:00');
+  });
+
+  it('skips inactive weekdays and closes too soon to be useful', () => {
+    // Friday 15:50 in Regina: 16:00 is under 15 minutes away, and the weekend is inactive.
+    expect(nextScheduledClose('DAY', schedule, 'America/Regina', new Date('2026-10-02T21:50:00Z'))).toBe('2026-10-05T16:00');
+  });
+
+  it('returns null for a schedule it cannot read', () => {
+    expect(nextScheduledClose('DAY', { dayCloses: '', nightCloses: '09:00' }, 'America/Regina')).toBeNull();
+    expect(nextScheduledClose('DAY', schedule, 'Not/AZone')).toBeNull();
+  });
+});
 
 describe('timezone-aware scheduling', () => {
   it('converts local deadlines using the game timezone, including a DST boundary', () => {

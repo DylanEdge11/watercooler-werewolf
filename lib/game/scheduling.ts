@@ -146,6 +146,43 @@ export function formatZonedDateTimeLocal(date: Date, timeZone: string): string {
   return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}T${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`;
 }
 
+/**
+ * The next time a phase of this kind closes under the game's schedule, as a
+ * datetime-local value in the game's timezone: today's close time if it is at
+ * least `minimumLeadMinutes` away, otherwise the next active weekday's. Day
+ * ballots and the final ballot use `dayCloses`; Night actions use `nightCloses`.
+ * Returns null when the schedule cannot give an answer (the caller falls back).
+ */
+export function nextScheduledClose(
+  kind: 'DAY' | 'NIGHT' | 'FINAL_BALLOT',
+  schedule: ScheduleDefinition,
+  timeZone: string,
+  now = new Date(),
+  minimumLeadMinutes = 15,
+): string | null {
+  const time = kind === 'NIGHT' ? schedule.nightCloses : schedule.dayCloses;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/u.test(time ?? '')) return null;
+  const weekdays = schedule.activeWeekdays?.length ? new Set(schedule.activeWeekdays) : null;
+  let today: LocalDateTimeParts;
+  try {
+    today = formattedParts(now.valueOf(), zonedFormatter(timeZone));
+  } catch {
+    return null;
+  }
+  const earliest = now.valueOf() + minimumLeadMinutes * 60_000;
+  for (let offset = 0; offset <= 8; offset += 1) {
+    const date = new Date(Date.UTC(today.year, today.month - 1, today.day + offset));
+    if (weekdays && !weekdays.has(date.getUTCDay())) continue;
+    const local = `${date.toISOString().slice(0, 10)}T${time}`;
+    try {
+      if (new Date(zonedDateTimeToUtcIso(local, timeZone)).valueOf() >= earliest) return local;
+    } catch {
+      // A close time inside a daylight-saving gap: try the next day.
+    }
+  }
+  return null;
+}
+
 export function validateSchedule(schedule: ScheduleDefinition): string[] {
   const errors: string[] = [];
   for (const [label, value] of [['dayCloses', schedule.dayCloses], ['nightCloses', schedule.nightCloses]] as const) {

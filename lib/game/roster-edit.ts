@@ -57,3 +57,21 @@ export function adjustCompositionForRosterChange(
   }
   return { composition: defaultComposition(newPlayerCount), resetToPreset: true };
 }
+
+/** Late joiners are allowed only during the first Day and the first Night: the game's first two phases. */
+export const LATE_JOIN_LAST_PHASE_SEQUENCE = 2;
+
+/**
+ * A late joiner is always a Villager and joins quietly. Allowed only once roles
+ * are released and the game is running, and only until the second Day opens.
+ */
+export function canAddLateVillager(status: string, rolesReleased: boolean, latestPhaseSequence: number, seatCount: number): RosterEditDecision {
+  if (status !== 'ACTIVE' || !rolesReleased) {
+    return { allowed: false, error: 'Late Villagers can be added only while the game is running. Before roles are randomized, use Change the roster instead.' };
+  }
+  if (latestPhaseSequence > LATE_JOIN_LAST_PHASE_SEQUENCE) {
+    return { allowed: false, error: 'Late Villagers can be added only during the first Day and Night.' };
+  }
+  if (seatCount >= MAX_PLAYERS) return { allowed: false, error: `A game can have at most ${MAX_PLAYERS} players.` };
+  return { allowed: true };
+}
