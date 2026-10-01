@@ -71,6 +71,13 @@
       "when": 1790822574846,
       "tag": "0009_elimination_schedule",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1790881473203,
+      "tag": "0010_moderator_messages",
+      "breakpoints": true
     }
   ]
 }
