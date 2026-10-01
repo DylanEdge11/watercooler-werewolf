@@ -5,6 +5,8 @@ import { nudgeMessage } from '../../lib/game/moderator-copy';
 import { phaseName } from '../../lib/game/timeline-view';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import AutomationControls, { type NextAutomaticStep } from './automation-controls';
+import EliminationSchedulePanel from './elimination-schedule-panel';
+import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
 import CopyButton from './copy-button';
 import { formatZonedDateTimeLocal } from '../../lib/game/scheduling';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
@@ -89,6 +91,7 @@ interface GameState {
   publicationMode: 'REVIEW' | 'AUTOMATIC';
   reviewWindowMinutes: number;
   automationPausedAt: string | null;
+  eliminationSchedule?: EliminationSchedule | null;
 }
 
 export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameId: string; gameStatus: string; onChanged?: (action?: string) => void }) {
@@ -194,6 +197,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
   const latest = current ?? phases[0];
   const effectiveStatus = game?.status ?? gameStatus;
   const latestPublished = phases.find((phase) => phase.status === 'PUBLISHED');
+  const latestRegular = phases.find((phase) => phase.kind !== 'FINAL_BALLOT');
   const nextKind = effectiveStatus === 'FINAL_SHOWDOWN'
     ? 'FINAL_BALLOT'
     : latestPublished?.kind === 'DAY'
@@ -236,6 +240,8 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
       {!current && effectiveStatus === 'ACTIVE' && latestPublished && <div className="final-showdown-callout"><div><p className="eyebrow accent">Final cutoff · {game?.timezone ?? 'UTC'}</p><strong>{game?.finalCutoffAt ? gameTime(game.finalCutoffAt) : 'Configured in the game schedule'}</strong><p>When the cutoff has passed, enter final showdown to unlock the final ballot.</p></div><button className="secondary-button" type="button" onClick={() => void enterFinalShowdown()}>Enter final showdown</button></div>}
 
       {game && !['COMPLETED', 'STOPPED', 'CANCELLED'].includes(effectiveStatus) && <AutomationControls gameId={gameId} game={game} nextStep={nextAutomaticStep} formatTime={gameTime} onChanged={refresh} />}
+
+      {game && ['ACTIVE', 'FINAL_SHOWDOWN'].includes(effectiveStatus) && <EliminationSchedulePanel gameId={gameId} status={effectiveStatus} schedule={game.eliminationSchedule ?? null} latest={latestRegular ? { kind: latestRegular.kind, sequence: latestRegular.sequence, status: latestRegular.status } : null} onChanged={refresh} />}
 
       {latest && (
         <div className="phase-review">

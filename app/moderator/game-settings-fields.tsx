@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { DEFAULT_NEW_GAME_AUTOMATION, type AutomationSettings } from '../../lib/game/automation';
+import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
 import { DEFAULT_GAME_SETTINGS, heavySlotWarning, slotTable, type GameSettings } from '../../lib/game/game-settings';
+import EliminationScheduleFields from './elimination-schedule-fields';
 
 interface GameSettingsFieldsProps {
-  initial?: Partial<GameSettings & AutomationSettings>;
+  initial?: Partial<GameSettings & AutomationSettings & { eliminationSchedule: EliminationSchedule | null }>;
   disabled?: boolean;
 }
 
@@ -26,8 +28,9 @@ function SlotPreview({ label, divisor }: { label: string; divisor: string }) {
 }
 
 /**
- * The Hunter window and the elimination divisors. Both setup forms use this;
- * the fields are editable only while the rest of the setup is.
+ * The Hunter window, the elimination divisors, and the elimination schedule.
+ * Both setup forms use this; the fields are editable only while the rest of
+ * the setup is. After release, the schedule changes in the live console.
  */
 export default function GameSettingsFields({ initial, disabled = false }: GameSettingsFieldsProps) {
   const settings: GameSettings = {
@@ -60,6 +63,8 @@ export default function GameSettingsFields({ initial, disabled = false }: GameSe
           <SlotPreview label="Night" divisor={nightDivisor} />
         </div>
       </div>
+      <h3 className="schedule-heading">Elimination schedule</h3>
+      <EliminationScheduleFields initial={initial?.eliminationSchedule ?? null} disabled={disabled} />
     </details>
   </>;
 }
