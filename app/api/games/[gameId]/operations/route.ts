@@ -16,6 +16,25 @@ interface RouteContext {
   params: Promise<{ gameId: string }>;
 }
 
+interface OperationalEventRow {
+  id: string;
+  severity: string;
+  source: string;
+  message: string;
+  detailsJson: string | null;
+  createdAt: string;
+}
+
+/** A result email records whether its story came from the AI or the template; the console shows which. */
+function storySource(detailsJson: string | null): 'AI' | 'TEMPLATE' | null {
+  try {
+    const details = JSON.parse(detailsJson ?? 'null') as { storySource?: unknown } | null;
+    return details?.storySource === 'AI' || details?.storySource === 'TEMPLATE' ? details.storySource : null;
+  } catch {
+    return null;
+  }
+}
+
 function changes(result: unknown): number {
   return Number((result as { meta?: { changes?: number } } | null)?.meta?.changes ?? 0);
 }
@@ -72,11 +91,13 @@ export async function GET(request: Request, context: RouteContext) {
         .all(),
       db
         .prepare(
+          // The event log. Late-attempt rows are left out: the activity count below covers them,
+          // and one player retrying after a deadline would otherwise push everything else off the list.
           `SELECT id, severity, source, message, details_json AS detailsJson, created_at AS createdAt
-           FROM operational_events WHERE game_id = ? ORDER BY created_at DESC LIMIT 20`,
+           FROM operational_events WHERE game_id = ? AND source != 'DEADLINE_MONITOR' ORDER BY created_at DESC LIMIT 20`,
         )
         .bind(gameId)
-        .all(),
+        .all<OperationalEventRow>(),
       db
         .prepare(
           `SELECT
@@ -98,7 +119,7 @@ export async function GET(request: Request, context: RouteContext) {
     ]);
     const latestBackup = backups.results[0];
     const lastBackup = latestBackup ? { exportedAt: latestBackup.exportedAt, checksum: latestBackup.checksum } : null;
-    return respondJsonWithEtag(request, { ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, seats: seats.results.map((seat) => ({ ...seat, pinLocked: Boolean(seat.pinLocked) })), lastBackup, backups: backups.results, events: events.results });
+    return respondJsonWithEtag(request, { ok: true, viewerRole: membership?.role ?? null, game, counts, overduePhase: overdue, reconciledPhaseIds, activePlayerSessions: Number((sessions as { count?: number } | null)?.count ?? 0), activity: { submittedActions: Number(activity?.submittedActions ?? 0), lateRejections: Number(activity?.lateRejections ?? 0), lastActionAt: activity?.lastActionAt ?? null }, seats: seats.results.map((seat) => ({ ...seat, pinLocked: Boolean(seat.pinLocked) })), lastBackup, backups: backups.results, events: events.results.map(({ detailsJson, ...event }) => ({ ...event, storySource: storySource(detailsJson) })) });
   } catch (error) {
     return routeError(error, 'Unable to load operational health.');
   }

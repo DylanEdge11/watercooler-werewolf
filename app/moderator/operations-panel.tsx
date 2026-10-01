@@ -19,7 +19,17 @@ interface Operations {
   activity: { submittedActions: number; lateRejections: number; lastActionAt: string | null };
   lastBackup: null | { exportedAt: string; checksum: string };
   backups: Array<{ id: string; schemaVersion: number; exportedAt: string; checksum: string }>;
-  events: Array<{ id: string; severity: string; source: string; message: string; createdAt: string }>;
+  events: OperationalEvent[];
+}
+
+interface OperationalEvent {
+  id: string;
+  severity: string;
+  source: string;
+  message: string;
+  createdAt: string;
+  /** Result emails only: whether the recap story came from the AI or the standard template. */
+  storySource: 'AI' | 'TEMPLATE' | null;
 }
 
 interface Room {
@@ -430,6 +440,8 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
       </div>
       <div className="ops-inline-note"><span>Deadline monitor checks due phases and locks player submissions safely.</span><button className="secondary-button" type="button" onClick={() => void reconcileDeadlines()}>Check deadlines</button></div>
 
+      <EventLog events={operations.events} />
+
       <div className="operations-columns">
         <form className="ops-block" onSubmit={announce}><p className="eyebrow accent">Official announcement</p><label>Title<input name="title" required /></label><label>Message<textarea name="body" rows={4} required /></label><button className="primary-button" type="submit">Publish notice</button></form>
         <form className="ops-block" onSubmit={addModerator}><p className="eyebrow accent">Co-moderator access</p><ul className="moderator-list" aria-label="Moderators">{moderators.map((moderator) => <li key={moderator.id}><span className="moderator-email">{moderator.email}</span><small>{moderator.role === 'OWNER' ? 'Owner' : 'Co-moderator'}</small>{operations.viewerRole === 'OWNER' && moderator.role !== 'OWNER' && <span className="moderator-actions"><button type="button" onClick={() => void makeOwner(moderator)} disabled={busyAction !== null}>Make owner</button><button type="button" onClick={() => void removeModerator(moderator)} disabled={busyAction !== null}>Remove</button></span>}</li>)}</ul><label>Email<input name="email" type="email" required /></label><label>Moderator password<input name="password" type="password" minLength={12} required /></label><p className="field-help">There is no forced expiry; the moderator can recover with a one-time code.</p><button className="secondary-button" type="submit">Add co-moderator</button>{recoveryCodes.length > 0 && <code className="recovery-list">{recoveryCodes.join(' · ')}</code>}</form>
@@ -447,5 +459,28 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
       <div className="backup-row"><div><p className="eyebrow accent">Verified backup</p><strong>{operations.lastBackup ? `Last export ${new Date(operations.lastBackup.exportedAt).toLocaleString()}` : 'No backup exported yet'}</strong><small>{operations.lastBackup?.checksum ? `Checksum ${operations.lastBackup.checksum.slice(0, 18)}…` : 'Includes game state, audit history, and private rooms.'}</small></div><button className="primary-button" type="button" onClick={exportBackup} disabled={busyAction !== null}>{busyAction === 'export' ? 'Creating…' : 'Download JSON backup'}</button></div>
       {operations.viewerRole === 'OWNER' && operations.backups.length > 0 && <div className="ops-block restore-backup-block"><p className="eyebrow accent">Recovery restore</p><p className="field-help">Restore a verified snapshot into this game’s setup state. Secrets are never restored; fresh seat links are generated.</p><div className="button-row"><label className="restore-select">Snapshot<select value={restoreBackupId} onChange={(event) => setRestoreBackupId(event.target.value)} disabled={busyAction !== null}>{operations.backups.map((backup) => <option key={backup.id} value={backup.id}>{new Date(backup.exportedAt).toLocaleString()} · {backup.checksum.slice(0, 12)}…</option>)}</select></label><button className="secondary-button" type="button" onClick={() => void restoreBackup()} disabled={busyAction !== null}>{busyAction === 'restore' ? 'Restoring…' : 'Restore to setup'}</button>{restoreInviteCsv && <button className="secondary-button" type="button" onClick={downloadRestoredInvites}>Download fresh invites</button>}</div></div>}
     </section>
+  );
+}
+
+/** Emails sent or failed, automatic steps that could not run, and deadline locks, newest first. */
+function EventLog({ events }: { events: OperationalEvent[] }) {
+  return (
+    <div className="ops-block event-log">
+      <p className="eyebrow accent">Event log</p>
+      <p className="field-help">Player emails, automatic results, and deadline locks for this game, newest first. Warnings need your attention.</p>
+      {events.length ? (
+        <ul aria-label="Event log">
+          {events.map((event) => (
+            <li key={event.id} className={event.severity === 'WARNING' ? 'warning' : undefined}>
+              <small>{new Date(event.createdAt).toLocaleString()}</small>
+              <span>
+                {event.severity === 'WARNING' ? 'Warning: ' : ''}{event.message}
+                {event.storySource === 'AI' ? ' Story written by AI.' : event.storySource === 'TEMPLATE' ? ' Story from the standard template (the AI story was unavailable).' : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="field-help">Nothing recorded yet.</p>}
+    </div>
   );
 }

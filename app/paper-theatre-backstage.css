@@ -248,6 +248,8 @@
 /* Taped notes: warnings, callouts, recovery codes. */
 .backstage :is(.notice, .hunter-callout, .random-note, .recovery-list, .preview-safety-note):not(.app-shell *) { border: 0; border-radius: 1px; box-shadow: 0 2px 5px rgba(35, 29, 24, 0.15); font-size: 12px; }
 .backstage :is(.notice.warning, .hunter-callout, .random-note, .recovery-list):not(.app-shell *) { background: #fff1c4; color: #5c4214; }
+.backstage .event-log li.warning { background: #fff1c4; color: #5c4214; }
+.backstage .event-log li { font-size: 13px; }
 .backstage .notice.error:not(.app-shell *) { background: #f6d8d3; color: #7d1f2a; }
 .backstage .notice.success:not(.app-shell *) { background: #dcebd9; color: var(--bs-go-deep); }
 .backstage .recovery-list { font-family: var(--ll-font-type), monospace; font-size: 11px; }

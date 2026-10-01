@@ -254,6 +254,24 @@ describe('real libSQL provider integration', () => {
     expect(data.backups.map((backup) => backup.id)).toEqual(['new', 'old']);
   });
 
+  test('lists operational events for the console, without the late-attempt rows it already counts', async () => {
+    await seedActiveGame();
+    const now = Date.now();
+    const at = (minutesAgo: number) => new Date(now - minutesAgo * 60_000).toISOString();
+    await client.batch([
+      { sql: "INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at) VALUES ('late', 'game', 'WARNING', 'DEADLINE_MONITOR', 'A late player action was rejected.', '{}', ?)", args: [at(1)] },
+      { sql: "INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at) VALUES ('result', 'game', 'INFO', 'EMAIL', 'Day 1 result: emailed 4 players.', ?, ?)", args: [JSON.stringify({ kind: 'RESULT', storySource: 'TEMPLATE', story: 'A fictional story.' }), at(2)] },
+      { sql: "INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at) VALUES ('automation', 'game', 'WARNING', 'AUTOMATION', 'An automatic step could not run; it will retry on the next check.', '{\"error\":\"boom\"}', ?)", args: [at(3)] },
+    ], 'write');
+    const response = await operationsGet(new Request('http://localhost:3000/api/games/game/operations'), { params: Promise.resolve({ gameId: 'game' }) });
+    expect(response.status).toBe(200);
+    const data = await response.json() as { activity: { lateRejections: number }; events: Array<{ id: string; severity: string; message: string; storySource: string | null }> };
+    expect(data.events.map((event) => event.id)).toEqual(['result', 'automation']);
+    expect(data.events.find((event) => event.id === 'result')?.storySource).toBe('TEMPLATE');
+    expect(data.events.find((event) => event.id === 'automation')?.storySource).toBeNull();
+    expect(data.activity.lateRejections).toBe(1);
+  });
+
   test('allows only one concurrent claim for a one-time invite', async () => {
     await seedClaim();
     const context = { params: Promise.resolve({ code: 'fictional-claim-code' }) };
