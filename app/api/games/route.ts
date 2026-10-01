@@ -5,6 +5,7 @@ import { hasModeratorAccount } from '../../../lib/auth/moderators';
 import { getCurrentModerator } from '../../../lib/auth/session';
 import { loadAssignmentsView, loadRosterView } from '../../../lib/game/setup-view';
 import { DEFAULT_NEW_GAME_AUTOMATION, resolveAutomationSettings, type PublicationMode } from '../../../lib/game/automation';
+import { parseEliminationSchedule, resolveEliminationSchedule, serializeEliminationSchedule } from '../../../lib/game/elimination-schedule';
 import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettingsInput } from '../../../lib/game/game-settings';
 import { validateGameSetup, type GameSetupInput } from '../../../lib/game/game-setup';
 import { formatZonedDateTimeLocal } from '../../../lib/game/scheduling';
@@ -15,6 +16,7 @@ import { respondJsonWithEtag } from '../../../lib/http/etag';
 interface CreateGameBody extends GameSettingsInput, GameSetupInput {
   publicationMode?: unknown;
   reviewWindowMinutes?: unknown;
+  eliminationSchedule?: unknown;
 }
 
 interface GameListRow {
@@ -33,6 +35,7 @@ interface GameListRow {
   automationPausedAt: string | null;
   dayDivisor: number;
   nightDivisor: number;
+  eliminationScheduleJson: string | null;
   moderatorRole: string;
 }
 
@@ -58,6 +61,7 @@ export async function GET(request: Request) {
                 g.final_cutoff_at AS finalCutoffAt,
                 g.hunter_window_minutes AS hunterWindowMinutes,
                 g.day_divisor AS dayDivisor, g.night_divisor AS nightDivisor,
+                g.elimination_schedule_json AS eliminationScheduleJson,
                 g.publication_mode AS publicationMode, g.review_window_minutes AS reviewWindowMinutes,
                 g.automation_paused_at AS automationPausedAt,
                 gm.role AS moderatorRole
@@ -91,6 +95,7 @@ export async function GET(request: Request) {
         hunterWindowMinutes: Number(game.hunterWindowMinutes),
         dayDivisor: Number(game.dayDivisor),
         nightDivisor: Number(game.nightDivisor),
+        eliminationSchedule: parseEliminationSchedule(game.eliminationScheduleJson),
         publicationMode: game.publicationMode,
         reviewWindowMinutes: Number(game.reviewWindowMinutes),
         automationPaused: Boolean(game.automationPausedAt),
@@ -114,6 +119,8 @@ export async function POST(request: Request) {
     // New games use moderator review unless the moderator opts in to automatic results.
     const { settings: automation, errors: automationErrors } = resolveAutomationSettings(body, DEFAULT_NEW_GAME_AUTOMATION);
     if (automationErrors.length) throw new Error(automationErrors.join(' '));
+    const { schedule: eliminationSchedule, errors: eliminationErrors } = resolveEliminationSchedule(body.eliminationSchedule, null);
+    if (eliminationErrors.length) throw new Error(eliminationErrors.join(' '));
 
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -124,9 +131,9 @@ export async function POST(request: Request) {
           `INSERT INTO games
            (id, name, status, timezone, start_date, end_date, active_weekdays_json, schedule_json,
             day_divisor, night_divisor, hunter_window_minutes, final_round_minutes,
-            chat_retention_days, final_cutoff_at, publication_mode, review_window_minutes, created_by_moderator_id,
-            created_at, updated_at)
-           VALUES (?, ?, 'REGISTRATION', ?, ?, ?, ?, ?, ?, ?, ?, 60, 7, ?, ?, ?, ?, ?, ?)`,
+            chat_retention_days, final_cutoff_at, publication_mode, review_window_minutes, elimination_schedule_json,
+            created_by_moderator_id, created_at, updated_at)
+           VALUES (?, ?, 'REGISTRATION', ?, ?, ?, ?, ?, ?, ?, ?, 60, 7, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -142,6 +149,7 @@ export async function POST(request: Request) {
           setup.finalCutoffAt.toISOString(),
           automation.publicationMode,
           automation.reviewWindowMinutes,
+          serializeEliminationSchedule(eliminationSchedule),
           moderator.id,
           now,
           now,
@@ -155,7 +163,7 @@ export async function POST(request: Request) {
            (id, game_id, event_type, actor_moderator_id, payload_json, created_at)
            VALUES (?, ?, 'GAME_CREATED', ?, ?, ?)`,
         )
-        .bind(crypto.randomUUID(), id, moderator.id, JSON.stringify({ name: setup.name }), now),
+        .bind(crypto.randomUUID(), id, moderator.id, JSON.stringify({ name: setup.name, eliminationSchedule }), now),
     ]);
     return Response.json({ ok: true, gameId: id }, { status: 201 });
   } catch (error) {
