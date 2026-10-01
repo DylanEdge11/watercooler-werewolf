@@ -10,7 +10,7 @@ import { useBallotVotes, VoteLedger } from './ballot-votes';
 import RoleMedallion from './role-medallion';
 import DeathCurtainCall from './death-curtain-call';
 import BrandMark from './brand-mark';
-import { pollWhileVisible } from '../lib/http/poll-while-visible';
+import { IDLE_AFTER_MS, pollWhileVisible } from '../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
 import { pollInterval } from '../lib/http/poll-interval';
 import { ROLE_VISIBILITY_COOKIE, roleVisibilityCookieValue } from '../lib/player/role-visibility';
@@ -129,6 +129,9 @@ function deathAlertKey(gameId: string, playerId: string): string {
   return `werewolf:v1:death-alert:${gameId}:${playerId}`;
 }
 
+/** Nothing in these games changes on its own, so the page stops refreshing on a timer. */
+const FINISHED_GAME_STATUSES = new Set(['COMPLETED', 'STOPPED', 'CANCELLED']);
+
 const subscribeToNothing = () => () => {};
 
 /** false in the server's HTML and while React takes it over; true once buttons respond. */
@@ -158,6 +161,8 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const [savingEmail, setSavingEmail] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [loadingOlderNotifications, setLoadingOlderNotifications] = useState(false);
+  // True while refreshes are paused because nobody has used the page for a while.
+  const [updatesPaused, setUpdatesPaused] = useState(false);
   const hydrated = useHydrated();
   const [roleHidden, setRoleHidden] = useState(initialRoleHidden ?? false);
   // A server-rendered role stays concealed until this device's own "Hide role" setting is read,
@@ -184,6 +189,8 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   // phase that sets how often it refreshes (lib/http/poll-interval.ts).
   const dashboardEtag = useRef<string | null>(null);
   const pacing = useRef(initialData?.phase ?? null);
+  // A finished game has nothing left to refresh; the page still refreshes once when the tab comes back.
+  const gameStatus = useRef(initialData?.game.status ?? null);
 
   useLayoutEffect(() => {
     modalState.current = { deathAlert, selectedTimeline, data };
@@ -229,6 +236,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     ];
     dashboardEtag.current = responseEtag(response);
     pacing.current = result.phase;
+    gameStatus.current = result.game.status;
     applyDeviceState(result);
     setData({ ...result, notifications: mergedNotifications });
     if (!keepLocalSelection) {
@@ -286,7 +294,11 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       void refresh(true).catch((caught) => {
         setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.');
       });
-    }, () => pollInterval(pacing.current));
+    }, () => pollInterval(pacing.current), {
+      idleAfterMs: IDLE_AFTER_MS,
+      onIdleChange: setUpdatesPaused,
+      stopWhen: () => gameStatus.current !== null && FINISHED_GAME_STATUSES.has(gameStatus.current),
+    });
     return () => {
       window.clearTimeout(timer);
       stopPolling();
@@ -554,6 +566,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
               ? <div className="deadline-card"><span>Results</span><strong suppressHydrationWarning>by {clockTime(data.phase.autoPublishAt, data.game.timezone)}</strong><small suppressHydrationWarning>Results publish by {clockTime(data.phase.autoPublishAt, data.game.timezone)} unless the moderator reviews them first.</small></div>
               : <div className="deadline-card"><span>Response window</span><strong suppressHydrationWarning>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : <DeadlineCountdown deadline={data.phase?.deadline ?? null} />}</strong><small>{data.game.automationPaused && !['COMPLETED', 'STOPPED'].includes(data.game.status) ? 'The schedule is paused' : data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>}
           </div>
+          {updatesPaused && !FINISHED_GAME_STATUSES.has(data.game.status) && <p className="notice warning" role="status">Updates are paused while you’re away. Tap anywhere to catch up, or <button className="text-button" type="button" onClick={() => void refresh(true).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.'))}>refresh now</button>.</p>}
           {data.game.status === 'STOPPED' && <p className="notice warning" role="status">{data.game.stopReason ?? 'This game is stopped. Player actions and rooms are read-only.'}</p>}
 
           {spectating ? <section className="role-card spectator-role" aria-labelledby="spectator-title">

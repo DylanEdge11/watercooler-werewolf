@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { LatestRoomRequest } from '../lib/chat/latest-room-request';
-import { pollWhileVisible } from '../lib/http/poll-while-visible';
+import { IDLE_AFTER_MS, pollWhileVisible } from '../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
 import { RELAXED_POLL_MS, URGENT_POLL_MS } from '../lib/http/poll-interval';
 
@@ -68,6 +68,10 @@ export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms:
   // and when its newest message was posted, which sets how often it refreshes.
   const etagByRoom = useRef<Record<string, string | null>>({});
   const newestMessageAtByRoom = useRef<Record<string, number>>({});
+  const roomStatus = useRef<Record<string, string>>({});
+  useEffect(() => {
+    roomStatus.current = Object.fromEntries(rooms.map((candidate) => [candidate.id, candidate.status]));
+  }, [rooms]);
   const room = rooms.find((candidate) => candidate.id === roomId) ?? rooms[0];
   const messages = previewMode
     ? previewMessagesByRoom[room?.id ?? ''] ?? []
@@ -102,7 +106,12 @@ export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms:
     }, 0);
     // A room with a message in the last two minutes refreshes every 10 s; a quiet one every 30 s.
     const inUse = () => Date.now() - (newestMessageAtByRoom.current[roomId] ?? 0) < CHAT_ACTIVE_MS;
-    const stopPolling = pollWhileVisible(() => void load(), () => (inUse() ? URGENT_POLL_MS : RELAXED_POLL_MS));
+    // Like the dashboard, it pauses while nobody uses the page, and a room that is no longer open (the game
+    // ended, or the moderator closed it) has nothing new to fetch until the tab comes back.
+    const stopPolling = pollWhileVisible(() => void load(), () => (inUse() ? URGENT_POLL_MS : RELAXED_POLL_MS), {
+      idleAfterMs: IDLE_AFTER_MS,
+      stopWhen: () => roomStatus.current[roomId] !== undefined && roomStatus.current[roomId] !== 'OPEN',
+    });
     return () => {
       window.clearTimeout(initial);
       stopPolling();

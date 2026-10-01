@@ -53,6 +53,9 @@ Requests never change the schema. `ensureDatabase()` checks that every version i
 - The "N of M submitted" counter (`participationCounter` in `lib/game/actions.ts`) counts across players only for Day ballots, the pack's vote, and the Afterlife ballot (out of all eliminated players). Every other action is counted for the reader alone, so the counter cannot reveal how many players hold another Night role.
 - Publishing applies eliminations, reveals roles, delivers Seer and lover notifications, updates room access, and checks for a winner in one transaction.
 - Private-room membership (`roomSyncStatements` in `lib/chat/rooms.ts`) is written only inside the role-release and publish transactions, because those are the only writes that change roles or who is alive. Player, chat, and moderator reads never write it; the player and moderator room reads only check, with one query, that the game's three rooms exist.
+- The console suggests each new phase's deadline from the game's `schedule_json` close times and active weekdays (`nextScheduledClose` in `lib/game/scheduling.ts`): Day ballots and the Final ballot use `dayCloses`, Night actions `nightCloses`, at least 15 minutes ahead. With no usable schedule it falls back to an hour from now.
+- `EXTEND_DEADLINE` on the phases `POST` moves an `OPEN` phase's `closes_at` later only, and only while `closes_at` is still in the future (`validateDeadlineExtension` in `lib/game/phase-policy.ts`). The update re-checks the status and the deadline it read, clears `closing_reminder_at` so the closing-soon email is sent again, and records `PHASE_DEADLINE_EXTENDED` (`{ from, to }`).
+- `POST /api/games/[gameId]/late-villagers` adds a seat to a running game while the latest phase sequence is 2 or less (the first Day and Night; `canAddLateVillager` in `lib/game/roster-edit.ts`). In one transaction it inserts an `INVITED` seat, a `VILLAGER` role assignment against the released batch, one more Villager in `game_role_counts`, and a moderator-only `LATE_VILLAGER_ADDED` event. Nothing is announced. Like every seat, it counts toward votes, slots, and win conditions only once `CLAIMED`. A Villager has no private room, so room membership is unchanged.
 - Final showdown requires the final cutoff to have passed and the latest phase to be published. After that, only Final ballots are allowed until a team wins.
 - Legacy `DOCTOR` rows are read as `BODYGUARD`.
 
@@ -102,6 +105,9 @@ There are no WebSockets; pages poll. How often (`lib/http/poll-interval.ts`):
 - The player dashboard and the console's live game panel refresh every 10 seconds while an open phase's deadline is within 15 minutes, and every 30 seconds otherwise.
 - A chat room refreshes every 10 seconds while its newest message is under two minutes old, and every 30 seconds otherwise.
 - The rest of the console (games list and setup, operations, rooms) refreshes every 30 seconds.
+- The player and spectator dashboard and the chat rooms stop refreshing after five minutes without a tap, click, scroll, or key press (`IDLE_AFTER_MS`), because a window left open on a second screen still counts as visible. The dashboard then shows "Updates are paused while you're away"; the first input, or coming back to the tab, refreshes at once and restarts the timer. The console does not pause.
+- Once the game is `COMPLETED`, `STOPPED`, or `CANCELLED`, the dashboard stops refreshing on its timer, and a chat room stops once it is no longer `OPEN`. Each still refreshes once when the tab comes back.
+- Nothing in the game depends on these refreshes: deadlines are enforced when a response is saved, and automatic steps also run from the console and the scheduler route.
 
 Each wait is the interval give or take 20% (`pollWhileVisible` in `lib/http/poll-while-visible.ts`), so pages opened together, or all sped up by the same deadline, drift apart instead of reaching the server at once.
 
@@ -111,7 +117,7 @@ A dashboard refresh sends who voted for whom only for the newest published ballo
 
 Timeline reads look up public events through `idx_game_events_type` (`INDEXED BY`), because every saved action also writes an `ACTION_SUBMITTED` audit event to the same table. Saving an action reads the phase, roster, and lover pair in parallel, then counts the attempt against the rate limit (30 per player per phase per 10 minutes) and saves the action in one transaction; an attempt over the limit saves nothing and answers 429.
 
-The moderator console loads and refreshes with one request: `GET /api/games` returns the games list plus the selected game's roster and assignments (`?gameId=`, or the newest game; `lib/game/setup-view.ts`), and its signed-out 401 carries `needsBootstrap`. The Communications & operations panel refreshes operations and rooms on every tick, the co-moderator list, announcements, and feedback at most once a minute, and everything after the moderator's own changes.
+The moderator console loads and refreshes with one request: `GET /api/games` returns the games list plus the selected game's roster and assignments (`?gameId=`, or the newest game; `lib/game/setup-view.ts`), and its signed-out 401 carries `needsBootstrap`. The Communications & operations panel shows the game's last 20 `operational_events` as an event log (email batches with `storySource`, warnings, deadline locks; `DEADLINE_MONITOR` late-attempt rows are left out and counted in `activity.lateRejections`). It refreshes operations and rooms on every tick, the co-moderator list, announcements, and feedback at most once a minute, and everything after the moderator's own changes.
 
 ## Reserved fields
 
