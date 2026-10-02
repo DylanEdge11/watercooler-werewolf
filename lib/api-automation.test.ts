@@ -18,6 +18,7 @@ import { POST as automationPost } from '../app/api/games/[gameId]/automation/rou
 import { GET as playerGet } from '../app/api/player/route';
 import { GET as schedulerGet } from '../app/api/scheduler/deadlines/route';
 import { advanceGame, advanceGameSafely } from './game/automation-sweep';
+import { openPhase } from './game/phase-open';
 
 let client: Client;
 const context = { params: Promise.resolve({ gameId: 'game' }) };
@@ -424,6 +425,43 @@ describe('opening the next phase automatically', () => {
     expect(await advanceGame('game')).toEqual([]);
     expect(await phaseList()).toHaveLength(2);
     expect(await rows("SELECT 1 FROM operational_events WHERE source = 'AUTOMATION'")).toHaveLength(0);
+  });
+
+  describe('the opening re-checks the moderator\'s settings inside its write', () => {
+    const scheduler = { moderatorId: null, source: 'SCHEDULER' } as const;
+    const inThreeHours = () => new Date(Date.now() + 3 * 60 * 60_000);
+
+    /** The first Day is published with the option off, then the option is turned on: the state just before an automatic opening. */
+    async function readyToOpen(): Promise<void> {
+      await seed({ windowMinutes: 0, autoOpen: true });
+      await exec('UPDATE games SET auto_open_next_phase = 0');
+      expect(await advanceGame('game')).toEqual(['LOCK_AND_PROPOSE', 'PUBLISH']);
+      await exec('UPDATE games SET auto_open_next_phase = 1');
+    }
+
+    test.each([
+      ['paused', "UPDATE games SET automation_paused_at = '2026-01-02T00:00:00.000Z'"],
+      ['switched to review mode', "UPDATE games SET publication_mode = 'REVIEW'"],
+      ['unticked the option', 'UPDATE games SET auto_open_next_phase = 0'],
+    ])('an automatic opening that lost a race with the moderator having %s opens nothing', async (_what, change) => {
+      await readyToOpen();
+      await exec(change);
+      const result = await openPhase('game', scheduler, 'NIGHT', inThreeHours());
+      expect(result.status).toBe(409);
+      expect(await phaseList()).toHaveLength(1);
+      expect(await rows("SELECT 1 FROM game_events WHERE event_type = 'PHASE_OPENED'")).toHaveLength(0);
+    });
+
+    test('the moderator\'s own Open button works in all of those states', async () => {
+      await readyToOpen();
+      await exec("UPDATE games SET publication_mode = 'REVIEW', auto_open_next_phase = 0, automation_paused_at = '2026-01-02T00:00:00.000Z'");
+      const response = await phasePost(post('/api/games/game/phases', { action: 'OPEN', kind: 'NIGHT', closesAt: inThreeHours().toISOString() }), context);
+      expect(response.status).toBe(200);
+      expect((await phaseList())[1]).toMatchObject({ kind: 'NIGHT', status: 'OPEN' });
+      const [opened] = await rows<{ actor: string | null; payload: string }>("SELECT actor_moderator_id AS actor, payload_json AS payload FROM game_events WHERE event_type = 'PHASE_OPENED'");
+      expect(opened.actor).toBe('mod');
+      expect(JSON.parse(opened.payload)).toMatchObject({ source: 'MODERATOR' });
+    });
   });
 });
 
