@@ -25,6 +25,9 @@ Requests never change the schema. `ensureDatabase()` checks that every version i
 | Player submissions | `app/api/phases/[phaseId]/actions/route.ts` |
 | Player dashboard data | `lib/player/dashboard-data.ts` (`loadDashboard`, three rounds of parallel reads), served by `app/api/player/route.ts` |
 | Signed-in dashboard page (rendered per request, then polled) | `app/(player)/page.tsx`, `app/(player)/loading.tsx`, `app/player-dashboard.tsx` |
+| Village stats: counting rules | `lib/game/game-stats.ts` (`buildGameStats`, `chatRhythm`), unit-tested beside it |
+| Village stats: data and routes | `lib/player/game-stats-data.ts` (`loadGameStats`), served by `app/api/stats/route.ts` (players, spectators) and `app/api/games/[gameId]/stats/route.ts` (moderators) |
+| Village stats: screens | `app/village-stats.tsx`, `app/village-stats-charts.tsx`, `app/village-stats.css`; the console panel is `app/moderator/stats-panel.tsx` |
 | Stop, reset, restore, cancel, PIN reset | `app/api/games/[gameId]/operations/route.ts`, `lib/backup/` |
 | Sessions, hashing, authorization | `lib/auth/` |
 | Co-moderators: add, remove, transfer ownership | `app/api/games/[gameId]/moderators/`, `lib/auth/game-moderators.ts` |
@@ -100,6 +103,19 @@ Deadlines are entered in the game's IANA timezone and stored as UTC. Impossible 
 - Rate limits are stored in the database and return HTTP 429 with `Retry-After`: moderator login and recovery 5 per 15 minutes, player sign-in 8 per 15 minutes, seat claim 3 per hour, actions and chat 30 per 10 minutes each, feedback 3 per hour (players) or 10 per hour (moderators), invite email 30 bulk sends per hour per game plus 5 single-player resends per hour per player. These limits are per client address. In addition, a seat locks after 10 wrong PINs in a row (`lib/auth/pin-lockout.ts`, counted in `rate_limit_buckets` under `pin-failures:<seatId>`) and answers 423 until a moderator resets its PIN; a correct PIN or a new claim clears the count.
 - Expired sessions and stale rate-limit buckets are deleted by the scheduler route and after each moderator sign-in (`lib/maintenance.ts`). An unknown moderator email is checked against a throwaway hash, so it takes as long as a wrong password.
 
+## Village stats
+
+The dashboard's **Village stats** tab (a third view beside Today and Timeline, for players and spectators) and the console's **Village stats** panel show the same numbers: votes received per player for each published Day or all days together, the most voted player, ballot turnout and close calls, players alive and werewolves left after each result with a ledger of who left, chat activity, and a grid of who voted for whom. Nothing is stored and there is no migration; `loadGameStats` computes everything on request.
+
+- **Only what players already see.** Votes come from the latest saved `DAY_VOTE` of each player in published Day and Final ballots of the current run, the same rows the Timeline's **View votes** reads, so an open ballot adds nothing until its result is published. Roles appear only for eliminated players, from the `PHASE_PUBLISHED` payload. The living werewolf count is the one the sidebar already shows. Counts are one per voter, so (as with the Timeline) they can differ from the result, which also reflects the Mayor's extra vote and any tiebreak. The response uses `votesReceived`, never `tally`, and is checked against `FORBIDDEN_PLAYER_KEYS` in `lib/api-stats.test.ts`.
+- **Run boundary.** Reset and Restore delete the earlier run's phases, votes, and chat, so the stats start from zero. Results and votes also share the Timeline's test for a phase of the current run (`RUN_BOUNDARY` in `lib/player/dashboard-data.ts`).
+- **Derived figures.** Players alive when a ballot opened is the claimed seats minus the eliminations published before it. The werewolves who started is the werewolves living now plus those whose role an elimination revealed. Both assume the roster at the time of the read (a late Villager makes the first points slightly off).
+- **Chat.** `summary.chatMessages` counts every message in every room by players, spectators, and moderators, including removed and purged ones (they stay as rows). It is the only figure that includes the private rooms, and no per-room split is sent. Every other chat figure is the Town Hall only: messages per day and per hour of the day (moderator and player messages), and the eight chattiest players (player messages only). SQL groups Town Hall messages by UTC quarter hour; `chatRhythm` converts each bucket to the game's timezone, so half-hour zones such as India land on the right hour. Quiet days between the first and last message show as zero, and at most the newest 60 days are sent.
+- **Routes.** `GET /api/stats` (a signed-in player or spectator, for their own game) and `GET /api/games/[gameId]/stats` (`requireGameModerator`) answer `{ ok, stats }` through `respondJsonWithEtag`, so an unchanged poll is a 304. They do not run the automatic-results sweep; the dashboard's own refresh and the console's phase refresh already do.
+- **Refresh.** The tab mounts only while it is open. It refetches at once when the newest published event or the game status changes (a result was published), and otherwise polls at the dashboard's pace (`pollInterval`: 10 seconds near a deadline, 30 otherwise) with the same idle pause and finished-game stop. The console panel loads only while it is expanded and refetches after the moderator's own changes. A failed refresh keeps the last numbers on screen with a note.
+- **Charts.** Drawn in `app/village-stats-charts.tsx` as plain HTML and SVG at the container's real width (no chart library). Every chart has a "View as table" twin, and the column and line charts read out values with the pointer or the arrow keys.
+- **Studio.** The Player View Studio passes sample numbers (`createPreviewStats` in `app/moderator/player-preview/scenarios.ts`), so the tab previews without a live game.
+
 ## Polling
 
 There are no WebSockets; pages poll. How often (`lib/http/poll-interval.ts`):
@@ -108,6 +124,7 @@ There are no WebSockets; pages poll. How often (`lib/http/poll-interval.ts`):
 - Player and moderator chat lists show the newest message first.
 - A chat room refreshes every 10 seconds while its newest message is under two minutes old, and every 30 seconds otherwise.
 - The rest of the console (games list and setup, operations, rooms) refreshes every 30 seconds.
+- The Village stats tab and console panel refresh only while open, at the dashboard's pace above, and at once when a result is published (see [Village stats](#village-stats)).
 - The player and spectator dashboard and the chat rooms stop refreshing after five minutes without a tap, click, scroll, or key press (`IDLE_AFTER_MS`), because a window left open on a second screen still counts as visible. The dashboard then shows "Updates are paused while you're away"; the first input, or coming back to the tab, refreshes at once and restarts the timer. The console does not pause.
 - Once the game is `COMPLETED`, `STOPPED`, or `CANCELLED`, the dashboard stops refreshing on its timer, and a chat room stops once it is no longer `OPEN`. Each still refreshes once when the tab comes back.
 - Nothing in the game depends on these refreshes: deadlines are enforced when a response is saved, and automatic steps also run from the console and the scheduler route.
