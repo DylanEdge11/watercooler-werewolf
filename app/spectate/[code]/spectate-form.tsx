@@ -47,7 +47,7 @@ export default function SpectateForm({ code, spectator, lookupError }: { code: s
         <><p>You are signed in as a spectator. You have no role and no vote. You can follow the game and chat in the Afterlife.</p><a className="primary-link" href="/">Watch the game</a></>
       ) : spectator ? (
         <>
-          <p>You’re spectating <strong>{spectator.gameName}</strong>. {firstVisit ? 'Choose a six-digit PIN you’ll remember; you’ll use it with this link to sign in again.' : 'Enter the PIN you chose for this link.'}</p>
+          <p>You’re spectating <strong>{spectator.gameName}</strong>. {firstVisit ? 'Choose a six-digit PIN you’ll remember. To come back later, sign in on the home page with your email and this PIN, or use this link.' : 'Enter the PIN you chose for this link.'}</p>
           <form className="form-stack" onSubmit={submit}>
             <label>Six-digit PIN<input name="pin" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} autoComplete={firstVisit ? 'new-password' : 'current-password'} required /></label>
             {error && <p className="form-error" role="alert">{error}</p>}

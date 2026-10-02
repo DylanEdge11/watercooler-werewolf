@@ -93,6 +93,7 @@ interface GameState {
   publicationMode: 'REVIEW' | 'AUTOMATIC';
   reviewWindowMinutes: number;
   automationPausedAt: string | null;
+  autoOpenNextPhase: boolean;
   eliminationSchedule?: EliminationSchedule | null;
   /** The game's Day and Night close times, which the Deadline field suggests. */
   schedule?: ScheduleDefinition | null;

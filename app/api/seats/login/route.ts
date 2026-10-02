@@ -3,17 +3,25 @@ import { ensureDatabase } from '../../../../db/migrate';
 import { sha256, verifySecret } from '../../../../lib/auth/crypto';
 import { createPlayerSession } from '../../../../lib/auth/session';
 import { clearPinFailures, isPinLocked, PIN_LOCKED_MESSAGE, pinFailureCounts, recordPinFailure } from '../../../../lib/auth/pin-lockout';
+import { INVALID_SPECTATOR_LINK, SPECTATOR_LOCKED_MESSAGE, spectatorLockoutId, startSpectatorSession } from '../../../../lib/auth/spectator-link';
 import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
 import { routeError } from '../../../../lib/http/errors';
 import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
 import { isSingleEmailAddress } from '../../../../lib/roster/email-address';
 
-interface LoginSeat {
+/** A seat, or a spectator who has already opened their link and chosen a PIN. */
+interface LoginCandidate {
+  kind: 'SEAT' | 'SPECTATOR';
   id: string;
   gameId: string;
   displayName: string;
   pinHash: string | null;
   sessionVersion: number;
+}
+
+/** Wrong PINs are counted per seat or spectator; a spectator's counter is shared with their private link. */
+function lockoutId(candidate: LoginCandidate): string {
+  return candidate.kind === 'SPECTATOR' ? spectatorLockoutId(candidate.id) : candidate.id;
 }
 
 export async function POST(request: Request) {
@@ -30,17 +38,31 @@ export async function POST(request: Request) {
     await enforceRateLimit(requestRateLimitKey(request, `seat-login:${loginKey}`), 8, 15 * 60_000);
 
     const db = getDb();
-    let candidateSeats: LoginSeat[];
+    let candidates: LoginCandidate[];
     if (isEmail) {
-      const result = await db
-        .prepare(
-          `SELECT id, game_id AS gameId, display_name AS displayName, pin_hash AS pinHash,
-                  session_version AS sessionVersion
-           FROM seats WHERE lower(email) = ? AND status = 'CLAIMED' ORDER BY claimed_at DESC`,
-        )
-        .bind(identifier.toLowerCase())
-        .all<LoginSeat>();
-      candidateSeats = result.results;
+      // A spectator signs in with the email the moderator added, the same way a player does.
+      const [seats, spectators] = await Promise.all([
+        db
+          .prepare(
+            `SELECT id, game_id AS gameId, display_name AS displayName, pin_hash AS pinHash,
+                    session_version AS sessionVersion
+             FROM seats WHERE lower(email) = ? AND status = 'CLAIMED' ORDER BY claimed_at DESC`,
+          )
+          .bind(identifier.toLowerCase())
+          .all<Omit<LoginCandidate, 'kind'>>(),
+        db
+          .prepare(
+            `SELECT id, game_id AS gameId, display_name AS displayName, pin_hash AS pinHash,
+                    session_version AS sessionVersion
+             FROM spectators WHERE lower(email) = ? AND status = 'ACTIVE' ORDER BY claimed_at DESC`,
+          )
+          .bind(identifier.toLowerCase())
+          .all<Omit<LoginCandidate, 'kind'>>(),
+      ]);
+      candidates = [
+        ...seats.results.map((seat): LoginCandidate => ({ ...seat, kind: 'SEAT' })),
+        ...spectators.results.map((spectator): LoginCandidate => ({ ...spectator, kind: 'SPECTATOR' })),
+      ];
     } else {
       const seat = await db
         .prepare(
@@ -49,29 +71,40 @@ export async function POST(request: Request) {
            FROM seats WHERE claim_code_hash = ? AND status = 'CLAIMED' LIMIT 1`,
         )
         .bind(await sha256(identifier))
-        .first<LoginSeat>();
-      candidateSeats = seat ? [seat] : [];
+        .first<Omit<LoginCandidate, 'kind'>>();
+      candidates = seat ? [{ ...seat, kind: 'SEAT' }] : [];
     }
     // A seat that has had too many wrong PINs in a row is skipped until a moderator resets its PIN.
-    const failures = await pinFailureCounts(db, candidateSeats.map((seat) => seat.id));
-    const openSeats = candidateSeats.filter((seat) => !isPinLocked(failures.get(seat.id)));
-    const matches: LoginSeat[] = [];
-    for (const seat of openSeats) {
-      if (seat.pinHash && await verifySecret(pin, seat.pinHash)) matches.push(seat);
+    const failures = await pinFailureCounts(db, candidates.map(lockoutId));
+    const open = candidates.filter((candidate) => !isPinLocked(failures.get(lockoutId(candidate))));
+    const matches: LoginCandidate[] = [];
+    for (const candidate of open) {
+      if (candidate.pinHash && await verifySecret(pin, candidate.pinHash)) matches.push(candidate);
     }
     if (matches.length > 1) {
-      return jsonError('This email and PIN match seats in more than one game. Use the seat code from the invitation for the game you want to open.', 409);
+      return jsonError(
+        matches.every((match) => match.kind === 'SEAT')
+          ? 'This email and PIN match seats in more than one game. Use the seat code from the invitation for the game you want to open.'
+          : 'This email and PIN match more than one game. Use the seat code or private link from the invitation for the game you want to open.',
+        409,
+      );
     }
-    const seat = matches[0];
-    if (!seat) {
+    const match = matches[0];
+    if (!match) {
       const now = new Date().toISOString();
-      if (openSeats.length) await db.batch(openSeats.map((candidate) => recordPinFailure(db, candidate.id, now)));
-      if (candidateSeats.length && !openSeats.length) return jsonError(PIN_LOCKED_MESSAGE, 423);
+      if (open.length) await db.batch(open.map((candidate) => recordPinFailure(db, lockoutId(candidate), now)));
+      if (candidates.length && !open.length) {
+        return jsonError(candidates.every((candidate) => candidate.kind === 'SPECTATOR') ? SPECTATOR_LOCKED_MESSAGE : PIN_LOCKED_MESSAGE, 423);
+      }
       return jsonError('Email or seat code and PIN were not accepted.', 401);
     }
-    if (failures.has(seat.id)) await clearPinFailures(db, seat.id).run();
-    await createPlayerSession(seat.id, seat.sessionVersion);
-    return Response.json({ ok: true, seat: { displayName: seat.displayName, gameId: seat.gameId } });
+    if (match.kind === 'SPECTATOR') {
+      if (!await startSpectatorSession(db, match)) return jsonError(INVALID_SPECTATOR_LINK, 404);
+    } else {
+      if (failures.has(match.id)) await clearPinFailures(db, match.id).run();
+      await createPlayerSession(match.id, match.sessionVersion);
+    }
+    return Response.json({ ok: true, seat: { displayName: match.displayName, gameId: match.gameId } });
   } catch (error) {
     return routeError(error, 'Unable to sign in.');
   }

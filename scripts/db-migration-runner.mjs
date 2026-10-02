@@ -13,6 +13,7 @@ export const MIGRATION_FILES = [
   '0008_spectators.sql',
   '0009_elimination_schedule.sql',
   '0010_moderator_messages.sql',
+  '0011_auto_open_next_phase.sql',
 ];
 
 export function splitMigrationStatements(sql) {

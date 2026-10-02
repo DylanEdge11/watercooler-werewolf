@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { automaticStepDueAt, nextAutomaticStep, resolveAutomationSettings, type AutomationGame, type AutomationPhase } from './automation';
+import { automaticStepDueAt, nextAutomaticStep, resolveAutoOpenNextPhase, resolveAutomationSettings, type AutomationGame, type AutomationPhase } from './automation';
 
 const now = new Date('2026-10-05T15:00:00.000Z');
-const game: AutomationGame = { status: 'ACTIVE', publicationMode: 'AUTOMATIC', reviewWindowMinutes: 60, pausedAt: null };
+const game: AutomationGame = {
+  status: 'ACTIVE',
+  publicationMode: 'AUTOMATIC',
+  reviewWindowMinutes: 60,
+  pausedAt: null,
+  autoOpenNextPhase: false,
+  timezone: 'UTC',
+  schedule: { dayCloses: '17:00', nightCloses: '08:00', activeWeekdays: [1, 2, 3, 4, 5] },
+  finalCutoffAt: '2026-12-01T00:00:00.000Z',
+};
 function phase(partial: Partial<AutomationPhase>): AutomationPhase {
   return { id: 'p1', status: 'OPEN', closesAt: '2026-10-05T16:00:00.000Z', hunterDeadlineAt: null, updatedAt: '2026-10-05T14:00:00.000Z', hunterShotSaved: false, ...partial };
 }
@@ -60,6 +69,75 @@ describe('when the next automatic step is due', () => {
     expect(automaticStepDueAt(game, phase({ status: 'PENDING_APPROVAL', updatedAt: '2026-10-05T14:30:00.000Z' }))).toEqual({ kind: 'PUBLISH', at: '2026-10-05T15:30:00.000Z' });
     expect(automaticStepDueAt({ ...game, pausedAt: 'x' }, phase({}))).toBeNull();
     expect(automaticStepDueAt({ ...game, publicationMode: 'REVIEW' }, phase({}))).toBeNull();
+  });
+});
+
+describe('opening the next phase', () => {
+  const opening: AutomationGame = { ...game, autoOpenNextPhase: true };
+  const afterNight = { kind: 'NIGHT', status: 'PUBLISHED' };
+  const afterDay = { kind: 'DAY', status: 'PUBLISHED' };
+
+  it('stays off unless the moderator turned it on', () => {
+    expect(nextAutomaticStep(game, null, now, afterNight)).toBeNull();
+  });
+
+  it('opens a Day after a published Night, closing at the game\'s next Day close time', () => {
+    expect(nextAutomaticStep(opening, null, now, afterNight)).toEqual({ kind: 'OPEN_NEXT', phaseKind: 'DAY', closesAt: '2026-10-05T17:00:00.000Z' });
+  });
+
+  it('opens a Night after a published Day, closing at the next Night close time', () => {
+    expect(nextAutomaticStep(opening, null, now, afterDay)).toEqual({ kind: 'OPEN_NEXT', phaseKind: 'NIGHT', closesAt: '2026-10-06T08:00:00.000Z' });
+  });
+
+  it('skips days the game is not played and times too close to give players a fair window', () => {
+    // Friday evening: the Night closes on the next active day, Monday morning.
+    expect(nextAutomaticStep(opening, null, new Date('2026-10-09T18:00:00.000Z'), afterDay)).toMatchObject({ phaseKind: 'NIGHT', closesAt: '2026-10-12T08:00:00.000Z' });
+    // Ten minutes before today's Day close, the Day runs to tomorrow's close instead.
+    expect(nextAutomaticStep(opening, null, new Date('2026-10-05T16:50:00.000Z'), afterNight)).toMatchObject({ phaseKind: 'DAY', closesAt: '2026-10-06T17:00:00.000Z' });
+  });
+
+  it('never opens in review mode, while paused, or when the game is not in its regular rounds', () => {
+    expect(nextAutomaticStep({ ...opening, publicationMode: 'REVIEW' }, null, now, afterNight)).toBeNull();
+    expect(nextAutomaticStep({ ...opening, pausedAt: '2026-10-05T10:00:00.000Z' }, null, now, afterNight)).toBeNull();
+    for (const status of ['REGISTRATION', 'FINAL_SHOWDOWN', 'COMPLETED', 'STOPPED', 'CANCELLED']) {
+      expect(nextAutomaticStep({ ...opening, status }, null, now, afterNight)).toBeNull();
+    }
+  });
+
+  it('waits for a published result, and leaves the first Day and the final ballot to the moderator', () => {
+    expect(nextAutomaticStep(opening, null, now, null)).toBeNull();
+    for (const status of ['OPEN', 'LOCKED', 'PENDING_HUNTER', 'PENDING_APPROVAL', 'PUBLISHING', 'SUPERSEDED']) {
+      expect(nextAutomaticStep(opening, null, now, { kind: 'NIGHT', status })).toBeNull();
+    }
+    expect(nextAutomaticStep(opening, null, now, { kind: 'FINAL_BALLOT', status: 'PUBLISHED' })).toBeNull();
+  });
+
+  it('does not open anything while a phase is still in progress', () => {
+    expect(nextAutomaticStep(opening, phase({ status: 'PENDING_APPROVAL', updatedAt: '2026-10-05T14:30:00.000Z' }), now, afterNight)).toBeNull();
+  });
+
+  it('stops short of the final cutoff, so final showdown stays with the moderator', () => {
+    expect(nextAutomaticStep({ ...opening, finalCutoffAt: '2026-10-05T16:59:59.000Z' }, null, now, afterNight)).toBeNull();
+    expect(nextAutomaticStep({ ...opening, finalCutoffAt: '2026-10-05T17:00:00.000Z' }, null, now, afterNight)).toMatchObject({ kind: 'OPEN_NEXT' });
+  });
+
+  it('does nothing when the game has no usable close times', () => {
+    expect(nextAutomaticStep({ ...opening, schedule: null }, null, now, afterNight)).toBeNull();
+    expect(nextAutomaticStep({ ...opening, schedule: { dayCloses: '', nightCloses: '' } }, null, now, afterNight)).toBeNull();
+  });
+
+  it('is not reported as a step due later, because it happens as soon as a result publishes', () => {
+    expect(automaticStepDueAt(opening, null)).toBeNull();
+  });
+});
+
+describe('opening the next phase: setting', () => {
+  it('takes true or false, keeps the current value when left out, and rejects anything else', () => {
+    expect(resolveAutoOpenNextPhase(true, false)).toEqual({ value: true, errors: [] });
+    expect(resolveAutoOpenNextPhase(false, true)).toEqual({ value: false, errors: [] });
+    expect(resolveAutoOpenNextPhase(undefined, true)).toEqual({ value: true, errors: [] });
+    expect(resolveAutoOpenNextPhase(null, false)).toEqual({ value: false, errors: [] });
+    expect(resolveAutoOpenNextPhase('yes', false)).toEqual({ value: false, errors: ['Choose whether the next Day or Night opens automatically.'] });
   });
 });
 
