@@ -380,7 +380,7 @@ export const chatRooms = sqliteTable(
     gameId: text('game_id')
       .notNull()
       .references(() => games.id, { onDelete: 'cascade' }),
-    type: text('type').$type<'WEREWOLF' | 'MASON' | 'DEAD'>().notNull(),
+    type: text('type').$type<'WEREWOLF' | 'MASON' | 'DEAD' | 'TOWN_HALL'>().notNull(),
     status: text('status').$type<'OPEN' | 'READ_ONLY' | 'PURGED'>().notNull().default('OPEN'),
     expiresAt: text('expires_at'),
     createdAt: text('created_at').notNull(),

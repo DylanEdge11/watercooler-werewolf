@@ -47,6 +47,7 @@ import { POST as lateVillagerPost } from '../app/api/games/[gameId]/late-village
 import { GET as phasesGet, POST as phasesPost } from '../app/api/games/[gameId]/phases/route';
 import { POST as claimPost } from '../app/api/seats/claim/[code]/route';
 import { GET as playerGet } from '../app/api/player/route';
+import { ensureGameRooms } from './chat/rooms';
 
 let sqlite: DatabaseSync;
 
@@ -167,8 +168,14 @@ describe('late Villagers', () => {
     const before = await (await phasesGet(new Request('http://localhost:3000/api/games/game/phases'), params)).json() as { roster: unknown[] };
     expect(before.roster).toHaveLength(20);
 
+    // The rooms were made at release; the unclaimed seat is in none of them.
+    await ensureGameRooms('game');
+    const townHall = () => sqlite.prepare("SELECT crm.access FROM chat_room_members crm JOIN chat_rooms cr ON cr.id = crm.room_id WHERE cr.type = 'TOWN_HALL' AND crm.seat_id = ?").all(body.seat.id);
+    expect(townHall()).toEqual([]);
     const claim = await claimPost(request({ pin: '135790' }, `/api/seats/claim/${body.inviteCode}`), { params: Promise.resolve({ code: body.inviteCode }) });
     expect(claim.status).toBe(200);
+    // Claiming joins the Town Hall at once, without waiting for the next publish.
+    expect(townHall()).toEqual([{ access: 'WRITE' }]);
     shared.currentPlayer = { seatId: body.seat.id, gameId: 'game' };
     const view = await (await playerGet(new Request('http://localhost:3000/api/player'))).json() as {
       player: { role: string; alive: boolean };

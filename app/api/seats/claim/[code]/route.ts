@@ -4,6 +4,7 @@ import { preparePlayerSession } from '../../../../../lib/auth/session';
 import { INVALID_CLAIM_LINK, lookupClaimSeat } from '../../../../../lib/auth/claim';
 import { pinFailureKey } from '../../../../../lib/auth/pin-lockout';
 import { changes } from '../../../../../db/results';
+import { townHallJoinStatement } from '../../../../../lib/chat/rooms';
 import { hashSecret, sha256 } from '../../../../../lib/auth/crypto';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { routeError } from '../../../../../lib/http/errors';
@@ -83,6 +84,7 @@ export async function POST(request: Request, context: RouteContext) {
         )
         .bind(...session.values, seat.id, now, pinHash, seat.sessionVersion),
       db.prepare(`DELETE FROM rate_limit_buckets WHERE bucket_key = ? AND ${claimedGuard}`).bind(pinFailureKey(seat.id), seat.id, now, pinHash, seat.sessionVersion),
+      townHallJoinStatement(db, seat.id, now),
     ]);
     if (changes(result[0]) !== 1) return jsonError('This seat was claimed by another request. Use seat sign-in instead.', 409);
     await session.setCookie();
