@@ -168,7 +168,8 @@ test('an eight-player game runs from setup to a Village win with private informa
     await expect(livingWolf.page.locator('#private-room')).toHaveCount(0);
     await expect(livingWolf.page.locator('#team')).toHaveCount(0);
     await expect(livingWolf.page.getByRole('link', { name: 'Private room' })).toHaveCount(0);
-    await expect(livingWolf.page.locator('#town-hall')).toContainText('Second Town Hall note.');
+    // This page loaded before the notes were posted; a quiet room refreshes every 30 seconds.
+    await expect(livingWolf.page.locator('#town-hall')).toContainText('Second Town Hall note.', { timeout: 40_000 });
     await livingWolf.page.getByRole('button', { name: 'Show role', exact: true }).click();
     await expect(livingWolf.page.locator('#private-room')).toBeVisible();
 
