@@ -108,7 +108,7 @@ export default function GuidePage() {
             <li><strong>Reviewed results.</strong> A moderator checks each calculated result and publishes it. A moderator can instead switch a game to automatic results: at each deadline the app locks and calculates, then publishes after a review window (60 minutes by default) unless the moderator publishes, corrects, or pauses it first.</li>
             <li><strong>Your own pace.</strong> Each phase stays open for hours, so people play between meetings instead of all at once.</li>
           </ul>
-          <p>Talk happens wherever your group already chats: in person, Slack, Teams, or email. Only what you save in the app counts.</p>
+          <p>Talk happens in the app’s <strong>Town Hall</strong> or wherever your group already chats: in person, Slack, Teams, or email. Only what you save in the app counts.</p>
         </section>
 
         <section className="guide-section" id="rules">
@@ -179,11 +179,14 @@ export default function GuidePage() {
           <p>If your site operator has turned email on, your dashboard has an <strong>Email</strong> card. It is off until you select <strong>Turn email on</strong>. Once it is on you get an email when a phase opens and you have something to do, another half an hour before it closes if you haven’t saved yet, and a short, silly story when each result is published. The emails never say what your role is or what your action is. They do go only to players with something to do, so if your screen is visible to others, know that getting a phase email on a Night means you have a Night action. Every email has a link to turn them off again.</p>
           <h3>Good to know</h3>
           <ul>
+            <li>The <strong>Town Hall</strong> is the whole village’s chat, open day and night. Every player and spectator can read it; only living players can post.</li>
             <li>Werewolves and Masons get a private room to chat with their team. Eliminated players can talk in the <strong>Afterlife</strong> room.</li>
-            <li>The moderator can read every private room and may post in them. Their messages are labelled <strong>Moderator</strong> and highlighted.</li>
-            <li>Playing where others can see your screen? Use <strong>Hide role</strong> on your role card.</li>
+            <li>Every chat shows the newest message at the top.</li>
+            <li>Select <strong>Town Hall</strong> or <strong>Private room</strong> in the menu to jump to that chat; it lights up briefly so you can spot it.</li>
+            <li>The moderator can read every room and may post in them. Their messages are labelled <strong>Moderator</strong> and highlighted.</li>
+            <li>Playing where others can see your screen? Use <strong>Hide role</strong> on your role card. It also hides your private rooms, teammates, private results, and any role-only action, so your page looks like any villager’s. The Day vote and the Town Hall stay. At Night you’ll see “You may have a private action”; show your role to see it.</li>
             <li>Once eliminated, you can watch but no longer vote in the village ballot. On each Day you can cast the optional Afterlife tiebreak vote. Please don’t pass information back to living players.</li>
-            <li>The moderator may add <strong>spectators</strong> after the game starts. They have no role or vote, see what every player sees publicly, and can chat in the Afterlife, where their name is marked “(spectator)”.</li>
+            <li>The moderator may add <strong>spectators</strong> after the game starts. They have no role or vote, see what every player sees publicly, and can chat in the Afterlife, where their name is marked “(spectator)”. They can read the Town Hall but not post there.</li>
           </ul>
         </section>
 
@@ -217,7 +220,7 @@ export default function GuidePage() {
             <li><strong>Announcements</strong> appear in every player’s updates. <strong>Announcement copy</strong> then shows each one ready to paste into an email or a group chat, with <strong>Copy email</strong> and <strong>Copy for chat</strong>.</li>
             <li><strong>Feedback</strong> lists the ratings and comments players and moderators send from the feedback card, with the average. It shows whether each came from a player or a moderator. The list doesn’t name the sender, but the audit log and backups record who sent each one.</li>
             <li><strong>Player access recovery</strong> sets a new PIN for a player who forgot theirs, and unlocks a seat locked after 10 wrong PINs (marked “locked” in the list).</li>
-            <li><strong>Private rooms</strong> can be made read-only, and individual messages removed with a reason. Select <strong>Open room</strong> to read a room’s whole history (<strong>Load earlier messages</strong> goes further back) and to post there. Your messages show to the room as <strong>Moderator</strong>, never your name or email. You can post only while the room is open and the game is running; reopen a read-only room first.</li>
+            <li><strong>Chat rooms</strong> (the Town Hall and the private rooms) can be made read-only, and individual messages removed with a reason. Select <strong>Open room</strong> to read a room’s whole history, newest first (<strong>Load earlier messages</strong> at the end goes further back), and to post there. Your messages show to the room as <strong>Moderator</strong>, never your name or email. You can post only while the room is open and the game is running; reopen a read-only room first.</li>
             <li><strong>Spectators</strong> can be added once roles are released and while the game runs. Enter a name and email, select <strong>Add spectator</strong>, and send them the private link shown once. They choose a PIN when they first open it and use the link and PIN to sign in again. They have no role or vote, see the public game (who is alive, published results and ballots), and can read and post in the Afterlife. A player in the game can’t be a spectator. <strong>Remove</strong> ends their access; to replace a lost link, remove them and add them again. Resetting the game removes its spectators.</li>
             <li><strong>Co-moderators</strong> can be added by the game owner, who can also <strong>Remove</strong> one or <strong>Make owner</strong> to hand the game over and stay on as a co-moderator.</li>
             <li><strong>Pause automation</strong> in <strong>Run the live game</strong> stops automatic calculation and publication (for an offsite or a long weekend) until you select <strong>Resume automation</strong>. Deadlines still close voting. Players see “The schedule is paused”.</li>
