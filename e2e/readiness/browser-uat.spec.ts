@@ -231,6 +231,51 @@ test('an eight-player game runs from setup to a Village win with private informa
       await expect(viewer.page.locator('#today')).toBeVisible();
     }
 
+    // Village stats: the numbers every viewer sees, built only from published results and chat counts.
+    // Two Days were published (seven votes for the first Werewolf, then six for the second), and the chat holds
+    // two Town Hall notes and the moderator's Pack room post.
+    for (const viewer of [game.players[1], game.players[0]]) {
+      await viewer.page.getByRole('button', { name: /^(Village stats|Stats)$/u }).filter({ visible: true }).click();
+      const stats = viewer.page.locator('#village-stats');
+      await expect(stats.getByRole('heading', { name: 'How the village is playing', exact: true })).toBeVisible({ timeout: 30_000 });
+      const tile = (label: string) => stats.locator('.vs-tiles > div').filter({ has: viewer.page.getByText(label, { exact: true }) });
+      await expect(tile('Ballots held')).toContainText('2');
+      await expect(tile('Ballots held')).toContainText('15 votes cast');
+      await expect(tile('Players alive')).toContainText('6 of 8');
+      await expect(tile('Most voted')).toContainText(wolfOne.account.displayName);
+      await expect(tile('Chat messages')).toContainText('3');
+      // The newest day is shown first; choosing another day redraws the bars.
+      const picker = stats.getByRole('group', { name: 'Choose a day' });
+      await expect(picker.getByRole('button', { name: 'Day 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await picker.getByRole('button', { name: 'Day 1', exact: true }).click();
+      const dayOne = stats.getByRole('list', { name: 'Votes received, Day 1' });
+      await expect(dayOne.locator('li').first()).toContainText(wolfOne.account.displayName);
+      await expect(dayOne.locator('li').first().locator('.vs-bar-value')).toContainText('7');
+      await picker.getByRole('button', { name: 'All days', exact: true }).click();
+      await expect(stats.getByRole('list', { name: 'Votes received, all days' }).locator('li').first()).toContainText(wolfOne.account.displayName);
+      // Arrow keys read the game story point by point; it opens on the latest result.
+      const story = stats.locator('.vs-chart').filter({ hasText: 'Players alive and werewolves left' });
+      await expect(story.locator('.vs-readout')).toContainText('Day 2');
+      await story.locator('.vs-plot').focus();
+      await viewer.page.keyboard.press('ArrowLeft');
+      await expect(story.locator('.vs-readout')).toContainText('Night 1');
+      await expect(stats.locator('.vs-ledger')).toContainText(`${wolfOne.account.displayName}Werewolf · village vote`);
+      await expect(stats.locator('.vs-matrix tbody tr').first()).toBeVisible();
+      // Only roles revealed by an elimination appear; nobody still alive is described.
+      await expect(stats).not.toContainText(/Seer|Bodyguard|Mason|Villager/u);
+      await viewer.page.getByRole('button', { name: 'Today', exact: true }).filter({ visible: true }).click();
+      await expect(viewer.page.locator('#village-stats')).toHaveCount(0);
+      await expect(viewer.page.locator('#today')).toBeVisible();
+    }
+
+    // The moderator opens the same stats from the console; nothing loads until the panel is opened.
+    await moderatorPage.reload();
+    const consoleStats = moderatorPage.locator('#village-stats');
+    await expect(consoleStats.locator('.vs-tiles')).toHaveCount(0);
+    await consoleStats.getByText('Show the stats', { exact: true }).click();
+    await expect(consoleStats.locator('.vs-tiles')).toContainText('Ballots held', { timeout: 30_000 });
+    await expect(consoleStats.locator('.vs-tiles')).toContainText('15 votes cast');
+
     // View votes on an older ballot loads its votes into the dialog.
     {
       const viewer = game.players[1];

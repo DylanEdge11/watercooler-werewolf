@@ -4,7 +4,7 @@ import { afterlifePermission, participationCounter, participationCountsAcrossPla
 import { automaticStepDueAt } from '../game/automation';
 import type { advanceGameSafely } from '../game/automation-sweep';
 import { ROLE_CATALOG } from '../game/catalog';
-import { protectedAttackBlocked } from '../game/public-result';
+import { afterlifeBrokeTie, protectedAttackBlocked } from '../game/public-result';
 import { spectatorCanPost } from '../game/spectators';
 import { loadCurrentLoverPair } from '../game/relationships';
 import { emailNotificationsAvailable } from '../notify/config';
@@ -35,7 +35,7 @@ interface PublicVoteRow {
  * the reset or restore, so player-facing events are those strictly after it,
  * or at the same instant when they are not themselves the boundary event.
  */
-const RUN_BOUNDARY = `(SELECT MAX(created_at) FROM game_events
+export const RUN_BOUNDARY = `(SELECT MAX(created_at) FROM game_events
   WHERE game_id = ? AND event_type IN ('GAME_RESET', 'GAME_RESTORED'))`;
 /**
  * Queries using this filter name `INDEXED BY idx_game_events_type`. Left to
@@ -46,7 +46,7 @@ const PUBLIC_EVENT_FILTER = `ge.game_id = ?
   AND (ge.created_at > COALESCE(${RUN_BOUNDARY}, '') OR (ge.created_at = ${RUN_BOUNDARY} AND ge.event_type NOT IN ('GAME_RESET', 'GAME_RESTORED')))
   AND ge.event_type IN ('PHASE_PUBLISHED', 'GAME_COMPLETED', 'ANNOUNCEMENT', 'GAME_STOPPED', 'FINAL_SHOWDOWN_ENTERED')`;
 
-function parseTargetIds(json: string): string[] {
+export function parseTargetIds(json: string): string[] {
   try {
     const parsed = JSON.parse(json) as unknown;
     return Array.isArray(parsed) ? parsed.filter((targetId): targetId is string => typeof targetId === 'string') : [];
@@ -117,7 +117,7 @@ export async function loadBallotVotes(gameId: string, phaseId: string): Promise<
   return ballotVotes(voteRows.results, new Map(seatRows.results.map((seat) => [seat.id, seat.displayName])));
 }
 
-type RosterSeat = { id: string; displayName: string; alive: boolean; role: RoleKey | null };
+export type RosterSeat = { id: string; displayName: string; alive: boolean; role: RoleKey | null };
 
 interface TimelineRow { id: string; eventType: string; phaseId: string | null; phaseSequence: number | null; payloadJson: string; createdAt: string }
 
@@ -145,7 +145,7 @@ function loadCurrentPhase(gameId: string) {
 }
 
 /** Every claimed seat with its role. Roles are for the server's own decisions; callers send only public fields. */
-async function loadRoster(gameId: string): Promise<RosterSeat[]> {
+export async function loadRoster(gameId: string): Promise<RosterSeat[]> {
   const rows = await getDb()
     .prepare(
       `SELECT s.id, s.display_name AS displayName, s.alive, ra.role_key AS role
@@ -247,15 +247,8 @@ function buildTimeline(
           isYou: viewerSeatId !== null && elimination.playerId === viewerSeatId,
         };
       });
-      const publishedOutcome = payload.publishedOutcome && typeof payload.publishedOutcome === 'object'
-        ? payload.publishedOutcome as Record<string, unknown>
-        : null;
-      // Only that the Afterlife settled a tie is public; its votes stay with the moderators. A tie
-      // it settled only in part also went to a random draw, so it gets no note.
-      const afterlifeTiebreak = publishedOutcome?.afterlifeTiebreak && typeof publishedOutcome.afterlifeTiebreak === 'object'
-        ? publishedOutcome.afterlifeTiebreak as { decided?: unknown }
-        : null;
-      const afterlifeBrokeTie = afterlifeTiebreak?.decided === true;
+      // Only that the Afterlife settled a tie is public; its votes stay with the moderators.
+      const brokeTie = afterlifeBrokeTie(payload);
       return {
         id: event.id,
         eventType: event.eventType,
@@ -266,7 +259,7 @@ function buildTimeline(
           kind: payload.kind,
           eliminations,
           protectedAttackBlocked: protectedAttackBlocked(payload),
-          ...(afterlifeBrokeTie ? { afterlifeBrokeTie } : {}),
+          ...(brokeTie ? { afterlifeBrokeTie: brokeTie } : {}),
           winner: payload.winner ?? null,
           publishedAutomatically: payload.source === 'SCHEDULER',
           ...(['DAY', 'FINAL_BALLOT'].includes(String(payload.kind)) && event.phaseId

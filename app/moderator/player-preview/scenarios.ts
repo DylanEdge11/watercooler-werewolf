@@ -2,6 +2,7 @@ import type { PublicTimelineEvent } from '../../../lib/game/timeline-view';
 import { permissionForRole } from '../../../lib/game/actions';
 import { ROLE_CATALOG } from '../../../lib/game/catalog';
 import type { DashboardData } from '../../player-dashboard';
+import { buildGameStats, type GameStats, type StatsInput, type StatsPublishedPhase } from '../../../lib/game/game-stats';
 import type { RoleKey } from '../../../lib/game/types';
 
 export const PREVIEW_SCENARIOS = [
@@ -182,6 +183,54 @@ export function createPreviewData(roleKey: RoleKey, scenario: PreviewScenarioId)
     notificationsNextCursor: null,
     rooms,
   };
+}
+
+/** Invented numbers for the studio's Village stats tab: three Days and two Nights, and a lively Town Hall. */
+export function createPreviewStats(scenario: PreviewScenarioId): GameStats {
+  const now = new Date();
+  const seats = candidates.map(({ id, displayName }) => ({ id, displayName }));
+  const nameOf = (id: string) => candidates.find((candidate) => candidate.id === id)?.displayName ?? id;
+  const base = { timeZone: 'America/New_York', gameStatus: scenario === 'completed' ? 'COMPLETED' : scenario === 'stopped' ? 'STOPPED' : 'ACTIVE', seats };
+  if (scenario === 'unreleased') {
+    return buildGameStats({ ...base, living: seats.length, werewolvesLiving: 4, published: [], votes: [], chat: { totalMessages: 0, townHallQuarterHours: [], townHallByAuthor: [] } });
+  }
+  const left = (id: string, role: string, cause: string) => ({ playerId: id, displayName: nameOf(id), role, cause });
+  const published: StatsPublishedPhase[] = [
+    { phaseId: 'sample-day-1', sequence: 1, kind: 'DAY', publishedAt: new Date(now.valueOf() - 52 * 3_600_000).toISOString(), afterlifeBrokeTie: false, eliminations: [left('preview-jordan', 'WEREWOLF', 'DAY_VOTE')] },
+    { phaseId: 'sample-night-1', sequence: 2, kind: 'NIGHT', publishedAt: new Date(now.valueOf() - 40 * 3_600_000).toISOString(), afterlifeBrokeTie: false, eliminations: [left('preview-quinn', 'VILLAGER', 'WEREWOLF_ATTACK')] },
+    { phaseId: 'sample-day-2', sequence: 3, kind: 'DAY', publishedAt: new Date(now.valueOf() - 28 * 3_600_000).toISOString(), afterlifeBrokeTie: false, eliminations: [left('preview-riley', 'VILLAGER', 'DAY_VOTE')] },
+    { phaseId: 'sample-night-2', sequence: 4, kind: 'NIGHT', publishedAt: new Date(now.valueOf() - 16 * 3_600_000).toISOString(), afterlifeBrokeTie: false, eliminations: [left('preview-drew', 'VILLAGER', 'WEREWOLF_ATTACK')] },
+    { phaseId: 'sample-day-3', sequence: 5, kind: 'DAY', publishedAt: new Date(now.valueOf() - 5 * 3_600_000).toISOString(), afterlifeBrokeTie: true, eliminations: [left('preview-blake', 'WEREWOLF', 'DAY_VOTE')] },
+  ];
+  const ids = candidates.map((candidate) => candidate.id);
+  const without = (gone: string[]) => ids.filter((id) => !gone.includes(id));
+  /** Most voters pick `favourite`; every `rivalEvery`th picks `rival`; the fifth voter abstains. */
+  const cast = (phaseId: string, voters: string[], favourite: string, rival: string, rivalEvery: number) =>
+    voters.filter((_, index) => index % 5 !== 4).map((voterId, index) => {
+      const preferred = index % rivalEvery === 0 ? rival : favourite;
+      const targetId = preferred !== voterId ? preferred : preferred === favourite ? rival : favourite;
+      return { phaseId, voterId, targetId };
+    });
+  const votes: StatsInput['votes'] = [
+    ...cast('sample-day-1', ids, 'preview-jordan', 'preview-casey', 3),
+    ...cast('sample-day-2', without(['preview-jordan', 'preview-quinn']), 'preview-riley', 'preview-morgan', 3),
+    ...cast('sample-day-3', without(['preview-jordan', 'preview-quinn', 'preview-riley', 'preview-drew']), 'preview-blake', 'preview-jamie', 2),
+  ];
+  const townHallQuarterHours: StatsInput['chat']['townHallQuarterHours'] = [];
+  for (const daysAgo of [2, 1, 0]) {
+    const date = new Date(now.valueOf() - daysAgo * 86_400_000).toISOString().slice(0, 10);
+    for (let hour = 13; hour <= 22; hour += 1) townHallQuarterHours.push({ bucket: `${date}T${hour}:00`, count: ((hour * 3 + daysAgo * 5) % 7) + 2 });
+  }
+  const townHallByAuthor = ids.map((seatId, index) => ({ seatId, count: ((index * 7 + 3) % 11) + 1 }));
+  const townHallTotal = townHallQuarterHours.reduce((sum, bucket) => sum + bucket.count, 0);
+  return buildGameStats({
+    ...base,
+    living: seats.length - published.length,
+    werewolvesLiving: 2,
+    published,
+    votes,
+    chat: { totalMessages: townHallTotal + 41, townHallQuarterHours, townHallByAuthor },
+  });
 }
 
 export const PREVIEW_ELIMINATIONS = [
