@@ -1,19 +1,19 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { parseEliminationSchedule, phaseSlots } from '../../../../../lib/game/elimination-schedule';
-import { validateDeadlineExtension, validateFinalShowdownEntry, validatePhaseOpen } from '../../../../../lib/game/phase-policy';
+import { parseEliminationSchedule } from '../../../../../lib/game/elimination-schedule';
+import { validateDeadlineExtension, validateFinalShowdownEntry } from '../../../../../lib/game/phase-policy';
 import { automaticStepDueAt } from '../../../../../lib/game/automation';
 import { advanceGameSafely } from '../../../../../lib/game/automation-sweep';
 import { outstandingResponders } from '../../../../../lib/game/outstanding';
 import { applyEliminationOverride } from '../../../../../lib/game/engine';
 import { changes, loadActions, overrideIdsFromJson } from '../../../../../lib/game/phase-store';
+import { openPhase } from '../../../../../lib/game/phase-open';
 import { runPhaseAction } from '../../../../../lib/game/phase-transitions';
 import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
-import { parseScheduledDate, type ScheduleDefinition } from '../../../../../lib/game/scheduling';
+import { parseCloseSchedule, parseScheduledDate } from '../../../../../lib/game/scheduling';
 import { canonicalRoleKey, type PhaseKind, type PhaseResolution, type PlayerState } from '../../../../../lib/game/types';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { notifyPhaseOpened, runAfterResponse } from '../../../../../lib/notify/notifications';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 
@@ -53,21 +53,6 @@ interface ProposalRow {
   createdAt: string;
 }
 
-function parseCloseSchedule(scheduleJson: string, activeWeekdaysJson: string): ScheduleDefinition | null {
-  try {
-    const schedule = JSON.parse(scheduleJson) as Partial<ScheduleDefinition>;
-    const weekdays = JSON.parse(activeWeekdaysJson) as unknown;
-    if (typeof schedule.dayCloses !== 'string' || typeof schedule.nightCloses !== 'string') return null;
-    return {
-      dayCloses: schedule.dayCloses,
-      nightCloses: schedule.nightCloses,
-      activeWeekdays: Array.isArray(weekdays) ? weekdays.filter((day): day is number => Number.isInteger(day)) : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
 export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
@@ -80,8 +65,9 @@ export async function GET(request: Request, context: RouteContext) {
       db.prepare(`SELECT status, final_cutoff_at AS finalCutoffAt, timezone, updated_at AS updatedAt,
                 publication_mode AS publicationMode, review_window_minutes AS reviewWindowMinutes,
                 automation_paused_at AS automationPausedAt, elimination_schedule_json AS eliminationScheduleJson,
-                schedule_json AS scheduleJson, active_weekdays_json AS activeWeekdaysJson
-         FROM games WHERE id = ? LIMIT 1`).bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string; updatedAt: string; publicationMode: string; reviewWindowMinutes: number; automationPausedAt: string | null; eliminationScheduleJson: string | null; scheduleJson: string; activeWeekdaysJson: string }>(),
+                schedule_json AS scheduleJson, active_weekdays_json AS activeWeekdaysJson,
+                auto_open_next_phase AS autoOpenNextPhase
+         FROM games WHERE id = ? LIMIT 1`).bind(gameId).first<{ status: string; finalCutoffAt: string; timezone: string; updatedAt: string; publicationMode: string; reviewWindowMinutes: number; automationPausedAt: string | null; eliminationScheduleJson: string | null; scheduleJson: string; activeWeekdaysJson: string; autoOpenNextPhase: number }>(),
       db
         .prepare(
           `SELECT p.id, p.sequence, p.kind, p.status, p.opens_at AS opensAt, p.closes_at AS closesAt,
@@ -159,6 +145,7 @@ export async function GET(request: Request, context: RouteContext) {
       game: gameRow
         ? {
             ...gameRow,
+            autoOpenNextPhase: Boolean(gameRow.autoOpenNextPhase),
             eliminationScheduleJson: undefined,
             eliminationSchedule: parseEliminationSchedule(gameRow.eliminationScheduleJson),
             scheduleJson: undefined,
@@ -313,81 +300,8 @@ export async function POST(request: Request, context: RouteContext) {
 
     if (body.action === 'OPEN') {
       if (!body.kind || !['DAY', 'NIGHT', 'FINAL_BALLOT'].includes(body.kind)) throw new Error('Choose a valid phase kind.');
-      const closesAt = parseScheduledDate(body.closesAt ?? '', game.timezone);
-      if (Number.isNaN(closesAt.valueOf()) || closesAt <= new Date()) throw new Error('The phase deadline must be in the future.');
-      const blocking = await db
-        .prepare(
-          `SELECT id, kind, status, closes_at AS closesAt FROM phases WHERE game_id = ?
-           AND status IN ('OPEN', 'LOCKED', 'PENDING_HUNTER', 'PENDING_APPROVAL') LIMIT 1`,
-        )
-        .bind(gameId)
-        .first<{ id: string; kind: PhaseKind; status: string; closesAt: string }>();
-      if (blocking) {
-        if (blocking.status === 'OPEN' && blocking.kind === body.kind) {
-          return Response.json({ ok: true, idempotent: true, phaseId: blocking.id });
-        }
-        throw new Error('Finish the current phase before opening another.');
-      }
-      const latest = await db
-        .prepare('SELECT kind, status FROM phases WHERE game_id = ? ORDER BY sequence DESC LIMIT 1')
-        .bind(gameId)
-        .first<{ kind: PhaseKind; status: string }>();
-      // A final ballot that produced a winner completes the game, so the policy's game-status check covers it.
-      const latestEntry = latest ? { kind: latest.kind, status: latest.status } : null;
-      const policyError = validatePhaseOpen({ gameStatus: game.status, latestPhase: latestEntry, requestedKind: body.kind });
-      if (policyError) throw new Error(policyError);
-      const living = await db
-        .prepare("SELECT COUNT(*) AS count FROM seats WHERE game_id = ? AND status = 'CLAIMED' AND alive = 1")
-        .bind(gameId)
-        .first<{ count: number }>();
-      const sequenceRow = await db
-        .prepare('SELECT COALESCE(MAX(sequence), 0) AS sequence FROM phases WHERE game_id = ?')
-        .bind(gameId)
-        .first<{ sequence: number }>();
-      const sequence = Number(sequenceRow?.sequence ?? 0) + 1;
-      const divisor = body.kind === 'NIGHT' ? Number(game.nightDivisor) : Number(game.dayDivisor);
-      // Days and Nights follow the elimination schedule when the game has one; otherwise the divisor.
-      const slots = phaseSlots({
-        kind: body.kind,
-        sequence,
-        livingPlayers: Number(living?.count ?? 0),
-        dayDivisor: Number(game.dayDivisor),
-        nightDivisor: Number(game.nightDivisor),
-        schedule: parseEliminationSchedule(game.eliminationScheduleJson),
-      });
-      const id = crypto.randomUUID();
-      const now = new Date().toISOString();
-      const result = await db.batch([
-        db
-          .prepare(
-            `INSERT INTO phases
-             (id, game_id, sequence, kind, status, opens_at, closes_at, slots, divisor_snapshot, version, created_at, updated_at)
-             SELECT ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, 1, ?, ?
-             WHERE EXISTS (
-                 SELECT 1 FROM games WHERE id = ? AND status IN ('ACTIVE', 'FINAL_SHOWDOWN')
-                   -- A schedule saved since it was read answers 409, so the slots never use a stale schedule.
-                   AND elimination_schedule_json IS ?
-               )
-               AND NOT EXISTS (
-                 SELECT 1 FROM phases
-                 WHERE game_id = ? AND status IN ('OPEN', 'LOCKED', 'PENDING_HUNTER', 'PENDING_APPROVAL', 'HUNTER_FINALIZING', 'PUBLISHING')
-               )`,
-          )
-          .bind(id, gameId, sequence, body.kind, now, closesAt.toISOString(), slots, divisor, now, now, gameId, game.eliminationScheduleJson ?? null, gameId),
-        db
-          .prepare(
-            `INSERT INTO game_events
-             (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
-             SELECT ?, ?, ?, 'PHASE_OPENED', ?, ?, ?
-             WHERE EXISTS (SELECT 1 FROM phases p JOIN games g ON g.id = p.game_id
-                           WHERE p.id = ? AND p.status = 'OPEN' AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN'))`,
-          )
-          .bind(crypto.randomUUID(), gameId, id, moderator.id, JSON.stringify({ kind: body.kind, slots, closesAt: closesAt.toISOString() }), now, id),
-      ]);
-      if (changes(result[0]) !== 1) return jsonError('The game or current phase changed before this phase could open. Refresh and try again.', 409);
-      // Players who turned email on and have something to do are told after this response is sent.
-      runAfterResponse(() => notifyPhaseOpened(gameId, id));
-      return Response.json({ ok: true, phaseId: id, slots });
+      const result = await openPhase(gameId, { moderatorId: moderator.id, source: 'MODERATOR' }, body.kind, parseScheduledDate(body.closesAt ?? '', game.timezone));
+      return result.status === 200 ? Response.json(result.body) : jsonError(result.error, result.status);
     }
 
     const result = await runPhaseAction(gameId, game, { moderatorId: moderator.id, source: 'MODERATOR' }, body);

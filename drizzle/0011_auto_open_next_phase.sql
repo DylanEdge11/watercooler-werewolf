@@ -1,0 +1,1 @@
+ALTER TABLE `games` ADD `auto_open_next_phase` integer DEFAULT false NOT NULL;

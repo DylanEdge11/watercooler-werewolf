@@ -183,6 +183,22 @@ export function nextScheduledClose(
   return null;
 }
 
+/** The game's stored close times and active weekdays, or null when either is missing or unreadable. */
+export function parseCloseSchedule(scheduleJson: string, activeWeekdaysJson: string): ScheduleDefinition | null {
+  try {
+    const schedule = JSON.parse(scheduleJson) as Partial<ScheduleDefinition>;
+    const weekdays = JSON.parse(activeWeekdaysJson) as unknown;
+    if (typeof schedule.dayCloses !== 'string' || typeof schedule.nightCloses !== 'string') return null;
+    return {
+      dayCloses: schedule.dayCloses,
+      nightCloses: schedule.nightCloses,
+      activeWeekdays: Array.isArray(weekdays) ? weekdays.filter((day): day is number => Number.isInteger(day)) : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function validateSchedule(schedule: ScheduleDefinition): string[] {
   const errors: string[] = [];
   for (const [label, value] of [['dayCloses', schedule.dayCloses], ['nightCloses', schedule.nightCloses]] as const) {

@@ -91,6 +91,10 @@ test('an eight-player game runs from setup to a Village win with private informa
     await automation.getByRole('button', { name: 'Resume automation', exact: true }).click();
     await expect(automation.getByRole('button', { name: 'Pause automation', exact: true })).toBeVisible();
 
+    // Opening the next phase automatically is an opt-in; it is off for this game. (Ticking it here would open Night 1 on its own, so the API tests cover turning it on.)
+    await automation.getByText('Change how results publish', { exact: true }).click();
+    await expect(automation.getByRole('checkbox', { name: 'Open the next Day or Night automatically after each result publishes' })).not.toBeChecked();
+
     // The elimination schedule names the next phase a change affects. One per Day and Night keeps this game's slots.
     const eliminations = moderatorPage.locator('.schedule-block');
     await expect(eliminations.locator('.schedule-status')).toHaveText('Latest phase: Day 1. A saved change applies from Night 1, the next phase to open. Phases already opened keep their slots.');
