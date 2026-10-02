@@ -90,7 +90,7 @@ export default function SpectatorsPanel({ gameId, gameStatus }: { gameId: string
         <p className="eyebrow accent">Add a spectator</p>
         <label>Display name<input name="displayName" maxLength={80} required /></label>
         <label>Email<input name="email" type="email" required /></label>
-        <p className="field-help">A player in this game can’t also be a spectator. You’ll get a private link to send them; they choose a PIN the first time they open it. If they lose it, remove them and add them again for a new link.</p>
+        <p className="field-help">A player in this game can’t also be a spectator. You’ll get a private link to send them; they choose a PIN the first time they open it. After that they can sign in on the home page with this email and their PIN. If they forget the PIN, remove them and add them again for a new link.</p>
         <button className="secondary-button" type="submit" disabled={busy}>{busy ? 'Adding…' : 'Add spectator'}</button>
       </form> : <p className="field-help">Spectators can be added while the game is running.</p>}
       {newLink && <div className="notice success" role="status"><p><strong>{newLink.displayName}</strong> can watch with this private link. It is shown only now.</p><code className="recovery-list">{newLink.url}</code><div className="button-row"><CopyButton text={newLink.url} label="Copy link" accessibleLabel={`Copy spectator link for ${newLink.displayName}`} /></div></div>}

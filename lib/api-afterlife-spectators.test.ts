@@ -16,6 +16,7 @@ vi.mock('../lib/auth/authorization', () => ({ requireGameModerator: async () => 
 vi.mock('../lib/auth/session', () => ({
   getCurrentPlayer: async () => shared.currentPlayer,
   getCurrentSpectator: async () => shared.currentSpectator,
+  createPlayerSession: async () => {},
   prepareSpectatorSession: async (spectatorId: string, sessionVersion: number) => ({
     values: [crypto.randomUUID(), spectatorId, `token-${crypto.randomUUID()}`, sessionVersion, '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'],
     setCookie: async () => {},
@@ -33,6 +34,8 @@ import { GET as messagesGet, POST as messagesPost } from '../app/api/rooms/[room
 import { GET as spectatorsGet, POST as spectatorsPost } from '../app/api/games/[gameId]/spectators/route';
 import { DELETE as spectatorDelete } from '../app/api/games/[gameId]/spectators/[spectatorId]/route';
 import { POST as spectatePost } from '../app/api/spectate/[code]/route';
+import { POST as loginPost } from '../app/api/seats/login/route';
+import { hashSecret } from './auth/crypto';
 import { GET as votesGet } from '../app/api/phases/[phaseId]/votes/route';
 import { GET as roomsGet, POST as roomsPost } from '../app/api/games/[gameId]/rooms/route';
 import { ensureGameRooms } from './chat/rooms';
@@ -246,6 +249,61 @@ describe('spectators', () => {
     expect((await spectatorDelete(new Request('http://localhost:3000/api/games/game/spectators/x', { method: 'DELETE', headers: { origin: 'http://localhost:3000' } }), { params: Promise.resolve({ gameId: 'game', spectatorId: added.body.spectator!.id }) })).status).toBe(200);
     expect((await openLink(added.body.spectateUrl!, '123456')).status).toBe(404);
     expect(Number((await client.execute('SELECT COUNT(*) AS count FROM spectator_sessions')).rows[0]?.count)).toBe(0);
+  });
+
+  async function homePageSignIn(identifier: string, pin: string) {
+    const response = await loginPost(post('/api/seats/login', { identifier, pin }));
+    return { status: response.status, body: await response.json() as Record<string, unknown> };
+  }
+
+  test('a spectator signs back in from the home page with the email the moderator added and their PIN', async () => {
+    const added = await addSpectator('Riley Watcher', 'riley@pilot.test');
+    // Before they open their link there is no PIN yet, so the email alone gets nowhere.
+    expect((await homePageSignIn('riley@pilot.test', '123456')).status).toBe(401);
+    await openLink(added.body.spectateUrl!, '123456');
+    const before = Number((await client.execute('SELECT COUNT(*) AS count FROM spectator_sessions')).rows[0]?.count);
+
+    expect((await homePageSignIn('Riley@Pilot.Test', '999999')).status).toBe(401);
+    expect(await homePageSignIn('Riley@Pilot.Test', '123456')).toEqual({ status: 200, body: { ok: true, seat: { displayName: 'Riley Watcher', gameId: 'game' } } });
+    expect(Number((await client.execute('SELECT COUNT(*) AS count FROM spectator_sessions')).rows[0]?.count)).toBe(before + 1);
+  });
+
+  test('wrong PINs from the home page and from the link count together toward one lockout', async () => {
+    const added = await addSpectator('Riley Watcher', 'riley@pilot.test');
+    await openLink(added.body.spectateUrl!, '123456');
+    for (let attempt = 0; attempt < 5; attempt += 1) expect((await homePageSignIn('riley@pilot.test', '000000')).status).toBe(401);
+    for (let attempt = 0; attempt < 5; attempt += 1) expect((await openLink(added.body.spectateUrl!, '000000')).status).toBe(401);
+    // Even the right PIN is refused now, in either place, with the spectator's way back.
+    const locked = await homePageSignIn('riley@pilot.test', '123456');
+    expect(locked.status).toBe(423);
+    expect(locked.body.error).toEqual(expect.stringContaining('remove you and add you again'));
+    expect((await openLink(added.body.spectateUrl!, '123456')).status).toBe(423);
+  });
+
+  test('a removed spectator cannot sign in from the home page, and can be added again', async () => {
+    const added = await addSpectator('Riley Watcher', 'riley@pilot.test');
+    await openLink(added.body.spectateUrl!, '123456');
+    await spectatorDelete(new Request('http://localhost:3000/api/games/game/spectators/x', { method: 'DELETE', headers: { origin: 'http://localhost:3000' } }), { params: Promise.resolve({ gameId: 'game', spectatorId: added.body.spectator!.id }) });
+    expect((await homePageSignIn('riley@pilot.test', '123456')).status).toBe(401);
+
+    const again = await addSpectator('Riley Watcher', 'riley@pilot.test');
+    await openLink(again.body.spectateUrl!, '654321');
+    expect((await homePageSignIn('riley@pilot.test', '123456')).status).toBe(401);
+    expect((await homePageSignIn('riley@pilot.test', '654321')).status).toBe(200);
+  });
+
+  test('an email and PIN that match a spectator and a player in different games ask for the link or seat code', async () => {
+    const added = await addSpectator('Riley Watcher', 'riley@pilot.test');
+    await openLink(added.body.spectateUrl!, '123456');
+    await client.batch([
+      { sql: "INSERT INTO games (id,name,status,timezone,start_date,end_date,active_weekdays_json,schedule_json,final_cutoff_at,created_by_moderator_id,created_at,updated_at) VALUES ('other','Other game','ACTIVE','UTC','2026-01-01','2027-01-01','[1]','{}','2099-01-01','mod','2026-01-01','2026-01-01')", args: [] },
+      { sql: "INSERT INTO seats (id,game_id,display_name,email,status,claim_code_hash,pin_hash,created_at,updated_at) VALUES ('riley-seat','other','Riley','riley@pilot.test','CLAIMED','riley-claim',?,'2026-01-01','2026-01-01')", args: [await hashSecret('123456')] },
+    ], 'write');
+    const result = await homePageSignIn('riley@pilot.test', '123456');
+    expect(result.status).toBe(409);
+    expect(result.body.error).toEqual(expect.stringContaining('more than one game'));
+    // Their private link still opens this game.
+    expect((await openLink(added.body.spectateUrl!, '123456')).status).toBe(200);
   });
 
   test('a spectator sees the public game and the Afterlife, but no roles, votes in progress, or private rooms', async () => {
