@@ -271,7 +271,10 @@ describe('spectators', () => {
     expect(game.livingPlayers.every((player) => Object.keys(player).sort().join() === 'displayName,id')).toBe(true);
     expect(game.eliminatedPlayers.map((player) => player.role).sort()).toEqual(['VILLAGER', 'WEREWOLF']);
     const rooms = view.body.rooms as Array<{ id: string; type: string; access: string }>;
-    expect(rooms).toEqual([expect.objectContaining({ type: 'DEAD', access: 'WRITE' })]);
+    expect(rooms).toEqual([
+      expect.objectContaining({ type: 'DEAD', access: 'WRITE' }),
+      expect.objectContaining({ type: 'TOWN_HALL', access: 'READ_ONLY' }),
+    ]);
 
     // The spectator cannot act, and cannot open the pack's room.
     const action = await actionPost(post('/api/phases/phase/actions', { actionKind: 'DAY_VOTE', targetIds: ['p0'] }), phaseContext);
@@ -323,5 +326,60 @@ describe('spectators', () => {
     await client.execute("UPDATE spectators SET status = 'REMOVED'");
     asSpectator(added.body.spectator!.id);
     expect((await messagesPost(post(`/api/rooms/${roomId}/messages`, { body: 'Still here?' }), roomContext)).status).toBe(409);
+  });
+});
+
+describe('Town Hall', () => {
+  async function townHallId(): Promise<string> {
+    return String((await client.execute("SELECT id FROM chat_rooms WHERE game_id = 'game' AND type = 'TOWN_HALL'")).rows[0]?.id);
+  }
+
+  async function roomsOf(): Promise<Array<{ type: string; access: string }>> {
+    const view = await dashboard();
+    return (view.body.rooms as Array<{ type: string; access: string }>).map(({ type, access }) => ({ type, access }));
+  }
+
+  test('every player and spectator reads it; only living players post', async () => {
+    const roomId = await townHallId();
+    const roomContext = { params: Promise.resolve({ roomId }) };
+
+    // A living Werewolf posts for the whole village.
+    asPlayer('p4');
+    expect(await roomsOf()).toEqual([{ type: 'TOWN_HALL', access: 'WRITE' }, { type: 'WEREWOLF', access: 'WRITE' }]);
+    expect((await messagesPost(post(`/api/rooms/${roomId}/messages`, { body: 'I trust Player 0.' }), roomContext)).status).toBe(201);
+
+    // An eliminated player and a spectator read it, but cannot post.
+    asPlayer('p6', false);
+    expect(await roomsOf()).toEqual([{ type: 'DEAD', access: 'WRITE' }, { type: 'TOWN_HALL', access: 'READ_ONLY' }]);
+    expect((await messagesPost(post(`/api/rooms/${roomId}/messages`, { body: 'From beyond.' }), roomContext)).status).toBe(400);
+
+    const added = await spectatorsPost(post('/api/games/game/spectators', { displayName: 'Riley Watcher', email: 'riley@pilot.test' }), gameContext);
+    const spectatorId = (await added.json() as { spectator: { id: string } }).spectator.id;
+    asSpectator(spectatorId);
+    expect((await messagesPost(post(`/api/rooms/${roomId}/messages`, { body: 'Hello village.' }), roomContext)).status).toBe(400);
+
+    for (const viewer of [() => asPlayer('p0'), () => asPlayer('p6', false), () => asSpectator(spectatorId)]) {
+      viewer();
+      const response = await messagesGet(get(`/api/rooms/${roomId}/messages`), roomContext);
+      expect(response.status).toBe(200);
+      const body = await response.json() as { messages: Array<{ authorName: string; body: string }> };
+      expectNoPrivateKeys(body);
+      expect(body.messages.map((message) => `${message.authorName}: ${message.body}`)).toEqual(['Player 4: I trust Player 0.']);
+    }
+    expect(Number((await client.execute('SELECT COUNT(*) AS count FROM chat_messages')).rows[0]?.count)).toBe(1);
+    expect(Number((await client.execute('SELECT COUNT(*) AS count FROM spectator_messages')).rows[0]?.count)).toBe(0);
+  });
+
+  test('a player eliminated after their last read cannot post, and the room locks with the game', async () => {
+    const roomId = await townHallId();
+    const roomContext = { params: Promise.resolve({ roomId }) };
+    // Eliminated, but membership not yet synced: the insert itself re-checks that the author is alive.
+    await client.execute("UPDATE seats SET alive = 0 WHERE id = 'p0'");
+    asPlayer('p0');
+    expect((await messagesPost(post(`/api/rooms/${roomId}/messages`, { body: 'Still here?' }), roomContext)).status).toBe(409);
+
+    await client.execute("UPDATE games SET status = 'COMPLETED'");
+    asPlayer('p1');
+    expect((await messagesPost(post(`/api/rooms/${roomId}/messages`, { body: 'Good game.' }), roomContext)).status).toBe(409);
   });
 });

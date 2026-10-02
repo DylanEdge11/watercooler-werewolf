@@ -115,6 +115,8 @@ describe('automatic publication', () => {
     expect(await rows(`SELECT m.seat_id AS seatId, r.type, m.access FROM chat_room_members m JOIN chat_rooms r ON r.id = m.room_id
       WHERE m.seat_id IN ('p1', 'p17') ORDER BY m.seat_id, r.type`)).toEqual([
       { seatId: 'p1', type: 'DEAD', access: 'WRITE' },
+      { seatId: 'p1', type: 'TOWN_HALL', access: 'READ_ONLY' },
+      { seatId: 'p17', type: 'TOWN_HALL', access: 'WRITE' },
       { seatId: 'p17', type: 'WEREWOLF', access: 'WRITE' },
     ]);
     const timelineEntry = published.timeline.find((entry) => entry.eventType === 'PHASE_PUBLISHED');
@@ -300,6 +302,8 @@ describe('unchanged refreshes', () => {
     await seed({ mode: 'REVIEW' });
     shared.currentPlayer = { seatId: 'p5', gameId: 'game' };
     const load = (etag?: string | null) => playerGet(new Request('http://localhost:3000/api/player', { headers: etag ? { 'if-none-match': etag } : {} }));
+    // The seed has no rooms: the first visit creates them while it reads, so it is the second that lists them.
+    await load();
     const first = await load();
     const etag = first.headers.get('etag');
     expect(first.status).toBe(200);

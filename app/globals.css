@@ -411,6 +411,17 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .chat-compose { display: grid; gap: 7px; }
 .chat-compose textarea { font-size: 9px; padding: 8px; }
 .chat-compose button { justify-self: end; padding: 8px 12px; }
+/* A card a navigation link just jumped to glows for a moment (SPOTLIGHT_MS in player-dashboard.tsx). */
+[data-spotlight] { animation: card-spotlight 1.8s ease-out; outline: 3px solid transparent; outline-offset: 4px; }
+/* Clear of the sticky top bar when a navigation link scrolls to the card. */
+.right-rail > [id] { scroll-margin-top: 92px; }
+@keyframes card-spotlight {
+  0%, 45% { outline-color: var(--coral); }
+  100% { outline-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-spotlight] { animation: none; outline-color: var(--coral); }
+}
 .setup-loading.compact { margin: 35px auto; }
 .health-grid { display: grid; gap: 8px; grid-template-columns: repeat(4, 1fr); margin-bottom: 18px; }
 .health-grid > div { background: #f3f3ed; border: 1px solid #e2e3dc; border-radius: 10px; padding: 11px; }

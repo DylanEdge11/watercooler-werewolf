@@ -59,11 +59,11 @@ describe('room sync', () => {
     expect(await memberships()).toEqual(expected.sort());
   });
 
-  test('an elimination moves a Werewolf to read-only and into the Afterlife, and a repeat sync changes nothing', async () => {
+  test('an elimination moves a Werewolf to read-only in the pack room and Town Hall and into the Afterlife, and a repeat sync changes nothing', async () => {
     await ensureGameRooms('game');
     await client.execute("UPDATE seats SET alive = 0 WHERE id = 'WEREWOLF-1'");
     await ensureGameRooms('game');
-    expect((await memberships()).filter((line) => line.startsWith('WEREWOLF-1 '))).toEqual(['WEREWOLF-1 DEAD WRITE', 'WEREWOLF-1 WEREWOLF READ_ONLY revoked']);
+    expect((await memberships()).filter((line) => line.startsWith('WEREWOLF-1 '))).toEqual(['WEREWOLF-1 DEAD WRITE', 'WEREWOLF-1 TOWN_HALL READ_ONLY revoked', 'WEREWOLF-1 WEREWOLF READ_ONLY revoked']);
     const snapshot = async () => (await client.execute('SELECT room_id, seat_id, access, granted_at, revoked_at FROM chat_room_members ORDER BY room_id, seat_id')).rows;
     const before = await snapshot();
     await ensureGameRooms('game');
@@ -72,7 +72,7 @@ describe('room sync', () => {
 
   test('the read-side safety net creates missing rooms once and otherwise only reads', async () => {
     await ensureGameRoomsExist('game');
-    expect((await client.execute("SELECT COUNT(*) AS count FROM chat_rooms WHERE game_id = 'game'")).rows[0].count).toBe(3);
+    expect((await client.execute("SELECT COUNT(*) AS count FROM chat_rooms WHERE game_id = 'game'")).rows[0].count).toBe(4);
     const batch = vi.spyOn(shared.db!, 'batch');
     await ensureGameRoomsExist('game');
     expect(batch).not.toHaveBeenCalled();

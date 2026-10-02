@@ -167,16 +167,19 @@ describe('real libSQL provider integration', () => {
       WHERE m.seat_id = 'p17' ORDER BY r.type`);
     expect(membership.rows).toEqual([
       { type: 'DEAD', access: 'WRITE', grantedAt: expect.any(String), revokedAt: null },
+      { type: 'TOWN_HALL', access: 'READ_ONLY', grantedAt: '2026-01-01', revokedAt: expect.any(String) },
       { type: 'WEREWOLF', access: 'READ_ONLY', grantedAt: '2026-01-01', revokedAt: expect.any(String) },
     ]);
     const secondEliminated = await client.execute(`SELECT r.type, m.access FROM chat_room_members m
       JOIN chat_rooms r ON r.id = m.room_id WHERE m.seat_id = 'p18' ORDER BY r.type`);
     expect(secondEliminated.rows).toEqual([
       { type: 'DEAD', access: 'WRITE' },
+      { type: 'TOWN_HALL', access: 'READ_ONLY' },
       { type: 'WEREWOLF', access: 'READ_ONLY' },
     ]);
-    const living = await client.execute("SELECT access, revoked_at AS revokedAt FROM chat_room_members WHERE seat_id = 'p19'");
-    expect(living.rows).toEqual([{ access: 'WRITE', revokedAt: null }]);
+    const living = await client.execute(`SELECT r.type, m.access, m.revoked_at AS revokedAt FROM chat_room_members m
+      JOIN chat_rooms r ON r.id = m.room_id WHERE m.seat_id = 'p19' ORDER BY r.type`);
+    expect(living.rows).toEqual([{ type: 'TOWN_HALL', access: 'WRITE', revokedAt: null }, { type: 'WEREWOLF', access: 'WRITE', revokedAt: null }]);
   });
 
   test('accepts only valid room statuses and reports when no room was updated', async () => {
@@ -215,7 +218,8 @@ describe('real libSQL provider integration', () => {
     await client.execute(`INSERT INTO chat_rooms (id, game_id, type, status, created_at) VALUES
       ('wolf-room', 'game', 'WEREWOLF', 'OPEN', '2026-01-01'),
       ('mason-room', 'game', 'MASON', 'OPEN', '2026-01-01'),
-      ('dead-room', 'game', 'DEAD', 'OPEN', '2026-01-01')`);
+      ('dead-room', 'game', 'DEAD', 'OPEN', '2026-01-01'),
+      ('hall-room', 'game', 'TOWN_HALL', 'OPEN', '2026-01-01')`);
     await client.execute(`INSERT INTO chat_room_members (room_id, seat_id, access, granted_at) VALUES
       ('wolf-room', 'p0', 'WRITE', '2026-01-01'),
       ('wolf-room', 'p1', 'READ_ONLY', '2026-01-01'),
@@ -232,6 +236,7 @@ describe('real libSQL provider integration', () => {
     expect(data.rooms.map(({ type, memberCount, messageCount }) => ({ type, memberCount, messageCount }))).toEqual([
       { type: 'DEAD', memberCount: 0, messageCount: 0 },
       { type: 'MASON', memberCount: 1, messageCount: 0 },
+      { type: 'TOWN_HALL', memberCount: 0, messageCount: 0 },
       { type: 'WEREWOLF', memberCount: 2, messageCount: 3 },
     ]);
   });

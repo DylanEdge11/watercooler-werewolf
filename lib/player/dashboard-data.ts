@@ -533,15 +533,17 @@ export async function loadSpectatorDashboard(spectatorId: string, options: { aut
   if (!spectator) return null;
   const gameId = spectator.gameId;
 
-  const [phase, roster, timelineRows, newestBallotRows, ballotCountRows, afterlife] = await Promise.all([
+  const [phase, roster, timelineRows, newestBallotRows, ballotCountRows, publicRooms] = await Promise.all([
     loadCurrentPhase(gameId),
     loadRoster(gameId),
     ...publicTimelineReads(gameId),
     db
-      .prepare("SELECT id, status FROM chat_rooms WHERE game_id = ? AND type = 'DEAD' AND status != 'PURGED' LIMIT 1")
+      .prepare("SELECT id, type, status FROM chat_rooms WHERE game_id = ? AND type IN ('DEAD', 'TOWN_HALL') AND status != 'PURGED' ORDER BY type")
       .bind(gameId)
-      .first<{ id: string; status: string }>(),
+      .all<{ id: string; type: 'DEAD' | 'TOWN_HALL'; status: string }>(),
   ]);
+  const afterlife = publicRooms.results.find((room) => room.type === 'DEAD');
+  const townHall = publicRooms.results.find((room) => room.type === 'TOWN_HALL');
   const { livingPlayers, eliminatedPlayers, werewolvesRemaining } = publicRoster(roster);
   // How many living players have voted on an open Day or Final ballot, as every voter sees. Night counts stay private.
   const openBallot = phase?.status === 'OPEN' && phase.kind !== 'NIGHT';
@@ -600,6 +602,10 @@ export async function loadSpectatorDashboard(spectatorId: string, options: { aut
     notifications: [] as Array<{ id: string; type: string; title: string; body: string; createdAt: string }>,
     notificationsHasMore: false,
     notificationsNextCursor: null,
-    rooms: afterlife ? [{ id: afterlife.id, type: 'DEAD' as const, status: afterlife.status, access: canPost ? 'WRITE' : 'READ_ONLY' }] : [],
+    // Spectators post in the Afterlife and only read the Town Hall.
+    rooms: [
+      ...(afterlife ? [{ id: afterlife.id, type: 'DEAD' as const, status: afterlife.status, access: canPost ? 'WRITE' : 'READ_ONLY' }] : []),
+      ...(townHall ? [{ id: townHall.id, type: 'TOWN_HALL' as const, status: townHall.status, access: 'READ_ONLY' }] : []),
+    ],
   };
 }

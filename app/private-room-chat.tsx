@@ -5,13 +5,14 @@ import { LatestRoomRequest } from '../lib/chat/latest-room-request';
 import { IDLE_AFTER_MS, pollWhileVisible } from '../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
 import { RELAXED_POLL_MS, URGENT_POLL_MS } from '../lib/http/poll-interval';
+import { ROOM_NAMES } from '../lib/chat/room-names';
 
 /** A room with a message in the last two minutes counts as in use. */
 const CHAT_ACTIVE_MS = 2 * 60_000;
 
 interface Room {
   id: string;
-  type: 'WEREWOLF' | 'MASON' | 'DEAD';
+  type: 'WEREWOLF' | 'MASON' | 'DEAD' | 'TOWN_HALL';
   status: string;
   access: string;
 }
@@ -27,7 +28,6 @@ interface Message {
   createdAt: string;
 }
 
-const roomNames = { WEREWOLF: 'Pack room', MASON: 'Mason room', DEAD: 'Afterlife' } as const;
 
 function previewMessages(roomType: Room['type']): Message[] {
   const messagesByRoom: Record<Room['type'], Array<{ authorName: string; body: string }>> = {
@@ -43,6 +43,10 @@ function previewMessages(roomType: Room['type']): Message[] {
       { authorName: 'Riley Chen', body: 'Spectator chat is open. Good luck, everyone.' },
       { authorName: 'Jordan Blake', body: 'The last reveal changed the whole story.' },
     ],
+    TOWN_HALL: [
+      { authorName: 'Avery Stone', body: 'Who else thought that last vote was strange?' },
+      { authorName: 'Quinn Harper', body: 'I am watching who goes quiet today.' },
+    ],
   };
   const now = Date.now();
   return messagesByRoom[roomType].map((message, index) => ({
@@ -55,7 +59,18 @@ function previewMessages(roomType: Room['type']): Message[] {
   }));
 }
 
-export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms: Room[]; previewMode?: boolean }) {
+/**
+ * One chat card: the Town Hall on its own, or the player's private rooms with
+ * a tab for each. Messages show newest first.
+ */
+export default function RoomChat({ rooms, previewMode = false, sectionId, spotlight = false }: {
+  rooms: Room[];
+  previewMode?: boolean;
+  /** The card's id, for the navigation links that jump to it. */
+  sectionId: string;
+  /** Briefly highlights the card after a navigation link jumped to it. */
+  spotlight?: boolean;
+}) {
   const [roomId, setRoomId] = useState(rooms[0]?.id ?? '');
   const [loadedMessagesByRoom, setLoadedMessagesByRoom] = useState<Record<string, Message[]>>({});
   const [previewMessagesByRoom, setPreviewMessagesByRoom] = useState<Record<string, Message[]>>(
@@ -75,9 +90,11 @@ export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms:
     roomStatus.current = Object.fromEntries(rooms.map((candidate) => [candidate.id, candidate.status]));
   }, [rooms]);
   const room = rooms.find((candidate) => candidate.id === roomId) ?? rooms[0];
-  const messages = previewMode
+  // The server and preview keep messages oldest first; the card shows the newest at the top.
+  const messages = [...(previewMode
     ? previewMessagesByRoom[room?.id ?? ''] ?? []
-    : loadedMessagesByRoom[room?.id ?? ''] ?? [];
+    : loadedMessagesByRoom[room?.id ?? ''] ?? [])].reverse();
+  const townHall = room?.type === 'TOWN_HALL';
 
   const load = useCallback(async () => {
     if (!roomId || previewMode) return;
@@ -156,13 +173,14 @@ export default function PrivateRoomChat({ rooms, previewMode = false }: { rooms:
   }
 
   return (
-    <section className="rail-card private-chat" id="private-room">
-      <div className="rail-heading"><h2>{roomNames[room.type]}</h2><span>{messages.length}</span></div>
-      {rooms.length > 1 && <div className="room-tabs">{rooms.map((candidate) => <button className={candidate.id === room.id ? 'active' : ''} key={candidate.id} type="button" aria-pressed={candidate.id === room.id} onClick={() => { messageRequest.current?.select(candidate.id); setRoomId(candidate.id); }}>{roomNames[candidate.type]}</button>)}</div>}
+    <section className={`rail-card private-chat${townHall ? ' town-hall-chat' : ''}`} id={sectionId} data-spotlight={spotlight || undefined}>
+      <div className="rail-heading"><h2>{ROOM_NAMES[room.type]}</h2><span>{messages.length}</span></div>
+      {townHall && <p className="field-help">Everyone in the game can read the Town Hall. Living players can post.</p>}
+      {rooms.length > 1 && <div className="room-tabs">{rooms.map((candidate) => <button className={candidate.id === room.id ? 'active' : ''} key={candidate.id} type="button" aria-pressed={candidate.id === room.id} onClick={() => { messageRequest.current?.select(candidate.id); setRoomId(candidate.id); }}>{ROOM_NAMES[candidate.type]}</button>)}</div>}
       <div className="chat-scroll">
-        {messages.length ? messages.map((message) => <article key={message.id} className={message.byModerator ? 'chat-line moderator' : 'chat-line'}><div><strong>{message.authorName}</strong><small suppressHydrationWarning>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small></div><p>{message.body ?? (message.purgedAt ? 'Message expired.' : 'Message removed by a moderator.')}</p></article>) : <p className="empty-note">No messages yet. This room is visible only to its members.</p>}
+        {messages.length ? messages.map((message) => <article key={message.id} className={message.byModerator ? 'chat-line moderator' : 'chat-line'}><div><strong>{message.authorName}</strong><small suppressHydrationWarning>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small></div><p>{message.body ?? (message.purgedAt ? 'Message expired.' : 'Message removed by a moderator.')}</p></article>) : <p className="empty-note">{townHall ? 'No messages yet. Start the village conversation.' : 'No messages yet. This room is visible only to its members.'}</p>}
       </div>
-      {room.status === 'OPEN' && room.access === 'WRITE' ? <form className="chat-compose" onSubmit={send}><label><span className="sr-only">Message</span><textarea name="body" rows={2} maxLength={1000} placeholder="Write a private message…" required /></label><button className="primary-button" type="submit">{previewMode ? 'Add preview message' : 'Send'}</button></form> : <p className="field-help">This room is read-only.</p>}
+      {room.status === 'OPEN' && room.access === 'WRITE' ? <form className="chat-compose" onSubmit={send}><label><span className="sr-only">Message</span><textarea name="body" rows={2} maxLength={1000} placeholder={townHall ? 'Write to the whole village…' : 'Write a private message…'} required /></label><button className="primary-button" type="submit">{previewMode ? 'Add preview message' : 'Send'}</button></form> : <p className="field-help">{townHall && room.status === 'OPEN' ? 'Only living players can post in the Town Hall.' : 'This room is read-only.'}</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
     </section>
   );

@@ -1,10 +1,10 @@
 'use client';
 
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import PrivateRoomChat from './private-room-chat';
+import RoomChat from './private-room-chat';
 import FullTimeline from './full-timeline';
 import { useBallotVotes, VoteLedger } from './ballot-votes';
 import RoleMedallion from './role-medallion';
@@ -13,7 +13,7 @@ import BrandMark from './brand-mark';
 import { IDLE_AFTER_MS, pollWhileVisible } from '../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
 import { pollInterval } from '../lib/http/poll-interval';
-import { ROLE_VISIBILITY_COOKIE, roleVisibilityCookieValue } from '../lib/player/role-visibility';
+import { CONCEALED_ACTION_HINT, ROLE_VISIBILITY_COOKIE, concealedPermission, roleVisibilityCookieValue } from '../lib/player/role-visibility';
 import { currentCycle, describeTimelineEvent, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
 
 import type { ActionKind, RoleKey } from '../lib/game/types';
@@ -64,7 +64,7 @@ export interface DashboardData {
   notificationsNextCursor?: { createdAt: string; id: string } | null;
   /** The player's own email switch. `available` is false when the site cannot send email. */
   emailNotifications?: { available: boolean; enabled: boolean };
-  rooms: Array<{ id: string; type: 'WEREWOLF' | 'MASON' | 'DEAD'; status: string; access: string }>;
+  rooms: Array<{ id: string; type: 'WEREWOLF' | 'MASON' | 'DEAD' | 'TOWN_HALL'; status: string; access: string }>;
 }
 
 interface PlayerDashboardProps {
@@ -131,6 +131,8 @@ function deathAlertKey(gameId: string, playerId: string): string {
 
 /** Nothing in these games changes on its own, so the page stops refreshing on a timer. */
 const FINISHED_GAME_STATUSES = new Set(['COMPLETED', 'STOPPED', 'CANCELLED']);
+/** How long a card stays highlighted after a navigation link jumps to it. */
+const SPOTLIGHT_MS = 1_800;
 
 const subscribeToNothing = () => () => {};
 
@@ -171,6 +173,9 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   const concealed = roleHidden || !roleVisibilityKnown;
   const [view, setView] = useState<'today' | 'timeline'>('today');
   const [roleJustRevealed, setRoleJustRevealed] = useState(false);
+  // The card a navigation link just jumped to, briefly highlighted so the player can see where it is.
+  const [spotlight, setSpotlight] = useState<string | null>(null);
+  const spotlightTimer = useRef<number | undefined>(undefined);
   const [deathAlert, setDeathAlert] = useState<DashboardData['timeline'][number] | null>(null);
   const [selectedTimeline, setSelectedTimeline] = useState<DashboardData['timeline'][number] | null>(null);
   const { votesFor, requestVotes } = useBallotVotes(previewMode);
@@ -407,6 +412,19 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     document.getElementById('top')?.scrollIntoView({ block: 'start' });
   }
 
+  /** Scrolls to a card in the side column and highlights it for a moment. */
+  function jumpTo(event: MouseEvent<HTMLAnchorElement>, sectionId: string) {
+    const target = document.getElementById(sectionId);
+    if (!target) return;
+    event.preventDefault();
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.clearTimeout(spotlightTimer.current);
+    // Cleared first so a second tap on the same link plays the highlight again.
+    setSpotlight(null);
+    window.requestAnimationFrame(() => setSpotlight(sectionId));
+    spotlightTimer.current = window.setTimeout(() => setSpotlight(null), SPOTLIGHT_MS);
+  }
+
   function toggleRoleVisibility() {
     if (!data?.player.id) return;
     const next = !concealed;
@@ -484,6 +502,16 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   if (unauthenticated) return <PublicWelcome />;
   if (!data) return <main className="setup-shell centered front-of-house"><section className="auth-card"><h1>The village is out of reach.</h1><p>{error}</p><a className="primary-link" href="/player-login">Try signing in</a></section></main>;
 
+  const spectating = data.viewer === 'SPECTATOR';
+  // "Hide role" makes the page look like any villager's: no private rooms, teammates, private results, or role action.
+  const privacy = concealed && !spectating;
+  const { permission, masked: actionMasked } = privacy
+    ? concealedPermission(data.permission, data.phase, data.player.alive)
+    : { permission: data.permission, masked: false };
+  const townHall = data.rooms.filter((room) => room.type === 'TOWN_HALL');
+  const privateRooms = privacy ? [] : data.rooms.filter((room) => room.type !== 'TOWN_HALL');
+  const teammates = privacy ? [] : data.player.teammates;
+  const notifications = privacy ? data.notifications.filter((notification) => notification.type === 'ANNOUNCEMENT') : data.notifications;
   const selectedNames = selected.map((id) => data.candidates.find((candidate) => candidate.id === id)?.displayName).filter(Boolean);
   const role = data.player.roleDefinition;
   const phaseTitle = data.game.status === 'STOPPED'
@@ -501,7 +529,6 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       : 'The village is between phases.';
 
   const stageLight = data.phase?.kind === 'NIGHT' ? 'night' : 'day';
-  const spectating = data.viewer === 'SPECTATOR';
   const roomLabel = spectating ? 'Afterlife' : 'Private room';
 
   return (
@@ -527,18 +554,20 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       <div className="workspace" id="top">
         <nav className="mobile-nav" aria-label="Game sections">
           <button type="button" aria-pressed={view === 'today'} onClick={() => showView('today')}>Today</button>
-          {data.player.teammates.length > 0 && <a href="#team">Teammates</a>}
-          {data.rooms.length > 0 && <a href="#private-room">{roomLabel}</a>}
+          {teammates.length > 0 && <a href="#team" onClick={(event) => jumpTo(event, 'team')}>Teammates</a>}
+          {townHall.length > 0 && <a href="#town-hall" onClick={(event) => jumpTo(event, 'town-hall')}>Town Hall</a>}
+          {privateRooms.length > 0 && <a href="#private-room" onClick={(event) => jumpTo(event, 'private-room')}>{roomLabel}</a>}
           <button type="button" aria-pressed={view === 'timeline'} onClick={() => showView('timeline')}>Timeline</button>
-          {data.notifications.length > 0 && <a href="#notifications">Updates</a>}
-          {!spectating && <a href="#feedback">Feedback</a>}
+          {notifications.length > 0 && <a href="#notifications" onClick={(event) => jumpTo(event, 'notifications')}>Updates</a>}
+          {!spectating && <a href="#feedback" onClick={(event) => jumpTo(event, 'feedback')}>Feedback</a>}
         </nav>
         <aside className="sidebar" aria-label="Game navigation">
           <p className="eyebrow">Game room</p>
           <nav>
             <button className={`nav-item${view === 'today' ? ' active' : ''}`} type="button" aria-current={view === 'today' ? 'page' : undefined} onClick={() => showView('today')}><span aria-hidden="true">◐</span>Today</button>
             <button className={`nav-item${view === 'timeline' ? ' active' : ''}`} type="button" aria-current={view === 'timeline' ? 'page' : undefined} onClick={() => showView('timeline')}><span aria-hidden="true">≋</span>Timeline</button>
-            {data.rooms.length > 0 && <a className="nav-item" href="#private-room"><span aria-hidden="true">◆</span>{roomLabel}</a>}
+            {townHall.length > 0 && <a className="nav-item" href="#town-hall" onClick={(event) => jumpTo(event, 'town-hall')}><span aria-hidden="true">◇</span>Town Hall</a>}
+            {privateRooms.length > 0 && <a className="nav-item" href="#private-room" onClick={(event) => jumpTo(event, 'private-room')}><span aria-hidden="true">◆</span>{roomLabel}</a>}
           </nav>
           <div className="sidebar-rule" />
           <p className="eyebrow">{spectating ? 'The game' : 'Your game'}</p>
@@ -561,7 +590,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
 
         {view === 'timeline' ? <FullTimeline events={data.timeline} hasMore={Boolean(data.timelineHasMore)} onBack={() => showView('today')} votesFor={votesFor} onOpenVotes={(event, retry) => void requestVotes(event, retry)} /> : <section className="main-column" id="today">
           <div className="welcome-row">
-            <div><p className="eyebrow accent">{data.phase ? phaseName(data.phase.kind, data.phase.sequence) : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{data.permission.label}</p></div>
+            <div><p className="eyebrow accent">{data.phase ? phaseName(data.phase.kind, data.phase.sequence) : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{permission.label}</p></div>
             {data.phase?.autoPublishAt && !['COMPLETED', 'STOPPED'].includes(data.game.status)
               ? <div className="deadline-card"><span>Results</span><strong suppressHydrationWarning>by {clockTime(data.phase.autoPublishAt, data.game.timezone)}</strong><small suppressHydrationWarning>Results publish by {clockTime(data.phase.autoPublishAt, data.game.timezone)} unless the moderator reviews them first.</small></div>
               : <div className="deadline-card"><span>Response window</span><strong suppressHydrationWarning>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : <DeadlineCountdown deadline={data.phase?.deadline ?? null} />}</strong><small>{data.game.automationPaused && !['COMPLETED', 'STOPPED'].includes(data.game.status) ? 'The schedule is paused' : data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>}
@@ -587,7 +616,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
             <div className="role-faction"><span>Faction</span><strong>{concealed ? 'Hidden' : role?.faction ?? 'Hidden'}</strong><small>{data.player.alive ? 'You are alive' : 'Eliminated'}</small></div>
           </section>}
 
-          {data.permission.actionKind && data.phase ? (
+          {permission.actionKind && data.phase ? (
             <section className="ballot-card">
               <div className="card-heading"><h2>{data.permission.label}</h2><span className="submission-count">{data.participation.submitted}/{data.participation.eligible} submitted</span></div>
               {data.permission.actionKind === 'AFTERLIFE_VOTE' && <p className="field-help afterlife-vote-note">Voting is optional. The Afterlife’s votes count only if the living village ties; then the tied player with the most Afterlife votes is eliminated. If the Afterlife ties too, a random draw decides.</p>}
@@ -603,16 +632,17 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
               <div className="ballot-footer"><p><span>●</span> {previewMode ? 'This response is staged locally for the preview.' : 'Your latest revision counts when the phase locks.'}</p><button className="primary-button" type="button" onClick={submitAction} disabled={submitting || selected.length === 0 || (data.permission.actionKind === 'CUPID_PAIR' && selected.length !== 2)}>{submitting ? 'Saving…' : previewMode ? 'Stage response' : 'Save response'}</button></div>
             </section>
           ) : (
-            <section className="ballot-card waiting-card"><span className="waiting-icon" aria-hidden="true">◐</span><div><h2>{data.permission.label}</h2><p>{spectating
+            <section className="ballot-card waiting-card"><span className="waiting-icon" aria-hidden="true">◐</span><div><h2>{permission.label}</h2><p>{actionMasked ? CONCEALED_ACTION_HINT : spectating
                 ? data.game.status === 'COMPLETED' ? 'This campaign is complete. Review the official timeline.' : 'Published outcomes, ballots, and announcements appear here as the moderator publishes them.'
                 : data.game.status === 'COMPLETED' ? 'This campaign is complete. Review the official timeline and your private result history below.' : data.player.alive ? 'You can step away. This page will show the next official action when it opens.' : 'Published outcomes and game announcements will continue to appear here.'}</p>{spectating && data.participation.eligible > 0 && <p className="field-help">{data.participation.submitted} of {data.participation.eligible} living players have voted so far.</p>}</div><button className="secondary-button" type="button" onClick={() => previewMode ? setMessage('This staged sample does not refresh from a live game.') : void refresh()}>{previewMode ? 'Preview mode' : 'Check for updates'}</button></section>
           )}
         </section>}
 
         <aside className="right-rail">
-          {data.notifications.length > 0 && <section className="rail-card announcement" id="notifications"><div className="rail-heading"><div><p className="eyebrow">Your updates</p><h2>Private result history</h2></div><span>{data.notifications.length}</span></div><div className="timeline-mini">{data.notifications.map((notification) => <article key={notification.id}><strong>{notification.type === 'ANNOUNCEMENT' ? 'Announcement' : notification.type === 'LOVER_BOND' ? 'Cupid’s pairing' : 'Private investigation'}</strong><h3>{notification.title}</h3><p>{notification.body}</p><small suppressHydrationWarning>{new Date(notification.createdAt).toLocaleString()}</small></article>)}</div>{data.notificationsHasMore && <button className="secondary-button" type="button" onClick={() => void loadOlderNotifications()} disabled={loadingOlderNotifications}>{loadingOlderNotifications ? 'Loading older updates…' : 'Load older updates'}</button>}</section>}
-          {data.player.teammates.length > 0 && <section className="rail-card" id="team"><div className="rail-heading"><h2>{data.player.role === 'WEREWOLF' ? 'Your pack' : 'Fellow Masons'}</h2><span>{data.player.teammates.length}</span></div><div className="player-stack">{data.player.teammates.map((teammate) => <div className="player-row" key={teammate.id}><span className="candidate-avatar small">{initials(teammate.displayName)}</span><span><strong>{teammate.displayName}</strong><small>{teammate.alive ? 'Living' : 'Eliminated'}</small></span><span className={`ready-dot ${teammate.alive ? 'ready' : ''}`} /></div>)}</div></section>}
-          {data.rooms.length > 0 && <PrivateRoomChat rooms={data.rooms} previewMode={previewMode} />}
+          {townHall.length > 0 && <RoomChat rooms={townHall} previewMode={previewMode} sectionId="town-hall" spotlight={spotlight === 'town-hall'} />}
+          {notifications.length > 0 && <section className="rail-card announcement" id="notifications" data-spotlight={spotlight === 'notifications' || undefined}><div className="rail-heading"><div><p className="eyebrow">Your updates</p><h2>Private result history</h2></div><span>{notifications.length}</span></div><div className="timeline-mini">{notifications.map((notification) => <article key={notification.id}><strong>{notification.type === 'ANNOUNCEMENT' ? 'Announcement' : notification.type === 'LOVER_BOND' ? 'Cupid’s pairing' : 'Private investigation'}</strong><h3>{notification.title}</h3><p>{notification.body}</p><small suppressHydrationWarning>{new Date(notification.createdAt).toLocaleString()}</small></article>)}</div>{data.notificationsHasMore && <button className="secondary-button" type="button" onClick={() => void loadOlderNotifications()} disabled={loadingOlderNotifications}>{loadingOlderNotifications ? 'Loading older updates…' : 'Load older updates'}</button>}</section>}
+          {teammates.length > 0 && <section className="rail-card" id="team" data-spotlight={spotlight === 'team' || undefined}><div className="rail-heading"><h2>{data.player.role === 'WEREWOLF' ? 'Your pack' : 'Fellow Masons'}</h2><span>{teammates.length}</span></div><div className="player-stack">{teammates.map((teammate) => <div className="player-row" key={teammate.id}><span className="candidate-avatar small">{initials(teammate.displayName)}</span><span><strong>{teammate.displayName}</strong><small>{teammate.alive ? 'Living' : 'Eliminated'}</small></span><span className={`ready-dot ${teammate.alive ? 'ready' : ''}`} /></div>)}</div></section>}
+          {privateRooms.length > 0 && <RoomChat rooms={privateRooms} previewMode={previewMode} sectionId="private-room" spotlight={spotlight === 'private-room'} />}
           <section className="rail-card" id="timeline">
             <div className="rail-heading"><h2>Official timeline</h2><span>{data.timeline.length}</span></div>
             {data.timeline.length > 0 && view !== 'timeline' && <button className="text-button timeline-see-all" type="button" onClick={() => showView('timeline')}>See the full timeline</button>}
@@ -630,7 +660,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
             })}</div> : <p>No published outcomes yet.</p>}
           </section>
           {data.emailNotifications?.available && !previewMode && <section className="rail-card email-card" id="email"><div className="rail-heading"><h2>Email</h2><span aria-hidden="true">@</span></div><p>{data.emailNotifications.enabled ? 'You will get an email when a phase opens and you have something to do, half an hour before it closes if you have not acted, and when a result is published.' : 'Get an email when a phase opens and you have something to do, a nudge half an hour before it closes, and a short story when each result is published. Off unless you turn it on.'}</p>{emailError && <p className="form-error" role="alert">{emailError}</p>}<button className="secondary-button" type="button" aria-pressed={data.emailNotifications.enabled} disabled={savingEmail} onClick={() => void changeEmailChoice(!data.emailNotifications?.enabled)}>{savingEmail ? 'Saving…' : data.emailNotifications.enabled ? 'Turn email off' : 'Turn email on'}</button></section>}
-          {!spectating && <section className="rail-card pilot-feedback-card" id="feedback"><div className="rail-heading"><h2>Feedback</h2><span aria-hidden="true">?</span></div><p>Share a quick signal with the moderator team. This is private to the moderators.</p><form className="chat-compose" onSubmit={submitFeedback}><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve?" /></label>{feedbackError && <p className="form-error" role="alert">{feedbackError}</p>}{feedbackMessage && <p className="action-success" role="status">{feedbackMessage}</p>}<button className="secondary-button" type="submit" disabled={sendingFeedback}>{sendingFeedback ? 'Sending…' : 'Send feedback'}</button></form></section>}
+          {!spectating && <section className="rail-card pilot-feedback-card" id="feedback" data-spotlight={spotlight === 'feedback' || undefined}><div className="rail-heading"><h2>Feedback</h2><span aria-hidden="true">?</span></div><p>Share a quick signal with the moderator team. This is private to the moderators.</p><form className="chat-compose" onSubmit={submitFeedback}><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve?" /></label>{feedbackError && <p className="form-error" role="alert">{feedbackError}</p>}{feedbackMessage && <p className="action-success" role="status">{feedbackMessage}</p>}<button className="secondary-button" type="submit" disabled={sendingFeedback}>{sendingFeedback ? 'Sending…' : 'Send feedback'}</button></form></section>}
           <section className="rail-card moon-card"><div className="moon-art" aria-hidden="true">☾</div><p className="eyebrow">Privacy reminder</p><h2>Talk freely. Keep screenshots private.</h2><p>Official actions only count when submitted here.</p></section>
         </aside>
       </div>

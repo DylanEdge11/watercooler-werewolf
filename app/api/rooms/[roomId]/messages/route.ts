@@ -25,7 +25,10 @@ type RoomViewer =
   | { kind: 'PLAYER'; identity: PlayerIdentity; room: RoomAccess }
   | { kind: 'SPECTATOR'; identity: SpectatorIdentity; room: RoomAccess };
 
-/** A player reaches the rooms they are a member of; a spectator reaches only their game's Afterlife. */
+/**
+ * A player reaches the rooms they are a member of. A spectator reaches their
+ * game's Afterlife, and reads (never posts in) its Town Hall.
+ */
 async function requireRoomAccess(roomId: string): Promise<RoomViewer> {
   const identity = await getCurrentPlayer();
   if (identity) {
@@ -44,8 +47,8 @@ async function requireRoomAccess(roomId: string): Promise<RoomViewer> {
   if (!spectator) throw new HttpError(401, 'Player authentication required.');
   const room = await getDb()
     .prepare(
-      `SELECT id, game_id AS gameId, type, status, 'WRITE' AS access
-       FROM chat_rooms WHERE id = ? AND game_id = ? AND type = 'DEAD' LIMIT 1`,
+      `SELECT id, game_id AS gameId, type, status, CASE WHEN type = 'DEAD' THEN 'WRITE' ELSE 'READ_ONLY' END AS access
+       FROM chat_rooms WHERE id = ? AND game_id = ? AND type IN ('DEAD', 'TOWN_HALL') LIMIT 1`,
     )
     .bind(roomId, spectator.gameId)
     .first<RoomAccess>();
@@ -130,7 +133,8 @@ export async function POST(request: Request, context: RouteContext) {
              AND g.status IN ('ACTIVE', 'FINAL_SHOWDOWN')
              AND s.status = 'CLAIMED'
              AND (
-               (cr.type = 'DEAD' AND s.alive = 0)
+               (cr.type = 'TOWN_HALL' AND s.alive = 1)
+               OR (cr.type = 'DEAD' AND s.alive = 0)
                OR (cr.type = 'WEREWOLF' AND s.alive = 1 AND ra.role_key = 'WEREWOLF')
                OR (cr.type = 'MASON' AND s.alive = 1 AND ra.role_key = 'MASON')
              )`,

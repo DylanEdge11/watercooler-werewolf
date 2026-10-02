@@ -109,7 +109,11 @@ export function createPreviewData(roleKey: RoleKey, scenario: PreviewScenarioId)
   const livingPlayers = isEliminated ? candidates : [player, ...candidates];
   const roomStatus = isClosed ? 'CLOSED' : 'OPEN';
   const roomAccess = isClosed ? 'READ' : 'WRITE';
-  const rooms: DashboardData['rooms'] = isUnreleased
+  // Every released player is in the Town Hall; an eliminated player only reads it.
+  const townHall: DashboardData['rooms'] = isUnreleased
+    ? []
+    : [{ id: 'preview-room-town-hall', type: 'TOWN_HALL', status: roomStatus, access: isEliminated ? 'READ_ONLY' : roomAccess }];
+  const privateRooms: DashboardData['rooms'] = isUnreleased
     ? []
     : scenario === 'eliminated'
       ? [{ id: 'preview-room-dead', type: 'DEAD', status: 'OPEN', access: 'READ' }]
@@ -118,6 +122,7 @@ export function createPreviewData(roleKey: RoleKey, scenario: PreviewScenarioId)
         : !isEliminated && roleKey === 'MASON'
           ? [{ id: 'preview-room-mason', type: 'MASON', status: roomStatus, access: roomAccess }]
           : [];
+  const rooms = [...townHall, ...privateRooms];
 
   const currentAction = scenario === 'day-submitted'
     ? { targetIds: [candidates[0].id], version: 2, submittedAt: new Date(now.valueOf() - 12 * 60_000).toISOString() }

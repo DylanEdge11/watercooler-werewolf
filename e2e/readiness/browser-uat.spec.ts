@@ -130,7 +130,7 @@ test('an eight-player game runs from setup to a Village win with private informa
     // The moderator opens the Pack room's history and posts in it; the living Werewolf sees it as "Moderator".
     const livingWolf = game.chooseLiving((player) => player.account.role === 'WEREWOLF');
     await moderatorPage.reload();
-    await moderatorPage.locator('.room-health-list > div').filter({ hasText: 'WEREWOLF' }).getByRole('button', { name: 'Open room', exact: true }).click();
+    await moderatorPage.locator('.room-health-list > div').filter({ hasText: 'Pack room' }).getByRole('button', { name: 'Open room', exact: true }).click();
     const roomHistory = moderatorPage.locator('.room-history');
     await expect(roomHistory.getByRole('button', { name: 'Pack room', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await roomHistory.getByLabel('Message as Moderator').fill('The moderator can read this room.');
@@ -142,6 +142,36 @@ test('an eight-player game runs from setup to a Village win with private informa
     await expect(wolfRoom).toContainText('The moderator can read this room.');
     await expect(livingWolf.page.locator('#private-room')).not.toContainText(MODERATOR_EMAIL);
     await roomHistory.getByRole('button', { name: 'Close', exact: true }).click();
+
+    // The Town Hall: living players post for everyone, newest first; an eliminated player reads it but can't post.
+    const speaker = game.chooseLiving((player) => player.account.role === 'VILLAGER');
+    const speakerHall = speaker.page.locator('#town-hall');
+    for (const body of ['First Town Hall note.', 'Second Town Hall note.']) {
+      await speakerHall.getByLabel('Message', { exact: true }).fill(body);
+      await speakerHall.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect(speakerHall.locator('.chat-line').first()).toContainText(body);
+    }
+    await expect(speakerHall.locator('.chat-line').last()).toContainText('First Town Hall note.');
+    await wolfOne.reload();
+    const deadHall = wolfOne.page.locator('#town-hall');
+    await expect(deadHall.locator('.chat-line').first()).toContainText('Second Town Hall note.', { timeout: 30_000 });
+    await expect(deadHall.getByText('Only living players can post in the Town Hall.', { exact: true })).toBeVisible();
+    await expect(deadHall.locator('textarea')).toHaveCount(0);
+
+    // A navigation link to a chat highlights the card for a moment.
+    await livingWolf.page.getByRole('link', { name: 'Private room' }).filter({ visible: true }).click();
+    await expect(livingWolf.page.locator('#private-room')).toHaveAttribute('data-spotlight', 'true');
+    await expect(livingWolf.page.locator('#private-room')).not.toHaveAttribute('data-spotlight', /.*/u, { timeout: 5_000 });
+
+    // Hide role leaves a page like any villager's: no pack room, teammates, or pack link; the Town Hall stays.
+    await livingWolf.page.getByRole('button', { name: 'Hide role', exact: true }).click();
+    await expect(livingWolf.page.locator('#private-room')).toHaveCount(0);
+    await expect(livingWolf.page.locator('#team')).toHaveCount(0);
+    await expect(livingWolf.page.getByRole('link', { name: 'Private room' })).toHaveCount(0);
+    // This page loaded before the notes were posted; a quiet room refreshes every 30 seconds.
+    await expect(livingWolf.page.locator('#town-hall')).toContainText('Second Town Hall note.', { timeout: 40_000 });
+    await livingWolf.page.getByRole('button', { name: 'Show role', exact: true }).click();
+    await expect(livingWolf.page.locator('#private-room')).toBeVisible();
 
     // An announcement comes with email and chat copy; player feedback reaches the moderator without a name.
     const announcementForm = moderatorPage.locator('form').filter({ hasText: 'Official announcement' });

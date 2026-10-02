@@ -4,11 +4,10 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS, URGENT_POLL_MS } from '../../lib/http/poll-interval';
+import { ROOM_NAMES as roomNames } from '../../lib/chat/room-names';
 
 /** A room with a message in the last two minutes counts as in use, as in the player view. */
 const CHAT_ACTIVE_MS = 2 * 60_000;
-
-const roomNames: Record<string, string> = { WEREWOLF: 'Pack room', MASON: 'Mason room', DEAD: 'Afterlife' };
 
 export interface HistoryRoom {
   id: string;
@@ -44,8 +43,9 @@ function messageText(message: HistoryMessage): string {
 }
 
 /**
- * A private room's whole history for the game's moderators, with a box to post
- * as "Moderator". The newest page refreshes on its own; older pages load on request.
+ * A room's whole history for the game's moderators, newest first, with a box to
+ * post as "Moderator". The newest page refreshes on its own; older pages load on
+ * request at the end of the list.
  * The console renders it with `key={roomId}`, so switching rooms starts afresh.
  */
 export default function RoomHistory({
@@ -77,8 +77,6 @@ export default function RoomHistory({
   const etag = useRef<string | null>(null);
   const newestAt = useRef(0);
   const earlierLoaded = useRef(false);
-  const scroller = useRef<HTMLDivElement>(null);
-  const stickToBottom = useRef(true);
 
   const url = `/api/games/${gameId}/rooms/${roomId}/messages`;
 
@@ -89,8 +87,6 @@ export default function RoomHistory({
     if (!response.ok) throw new Error(data.error ?? 'Unable to load this room.');
     etag.current = responseEtag(response);
     newestAt.current = Math.max(0, ...data.messages.map((message) => Date.parse(message.createdAt) || 0));
-    const box = scroller.current;
-    stickToBottom.current = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 40;
     setPage(data);
     if (!earlierLoaded.current) setEarlierCursor(data.earlierCursor);
   }, [url]);
@@ -110,12 +106,8 @@ export default function RoomHistory({
     };
   }, [load, reloadToken]);
 
-  const messages = page ? mergeMessages(earlier, page.messages) : [];
-
-  useEffect(() => {
-    const box = scroller.current;
-    if (box && stickToBottom.current) box.scrollTop = box.scrollHeight;
-  }, [page]);
+  // Kept oldest first for merging pages; shown newest first.
+  const messages = page ? mergeMessages(earlier, page.messages).reverse() : [];
 
   async function loadEarlier() {
     if (!earlierCursor) return;
@@ -126,7 +118,6 @@ export default function RoomHistory({
       const data = await response.json() as HistoryPage;
       if (!response.ok) throw new Error(data.error ?? 'Unable to load earlier messages.');
       earlierLoaded.current = true;
-      stickToBottom.current = false;
       setEarlier((current) => mergeMessages(data.messages, current));
       setEarlierCursor(data.earlierCursor);
     } catch (caught) {
@@ -151,7 +142,6 @@ export default function RoomHistory({
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error ?? 'Unable to send this message.');
       form.reset();
-      stickToBottom.current = true;
       await load(true);
       onPosted();
     } catch (caught) {
@@ -182,8 +172,7 @@ export default function RoomHistory({
         </div>
         <button className="text-button" type="button" onClick={onClose}>Close</button>
       </div>
-      <div className="chat-scroll" ref={scroller}>
-        {earlierCursor && <button className="secondary-button load-earlier" type="button" onClick={() => void loadEarlier()} disabled={loadingEarlier}>{loadingEarlier ? 'Loading…' : 'Load earlier messages'}</button>}
+      <div className="chat-scroll">
         {!page && !error && <p className="empty-note">Loading messages…</p>}
         {page && !messages.length && <p className="empty-note">No messages in this room yet.</p>}
         {messages.map((message) => (
@@ -196,6 +185,7 @@ export default function RoomHistory({
             {message.body !== null && <button className="chat-remove" type="button" onClick={() => void remove(message.id)}>Remove</button>}
           </article>
         ))}
+        {earlierCursor && <button className="secondary-button load-earlier" type="button" onClick={() => void loadEarlier()} disabled={loadingEarlier}>{loadingEarlier ? 'Loading…' : 'Load earlier messages'}</button>}
       </div>
       {page && (page.room.postBlockedReason
         ? <p className="field-help">{page.room.postBlockedReason}</p>
