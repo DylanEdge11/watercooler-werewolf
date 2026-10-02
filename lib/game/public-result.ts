@@ -4,6 +4,21 @@
  * both use these, so the two never disagree about what became public.
  */
 
+/**
+ * Whether the Afterlife's votes settled every tied slot of this result. Only that fact is public;
+ * the Afterlife's votes themselves stay with the moderators. A tie it settled only in part also
+ * went to a random draw, so it does not count.
+ */
+export function afterlifeBrokeTie(payload: Record<string, unknown>): boolean {
+  const publishedOutcome = payload.publishedOutcome && typeof payload.publishedOutcome === 'object'
+    ? payload.publishedOutcome as Record<string, unknown>
+    : null;
+  const tiebreak = publishedOutcome?.afterlifeTiebreak && typeof publishedOutcome.afterlifeTiebreak === 'object'
+    ? publishedOutcome.afterlifeTiebreak as { decided?: unknown }
+    : null;
+  return tiebreak?.decided === true;
+}
+
 /** Whether the result shows a pack attack that a protection stopped. */
 export function protectedAttackBlocked(payload: Record<string, unknown>): boolean {
   const rawEliminations = Array.isArray(payload.eliminations) ? payload.eliminations : [];

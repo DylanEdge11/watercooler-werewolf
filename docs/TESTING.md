@@ -19,7 +19,7 @@ A candidate is ready for release when `npm run verify:full` has passed on its ex
 
 ## Unit tests
 
-`npm test` runs Vitest over `lib/**/*.test.ts`: the game engine, action rules, scheduling, balance, CSV import, auth, rate limits, migrations, backup and restore, and race conditions in the API routes, using an in-memory libSQL database. Player email is covered by `lib/api-email-notifications.test.ts` (recipients, once-only reminders, privacy of the wording, failures, the AI story with a mocked SDK) and the unit tests in `lib/notify/`; none of them send mail or call Claude.
+`npm test` runs Vitest over `lib/**/*.test.ts`: the game engine, action rules, scheduling, balance, CSV import, auth, rate limits, migrations, backup and restore, and race conditions in the API routes, using an in-memory libSQL database. Village stats are covered by `lib/game/game-stats.test.ts` (the counting rules, including timezones) and `lib/api-stats.test.ts` (the routes: open ballots excluded, privacy, access, reset, chat counts). Player email is covered by `lib/api-email-notifications.test.ts` (recipients, once-only reminders, privacy of the wording, failures, the AI story with a mocked SDK) and the unit tests in `lib/notify/`; none of them send mail or call Claude.
 
 ## Rehearse a game
 
@@ -47,7 +47,7 @@ All local suites start a disposable Next server on `http://localhost:3100` with 
 | `npm run test:e2e:random` | Bot farm with seeded random decisions (seeds 7, 21, 42). |
 | `npm run test:e2e:readiness` | **Browser suite.** 20 real browser sessions in Chromium through the full game, including privacy at the page and API level, mobile width, keyboard use, reloads, and console or network errors. Adds a smoke test in WebKit (Safari's engine). |
 | `npm run test:e2e:readiness:random` | Browser suite with seeds 7, 21, and 42. |
-| `npm run test:e2e:uat` | **UAT browser game.** One eight-player game from setup to a Village win in separate browser sessions, including a mobile-width player and privacy checks. This is the game the hosted Preview run plays. |
+| `npm run test:e2e:uat` | **UAT browser game.** One eight-player game from setup to a Village win in separate browser sessions, including a mobile-width player, privacy checks, and the Village stats tab and console panel. This is the game the hosted Preview run plays. |
 | `node scripts/run-playwright.mjs --project=stress` | **Load test.** A 20-player baseline game, then two 80-player games at the same time, every role, each to a Werewolf win, with privacy checks after every phase. Times every request and writes the numbers to `work/stress/stress-<run-id>.json`. About 3 minutes. Not part of `verify:full`; run it after a change that could affect speed and compare with an earlier run. |
 
 Reports go to `playwright-report/<run-id>/<invocation-id>/`, and traces, screenshots, and videos to `test-results/`. Open a report with `npx playwright show-report <path>`. These artifacts can show roles, so keep them private.
