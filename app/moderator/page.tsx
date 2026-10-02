@@ -7,6 +7,7 @@ import GameSettingsFields from './game-settings-fields';
 import { useRouter } from 'next/navigation';
 import LiveGamePanel from './live-game-panel';
 import OperationsPanel from './operations-panel';
+import PlayerChoicesPanel from './player-choices-panel';
 import SpectatorsPanel from './spectators-panel';
 import StatsPanel from './stats-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
@@ -789,6 +790,7 @@ export default function ModeratorPage() {
                 </section>
               )}
               {latestBatch?.releasedAt && <LiveGamePanel key={`live-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} onChanged={handleLiveChange} />}
+              {latestBatch?.releasedAt && <PlayerChoicesPanel key={`choices-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} />}
               {latestBatch?.releasedAt && <StatsPanel key={`stats-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} />}
               {latestBatch?.releasedAt && <SpectatorsPanel key={`spectators-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} />}
               <OperationsPanel key={`operations-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} onGameChanged={handleLiveChange} />
