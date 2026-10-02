@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import LiveGamePanel from './live-game-panel';
 import OperationsPanel from './operations-panel';
 import SpectatorsPanel from './spectators-panel';
+import StatsPanel from './stats-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
 import { ROLE_KEYS, type RoleKey } from '../../lib/game/types';
@@ -788,6 +789,7 @@ export default function ModeratorPage() {
                 </section>
               )}
               {latestBatch?.releasedAt && <LiveGamePanel key={`live-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} onChanged={handleLiveChange} />}
+              {latestBatch?.releasedAt && <StatsPanel key={`stats-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} />}
               {latestBatch?.releasedAt && <SpectatorsPanel key={`spectators-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} />}
               <OperationsPanel key={`operations-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} onGameChanged={handleLiveChange} />
             </>

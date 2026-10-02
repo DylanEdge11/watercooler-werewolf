@@ -1,0 +1,161 @@
+/* Village stats: the charts and tiles of app/village-stats.tsx.
+
+   Colors come from the Paper Theatre tokens (--pt-*), so the view follows the dashboard's Day and
+   Night lighting and the console's skin. Two mark colors only: a muted ink for every bar, and the
+   curtain red for the one that matters (the leader, the peak, the werewolves). Both clear 3:1
+   against the card, and the red stays distinct from the muted ink under red-green color blindness.
+   Values are always printed beside or under the marks, and every chart has a table. */
+
+.village-stats {
+  --vs-ink: var(--pt-ink, #2b2118);
+  --vs-ink-soft: var(--pt-ink-soft, #6b5d4f);
+  --vs-surface: var(--pt-paper, #fffaf0);
+  --vs-edge: var(--pt-paper-edge, #e4dccb);
+  --vs-accent: var(--pt-curtain, #b8323a);
+  --vs-mark: color-mix(in srgb, var(--vs-ink-soft) 72%, var(--vs-surface));
+  --vs-grid: color-mix(in srgb, var(--vs-ink) 12%, var(--vs-surface));
+  --vs-wash: color-mix(in srgb, var(--vs-ink) 5%, var(--vs-surface));
+  --vs-mono: var(--ll-font-type), 'Courier New', monospace;
+  color: var(--vs-ink);
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.backstage .village-stats {
+  --vs-ink: var(--bs-ink, #231d18);
+  --vs-ink-soft: var(--bs-ink-soft, #6b5f52);
+  --vs-surface: var(--bs-page, #fbf8f0);
+  --vs-edge: var(--bs-rule, #ddd1ba);
+}
+
+.village-stats .vs-header { margin-bottom: 0; }
+.village-stats .vs-status { color: var(--vs-ink-soft); font-family: var(--vs-mono); font-size: 11px; letter-spacing: 0.04em; margin: -6px 0 0; min-height: 1.4em; }
+.village-stats .vs-error { color: var(--vs-accent); }
+.village-stats .vs-loading { color: var(--vs-ink-soft); margin: 24px 0; }
+.village-stats .text-button { color: inherit; text-decoration: underline; }
+
+/* ---------- Headline tiles ---------- */
+
+.vs-tiles { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.vs-tiles > .wide { grid-column: 1 / -1; }
+.vs-tiles > div { background: var(--vs-surface); border: 1px solid var(--vs-edge); border-radius: 3px; box-shadow: var(--pt-shadow, none); display: grid; gap: 4px; align-content: start; min-width: 0; padding: 14px 16px; }
+.vs-tiles dt { color: var(--vs-ink-soft); font-family: var(--vs-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.vs-tiles dd { font-size: 34px; font-weight: 600; line-height: 1.05; margin: 0; overflow-wrap: anywhere; }
+.vs-tiles dd span { color: var(--vs-ink-soft); font-size: 15px; font-weight: 400; }
+.vs-tiles dd.name { font-size: 26px; line-height: 1.2; }
+.vs-tiles small { color: var(--vs-ink-soft); font-size: 12px; }
+@media (min-width: 560px) { .vs-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ---------- Sections ---------- */
+
+.vs-section { background: var(--vs-surface); border: 1px solid var(--vs-edge); border-radius: 3px; box-shadow: var(--pt-shadow, none); min-width: 0; padding: 20px; }
+.backstage .vs-section { box-shadow: none; }
+.vs-section h2 { font-size: 22px; font-weight: 600; line-height: 1.2; margin: 0 0 6px; }
+.vs-section .eyebrow { margin-bottom: 6px; }
+.vs-intro { color: var(--vs-ink-soft); font-size: 13px; line-height: 1.55; margin: 0 0 16px; max-width: 62ch; }
+.vs-section .empty-note { color: var(--vs-ink-soft); font-size: 13px; margin: 8px 0 0; }
+
+/* ---------- The day picker ---------- */
+
+.vs-filter { display: flex; gap: 6px; margin: 0 0 14px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.vs-filter button { background: transparent; border: 1.5px solid var(--vs-edge); border-radius: 3px; color: var(--vs-ink); cursor: pointer; flex: 0 0 auto; font-family: var(--vs-mono); font-size: 12px; min-height: 36px; padding: 6px 12px; white-space: nowrap; }
+.vs-filter button:hover { background: var(--vs-wash); }
+.vs-filter button[aria-pressed='true'] { background: var(--vs-ink); border-color: var(--vs-ink); color: var(--vs-surface); }
+.vs-summary { font-size: 15px; margin: 0 0 8px; }
+
+.vs-chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 14px; padding: 0; }
+.vs-chips li { background: var(--vs-wash); border: 1px solid var(--vs-edge); border-radius: 3px; color: var(--vs-ink); font-size: 12px; line-height: 1.35; padding: 3px 9px; }
+
+/* ---------- Bars ---------- */
+
+.vs-bars { list-style: none; margin: 0 0 6px; padding: 0; }
+.vs-bar-row { align-items: center; display: grid; gap: 10px; grid-template-columns: minmax(84px, 30%) minmax(0, 1fr) auto; padding: 2px 0; }
+.vs-bar-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-bar-track { border-left: 1px solid var(--vs-grid); display: block; height: 18px; padding: 2px 0; }
+.vs-bar { background: var(--vs-mark); border-radius: 0 4px 4px 0; display: block; height: 14px; min-width: 2px; }
+.vs-bar.lead { background: var(--vs-accent); }
+.vs-bar-value { font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 600; min-width: 2ch; text-align: right; }
+.vs-show-all { font-size: 12px; margin: 4px 0 8px; }
+
+/* ---------- Turnout ---------- */
+
+.vs-turnout { display: grid; gap: 16px; list-style: none; margin: 0; padding: 0; }
+.vs-turnout li { display: grid; gap: 6px; }
+.vs-turnout .vs-chips { margin: 4px 0 0; }
+.vs-turnout-head { align-items: baseline; display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; }
+.vs-turnout-head span { color: var(--vs-ink-soft); font-size: 13px; }
+
+/* ---------- Charts ---------- */
+
+.vs-chart { margin: 0 0 22px; min-width: 0; }
+.vs-chart:last-child { margin-bottom: 0; }
+.vs-chart-title { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+.vs-readout { font-size: 13px; margin: 0 0 6px; min-height: 1.5em; }
+.vs-plot { border-radius: 3px; max-width: 100%; min-width: 0; width: 100%; }
+.vs-plot:focus-visible { outline: 3px solid color-mix(in srgb, var(--vs-accent) 55%, transparent); outline-offset: 2px; }
+.vs-plot svg { display: block; max-width: 100%; touch-action: pan-y; }
+.vs-grid { stroke: var(--vs-grid); stroke-width: 1; }
+.vs-axis-text { fill: var(--vs-ink-soft); font-family: var(--vs-mono); font-size: 11px; }
+.vs-column { fill: var(--vs-mark); }
+.vs-column.lead { fill: var(--vs-accent); }
+.vs-hit { cursor: crosshair; fill: transparent; }
+.vs-line { fill: none; stroke: var(--vs-mark); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
+.vs-line.lead { stroke: var(--vs-accent); }
+.vs-dot { fill: var(--vs-mark); stroke: var(--vs-surface); stroke-width: 2; }
+.vs-dot.lead { fill: var(--vs-accent); }
+.vs-cursor { stroke: var(--vs-ink-soft); stroke-width: 1; }
+.vs-legend { color: var(--vs-ink-soft); display: flex; flex-wrap: wrap; font-size: 12px; gap: 4px 16px; list-style: none; margin: 0 0 6px; padding: 0; }
+.vs-legend li { align-items: center; display: flex; gap: 6px; }
+.vs-key { background: var(--vs-mark); border-radius: 2px; display: inline-block; height: 3px; width: 18px; }
+.vs-key.lead { background: var(--vs-accent); }
+
+/* ---------- Table twin ---------- */
+
+.vs-table { font-size: 12px; margin-top: 8px; }
+.vs-table summary { color: var(--vs-ink-soft); cursor: pointer; font-family: var(--vs-mono); width: fit-content; }
+.vs-table-scroll { margin-top: 6px; max-height: 18rem; overflow: auto; }
+.vs-table table { border-collapse: collapse; min-width: 16rem; width: 100%; }
+.vs-table th, .vs-table td { border-bottom: 1px solid var(--vs-edge); padding: 4px 10px 4px 0; text-align: left; }
+.vs-table th[scope='col'] { color: var(--vs-ink-soft); font-weight: 400; position: sticky; top: 0; background: var(--vs-surface); }
+.vs-table .num { font-variant-numeric: tabular-nums; text-align: right; }
+.vs-table th[scope='row'] { font-weight: 400; }
+
+/* ---------- Ledger ---------- */
+
+.vs-ledger { display: grid; gap: 12px; list-style: none; margin: 18px 0 0; padding: 0; }
+.vs-ledger > li { border-top: 1px solid var(--vs-edge); display: grid; gap: 4px; padding-top: 10px; }
+.vs-ledger ul { display: grid; gap: 2px; list-style: none; margin: 0; padding: 0; }
+.vs-ledger ul li { align-items: baseline; display: flex; flex-wrap: wrap; gap: 2px 10px; }
+.vs-ledger small { color: var(--vs-ink-soft); font-size: 12px; }
+
+/* ---------- Who voted for whom ---------- */
+
+.vs-matrix-scroll { border-radius: 3px; max-height: 32rem; overflow: auto; }
+.vs-matrix-scroll:focus-visible { outline: 3px solid color-mix(in srgb, var(--vs-accent) 55%, transparent); outline-offset: 2px; }
+.vs-matrix { border-collapse: separate; border-spacing: 2px; font-size: 12px; }
+.vs-matrix th[scope='row'] { background: var(--vs-surface); font-weight: 400; left: 0; max-width: 11rem; overflow: hidden; padding: 0 10px 0 0; position: sticky; text-align: left; text-overflow: ellipsis; white-space: nowrap; z-index: 1; }
+.vs-matrix thead th { background: var(--vs-surface); font-weight: 400; position: sticky; top: 0; vertical-align: bottom; z-index: 2; }
+.vs-matrix thead th:first-child { left: 0; z-index: 3; }
+.vs-col-name { display: block; max-height: 9rem; overflow: hidden; padding-bottom: 4px; text-overflow: ellipsis; transform: rotate(180deg); white-space: nowrap; writing-mode: vertical-rl; }
+.vs-cell { border-radius: 2px; font-variant-numeric: tabular-nums; height: 28px; min-width: 28px; text-align: center; width: 28px; }
+.vs-cell.empty { background: var(--vs-wash); }
+.vs-cell[data-level='1'] { background: color-mix(in srgb, var(--vs-accent) 15%, var(--vs-surface)); }
+.vs-cell[data-level='2'] { background: color-mix(in srgb, var(--vs-accent) 35%, var(--vs-surface)); }
+.vs-cell[data-level='3'] { background: color-mix(in srgb, var(--vs-accent) 60%, var(--vs-surface)); }
+.vs-cell[data-level='4'] { background: color-mix(in srgb, var(--vs-accent) 85%, var(--vs-surface)); color: #fff; }
+
+@media (max-width: 780px) {
+  .vs-section { padding: 16px; }
+  .vs-bar-row { grid-template-columns: minmax(72px, 34%) minmax(0, 1fr) auto; }
+}
+
+@media (forced-colors: active) {
+  .vs-bar, .vs-column, .vs-dot, .vs-key { background: CanvasText; fill: CanvasText; forced-color-adjust: none; }
+  .vs-bar.lead, .vs-column.lead, .vs-dot.lead, .vs-key.lead { background: Highlight; fill: Highlight; }
+  .vs-line { stroke: CanvasText; }
+  .vs-line.lead { stroke: Highlight; stroke-dasharray: 6 4; }
+  .vs-cell[data-level] { background: Canvas; border: 1px solid CanvasText; }
+}
+
+/* The console's collapsible wrapper around the stats. */
+.stats-panel-toggle > summary { cursor: pointer; font-family: var(--ll-font-type), 'Courier New', monospace; font-size: 12px; margin-bottom: 14px; width: fit-content; }

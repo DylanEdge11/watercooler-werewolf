@@ -3,6 +3,7 @@ import { landingFontVariables } from './landing/fonts';
 import './globals.css';
 import './paper-theatre.css';
 import './paper-theatre-backstage.css';
+import './village-stats.css';
 
 export const runtime = 'nodejs';
 

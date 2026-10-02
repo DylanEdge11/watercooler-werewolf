@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import RoomChat from './private-room-chat';
 import FullTimeline from './full-timeline';
+import VillageStats from './village-stats';
 import { useBallotVotes, VoteLedger } from './ballot-votes';
 import RoleMedallion from './role-medallion';
 import DeathCurtainCall from './death-curtain-call';
@@ -15,6 +16,7 @@ import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
 import { pollInterval } from '../lib/http/poll-interval';
 import { CONCEALED_ACTION_HINT, ROLE_VISIBILITY_COOKIE, concealedPermission, roleVisibilityCookieValue } from '../lib/player/role-visibility';
 import { currentCycle, describeTimelineEvent, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
+import type { GameStats } from '../lib/game/game-stats';
 
 import type { ActionKind, RoleKey } from '../lib/game/types';
 
@@ -69,6 +71,8 @@ export interface DashboardData {
 
 interface PlayerDashboardProps {
   previewData?: DashboardData;
+  /** Sample numbers for the Village stats tab in the Player View Studio. */
+  previewStats?: GameStats;
   previewMode?: boolean;
   onExitPreview?: () => void;
   /** Rendered on the server for the signed-in player; the dashboard then only polls. */
@@ -148,7 +152,7 @@ function PublicWelcome() {
   return <LandingShell />;
 }
 
-export default function PlayerDashboard({ previewData, previewMode = false, onExitPreview, initialData = null, initiallyUnauthenticated = false, initialRoleHidden = null }: PlayerDashboardProps) {
+export default function PlayerDashboard({ previewData, previewStats, previewMode = false, onExitPreview, initialData = null, initiallyUnauthenticated = false, initialRoleHidden = null }: PlayerDashboardProps) {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(() => previewMode ? previewData ?? null : initialData);
   const [loading, setLoading] = useState(!previewMode && !initialData && !initiallyUnauthenticated);
@@ -171,7 +175,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
   // unless the cookie already said the role is shown.
   const [roleVisibilityKnown, setRoleVisibilityKnown] = useState(!initialData || initialRoleHidden !== null);
   const concealed = roleHidden || !roleVisibilityKnown;
-  const [view, setView] = useState<'today' | 'timeline'>('today');
+  const [view, setView] = useState<'today' | 'timeline' | 'stats'>('today');
   const [roleJustRevealed, setRoleJustRevealed] = useState(false);
   // The card a navigation link just jumped to, briefly highlighted so the player can see where it is.
   const [spotlight, setSpotlight] = useState<string | null>(null);
@@ -407,7 +411,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
     router.push('/');
   }
 
-  function showView(next: 'today' | 'timeline') {
+  function showView(next: 'today' | 'timeline' | 'stats') {
     setView(next);
     document.getElementById('top')?.scrollIntoView({ block: 'start' });
   }
@@ -528,6 +532,10 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
       ? 'The campaign is complete.'
       : 'The village is between phases.';
 
+  // The stats refresh as soon as a new result is published, and follow the dashboard's pace.
+  const latestResultId = data.timeline.find((event) => event.eventType === 'PHASE_PUBLISHED')?.id ?? '';
+  const statsPacing = data.phase ? { status: data.phase.status, deadline: data.phase.deadline } : null;
+
   const stageLight = data.phase?.kind === 'NIGHT' ? 'night' : 'day';
   const roomLabel = spectating ? 'Afterlife' : 'Private room';
 
@@ -558,6 +566,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           {townHall.length > 0 && <a href="#town-hall" onClick={(event) => jumpTo(event, 'town-hall')}>Town Hall</a>}
           {privateRooms.length > 0 && <a href="#private-room" onClick={(event) => jumpTo(event, 'private-room')}>{roomLabel}</a>}
           <button type="button" aria-pressed={view === 'timeline'} onClick={() => showView('timeline')}>Timeline</button>
+          <button type="button" aria-pressed={view === 'stats'} onClick={() => showView('stats')}>Stats</button>
           {notifications.length > 0 && <a href="#notifications" onClick={(event) => jumpTo(event, 'notifications')}>Updates</a>}
           {!spectating && <a href="#feedback" onClick={(event) => jumpTo(event, 'feedback')}>Feedback</a>}
         </nav>
@@ -566,6 +575,7 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           <nav>
             <button className={`nav-item${view === 'today' ? ' active' : ''}`} type="button" aria-current={view === 'today' ? 'page' : undefined} onClick={() => showView('today')}><span aria-hidden="true">◐</span>Today</button>
             <button className={`nav-item${view === 'timeline' ? ' active' : ''}`} type="button" aria-current={view === 'timeline' ? 'page' : undefined} onClick={() => showView('timeline')}><span aria-hidden="true">≋</span>Timeline</button>
+            <button className={`nav-item${view === 'stats' ? ' active' : ''}`} type="button" aria-current={view === 'stats' ? 'page' : undefined} onClick={() => showView('stats')}><span aria-hidden="true">▥</span>Village stats</button>
             {townHall.length > 0 && <a className="nav-item" href="#town-hall" onClick={(event) => jumpTo(event, 'town-hall')}><span aria-hidden="true">◇</span>Town Hall</a>}
             {privateRooms.length > 0 && <a className="nav-item" href="#private-room" onClick={(event) => jumpTo(event, 'private-room')}><span aria-hidden="true">◆</span>{roomLabel}</a>}
           </nav>
@@ -588,7 +598,9 @@ export default function PlayerDashboard({ previewData, previewMode = false, onEx
           <div className="sidebar-note"><span aria-hidden="true">☾</span>{spectating ? <p><strong>Watch quietly.</strong>Keep what you read in the Afterlife away from living players.</p> : <p><strong>Keep it quiet.</strong>Your role is private until you are eliminated.</p>}</div>
         </aside>
 
-        {view === 'timeline' ? <FullTimeline events={data.timeline} hasMore={Boolean(data.timelineHasMore)} onBack={() => showView('today')} votesFor={votesFor} onOpenVotes={(event, retry) => void requestVotes(event, retry)} /> : <section className="main-column" id="today">
+        {view === 'timeline' ? <FullTimeline events={data.timeline} hasMore={Boolean(data.timelineHasMore)} onBack={() => showView('today')} votesFor={votesFor} onOpenVotes={(event, retry) => void requestVotes(event, retry)} /> : view === 'stats' ? <section className="main-column" id="village-stats" aria-labelledby="village-stats-title">
+          <VillageStats endpoint="/api/stats" refreshKey={`${latestResultId}:${data.game.status}`} pacing={statsPacing} sample={previewMode ? previewStats : undefined} />
+        </section> : <section className="main-column" id="today">
           <div className="welcome-row">
             <div><p className="eyebrow accent">{data.phase ? phaseName(data.phase.kind, data.phase.sequence) : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{permission.label}</p></div>
             {data.phase?.autoPublishAt && !['COMPLETED', 'STOPPED'].includes(data.game.status)
