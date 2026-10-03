@@ -325,7 +325,7 @@ describe('setup and publication invariants', () => {
     sqlite.prepare("INSERT INTO seats (id,game_id,display_name,email,status,claim_code_hash,alive,created_at,updated_at) VALUES ('archived','game','Archived Player','archived@invalid.test','REMOVED','archived-hash',0,'2026-01-01','2026-01-01')").run();
     sqlite.prepare("INSERT INTO game_events (id,game_id,event_type,actor_seat_id,payload_json,created_at) VALUES ('archived-event','game','HISTORICAL_NOTE','archived','{}','2026-01-01')").run();
 
-    sqlite.exec("UPDATE games SET automation_paused_at = '2026-01-02T00:00:00.000Z' WHERE id = 'game'");
+    sqlite.exec("UPDATE games SET automation_paused_at = '2026-01-02T00:00:00.000Z', auto_open_next_phase = 1 WHERE id = 'game'");
     sqlite.prepare("INSERT INTO announcements (id,game_id,moderator_id,title,body,email_subject,email_body,created_at) VALUES ('old-note','game','mod','Old run','From before the reset','s','b','2026-01-01')").run();
     sqlite.prepare("INSERT INTO game_events (id,game_id,event_type,actor_moderator_id,payload_json,created_at) VALUES ('old-note-event','game','ANNOUNCEMENT','mod','{}','2026-01-01')").run();
     // A spectator of the old run, signed in, with an Afterlife message.
@@ -345,8 +345,8 @@ describe('setup and publication invariants', () => {
     // The previous run's announcements go, as with Restore; the audit event stays.
     expect((sqlite.prepare("SELECT COUNT(*) AS count FROM announcements WHERE game_id = 'game'").get() as { count: number }).count).toBe(0);
     expect(sqlite.prepare("SELECT id FROM game_events WHERE id = 'old-note-event'").get()).toBeTruthy();
-    // A reset game starts over unpaused.
-    expect(sqlite.prepare("SELECT automation_paused_at AS paused FROM games WHERE id = 'game'").get()).toEqual({ paused: null });
+    // A reset game starts over unpaused, and the next phase no longer opens by itself until the moderator ticks that again.
+    expect(sqlite.prepare("SELECT automation_paused_at AS paused, auto_open_next_phase AS autoOpen FROM games WHERE id = 'game'").get()).toEqual({ paused: null, autoOpen: 0 });
     expect(sqlite.prepare("SELECT status FROM seats WHERE id = 'archived'").get()).toMatchObject({ status: 'REMOVED' });
     expect((sqlite.prepare("SELECT COUNT(*) AS count FROM seats WHERE game_id = 'game' AND status = 'INVITED'").get() as { count: number }).count).toBe(20);
     expect((sqlite.prepare("SELECT actor_seat_id AS actorSeatId FROM game_events WHERE id = 'archived-event'").get() as { actorSeatId: string }).actorSeatId).toBe('archived');

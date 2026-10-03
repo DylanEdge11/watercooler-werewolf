@@ -311,7 +311,7 @@ export async function POST(request: Request, context: RouteContext) {
       }
       statements.push(
         db
-          .prepare("UPDATE games SET status = 'DRAFT', automation_paused_at = NULL, stopped_at = NULL, stopped_by_moderator_id = NULL, stop_reason = NULL, updated_at = ? WHERE id = ? AND status = 'RESETTING' AND reset_at = ? AND reset_by_moderator_id = ?")
+          .prepare("UPDATE games SET status = 'DRAFT', automation_paused_at = NULL, auto_open_next_phase = 0, stopped_at = NULL, stopped_by_moderator_id = NULL, stop_reason = NULL, updated_at = ? WHERE id = ? AND status = 'RESETTING' AND reset_at = ? AND reset_by_moderator_id = ?")
           .bind(now, gameId, now, moderator.id),
       );
       const result = await db.batch(statements);

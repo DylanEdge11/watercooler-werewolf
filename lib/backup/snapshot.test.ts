@@ -6,7 +6,7 @@ import { loadMigrations, runMigrations } from '../../scripts/db-migration-runner
 const shared = vi.hoisted(() => ({ db: null as LibsqlDatabase | null }));
 vi.mock('../../db', () => ({ getDb: () => shared.db }));
 
-import { collectGameBackup } from './snapshot';
+import { collectGameBackup, createBackupRecord, restoreGameBackup } from './snapshot';
 
 let client: Client;
 
@@ -37,6 +37,18 @@ describe('game backup', () => {
     expect(backup.moderators).toEqual([expect.objectContaining({ id: 'mod', role: 'OWNER' })]);
     expect(backup.seats).toEqual([expect.objectContaining({ id: 'ana', displayName: 'Ana' })]);
     expect(JSON.stringify(backup)).not.toMatch(/claim-secret|pin-secret/u);
+  });
+
+  test('restoring a backup starts the run unpaused and with the next phase no longer opening by itself', async () => {
+    // A backup can be restored only with a real roster: six to eighty seats.
+    for (let index = 1; index <= 5; index += 1) {
+      await client.execute({ sql: "INSERT INTO seats (id,game_id,display_name,email,status,claim_code_hash,created_at,updated_at) VALUES (?, 'game', ?, ?, 'INVITED', ?, '2026-01-01', '2026-01-01')", args: [`seat-${index}`, `Player ${index}`, `player${index}@pilot.test`, `hash-${index}`] });
+    }
+    const { backupId, checksum } = await createBackupRecord('game', 'mod');
+    const stored = (await client.execute({ sql: 'SELECT payload_json AS payloadJson, schema_version AS schemaVersion FROM backup_exports WHERE id = ?', args: [backupId] })).rows[0];
+    await client.execute("UPDATE games SET auto_open_next_phase = 1, automation_paused_at = '2026-01-02T00:00:00.000Z' WHERE id = 'game'");
+    await restoreGameBackup('game', { id: backupId, gameId: 'game', schemaVersion: Number(stored.schemaVersion), checksum, payloadJson: String(stored.payloadJson) }, 'mod', 'http://localhost:3000');
+    expect((await client.execute("SELECT auto_open_next_phase AS autoOpen, automation_paused_at AS paused, status FROM games WHERE id = 'game'")).rows[0]).toMatchObject({ autoOpen: 0, paused: null, status: 'DRAFT' });
   });
 
   test('refuses a game that does not exist', async () => {
