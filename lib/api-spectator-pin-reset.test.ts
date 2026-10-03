@@ -3,7 +3,7 @@ import { createClient, type Client } from '@libsql/client';
 import { LibsqlDatabase, type LibsqlClient } from '../db/libsql';
 import { loadMigrations, runMigrations } from '../scripts/db-migration-runner.mjs';
 
-const shared = vi.hoisted(() => ({ db: null as LibsqlDatabase | null }));
+const shared = vi.hoisted(() => ({ db: null as LibsqlDatabase | null, beforeHash: null as (() => Promise<void>) | null }));
 
 vi.mock('../db', () => ({ getDb: () => shared.db }));
 vi.mock('../db/migrate', () => ({ ensureDatabase: async () => {} }));
@@ -15,6 +15,11 @@ vi.mock('../lib/auth/session', () => ({
     setCookie: async () => {},
   }),
 }));
+// Lets one test run something between the route reading the spectator and writing the new PIN: a competing reset.
+vi.mock('../lib/auth/crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./auth/crypto')>();
+  return { ...actual, hashSecret: async (secret: string) => { await shared.beforeHash?.(); return actual.hashSecret(secret); } };
+});
 vi.mock('../lib/http/rate-limit', async (importOriginal) => ({
   ...await importOriginal<typeof import('./http/rate-limit')>(),
   enforceRateLimit: async () => {},
@@ -146,6 +151,31 @@ describe('moderator resets a spectator\'s PIN', () => {
 
     await spectatorDelete(new Request('http://localhost:3000/api/x', { method: 'DELETE', headers: { origin: 'http://localhost:3000' } }), { params: Promise.resolve({ gameId: 'game', spectatorId: invited.id }) });
     expect((await resetPin(invited.id, { newPin: '654321', reason: 'Forgot their PIN' })).status).toBe(404);
+  });
+
+  test('a reset that lost a race to another reset changes nothing, even when both land in the same millisecond', async () => {
+    const spectator = await addSpectator();
+    await claim(spectator.code);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-06-01T12:00:00.000Z'));
+    try {
+      // Another moderator's reset lands first, with its own new session and a fresh wrong-PIN count after it.
+      shared.beforeHash = async () => {
+        await client.execute({ sql: "UPDATE spectators SET pin_hash = 'competitor', session_version = session_version + 1, updated_at = '2026-06-01T12:00:00.000Z' WHERE id = ?", args: [spectator.id] });
+        await client.execute({ sql: "INSERT INTO spectator_sessions (id,spectator_id,token_hash,session_version,expires_at,created_at) VALUES ('fresh', ?, 'fresh-token', 2, '2099-01-01', '2026-01-01')", args: [spectator.id] });
+        await client.execute({ sql: "INSERT INTO rate_limit_buckets (bucket_key,window_started_at,attempts) VALUES (?, '2026-01-01', 3)", args: [`pin-failures:spectator:${spectator.id}`] });
+      };
+      const result = await resetPin(spectator.id, { newPin: '654321', reason: 'Forgot their PIN' });
+      expect(result.status).toBe(409);
+    } finally {
+      shared.beforeHash = null;
+      vi.useRealTimers();
+    }
+    // The other reset stands: its session and the count after it are untouched, and no audit entry was written for the loser.
+    expect(await count("SELECT COUNT(*) AS count FROM spectator_sessions WHERE id = 'fresh'")).toBe(1);
+    expect(await count('SELECT COUNT(*) AS count FROM rate_limit_buckets WHERE bucket_key = ?', [`pin-failures:spectator:${spectator.id}`])).toBe(1);
+    expect(await count('SELECT COUNT(*) AS count FROM operational_events')).toBe(0);
+    expect(String((await client.execute({ sql: 'SELECT pin_hash AS pin FROM spectators WHERE id = ?', args: [spectator.id] })).rows[0]?.pin)).toBe('competitor');
   });
 
   test('a request from another site is refused before anything happens', async () => {

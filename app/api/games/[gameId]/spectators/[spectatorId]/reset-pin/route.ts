@@ -44,10 +44,11 @@ export async function POST(request: Request, context: RouteContext) {
     const pinHash = await hashSecret(newPin);
     const now = new Date().toISOString();
     const nextVersion = Number(spectator.sessionVersion) + 1;
-    // This request's own update, so the dependent writes below change nothing if it lost a race.
+    // This request's own update: its salted PIN hash is unique to it, so the dependent writes below
+    // change nothing if another reset got in first, even within the same millisecond.
     const resetGuard = `EXISTS (
       SELECT 1 FROM spectators
-      WHERE id = ? AND game_id = ? AND status = 'ACTIVE' AND session_version = ? AND updated_at = ?
+      WHERE id = ? AND game_id = ? AND status = 'ACTIVE' AND session_version = ? AND pin_hash = ?
     )`;
     const result = await db.batch([
       db
@@ -56,16 +57,16 @@ export async function POST(request: Request, context: RouteContext) {
            WHERE id = ? AND game_id = ? AND status = 'ACTIVE' AND session_version = ?`,
         )
         .bind(pinHash, now, spectator.id, gameId, spectator.sessionVersion),
-      db.prepare(`DELETE FROM spectator_sessions WHERE spectator_id = ? AND ${resetGuard}`).bind(spectator.id, spectator.id, gameId, nextVersion, now),
+      db.prepare(`DELETE FROM spectator_sessions WHERE spectator_id = ? AND ${resetGuard}`).bind(spectator.id, spectator.id, gameId, nextVersion, pinHash),
       // A new PIN unlocks a spectator who was locked after too many wrong PINs.
-      db.prepare(`DELETE FROM rate_limit_buckets WHERE bucket_key = ? AND ${resetGuard}`).bind(pinFailureKey(spectatorLockoutId(spectator.id)), spectator.id, gameId, nextVersion, now),
+      db.prepare(`DELETE FROM rate_limit_buckets WHERE bucket_key = ? AND ${resetGuard}`).bind(pinFailureKey(spectatorLockoutId(spectator.id)), spectator.id, gameId, nextVersion, pinHash),
       db
         .prepare(
           `INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at)
            SELECT ?, ?, 'WARNING', 'SPECTATOR_ACCESS', 'A spectator PIN was reset by a moderator.', ?, ?
            WHERE ${resetGuard}`,
         )
-        .bind(crypto.randomUUID(), gameId, JSON.stringify({ spectatorId: spectator.id, reason, moderatorId: moderator.id }), now, spectator.id, gameId, nextVersion, now),
+        .bind(crypto.randomUUID(), gameId, JSON.stringify({ spectatorId: spectator.id, reason, moderatorId: moderator.id }), now, spectator.id, gameId, nextVersion, pinHash),
     ]);
     if (changes(result[0]) !== 1) return jsonError('The spectator changed before their PIN could be reset. Refresh and try again.', 409);
     return Response.json({ ok: true, spectatorId: spectator.id });
