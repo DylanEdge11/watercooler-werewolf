@@ -306,6 +306,37 @@ describe('spectators', () => {
     expect((await openLink(added.body.spectateUrl!, '123456')).status).toBe(200);
   });
 
+  async function playerInAnotherGame(email: string, pin: string, gameStatus = 'ACTIVE') {
+    await client.batch([
+      { sql: "INSERT INTO games (id,name,status,timezone,start_date,end_date,active_weekdays_json,schedule_json,final_cutoff_at,created_by_moderator_id,created_at,updated_at) VALUES ('other','Other game',?,'UTC','2026-01-01','2027-01-01','[1]','{}','2099-01-01','mod','2026-01-01','2026-01-01')", args: [gameStatus] },
+      { sql: "INSERT INTO seats (id,game_id,display_name,email,status,claim_code_hash,pin_hash,created_at,updated_at) VALUES ('riley-seat','other','Riley','riley@pilot.test','CLAIMED','riley-claim',?,'2026-01-01','2026-01-01')", args: [await hashSecret(pin)] },
+    ], 'write');
+    return email;
+  }
+
+  test('a spectator of a finished game does not stop the same person signing in to the game they are playing', async () => {
+    const added = await addSpectator('Riley Watcher', 'riley@pilot.test');
+    await openLink(added.body.spectateUrl!, '123456');
+    await playerInAnotherGame('riley@pilot.test', '123456');
+    await client.execute("UPDATE games SET status = 'COMPLETED' WHERE id = 'game'");
+    expect(await homePageSignIn('riley@pilot.test', '123456')).toEqual({ status: 200, body: { ok: true, seat: { displayName: 'Riley', gameId: 'other' } } });
+  });
+
+  test('a spectator of a finished game can still sign in by email when nothing else matches', async () => {
+    const added = await addSpectator('Riley Watcher', 'riley@pilot.test');
+    await openLink(added.body.spectateUrl!, '123456');
+    await client.execute("UPDATE games SET status = 'COMPLETED' WHERE id = 'game'");
+    expect(await homePageSignIn('riley@pilot.test', '123456')).toEqual({ status: 200, body: { ok: true, seat: { displayName: 'Riley Watcher', gameId: 'game' } } });
+  });
+
+  test('a player in one finished game and a spectator in another finished game still sign in as the player', async () => {
+    const added = await addSpectator('Riley Watcher', 'riley@pilot.test');
+    await openLink(added.body.spectateUrl!, '123456');
+    await playerInAnotherGame('riley@pilot.test', '123456', 'COMPLETED');
+    await client.execute("UPDATE games SET status = 'COMPLETED' WHERE id = 'game'");
+    expect((await homePageSignIn('riley@pilot.test', '123456')).body).toMatchObject({ ok: true, seat: { gameId: 'other' } });
+  });
+
   test('a spectator sees the public game and the Afterlife, but no roles, votes in progress, or private rooms', async () => {
     const added = await addSpectator('Riley Watcher', 'riley@pilot.test');
     await openLink(added.body.spectateUrl!, '123456');

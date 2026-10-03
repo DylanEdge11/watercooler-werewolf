@@ -2,6 +2,7 @@ import { getDb } from '../../../../db';
 import { ensureDatabase } from '../../../../db/migrate';
 import { sha256, verifySecret } from '../../../../lib/auth/crypto';
 import { createPlayerSession } from '../../../../lib/auth/session';
+import { withoutEndedSpectators } from '../../../../lib/auth/login-matches';
 import { clearPinFailures, isPinLocked, PIN_LOCKED_MESSAGE, pinFailureCounts, recordPinFailure } from '../../../../lib/auth/pin-lockout';
 import { INVALID_SPECTATOR_LINK, SPECTATOR_LOCKED_MESSAGE, spectatorLockoutId, startSpectatorSession } from '../../../../lib/auth/spectator-link';
 import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
@@ -17,6 +18,8 @@ interface LoginCandidate {
   displayName: string;
   pinHash: string | null;
   sessionVersion: number;
+  /** Spectators only: whether their game has ended decides if they can make a sign-in ambiguous. */
+  gameStatus?: string;
 }
 
 /** Wrong PINs are counted per seat or spectator; a spectator's counter is shared with their private link. */
@@ -52,9 +55,10 @@ export async function POST(request: Request) {
           .all<Omit<LoginCandidate, 'kind'>>(),
         db
           .prepare(
-            `SELECT id, game_id AS gameId, display_name AS displayName, pin_hash AS pinHash,
-                    session_version AS sessionVersion
-             FROM spectators WHERE lower(email) = ? AND status = 'ACTIVE' ORDER BY claimed_at DESC`,
+            `SELECT sp.id, sp.game_id AS gameId, sp.display_name AS displayName, sp.pin_hash AS pinHash,
+                    sp.session_version AS sessionVersion, g.status AS gameStatus
+             FROM spectators sp JOIN games g ON g.id = sp.game_id
+             WHERE lower(sp.email) = ? AND sp.status = 'ACTIVE' ORDER BY sp.claimed_at DESC`,
           )
           .bind(identifier.toLowerCase())
           .all<Omit<LoginCandidate, 'kind'>>(),
@@ -77,10 +81,12 @@ export async function POST(request: Request) {
     // A seat that has had too many wrong PINs in a row is skipped until a moderator resets its PIN.
     const failures = await pinFailureCounts(db, candidates.map(lockoutId));
     const open = candidates.filter((candidate) => !isPinLocked(failures.get(lockoutId(candidate))));
-    const matches: LoginCandidate[] = [];
+    const matched: LoginCandidate[] = [];
     for (const candidate of open) {
-      if (candidate.pinHash && await verifySecret(pin, candidate.pinHash)) matches.push(candidate);
+      if (candidate.pinHash && await verifySecret(pin, candidate.pinHash)) matched.push(candidate);
     }
+    // A spectator of a finished game never makes someone's sign-in to a running game ambiguous.
+    const matches = withoutEndedSpectators(matched);
     if (matches.length > 1) {
       return jsonError(
         matches.every((match) => match.kind === 'SEAT')

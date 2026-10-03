@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import type { RoleComposition } from '../../lib/game/types';
 import { BASE_URL, MODERATOR_EMAIL } from '../constants';
 import { BrowserGame, closeSharedModerator, verifyExpectedRoleComposition, type BrowserPlayer } from './browser-fixture';
@@ -20,6 +20,19 @@ const UAT_COMPOSITION: RoleComposition = {
   CUPID: 0,
 };
 const UAT_PLAYER_COUNT = 8;
+
+/** Makes the page's pollers refresh at once, the way a tab does when it becomes visible again, instead of waiting for their timers. */
+async function refreshPollersNow(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const setHidden = (hidden: boolean) => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    setHidden(true);
+    setHidden(false);
+    delete (document as { hidden?: boolean }).hidden;
+  });
+}
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -94,6 +107,29 @@ test('an eight-player game runs from setup to a Village win with private informa
     // Opening the next phase automatically is an opt-in; it is off for this game. (Ticking it here would open Night 1 on its own, so the API tests cover turning it on.)
     await automation.getByText('Change how results publish', { exact: true }).click();
     await expect(automation.getByRole('checkbox', { name: 'Open the next Day or Night automatically after each result publishes' })).not.toBeChecked();
+
+    // Player choices lists every player's saved vote with their role, and a refresh that fails once clears by itself
+    // when the next one succeeds, even though the votes have not changed in between.
+    const choices = moderatorPage.locator('#player-choices');
+    await choices.scrollIntoViewIfNeeded();
+    await choices.getByText('Show player choices', { exact: true }).click();
+    const dayChoices = choices.getByRole('region', { name: 'Day 1' });
+    await expect(dayChoices.locator('.outcome-row').first()).toBeVisible({ timeout: 30_000 });
+    expect(await dayChoices.locator('.outcome-row').first().innerText()).toMatch(/\(.+\)/u);
+    let failNextChoices = true;
+    // One refresh is refused (429, which the telemetry check accepts when announced); the panel treats any failed answer alike.
+    game.telemetry.allowConsoleError(/status of 429/iu);
+    await moderatorPage.route(/\/api\/games\/[^/]+\/choices$/u, (route) => {
+      if (!failNextChoices) return route.fallback();
+      failNextChoices = false;
+      return route.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Too many requests. Try again in a moment.' }) });
+    });
+    await refreshPollersNow(moderatorPage);
+    await expect(choices.getByRole('alert')).toContainText('Too many requests');
+    await refreshPollersNow(moderatorPage);
+    await expect(choices.getByRole('alert')).toHaveCount(0);
+    await expect(dayChoices.locator('.outcome-row').first()).toBeVisible();
+    await moderatorPage.unroute(/\/api\/games\/[^/]+\/choices$/u);
 
     // The elimination schedule names the next phase a change affects. One per Day and Night keeps this game's slots.
     const eliminations = moderatorPage.locator('.schedule-block');

@@ -13,8 +13,10 @@ import { notifyPhaseOpened, runAfterResponse } from '../notify/notifications';
  * the moderator's Open button and the automatic sweep (lib/game/automation.ts)
  * apply the same rules and the same conditional write. A moderator action
  * records the moderator; an automatic one records no moderator and the
- * SCHEDULER source. Invalid requests throw (the route answers 400); a lost
- * race returns a 409 result.
+ * SCHEDULER source, and also re-checks inside the write that the game is still
+ * in automatic mode, not paused, and has the option on, so a moderator who
+ * pauses or unticks at the same moment wins. Invalid requests throw (the route
+ * answers 400); a lost race returns a 409 result.
  */
 export async function openPhase(gameId: string, actor: TransitionActor, kind: PhaseKind, closesAt: Date): Promise<PhaseActionResult> {
   if (Number.isNaN(closesAt.valueOf()) || closesAt <= new Date()) throw new Error('The phase deadline must be in the future.');
@@ -70,6 +72,7 @@ export async function openPhase(gameId: string, actor: TransitionActor, kind: Ph
   });
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  const automatic = actor.source === 'SCHEDULER';
   const result = await db.batch([
     db
       .prepare(
@@ -84,9 +87,13 @@ export async function openPhase(gameId: string, actor: TransitionActor, kind: Ph
            AND NOT EXISTS (
              SELECT 1 FROM phases
              WHERE game_id = ? AND status IN ('OPEN', 'LOCKED', 'PENDING_HUNTER', 'PENDING_APPROVAL', 'HUNTER_FINALIZING', 'PUBLISHING')
-           )`,
+           )${automatic ? `
+           AND EXISTS (
+             SELECT 1 FROM games
+             WHERE id = ? AND publication_mode = 'AUTOMATIC' AND automation_paused_at IS NULL AND auto_open_next_phase = 1
+           )` : ''}`,
       )
-      .bind(id, gameId, sequence, kind, now, closesAt.toISOString(), slots, divisor, now, now, gameId, game.eliminationScheduleJson ?? null, gameId),
+      .bind(id, gameId, sequence, kind, now, closesAt.toISOString(), slots, divisor, now, now, gameId, game.eliminationScheduleJson ?? null, gameId, ...(automatic ? [gameId] : [])),
     db
       .prepare(
         `INSERT INTO game_events
