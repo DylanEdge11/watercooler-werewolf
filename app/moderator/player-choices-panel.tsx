@@ -22,6 +22,8 @@ function ChoicesList({ gameId, refreshToken }: { gameId: string; refreshToken: n
       setPhases(data.phases ?? []);
       setError('');
     } catch (caught) {
+      // Forget the tag: the next refresh must fetch in full, because an unchanged-data answer (304) would leave this error on screen.
+      etag.current = null;
       setError(caught instanceof Error ? caught.message : 'Unable to load player choices.');
     }
   }, [gameId]);
