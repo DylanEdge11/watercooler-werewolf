@@ -24,7 +24,7 @@ export async function lookupSpectatorLink(code: string): Promise<SpectatorLink |
 
 export const INVALID_SPECTATOR_LINK = 'This spectator link is not valid. Ask your moderator for a new one.';
 
-export const SPECTATOR_LOCKED_MESSAGE = 'This spectator link is locked after too many wrong PINs. Ask your moderator to remove you and add you again for a new link.';
+export const SPECTATOR_LOCKED_MESSAGE = 'This spectator link is locked after too many wrong PINs. Ask your moderator to reset your PIN.';
 
 /** Wrong-PIN counters share rate_limit_buckets with seats; this prefix keeps the two apart. */
 export function spectatorLockoutId(spectatorId: string): string {
