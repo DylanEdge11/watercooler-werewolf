@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { RoleComposition } from '../../lib/game/types';
 import { BASE_URL, MODERATOR_EMAIL } from '../constants';
+import { newBrowserContext } from '../transport';
 import { BrowserGame, closeSharedModerator, verifyExpectedRoleComposition, type BrowserPlayer } from './browser-fixture';
 import { livingTarget, runDayElimination, runNight } from './game-steps';
 
@@ -130,6 +131,46 @@ test('an eight-player game runs from setup to a Village win with private informa
     await expect(choices.getByRole('alert')).toHaveCount(0);
     await expect(dayChoices.locator('.outcome-row').first()).toBeVisible();
     await moderatorPage.unroute(/\/api\/games\/[^/]+\/choices$/u);
+
+    // A spectator who forgot their PIN gets a new one from the moderator, is signed out on their old device, and signs back in with it.
+    const spectators = moderatorPage.locator('#spectators');
+    await spectators.scrollIntoViewIfNeeded();
+    const spectatorEmail = `riley-${Date.now()}@spectator.test`;
+    await spectators.getByLabel('Display name').fill('Riley Watcher');
+    await spectators.getByLabel('Email').fill(spectatorEmail);
+    await spectators.getByRole('button', { name: 'Add spectator', exact: true }).click();
+    await expect(spectators.locator('code.recovery-list')).toContainText('/spectate/');
+    const spectatorLink = (await spectators.locator('code.recovery-list').innerText()).trim();
+    const spectatorContext = await newBrowserContext(browser);
+    try {
+      const spectatorPage = await spectatorContext.newPage();
+      await spectatorPage.goto(spectatorLink);
+      await spectatorPage.getByLabel('Six-digit PIN').fill('246810');
+      await spectatorPage.getByRole('button', { name: 'Start spectating', exact: true }).click();
+      await expect(spectatorPage.getByRole('heading', { name: 'Your seat in the gallery is ready.' })).toBeVisible();
+
+      await moderatorPage.reload();
+      await expect(spectators.getByText('Watching', { exact: true })).toBeVisible({ timeout: 30_000 });
+      await spectators.getByRole('button', { name: 'Reset PIN for Riley Watcher', exact: true }).click();
+      await spectators.getByLabel('New six-digit PIN').fill('135790');
+      await spectators.getByLabel('Reason').fill('Forgot the PIN');
+      await spectators.getByRole('button', { name: 'Reset PIN', exact: true }).click();
+      await expect(spectators.getByRole('status').filter({ hasText: 'PIN was replaced' })).toBeVisible();
+
+      // Their old device is signed out, the old PIN no longer works, and the new one does.
+      await spectatorPage.goto('/');
+      const signIn = spectatorPage.locator('form.ll-signin-form:visible').first();
+      await expect(signIn).toBeVisible();
+      await signIn.getByLabel('Email or seat code').fill(spectatorEmail);
+      await signIn.getByLabel('Six-digit PIN').fill('246810');
+      await signIn.locator('button[type="submit"]').click();
+      await expect(spectatorPage.getByText('Email or seat code and PIN were not accepted.')).toBeVisible();
+      await signIn.getByLabel('Six-digit PIN').fill('135790');
+      await signIn.locator('button[type="submit"]').click();
+      await expect(spectatorPage.getByRole('heading', { name: 'You’re watching this game' })).toBeVisible({ timeout: 60_000 });
+    } finally {
+      await spectatorContext.close();
+    }
 
     // The elimination schedule names the next phase a change affects. One per Day and Night keeps this game's slots.
     const eliminations = moderatorPage.locator('.schedule-block');
