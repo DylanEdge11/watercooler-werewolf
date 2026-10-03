@@ -27,8 +27,9 @@ export async function GET(_request: Request, context: RouteContext) {
 
 /**
  * The first visit chooses a PIN; later visits sign in with it. Either way the
- * device gets a spectator session. There is no email sign-in for spectators:
- * the private link is their key.
+ * device gets a spectator session. Once a spectator has a PIN they can also sign
+ * in from the home page with their email (POST /api/seats/login); the wrong-PIN
+ * count is shared, and only a moderator's PIN reset clears a lockout.
  */
 export async function POST(request: Request, context: RouteContext) {
   try {
