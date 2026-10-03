@@ -273,10 +273,10 @@ describe('spectators', () => {
     await openLink(added.body.spectateUrl!, '123456');
     for (let attempt = 0; attempt < 5; attempt += 1) expect((await homePageSignIn('riley@pilot.test', '000000')).status).toBe(401);
     for (let attempt = 0; attempt < 5; attempt += 1) expect((await openLink(added.body.spectateUrl!, '000000')).status).toBe(401);
-    // Even the right PIN is refused now, in either place, with the spectator's way back.
+    // Even the right PIN is refused now, in either place, with the moderator's way back.
     const locked = await homePageSignIn('riley@pilot.test', '123456');
     expect(locked.status).toBe(423);
-    expect(locked.body.error).toEqual(expect.stringContaining('remove you and add you again'));
+    expect(locked.body.error).toEqual(expect.stringContaining('reset your PIN'));
     expect((await openLink(added.body.spectateUrl!, '123456')).status).toBe(423);
   });
 
