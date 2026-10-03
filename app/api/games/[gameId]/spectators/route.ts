@@ -3,6 +3,8 @@ import { changes } from '../../../../../db/results';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator } from '../../../../../lib/auth/authorization';
 import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
+import { isPinLocked, pinFailureCounts } from '../../../../../lib/auth/pin-lockout';
+import { spectatorLockoutId } from '../../../../../lib/auth/spectator-link';
 import { canAddSpectator, SPECTATOR_JOIN_STATUSES } from '../../../../../lib/game/spectators';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { routeError } from '../../../../../lib/http/errors';
@@ -13,7 +15,7 @@ interface RouteContext {
   params: Promise<{ gameId: string }>;
 }
 
-/** The game's spectators, for the moderator console. */
+/** The game's spectators, for the moderator console, with whether each is locked out by wrong PINs. */
 export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
@@ -27,7 +29,9 @@ export async function GET(request: Request, context: RouteContext) {
       )
       .bind(gameId)
       .all<{ id: string; displayName: string; email: string; status: string; claimedAt: string | null; createdAt: string }>();
-    return respondJsonWithEtag(request, { ok: true, spectators: rows.results });
+    // Spectators who have had too many wrong PINs in a row, so the moderator can see who needs a PIN reset.
+    const failures = await pinFailureCounts(getDb(), rows.results.map((row) => spectatorLockoutId(row.id)));
+    return respondJsonWithEtag(request, { ok: true, spectators: rows.results.map((row) => ({ ...row, locked: isPinLocked(failures.get(spectatorLockoutId(row.id))) })) });
   } catch (error) {
     return routeError(error, 'Unable to load spectators.');
   }

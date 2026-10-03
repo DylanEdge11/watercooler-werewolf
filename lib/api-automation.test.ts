@@ -18,6 +18,7 @@ import { POST as automationPost } from '../app/api/games/[gameId]/automation/rou
 import { GET as playerGet } from '../app/api/player/route';
 import { GET as schedulerGet } from '../app/api/scheduler/deadlines/route';
 import { advanceGame, advanceGameSafely } from './game/automation-sweep';
+import { openPhase } from './game/phase-open';
 
 let client: Client;
 const context = { params: Promise.resolve({ gameId: 'game' }) };
@@ -39,13 +40,17 @@ async function rows<T>(sql: string): Promise<T[]> {
 }
 
 /** An automatic game with 20 fictional players, three of them Werewolves, and a Day past its deadline. */
-async function seed(options: { mode?: 'AUTOMATIC' | 'REVIEW'; windowMinutes?: number; paused?: boolean } = {}): Promise<void> {
+async function seed(options: { mode?: 'AUTOMATIC' | 'REVIEW'; windowMinutes?: number; paused?: boolean; autoOpen?: boolean } = {}): Promise<void> {
   await exec("INSERT INTO moderator_accounts (id,email,password_hash,recovery_codes_json,created_at,updated_at) VALUES ('mod','owner@pilot.test','fake','[]','2026-01-01','2026-01-01')");
   await exec(
     `INSERT INTO games (id,name,status,timezone,start_date,end_date,active_weekdays_json,schedule_json,final_cutoff_at,created_by_moderator_id,created_at,updated_at,publication_mode,review_window_minutes,automation_paused_at)
      VALUES ('game','Automation test','ACTIVE','UTC','2026-01-01','2027-01-01','[1]','{}','2099-01-01','mod','2026-01-01','2026-01-01',?,?,?)`,
     [options.mode ?? 'AUTOMATIC', options.windowMinutes ?? 60, options.paused ? '2026-01-02T00:00:00.000Z' : null],
   );
+  if (options.autoOpen) {
+    // Played every day, with the Day closing at 17:00 and the Night at 08:00 (UTC).
+    await exec("UPDATE games SET auto_open_next_phase = 1, active_weekdays_json = '[0,1,2,3,4,5,6]', schedule_json = '{\"dayCloses\":\"17:00\",\"nightCloses\":\"08:00\"}'");
+  }
   await exec("INSERT INTO game_moderators (game_id,moderator_id,role,added_at) VALUES ('game','mod','OWNER','2026-01-01')");
   await exec("INSERT INTO assignment_batches (id,game_id,revision,assignments_json,random_evidence_hash,created_by_moderator_id,created_at) VALUES ('batch','game',1,'[]','hash','mod','2026-01-01')");
   await exec("INSERT INTO phases (id,game_id,sequence,kind,status,opens_at,closes_at,slots,divisor_snapshot,created_at,updated_at) VALUES ('phase','game',1,'DAY','OPEN','2026-01-01','2026-01-02T00:00:00.000Z',1,30,'2026-01-01','2026-01-01')");
@@ -274,7 +279,7 @@ describe('automation settings route', () => {
     expect(response.status).toBe(200);
     expect((await rows<{ mode: string; window: number }>("SELECT publication_mode AS mode, review_window_minutes AS window FROM games"))[0]).toEqual({ mode: 'AUTOMATIC', window: 15 });
     const [event] = await rows<{ payload: string }>("SELECT payload_json AS payload FROM game_events WHERE event_type = 'AUTOMATION_SETTINGS_UPDATED'");
-    expect(JSON.parse(event.payload)).toEqual({ publicationMode: 'AUTOMATIC', reviewWindowMinutes: 15, previousPublicationMode: 'REVIEW', previousReviewWindowMinutes: 60 });
+    expect(JSON.parse(event.payload)).toEqual({ publicationMode: 'AUTOMATIC', reviewWindowMinutes: 15, autoOpenNextPhase: false, previousPublicationMode: 'REVIEW', previousReviewWindowMinutes: 60, previousAutoOpenNextPhase: false });
   });
 
   test('rejects bad settings, and anything on a finished game', async () => {
@@ -324,5 +329,163 @@ describe('unchanged refreshes', () => {
     expect((await load(etag)).status).toBe(304);
     await exec("UPDATE phases SET closes_at = '2099-01-03T00:00:00.000Z' WHERE id = 'phase'");
     expect((await load(etag)).status).toBe(200);
+  });
+});
+
+describe('opening the next phase automatically', () => {
+  async function phaseList(): Promise<Array<{ sequence: number; kind: string; status: string; closesAt: string }>> {
+    return rows("SELECT sequence, kind, status, closes_at AS closesAt FROM phases ORDER BY sequence");
+  }
+
+  test('after a result publishes, the next phase opens with the game\'s next close time and tells the timeline who opened it', async () => {
+    await seed({ windowMinutes: 0, autoOpen: true });
+    expect(await advanceGame('game')).toEqual(['LOCK_AND_PROPOSE', 'PUBLISH', 'OPEN_NEXT']);
+    const [first, second] = await phaseList();
+    expect(first).toMatchObject({ sequence: 1, kind: 'DAY', status: 'PUBLISHED' });
+    expect(second).toMatchObject({ sequence: 2, kind: 'NIGHT', status: 'OPEN' });
+    // The Night closes at 08:00 UTC, in the future and on the minute.
+    expect(new Date(second.closesAt).valueOf()).toBeGreaterThan(Date.now());
+    expect(second.closesAt).toMatch(/T08:00:00\.000Z$/u);
+    const [opened] = await rows<{ actor: string | null; payload: string }>("SELECT actor_moderator_id AS actor, payload_json AS payload FROM game_events WHERE event_type = 'PHASE_OPENED'");
+    expect(opened.actor).toBeNull();
+    expect(JSON.parse(opened.payload)).toMatchObject({ kind: 'NIGHT', source: 'SCHEDULER' });
+    // Nothing more to do until that Night ends.
+    expect(await advanceGame('game')).toEqual([]);
+  });
+
+  test('a player visit does it too, so nobody waits for the moderator', async () => {
+    await seed({ windowMinutes: 0, autoOpen: true });
+    const visit = await playerVisit();
+    expect(visit.phase?.status).toBe('OPEN');
+    expect(await phaseList()).toHaveLength(2);
+  });
+
+  test('is off unless turned on', async () => {
+    await seed({ windowMinutes: 0 });
+    expect(await advanceGame('game')).toEqual(['LOCK_AND_PROPOSE', 'PUBLISH']);
+    expect(await phaseList()).toHaveLength(1);
+  });
+
+  test('opens the next phase after the moderator publishes a result by hand, too', async () => {
+    await seed({ autoOpen: true });
+    await advanceGame('game');
+    expect(await phaseStatus()).toBe('PENDING_APPROVAL');
+    expect((await phasePost(post('/api/games/game/phases', { action: 'PUBLISH', phaseId: 'phase' }), context)).status).toBe(200);
+    expect(await phaseList()).toHaveLength(1);
+    expect(await advanceGame('game')).toEqual(['OPEN_NEXT']);
+    expect((await phaseList())[1]).toMatchObject({ kind: 'NIGHT', status: 'OPEN' });
+  });
+
+  test('waits while paused and in review mode, and opens once automation is running again', async () => {
+    await seed({ windowMinutes: 0, autoOpen: true });
+    // Publish the first result with the option off, then turn it on while the game is paused.
+    await exec('UPDATE games SET auto_open_next_phase = 0');
+    expect(await advanceGame('game')).toEqual(['LOCK_AND_PROPOSE', 'PUBLISH']);
+    await exec("UPDATE games SET auto_open_next_phase = 1, automation_paused_at = '2026-01-02T00:00:00.000Z'");
+    expect(await advanceGame('game')).toEqual([]);
+    await exec("UPDATE games SET automation_paused_at = NULL, publication_mode = 'REVIEW'");
+    expect(await advanceGame('game')).toEqual([]);
+    expect(await phaseList()).toHaveLength(1);
+    await exec("UPDATE games SET publication_mode = 'AUTOMATIC'");
+    expect(await advanceGame('game')).toEqual(['OPEN_NEXT']);
+  });
+
+  test('stops at the final cutoff and leaves final showdown to the moderator', async () => {
+    await seed({ windowMinutes: 0, autoOpen: true });
+    // The cutoff falls before the Night would close.
+    await exec("UPDATE games SET final_cutoff_at = ?", [new Date(Date.now() + 60_000).toISOString()]);
+    expect(await advanceGame('game')).toEqual(['LOCK_AND_PROPOSE', 'PUBLISH']);
+    expect(await phaseList()).toHaveLength(1);
+    expect((await rows<{ status: string }>('SELECT status FROM games'))[0].status).toBe('ACTIVE');
+  });
+
+  test('does not open a phase when a winner has ended the game', async () => {
+    await seed({ windowMinutes: 0, autoOpen: true });
+    // Only the Werewolves are left standing after this vote.
+    await exec("UPDATE role_assignments SET role_key = 'WEREWOLF' WHERE seat_id IN ('p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10', 'p11', 'p12', 'p13', 'p14', 'p15', 'p16')");
+    await exec("UPDATE seats SET alive = 0 WHERE id IN ('p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10', 'p11', 'p12', 'p13', 'p14', 'p15', 'p16')");
+    expect(await advanceGame('game')).toEqual(['LOCK_AND_PROPOSE', 'PUBLISH']);
+    expect((await rows<{ status: string }>('SELECT status FROM games'))[0].status).toBe('COMPLETED');
+    expect(await phaseList()).toHaveLength(1);
+  });
+
+  test('two sweeps and a player visit at once open one phase', async () => {
+    await seed({ windowMinutes: 0, autoOpen: true });
+    await Promise.all([advanceGame('game'), advanceGame('game'), playerVisit('p6'), playerVisit('p7')]);
+    expect(await phaseList()).toHaveLength(2);
+    expect(await rows("SELECT 1 FROM game_events WHERE event_type = 'PHASE_OPENED'")).toHaveLength(1);
+  });
+
+  test('a moderator opening the same phase first leaves one phase and no warning', async () => {
+    await seed({ autoOpen: true });
+    await advanceGame('game');
+    await phasePost(post('/api/games/game/phases', { action: 'PUBLISH', phaseId: 'phase' }), context);
+    const closesAt = new Date(Date.now() + 3 * 60 * 60_000).toISOString();
+    expect((await phasePost(post('/api/games/game/phases', { action: 'OPEN', kind: 'NIGHT', closesAt }), context)).status).toBe(200);
+    expect(await advanceGame('game')).toEqual([]);
+    expect(await phaseList()).toHaveLength(2);
+    expect(await rows("SELECT 1 FROM operational_events WHERE source = 'AUTOMATION'")).toHaveLength(0);
+  });
+
+  describe('the opening re-checks the moderator\'s settings inside its write', () => {
+    const scheduler = { moderatorId: null, source: 'SCHEDULER' } as const;
+    const inThreeHours = () => new Date(Date.now() + 3 * 60 * 60_000);
+
+    /** The first Day is published with the option off, then the option is turned on: the state just before an automatic opening. */
+    async function readyToOpen(): Promise<void> {
+      await seed({ windowMinutes: 0, autoOpen: true });
+      await exec('UPDATE games SET auto_open_next_phase = 0');
+      expect(await advanceGame('game')).toEqual(['LOCK_AND_PROPOSE', 'PUBLISH']);
+      await exec('UPDATE games SET auto_open_next_phase = 1');
+    }
+
+    test.each([
+      ['paused', "UPDATE games SET automation_paused_at = '2026-01-02T00:00:00.000Z'"],
+      ['switched to review mode', "UPDATE games SET publication_mode = 'REVIEW'"],
+      ['unticked the option', 'UPDATE games SET auto_open_next_phase = 0'],
+    ])('an automatic opening that lost a race with the moderator having %s opens nothing', async (_what, change) => {
+      await readyToOpen();
+      await exec(change);
+      const result = await openPhase('game', scheduler, 'NIGHT', inThreeHours());
+      expect(result.status).toBe(409);
+      expect(await phaseList()).toHaveLength(1);
+      expect(await rows("SELECT 1 FROM game_events WHERE event_type = 'PHASE_OPENED'")).toHaveLength(0);
+    });
+
+    test('the moderator\'s own Open button works in all of those states', async () => {
+      await readyToOpen();
+      await exec("UPDATE games SET publication_mode = 'REVIEW', auto_open_next_phase = 0, automation_paused_at = '2026-01-02T00:00:00.000Z'");
+      const response = await phasePost(post('/api/games/game/phases', { action: 'OPEN', kind: 'NIGHT', closesAt: inThreeHours().toISOString() }), context);
+      expect(response.status).toBe(200);
+      expect((await phaseList())[1]).toMatchObject({ kind: 'NIGHT', status: 'OPEN' });
+      const [opened] = await rows<{ actor: string | null; payload: string }>("SELECT actor_moderator_id AS actor, payload_json AS payload FROM game_events WHERE event_type = 'PHASE_OPENED'");
+      expect(opened.actor).toBe('mod');
+      expect(JSON.parse(opened.payload)).toMatchObject({ source: 'MODERATOR' });
+    });
+  });
+});
+
+describe('opening the next phase: settings route', () => {
+  test('turns it on and off with an audit event, and leaves it alone when a request does not mention it', async () => {
+    await seed();
+    const enabled = () => rows<{ enabled: number }>('SELECT auto_open_next_phase AS enabled FROM games').then((result) => result[0].enabled);
+    expect(await enabled()).toBe(0);
+    expect((await automationPost(post('/api/games/game/automation', { action: 'SETTINGS', autoOpenNextPhase: true }), context)).status).toBe(200);
+    expect(await enabled()).toBe(1);
+    expect((await automationPost(post('/api/games/game/automation', { action: 'SETTINGS', reviewWindowMinutes: 30 }), context)).status).toBe(200);
+    expect(await enabled()).toBe(1);
+    expect((await automationPost(post('/api/games/game/automation', { action: 'SETTINGS', autoOpenNextPhase: false }), context)).status).toBe(200);
+    expect(await enabled()).toBe(0);
+    const events = await rows<{ payload: string }>("SELECT payload_json AS payload FROM game_events WHERE event_type = 'AUTOMATION_SETTINGS_UPDATED' ORDER BY created_at, rowid");
+    expect(JSON.parse(events[0].payload)).toMatchObject({ autoOpenNextPhase: true, previousAutoOpenNextPhase: false });
+    expect(JSON.parse(events[2].payload)).toMatchObject({ autoOpenNextPhase: false, previousAutoOpenNextPhase: true });
+  });
+
+  test('rejects a value that is not true or false, and shows the setting to the console', async () => {
+    await seed();
+    expect((await automationPost(post('/api/games/game/automation', { action: 'SETTINGS', autoOpenNextPhase: 'maybe' }), context)).status).toBe(400);
+    await automationPost(post('/api/games/game/automation', { action: 'SETTINGS', autoOpenNextPhase: true }), context);
+    const body = await (await phaseGet(new Request('http://localhost:3000/api/games/game/phases'), context)).json() as { game: { autoOpenNextPhase: boolean } };
+    expect(body.game.autoOpenNextPhase).toBe(true);
   });
 });

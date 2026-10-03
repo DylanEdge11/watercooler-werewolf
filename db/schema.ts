@@ -77,6 +77,8 @@ export const games = sqliteTable(
     reviewWindowMinutes: integer('review_window_minutes').notNull().default(60),
     // Set while a moderator has paused automation; nothing locks, calculates, or publishes on its own.
     automationPausedAt: text('automation_paused_at'),
+    // In AUTOMATIC mode, open the next Day or Night as soon as a result publishes (lib/game/automation.ts).
+    autoOpenNextPhase: integer('auto_open_next_phase', { mode: 'boolean' }).notNull().default(false),
     // Incremented whenever setup inputs change. Assignment previews capture
     // this value so an old preview cannot be released after a roster or
     // composition change.

@@ -1,6 +1,7 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import type { RoleComposition } from '../../lib/game/types';
 import { BASE_URL, MODERATOR_EMAIL } from '../constants';
+import { newBrowserContext } from '../transport';
 import { BrowserGame, closeSharedModerator, verifyExpectedRoleComposition, type BrowserPlayer } from './browser-fixture';
 import { livingTarget, runDayElimination, runNight } from './game-steps';
 
@@ -20,6 +21,19 @@ const UAT_COMPOSITION: RoleComposition = {
   CUPID: 0,
 };
 const UAT_PLAYER_COUNT = 8;
+
+/** Makes the page's pollers refresh at once, the way a tab does when it becomes visible again, instead of waiting for their timers. */
+async function refreshPollersNow(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const setHidden = (hidden: boolean) => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    setHidden(true);
+    setHidden(false);
+    delete (document as { hidden?: boolean }).hidden;
+  });
+}
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -90,6 +104,73 @@ test('an eight-player game runs from setup to a Village win with private informa
     await expect(watcher.page.locator('.deadline-card')).toContainText('The schedule is paused');
     await automation.getByRole('button', { name: 'Resume automation', exact: true }).click();
     await expect(automation.getByRole('button', { name: 'Pause automation', exact: true })).toBeVisible();
+
+    // Opening the next phase automatically is an opt-in; it is off for this game. (Ticking it here would open Night 1 on its own, so the API tests cover turning it on.)
+    await automation.getByText('Change how results publish', { exact: true }).click();
+    await expect(automation.getByRole('checkbox', { name: 'Open the next Day or Night automatically after each result publishes' })).not.toBeChecked();
+
+    // Player choices lists every player's saved vote with their role, and a refresh that fails once clears by itself
+    // when the next one succeeds, even though the votes have not changed in between.
+    const choices = moderatorPage.locator('#player-choices');
+    await choices.scrollIntoViewIfNeeded();
+    await choices.getByText('Show player choices', { exact: true }).click();
+    const dayChoices = choices.getByRole('region', { name: 'Day 1' });
+    await expect(dayChoices.locator('.outcome-row').first()).toBeVisible({ timeout: 30_000 });
+    expect(await dayChoices.locator('.outcome-row').first().innerText()).toMatch(/\(.+\)/u);
+    let failNextChoices = true;
+    // One refresh is refused (429, which the telemetry check accepts when announced); the panel treats any failed answer alike.
+    game.telemetry.allowConsoleError(/status of 429/iu);
+    await moderatorPage.route(/\/api\/games\/[^/]+\/choices$/u, (route) => {
+      if (!failNextChoices) return route.fallback();
+      failNextChoices = false;
+      return route.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Too many requests. Try again in a moment.' }) });
+    });
+    await refreshPollersNow(moderatorPage);
+    await expect(choices.getByRole('alert')).toContainText('Too many requests');
+    await refreshPollersNow(moderatorPage);
+    await expect(choices.getByRole('alert')).toHaveCount(0);
+    await expect(dayChoices.locator('.outcome-row').first()).toBeVisible();
+    await moderatorPage.unroute(/\/api\/games\/[^/]+\/choices$/u);
+
+    // A spectator who forgot their PIN gets a new one from the moderator, is signed out on their old device, and signs back in with it.
+    const spectators = moderatorPage.locator('#spectators');
+    await spectators.scrollIntoViewIfNeeded();
+    const spectatorEmail = `riley-${Date.now()}@spectator.test`;
+    await spectators.getByLabel('Display name').fill('Riley Watcher');
+    await spectators.getByLabel('Email').fill(spectatorEmail);
+    await spectators.getByRole('button', { name: 'Add spectator', exact: true }).click();
+    await expect(spectators.locator('code.recovery-list')).toContainText('/spectate/');
+    const spectatorLink = (await spectators.locator('code.recovery-list').innerText()).trim();
+    const spectatorContext = await newBrowserContext(browser);
+    try {
+      const spectatorPage = await spectatorContext.newPage();
+      await spectatorPage.goto(spectatorLink);
+      await spectatorPage.getByLabel('Six-digit PIN').fill('246810');
+      await spectatorPage.getByRole('button', { name: 'Start spectating', exact: true }).click();
+      await expect(spectatorPage.getByRole('heading', { name: 'Your seat in the gallery is ready.' })).toBeVisible();
+
+      await moderatorPage.reload();
+      await expect(spectators.getByText('Watching', { exact: true })).toBeVisible({ timeout: 30_000 });
+      await spectators.getByRole('button', { name: 'Reset PIN for Riley Watcher', exact: true }).click();
+      await spectators.getByLabel('New six-digit PIN').fill('135790');
+      await spectators.getByLabel('Reason').fill('Forgot the PIN');
+      await spectators.getByRole('button', { name: 'Reset PIN', exact: true }).click();
+      await expect(spectators.getByRole('status').filter({ hasText: 'PIN was replaced' })).toBeVisible();
+
+      // Their old device is signed out, the old PIN no longer works, and the new one does.
+      await spectatorPage.goto('/');
+      const signIn = spectatorPage.locator('form.ll-signin-form:visible').first();
+      await expect(signIn).toBeVisible();
+      await signIn.getByLabel('Email or seat code').fill(spectatorEmail);
+      await signIn.getByLabel('Six-digit PIN').fill('246810');
+      await signIn.locator('button[type="submit"]').click();
+      await expect(spectatorPage.getByText('Email or seat code and PIN were not accepted.')).toBeVisible();
+      await signIn.getByLabel('Six-digit PIN').fill('135790');
+      await signIn.locator('button[type="submit"]').click();
+      await expect(spectatorPage.getByRole('heading', { name: 'You’re watching this game' })).toBeVisible({ timeout: 60_000 });
+    } finally {
+      await spectatorContext.close();
+    }
 
     // The elimination schedule names the next phase a change affects. One per Day and Night keeps this game's slots.
     const eliminations = moderatorPage.locator('.schedule-block');

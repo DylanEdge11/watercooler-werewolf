@@ -7,6 +7,7 @@ export interface AutomationGameState {
   publicationMode: 'REVIEW' | 'AUTOMATIC';
   reviewWindowMinutes: number;
   automationPausedAt: string | null;
+  autoOpenNextPhase: boolean;
 }
 
 export interface NextAutomaticStep {
@@ -24,11 +25,12 @@ interface AutomationControlsProps {
 
 function statusLine(game: AutomationGameState, nextStep: NextAutomaticStep | null, formatTime: (iso: string) => string): string {
   if (game.automationPausedAt) return 'Paused. Deadlines still close voting, but nothing calculates or publishes on its own until you resume.';
-  if (game.publicationMode === 'REVIEW') return 'Review mode: voting closes at each deadline, and you calculate and publish each result yourself.';
+  if (game.publicationMode === 'REVIEW') return `Review mode: voting closes at each deadline, and you calculate and publish each result yourself.${game.autoOpenNextPhase ? ' Opening the next phase automatically needs automatic results.' : ''}`;
   if (nextStep?.kind === 'LOCK_AND_PROPOSE') return `Locks and calculates at ${formatTime(nextStep.at)}.`;
   if (nextStep?.kind === 'FINALIZE_HUNTER') return `Waiting for the Hunter: finishes as soon as they shoot, or at ${formatTime(nextStep.at)}.`;
   if (nextStep?.kind === 'PUBLISH') return `Publishes automatically at ${formatTime(nextStep.at)} unless you publish, override, or pause first.`;
-  return `Automatic: each phase you open locks at its deadline and publishes ${game.reviewWindowMinutes} minutes later unless you act.`;
+  const opening = game.autoOpenNextPhase ? ' The next Day or Night then opens by itself.' : '';
+  return `Automatic: each phase you open locks at its deadline and publishes ${game.reviewWindowMinutes} minutes later unless you act.${opening}`;
 }
 
 /** Pause, resume, and the publication choice for a running game. Every change is audited. */
@@ -60,7 +62,7 @@ export default function AutomationControls({ gameId, game, nextStep, formatTime,
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    void send({ action: 'SETTINGS', publicationMode: form.get('publicationMode'), reviewWindowMinutes: form.get('reviewWindowMinutes') });
+    void send({ action: 'SETTINGS', publicationMode: form.get('publicationMode'), reviewWindowMinutes: form.get('reviewWindowMinutes'), autoOpenNextPhase: form.get('autoOpenNextPhase') === 'on' });
   }
 
   return (
@@ -72,10 +74,12 @@ export default function AutomationControls({ gameId, game, nextStep, formatTime,
       {error && <p className="notice error" role="alert">{error}</p>}
       <details className="automation-settings">
         <summary>Change how results publish</summary>
-        <form className="automation-form" onSubmit={save} key={`${game.publicationMode}-${game.reviewWindowMinutes}`}>
+        <form className="automation-form" onSubmit={save} key={`${game.publicationMode}-${game.reviewWindowMinutes}-${game.autoOpenNextPhase}`}>
           <label><input type="radio" name="publicationMode" value="REVIEW" defaultChecked={game.publicationMode === 'REVIEW'} />I review and publish each result</label>
           <label><input type="radio" name="publicationMode" value="AUTOMATIC" defaultChecked={game.publicationMode === 'AUTOMATIC'} />Publish automatically after a review window</label>
           <label>Review window (minutes)<input name="reviewWindowMinutes" type="number" min="0" max="1440" step="1" defaultValue={game.reviewWindowMinutes} required /></label>
+          <label><input type="checkbox" name="autoOpenNextPhase" defaultChecked={game.autoOpenNextPhase} />Open the next Day or Night automatically after each result publishes</label>
+          <small className="field-hint">Works with automatic publishing. The next phase closes at your game’s usual Day or Night close time, and starts as soon as the result is out. The first Day and final showdown are still yours to start.</small>
           <button className="secondary-button" type="submit" disabled={busy}>Save</button>
         </form>
       </details>
