@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { attentionEventCount, CONSOLE_TABS, latestAttentionEventAt, type ConsoleTabId } from '../../lib/game/console-guidance';
+import { attentionEventCount, CONSOLE_TABS, latestAttentionEventAt, type ConsoleTabId, type TabCount } from '../../lib/game/console-guidance';
 import { useOperations } from './operations-context';
 
 export interface TabBadge {
@@ -82,15 +82,19 @@ export function ConsolePanel({ id, active, children }: { id: ConsoleTabId; activ
  * tab while a result is waiting on the moderator, and the Safety & records tab
  * while the event log holds a problem the moderator has not looked at yet, so
  * nothing urgent hides behind a tab. Opening Safety & records clears the number;
- * a problem logged after that brings it back.
+ * a problem logged after that brings it back. Setup and People carry a number
+ * for people waiting on the moderator (sign-ups, moderator applications), which
+ * stays until they are dealt with.
  */
-export function ConsoleNavigation({ active, onSelect, runAttention }: { active: ConsoleTabId; onSelect: (id: ConsoleTabId) => void; runAttention: boolean }) {
+export function ConsoleNavigation({ active, onSelect, runAttention, waiting = {} }: { active: ConsoleTabId; onSelect: (id: ConsoleTabId) => void; runAttention: boolean; waiting?: { setup?: TabCount; people?: TabCount } }) {
   const { operations, clearNotices } = useOperations();
   const events = operations?.events ?? [];
   const [seenThrough, setSeenThrough] = useState<string | null>(null);
   const unseenProblems = attentionEventCount(events, seenThrough);
   const badges: Partial<Record<ConsoleTabId, TabBadge>> = {};
   if (runAttention && active !== 'run') badges.run = { description: 'A result or follow-up is waiting for you' };
+  if (waiting.setup && active !== 'setup') badges.setup = { count: waiting.setup.count, description: waiting.setup.description };
+  if (waiting.people && active !== 'people') badges.people = { count: waiting.people.count, description: waiting.people.description };
   if (unseenProblems > 0 && active !== 'safety') badges.safety = { count: unseenProblems, description: `${unseenProblems} new ${unseenProblems === 1 ? 'problem needs' : 'problems need'} your attention in the event log` };
 
   function select(id: ConsoleTabId) {

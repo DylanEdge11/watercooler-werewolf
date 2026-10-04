@@ -107,6 +107,15 @@ export async function POST(request: Request, context: RouteContext) {
         db.prepare(`DELETE FROM seat_sessions WHERE seat_id = ? AND ${setupGuard}`).bind(archived.id, gameId, nextRevision),
       );
     }
+    // Replacing the roster archives every seat, including those made from sign-ups; those people go back to waiting.
+    statements.push(
+      db
+        .prepare(
+          `UPDATE signups SET status = 'PENDING', seat_id = NULL, decided_at = NULL, decided_by_moderator_id = NULL
+           WHERE game_id = ? AND status = 'ACCEPTED' AND ${setupGuard}`,
+        )
+        .bind(gameId, gameId, nextRevision),
+    );
     for (const invite of invites) {
       statements.push(
         db

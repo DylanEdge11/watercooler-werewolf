@@ -8,17 +8,19 @@ import { useRouter } from 'next/navigation';
 import LiveGamePanel from './live-game-panel';
 import { ConsoleNavigation, ConsolePanel } from './console-tabs';
 import { OperationsProvider } from './operations-context';
+import ApplicationsPanel from './applications-panel';
 import { Announcements, BackupControls, ChatRooms, CoModeratorAccess, EventLog, FailSafeControls, FeedbackSection, HealthStrip, OpsNotices, PlayerAccessRecovery } from './ops-sections';
 import PlayerChoicesPanel from './player-choices-panel';
+import SignupsPanel, { type AcceptedSignups } from './signups-panel';
 import SpectatorsPanel from './spectators-panel';
 import StatsPanel from './stats-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
-import { defaultConsoleTab, isConsoleTabId, launchChecklist, resolveConsoleTab, setupHint, type ConsoleTabId, type SetupStepKey, type TabChoice } from '../../lib/game/console-guidance';
+import { defaultConsoleTab, isConsoleTabId, launchChecklist, resolveConsoleTab, setupHint, waitingBadges, type ConsoleTabId, type SetupStepKey, type TabChoice } from '../../lib/game/console-guidance';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
 import { ROLE_KEYS, type RoleKey } from '../../lib/game/types';
 import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
-import BrandMark from '../brand-mark';
+import BrandHeader from './brand-header';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
@@ -35,6 +37,7 @@ const sampleRoster = [
 const roleOrder = ROLE_KEYS;
 /** Where each setup step lives on the Setup tab, and what the "next step" note calls the button that jumps there. */
 const SETUP_STEP_SECTIONS: Record<SetupStepKey, { id: string; label: string }> = {
+  signups: { id: 'setup-signups', label: 'Go to sign-ups' },
   roster: { id: 'setup-roster', label: 'Go to the roster' },
   roles: { id: 'setup-roles', label: 'Go to the roles' },
   release: { id: 'setup-release', label: 'Go to release' },
@@ -143,22 +146,20 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
-interface SelectedGameSetup {
-  gameId: string;
-  roster: { roster: RosterSeat[]; emailConfigured?: boolean };
-  assignments: { composition: Composition; batches: Batch[]; game?: { status: string } };
+/** What the console's refresh knows about sign-ups: counts and whether the link is live, not the list itself. */
+interface SignupSummary {
+  state: 'NOT_OPEN' | 'OPEN' | 'CLOSED';
+  live: boolean;
+  pending: number;
+  accepted: number;
+  applicationsOpen: boolean;
+  pendingApplications: number;
 }
 
-function BrandHeader() {
-  return (
-    <header className="setup-header">
-      <a className="brand" href="/" aria-label="Watercooler Werewolf home">
-        <BrandMark />
-        <span><strong>Watercooler</strong><small>Werewolf</small></span>
-      </a>
-      <span className="mode-chip">Moderator console</span>
-    </header>
-  );
+interface SelectedGameSetup {
+  gameId: string;
+  roster: { roster: RosterSeat[]; emailConfigured?: boolean; signups?: SignupSummary };
+  assignments: { composition: Composition; batches: Batch[]; game?: { status: string } };
 }
 
 export default function ModeratorPage() {
@@ -176,6 +177,7 @@ export default function ModeratorPage() {
   // Private links from this session's import and single-player adds, kept only in memory.
   const [inviteRows, setInviteRows] = useState<InviteRow[]>([]);
   const [emailConfigured, setEmailConfigured] = useState(false);
+  const [signupSummary, setSignupSummary] = useState<SignupSummary | null>(null);
   const [emailingInvites, setEmailingInvites] = useState(false);
   const [editingRoster, setEditingRoster] = useState(false);
   const [addedInvite, setAddedInvite] = useState<{ gameId: string; seatId: string; displayName: string; claimUrl: string } | null>(null);
@@ -212,6 +214,7 @@ export default function ModeratorPage() {
   const applyGameSetup = useCallback((selectedGameId: string, rosterData: SelectedGameSetup['roster'], assignmentData: SelectedGameSetup['assignments']) => {
     setRoster(rosterData.roster);
     setEmailConfigured(Boolean(rosterData.emailConfigured));
+    setSignupSummary(rosterData.signups ?? null);
     setComposition(compositionDrafts.current.get(selectedGameId) ?? assignmentData.composition);
     setBatches(assignmentData.batches);
     if (assignmentData.game?.status) {
@@ -255,6 +258,7 @@ export default function ModeratorPage() {
       selectedGameRef.current = '';
       setGameId('');
       setRoster([]);
+      setSignupSummary(null);
       setComposition(null);
       setBatches([]);
     }
@@ -524,6 +528,15 @@ export default function ModeratorPage() {
     }
   }
 
+  /** People accepted from the sign-up list are now seats; keep their private links for the invite file and show the new role counts. */
+  function signupsAccepted(result: AcceptedSignups) {
+    const acceptedFor = gameId;
+    markCompositionDraft(acceptedFor, null);
+    setComposition(result.composition);
+    setInviteRows((current) => [...current, ...result.invites]);
+    void loadGame(acceptedFor).catch(() => {});
+  }
+
   async function copyAddedInvite() {
     if (!addedInvite) return;
     try {
@@ -638,7 +651,8 @@ export default function ModeratorPage() {
   const activeTab = resolveConsoleTab(selectedTab, defaultConsoleTab(selectedGame?.status));
   const released = Boolean(latestBatch?.releasedAt);
   const checklist = launchChecklist({ gameCount: games.length, seatCount: roster.length, claimedCount: claimed, hasBatch: Boolean(latestBatch), released });
-  const hint = setupHint({ status: selectedGame?.status, seatCount: roster.length, claimedCount: claimed, hasBatch: Boolean(latestBatch), released });
+  const hint = setupHint({ status: selectedGame?.status, seatCount: roster.length, claimedCount: claimed, hasBatch: Boolean(latestBatch), released, pendingSignups: signupSummary?.pending ?? 0, signupsOpen: signupSummary?.live ?? false });
+  const waiting = waitingBadges({ pendingSignups: signupSummary?.pending ?? 0, pendingApplications: signupSummary?.pendingApplications ?? 0, setupEditable, isOwner: selectedGame?.moderatorRole === 'OWNER' });
   const balanceScore = composition
     ? composition.VILLAGER - composition.WEREWOLF * 5 + composition.SEER * 3 + composition.BODYGUARD * 2 + composition.HUNTER + composition.MASON + composition.APPRENTICE_SEER * 2 + composition.MAYOR * 2 + composition.CUPID
     : 0;
@@ -746,7 +760,7 @@ export default function ModeratorPage() {
             </section>
           ) : (
             <OperationsProvider key={`operations-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} onGameChanged={handleLiveChange}>
-              <ConsoleNavigation active={activeTab} onSelect={chooseTab} runAttention={runAttention} />
+              <ConsoleNavigation active={activeTab} onSelect={chooseTab} runAttention={runAttention} waiting={waiting} />
 
               <ConsolePanel id="setup" active={activeTab === 'setup'}>
               {showSchedulePanel && selectedGame && <section className="setup-card" id="game-schedule">
@@ -768,8 +782,9 @@ export default function ModeratorPage() {
                 </form>
                 {!setupEditable && <p className="notice warning schedule-lock-note">Schedule changes are locked for this {selectedGame.status.replaceAll('_', ' ').toLowerCase()} game.</p>}
               </section>}
+              {setupEditable && selectedGame && <SignupsPanel key={`signups-${gameId}`} gameId={gameId} gameStatus={selectedGame.status} active={activeTab === 'setup'} refreshKey={`${signupSummary?.state}-${signupSummary?.pending}-${signupSummary?.accepted}`} onAccepted={signupsAccepted} onRosterChanged={() => void loadGame(gameId).catch(() => {})} />}
               {setupEditable ? <section className="setup-card" id="setup-roster">
-                <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Re-importing replaces every seat, so everyone must claim again; to add or remove one player, use <strong>Change the roster</strong> below. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
+                <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Re-importing replaces every seat, including people you accepted from sign-ups (they go back to waiting), so everyone must claim again; to add or remove one player, use <strong>Change the roster</strong> below. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
                 <form className="form-stack" onSubmit={importRoster}>
                   <label>Roster CSV<textarea name="csv" defaultValue={sampleRoster} rows={8} spellCheck={false} required /></label>
                   <div className="button-row">
@@ -803,7 +818,7 @@ export default function ModeratorPage() {
                         <span><strong>{seat.displayName}</strong><small>{seat.email} · {seat.invitationEmailedAt ? `emailed ${new Date(seat.invitationEmailedAt).toLocaleString()}` : 'not emailed'}</small></span>
                         <span className="button-row">
                           {emailConfigured && <button className="text-button" type="button" onClick={() => void emailInvites([seat])} disabled={emailingInvites}>{seat.invitationEmailedAt ? 'Resend' : 'Email'}</button>}
-                          {rosterEditable && <button className="text-button" type="button" onClick={() => void removeSeat(seat)} disabled={editingRoster || roster.length <= MIN_PLAYERS} aria-label={`Remove ${seat.displayName}`}>Remove</button>}
+                          {rosterEditable && <button className="text-button" type="button" onClick={() => void removeSeat(seat)} disabled={editingRoster || roster.length === MIN_PLAYERS} aria-label={`Remove ${seat.displayName}`}>Remove</button>}
                         </span>
                       </li>)}
                     </ul>
@@ -879,6 +894,7 @@ export default function ModeratorPage() {
                   <div className="setup-card-heading"><span aria-hidden="true">◆</span><div><h2>Moderators</h2><p>Share this game with co-moderators. Only the owner can add or remove them, or hand the game over.</p></div></div>
                   <div className="card-stack"><CoModeratorAccess /></div>
                 </section>
+                <ApplicationsPanel key={`applications-${gameId}`} gameId={gameId} isOwner={selectedGame?.moderatorRole === 'OWNER'} canOpen={!['CANCELLED', 'STOPPED', 'COMPLETED'].includes(selectedGame?.status ?? '')} active={activeTab === 'people'} refreshKey={`${signupSummary?.applicationsOpen}-${signupSummary?.pendingApplications}`} onChanged={handleLiveChange} />
               </ConsolePanel>
 
               <ConsolePanel id="messages" active={activeTab === 'messages'}>

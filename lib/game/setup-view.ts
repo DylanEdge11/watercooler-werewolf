@@ -1,5 +1,6 @@
 import { getDb } from '../../db';
 import { readSmtpSettings } from '../email/settings';
+import { loadSignupSummary } from '../roster/signup-store';
 import { HttpError } from '../http/errors';
 import { scoreComposition } from './balance';
 import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from './types';
@@ -25,7 +26,7 @@ export async function loadRosterView(gameId: string) {
   const db = getDb();
   // An emailed invitation counts only until the seat's link is replaced
   // again (by a later send, a reset, or a restore), which bumps updated_at.
-  const [roster, composition] = await Promise.all([
+  const [roster, composition, signups] = await Promise.all([
     db
       .prepare(
         `SELECT id, display_name AS displayName, email, status, claimed_at AS claimedAt,
@@ -47,9 +48,11 @@ export async function loadRosterView(gameId: string) {
       )
       .bind(gameId)
       .all(),
+    loadSignupSummary(gameId),
   ]);
   return {
     emailConfigured: readSmtpSettings() !== null,
+    signups,
     roster: roster.results,
     composition: composition.results.map((row) => ({ ...row, roleKey: canonicalRoleKey(String(row.roleKey)) })),
   };
