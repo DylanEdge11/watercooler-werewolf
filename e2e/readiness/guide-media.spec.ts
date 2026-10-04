@@ -28,7 +28,7 @@ const RAW_VIDEO = resolve('work/guide-walkthrough-raw.webm');
 const NARRATOR = 'Alex Morgan';
 const BOTS = ['Casey Rivera', 'Morgan Lee', 'Jamie Park', 'Taylor Reed', 'Riley Chen', 'Jordan Blake'];
 const COMPOSITION: Record<RoleKey, number> = {
-  VILLAGER: 4, WEREWOLF: 2, SEER: 1, BODYGUARD: 0, HUNTER: 0, MASON: 0, APPRENTICE_SEER: 0, MAYOR: 0, CUPID: 0,
+  VILLAGER: 3, WEREWOLF: 2, SEER: 1, BODYGUARD: 1, HUNTER: 0, MASON: 0, APPRENTICE_SEER: 0, MAYOR: 0, CUPID: 0,
 };
 const ROLE_NAMES: Record<RoleKey, string> = {
   VILLAGER: 'Villager', WEREWOLF: 'Werewolf', SEER: 'Seer', BODYGUARD: 'Bodyguard', HUNTER: 'Hunter',
@@ -179,6 +179,9 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await type(page, page.getByLabel('Password'), MODERATOR_PASSWORD);
   await click(page, page.getByRole('button', { name: 'Sign in', exact: true }), 1500);
   await expect(page.getByRole('heading', { name: gameName, exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('tablist', { name: 'Console sections' })).toBeVisible();
+  await pause(page, 1200);
+  await shot(page, 'moderator-tabs.webp');
   await caption(page, 'Email invites sends each player their own private link');
   await page.locator('.invite-email:not(.roster-edit)').evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'smooth' }));
   await pause(page, 1500);
@@ -227,6 +230,8 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   const preview = await (await previewResponse).json() as { assignments: Array<{ seatId: string; role: RoleKey }> };
   const roleBySeatId = new Map(preview.assignments.map((assignment) => [assignment.seatId, assignment.role]));
   await click(page, page.getByRole('button', { name: 'Release roles to players', exact: true }), 600);
+  // Releasing roles moves the console to Run game; the batch just released is on the Setup tab.
+  await click(page, page.getByRole('tab', { name: 'Setup', exact: true }), 400);
   await page.getByRole('heading', { name: /Review assignment batch/u }).evaluate((element) => element.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   await pause(page, 2800);
 
@@ -307,6 +312,49 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await pause(page, 2600);
   await shot(page, 'player-timeline.webp');
   await click(page, page.getByRole('button', { name: 'Back to today', exact: true }), 900);
+
+  // 10. Night falls: the moderator opens it, and the special roles act in private.
+  await page.goto('/moderator');
+  await caption(page, '10 · Night falls. The moderator opens it, and special roles act in private');
+  await expect(livePanel).toBeVisible({ timeout: 30_000 });
+  await livePanel.scrollIntoViewIfNeeded();
+  await pause(page, 1200);
+  await click(page, page.getByLabel(/Deadline \(/u), 200);
+  await page.getByLabel(/Deadline \(/u).fill(deadline);
+  const nightResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/games/${gameId}/phases`);
+  await click(page, page.getByRole('button', { name: 'Open phase', exact: true }), 1500);
+  const { phaseId: nightId } = await (await nightResponse).json() as { phaseId: string };
+
+  // The living bots with a Night role act: the pack attacks a Villager, the Bodyguard protects them, the Seer looks at the last Werewolf.
+  const livingBotsWith = (role: RoleKey) => [...roleBySeatId].filter(([seatId, seatRole]) => seatRole === role && seatId !== victimSeatId && seatId !== narratorSeatId).map(([seatId]) => nameBySeatId.get(seatId) ?? '');
+  const livingWolfSeat = wolves.find((seatId) => seatId !== victimSeatId) ?? '';
+  const attacked = seats.find((seat) => roleBySeatId.get(seat.id) === 'VILLAGER' && seat.id !== narratorSeatId)?.id ?? '';
+  for (const name of livingBotsWith('WEREWOLF')) await post(bots.get(name)!, `/api/phases/${nightId}/actions`, { actionKind: 'WOLF_VOTE', targetIds: [attacked] });
+  for (const name of livingBotsWith('BODYGUARD')) await post(bots.get(name)!, `/api/phases/${nightId}/actions`, { actionKind: 'PROTECT', targetIds: [attacked] });
+  for (const name of livingBotsWith('SEER')) await post(bots.get(name)!, `/api/phases/${nightId}/actions`, { actionKind: 'INVESTIGATE', targetIds: [livingWolfSeat] });
+  await pause(page, 1500);
+
+  // 11. Player choices: special powers first; the pack and the votes are lists to open.
+  await caption(page, '11 · Player choices lists special powers first');
+  const choices = page.locator('#player-choices');
+  await click(page, choices.getByText('Show player choices', { exact: true }), 1200);
+  await choices.evaluate((element) => element.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  await expect(choices.getByRole('region', { name: 'Night 1' }).locator('.choices-powers .outcome-row').first()).toBeVisible({ timeout: 30_000 });
+  await pause(page, 2400);
+  await shot(page, 'moderator-player-choices.webp');
+  await caption(page, 'The pack’s targets and the votes open with one click');
+  const packList = choices.getByRole('region', { name: 'Night 1' }).locator('details.choices-group').filter({ hasText: 'Pack targets' });
+  if (await packList.count()) await click(page, packList.locator('summary'), 1800);
+  await click(page, choices.getByRole('region', { name: 'Day 1' }).locator('details.choices-phase > summary'), 1000);
+  await click(page, choices.getByRole('region', { name: 'Day 1' }).locator('details.choices-group').filter({ hasText: 'Day votes' }).locator('summary'), 2200);
+
+  // 12. The rest of the console is a tab away.
+  await caption(page, '12 · Everything else is a tab away: people, messages, and safety');
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  await pause(page, 900);
+  for (const tabName of ['People', 'Messages', 'Safety & records', 'Run game']) {
+    await click(page, page.getByRole('tab', { name: tabName, exact: true }), 1500);
+  }
   await caption(page, 'Then the next phase begins. Full rules at /guide');
   await pause(page, 3000);
 

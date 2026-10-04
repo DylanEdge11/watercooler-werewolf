@@ -6,11 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import GameSettingsFields from './game-settings-fields';
 import { useRouter } from 'next/navigation';
 import LiveGamePanel from './live-game-panel';
-import OperationsPanel from './operations-panel';
+import { ConsoleNavigation, ConsolePanel } from './console-tabs';
+import { OperationsProvider } from './operations-context';
+import { Announcements, BackupControls, ChatRooms, CoModeratorAccess, EventLog, FailSafeControls, FeedbackSection, HealthStrip, OpsNotices, PlayerAccessRecovery } from './ops-sections';
 import PlayerChoicesPanel from './player-choices-panel';
 import SpectatorsPanel from './spectators-panel';
 import StatsPanel from './stats-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
+import { defaultConsoleTab, isConsoleTabId, launchChecklist, resolveConsoleTab, setupHint, type ConsoleTabId, type SetupStepKey, type TabChoice } from '../../lib/game/console-guidance';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
 import { ROLE_KEYS, type RoleKey } from '../../lib/game/types';
 import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
@@ -30,6 +33,12 @@ const sampleRoster = [
 ].join('\n');
 
 const roleOrder = ROLE_KEYS;
+/** Where each setup step lives on the Setup tab, and what the "next step" note calls the button that jumps there. */
+const SETUP_STEP_SECTIONS: Record<SetupStepKey, { id: string; label: string }> = {
+  roster: { id: 'setup-roster', label: 'Go to the roster' },
+  roles: { id: 'setup-roles', label: 'Go to the roles' },
+  release: { id: 'setup-release', label: 'Go to release' },
+};
 const weekdayOptions = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -176,6 +185,10 @@ export default function ModeratorPage() {
   const [showNewGameForm, setShowNewGameForm] = useState(false);
   const [showSchedulePanel, setShowSchedulePanel] = useState(false);
   const [compositionDraftIds, setCompositionDraftIds] = useState<Set<string>>(() => new Set());
+  // The tab the moderator picked; until they pick one, the console opens on Setup or Run game by the game's status.
+  const [selectedTab, setSelectedTab] = useState<TabChoice | null>(null);
+  // A result or follow-up is waiting on the moderator, reported by the live game panel, so the Run game tab can say so.
+  const [runAttention, setRunAttention] = useState(false);
   const selectedGameRef = useRef('');
   const gamesRequest = useRef(0);
   const gameDetailRequest = useRef(0);
@@ -256,6 +269,9 @@ export default function ModeratorPage() {
     void (async () => {
       try {
         await loadGames();
+        // A link such as /moderator#messages opens that tab.
+        const linked = window.location.hash.slice(1);
+        if (isConsoleTabId(linked)) setSelectedTab({ id: linked, forDefault: null });
       } catch (caught) {
         // Signed out: the 401 also says whether the first moderator account still has to be created.
         setNeedsBootstrap(caught instanceof RequestError && caught.body.needsBootstrap === true);
@@ -323,6 +339,7 @@ export default function ModeratorPage() {
       setInviteRows([]);
       setShowNewGameForm(false);
       setShowSchedulePanel(false);
+      setSelectedTab(null);
       await loadGames(data.gameId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to create the game.');
@@ -333,6 +350,7 @@ export default function ModeratorPage() {
     if (!nextGameId) return;
     setShowNewGameForm(false);
     setShowSchedulePanel(false);
+    setSelectedTab(null);
     setInviteRows([]);
     setMessage('');
     setError('');
@@ -357,8 +375,21 @@ export default function ModeratorPage() {
     } else {
       setShowNewGameForm(false);
       setShowSchedulePanel(true);
+      chooseTab('setup');
     }
     window.setTimeout(() => document.getElementById('game-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  }
+
+  /** Picks a tab. It holds until the game flips between setup and running, when the console goes to the tab that suits it. */
+  function chooseTab(id: ConsoleTabId) {
+    setSelectedTab({ id, forDefault: defaultConsoleTab(selectedGame?.status) });
+  }
+
+  /** Jumps to a step of the launch checklist on the Setup tab. */
+  function goToSetupStep(sectionId: string) {
+    setShowNewGameForm(false);
+    chooseTab('setup');
+    window.setTimeout(() => document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   }
 
   async function updateSchedule(event: FormEvent<HTMLFormElement>) {
@@ -572,6 +603,7 @@ export default function ModeratorPage() {
         body: JSON.stringify({ action: 'RELEASE', batchId }),
       });
       setMessage('Roles released. Each player can now see only their own role.');
+      chooseTab('run');
       await loadGames();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to release roles.');
@@ -603,6 +635,10 @@ export default function ModeratorPage() {
   const latestBatch = batches[0];
   const rosterById = useMemo(() => new Map(roster.map((seat) => [seat.id, seat])), [roster]);
   const gameDates = useMemo(() => defaultGameDates(), []);
+  const activeTab = resolveConsoleTab(selectedTab, defaultConsoleTab(selectedGame?.status));
+  const released = Boolean(latestBatch?.releasedAt);
+  const checklist = launchChecklist({ gameCount: games.length, seatCount: roster.length, claimedCount: claimed, hasBatch: Boolean(latestBatch), released });
+  const hint = setupHint({ status: selectedGame?.status, seatCount: roster.length, claimedCount: claimed, hasBatch: Boolean(latestBatch), released });
   const balanceScore = composition
     ? composition.VILLAGER - composition.WEREWOLF * 5 + composition.SEER * 3 + composition.BODYGUARD * 2 + composition.HUNTER + composition.MASON + composition.APPRENTICE_SEER * 2 + composition.MAYOR * 2 + composition.CUPID
     : 0;
@@ -638,41 +674,57 @@ export default function ModeratorPage() {
     <main className="setup-shell backstage">
       <BrandHeader />
       <div className="console-layout">
-        <aside className="setup-progress">
+        <aside className={`setup-progress${checklist.release === 'done' ? ' launched' : ''}`}>
           <p className="eyebrow">Launch checklist</p>
+          {checklist.release === 'done' && <p className="launch-complete">All four launch steps are done.</p>}
           <ol>
-            <li className={`${games.length ? 'done' : 'active'} ${showSchedulePanel || showNewGameForm ? 'reviewing' : ''}`}><button className="checklist-step" type="button" onClick={openGameSchedule} aria-controls="game-schedule"><span>1</span><div><strong>Game schedule</strong><small>Open timezone and cadence</small></div></button></li>
-            <li className={roster.length ? 'done' : games.length ? 'active' : ''}><span>2</span><div><strong>Player roster</strong><small>Minimum {MIN_PLAYERS} · up to {MAX_PLAYERS} private seats</small></div></li>
-            <li className={latestBatch ? 'done' : roster.length ? 'active' : ''}><span>3</span><div><strong>Role balance</strong><small>Compose and randomize</small></div></li>
-            <li className={latestBatch?.releasedAt ? 'done' : latestBatch ? 'active' : ''}><span>4</span><div><strong>Release roles</strong><small>Irreversible launch</small></div></li>
+            <li className={`${checklist.schedule} ${showSchedulePanel || showNewGameForm ? 'reviewing' : ''}`}><button className="checklist-step" type="button" onClick={openGameSchedule} aria-controls="game-schedule"><span>1</span><div><strong>Game schedule</strong><small>Open timezone and cadence</small></div></button></li>
+            <li className={checklist.roster}><button className="checklist-step" type="button" onClick={() => goToSetupStep('setup-roster')} disabled={!selectedGame}><span>2</span><div><strong>Player roster</strong><small>Minimum {MIN_PLAYERS} · up to {MAX_PLAYERS} private seats</small></div></button></li>
+            <li className={checklist.roles}><button className="checklist-step" type="button" onClick={() => goToSetupStep(setupEditable && composition ? 'setup-roles' : 'setup-release')} disabled={!latestBatch && !(setupEditable && composition)}><span>3</span><div><strong>Role balance</strong><small>Compose and randomize</small></div></button></li>
+            <li className={checklist.release}><button className="checklist-step" type="button" onClick={() => goToSetupStep('setup-release')} disabled={!latestBatch}><span>4</span><div><strong>Release roles</strong><small>Irreversible launch</small></div></button></li>
           </ol>
-          <a className="quiet-link" href="/">View current player session →</a>
-          <a className="quiet-link" href="/moderator/player-preview">Open Player View Studio →</a>
+          <nav className="console-links" aria-label="Moderator links">
+            <a className="quiet-link" href="/guide#moderators" target="_blank" rel="noopener noreferrer">Moderator guide →<span className="sr-only"> (opens in a new tab)</span></a>
+            <a className="quiet-link" href="/">View current player session →</a>
+            <a className="quiet-link" href="/moderator/player-preview">Open Player View Studio →</a>
+          </nav>
         </aside>
 
         <section className="console-main">
           <div className="console-title">
             <div><p className="eyebrow accent">Office campaign</p><h1>{selectedGame?.name ?? 'Set up a new game'}</h1></div>
-            <div className="console-title-actions">{selectedGame && <span className="status-pill">{selectedGame.status.replaceAll('_', ' ')}</span>}<button className="secondary-button" type="button" onClick={startNewSetup}>Start new setup</button><button className="text-button" type="button" onClick={signOut}>Sign out</button></div>
+            <div className="console-title-actions">{selectedGame && <span className="status-pill">{selectedGame.status.replaceAll('_', ' ')}</span>}</div>
+          </div>
+          <div className={`game-bar${games.length ? '' : ' bare'}`}>
+            {games.length > 0 && (
+              <label className="game-selector-label">Selected game
+                <select aria-label="Selected game" value={gameId} onChange={(event) => selectGame(event.target.value)}>
+                  {games.map((game) => <option key={game.id} value={game.id}>{game.name} · {game.status.replaceAll('_', ' ')}</option>)}
+                </select>
+              </label>
+            )}
+            <div className="game-bar-actions">
+              {showNewGameForm && games.length > 0 && <button className="secondary-button" type="button" onClick={() => setShowNewGameForm(false)}>Back to selected game</button>}
+              <button className="secondary-button" type="button" onClick={startNewSetup}>Start new setup</button>
+              <button className="text-button" type="button" onClick={signOut}>Sign out</button>
+            </div>
           </div>
           {error && <p className="notice error" role="alert">{error}</p>}
           {message && <p className="notice success" role="status">{message}</p>}
           {recoveryCodes.length > 0 && (
             <div className="notice warning"><strong>Save these one-time recovery codes now:</strong><code>{recoveryCodes.join(' · ')}</code></div>
           )}
+          {hint && games.length > 0 && !showNewGameForm && <section className="next-step page-next-step" aria-label="Next step"><div><strong>{hint.title}</strong> {hint.detail}</div>{hint.step && <button className="secondary-button" type="button" onClick={() => goToSetupStep(SETUP_STEP_SECTIONS[hint.step!].id)}>{SETUP_STEP_SECTIONS[hint.step].label}</button>}</section>}
 
-          {games.length > 0 && (
-            <section className="setup-card game-selector-card">
-              <div className="setup-card-heading"><span>↔</span><div><h2>Game workspace</h2><p>Select a prior game to review its scoped roster, roles, and operations.</p></div></div>
-              <div className="button-row">
-                <label className="game-selector-label">Selected game
-                  <select aria-label="Selected game" value={gameId} onChange={(event) => selectGame(event.target.value)}>
-                    {games.map((game) => <option key={game.id} value={game.id}>{game.name} · {game.status.replaceAll('_', ' ')}</option>)}
-                  </select>
-                </label>
-                {canCancelSetup && <button className="danger-button" type="button" onClick={() => void cancelSetup()}>Cancel setup and start new game</button>}
-                {showNewGameForm && <button className="secondary-button" type="button" onClick={() => setShowNewGameForm(false)}>Back to selected game</button>}
-              </div>
+          {!games.length && (
+            <section className="setup-card welcome-card" aria-labelledby="console-welcome-title">
+              <div className="setup-card-heading"><span aria-hidden="true">★</span><div><h2 id="console-welcome-title">Welcome, moderator</h2><p>You run the game but don’t play it, so this console shows every role. A game has three parts.</p></div></div>
+              <ol className="welcome-steps">
+                <li><strong>Set up.</strong> Choose the dates and rules below, import your players, balance the roles, then release them. Use the launch checklist beside this page to see where you are.</li>
+                <li><strong>Run.</strong> Each Day and Night: open a phase, nudge anyone who hasn’t responded, lock it, check the result, and publish it. Or let the app publish for you.</li>
+                <li><strong>Look after people.</strong> Reset a forgotten PIN, announce news, add spectators, and keep an eye on the chat.</li>
+              </ol>
+              <p className="field-help">New to this? <a href="/guide#moderators" target="_blank" rel="noopener noreferrer">Read the moderator guide<span className="sr-only"> (opens in a new tab)</span></a>, or open <a href="/moderator/player-preview">Player View Studio</a> to see what your players will see.</p>
             </section>
           )}
 
@@ -693,7 +745,10 @@ export default function ModeratorPage() {
               </form>
             </section>
           ) : (
-            <>
+            <OperationsProvider key={`operations-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} onGameChanged={handleLiveChange}>
+              <ConsoleNavigation active={activeTab} onSelect={chooseTab} runAttention={runAttention} />
+
+              <ConsolePanel id="setup" active={activeTab === 'setup'}>
               {showSchedulePanel && selectedGame && <section className="setup-card" id="game-schedule">
                 <div className="setup-card-heading"><span>01</span><div><h2>Game schedule</h2><p>{setupEditable ? 'Review or update the setup details, then continue where you left off.' : 'Review the launch schedule. It becomes read-only after roles are released.'}</p></div></div>
                 <form className="setup-grid" key={`schedule-${selectedGame.id}-${selectedGame.finalCutoffAt}-${selectedGame.hunterWindowMinutes}-${selectedGame.dayDivisor}-${selectedGame.nightDivisor}-${JSON.stringify(selectedGame.eliminationSchedule ?? null)}-${selectedGame.publicationMode}-${selectedGame.reviewWindowMinutes}`} onSubmit={updateSchedule}>
@@ -713,7 +768,7 @@ export default function ModeratorPage() {
                 </form>
                 {!setupEditable && <p className="notice warning schedule-lock-note">Schedule changes are locked for this {selectedGame.status.replaceAll('_', ' ').toLowerCase()} game.</p>}
               </section>}
-              {setupEditable ? <section className="setup-card">
+              {setupEditable ? <section className="setup-card" id="setup-roster">
                 <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Re-importing replaces every seat, so everyone must claim again; to add or remove one player, use <strong>Change the roster</strong> below. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
                 <form className="form-stack" onSubmit={importRoster}>
                   <label>Roster CSV<textarea name="csv" defaultValue={sampleRoster} rows={8} spellCheck={false} required /></label>
@@ -754,10 +809,10 @@ export default function ModeratorPage() {
                     </ul>
                   </details>
                 </div>}
-              </section> : <section className="setup-card"><p className="notice warning">This game is {selectedGame?.status.replaceAll('_', ' ').toLowerCase()}. Setup changes are locked. Select another game or start a new setup.</p></section>}
+              </section> : <section className="setup-card" id="setup-roster"><p className="notice warning">This game is {selectedGame?.status.replaceAll('_', ' ').toLowerCase()}. Setup changes are locked. Select another game or start a new setup.</p></section>}
 
               {setupEditable && composition && (
-                <section className="setup-card">
+                <section className="setup-card" id="setup-roles">
                   <div className="setup-card-heading"><span>03</span><div><h2>Balance the roles</h2><p>Counts must equal the roster. Unique roles cap at one; Masons travel in groups. Small-game presets are editable before release.</p></div></div>
                   <div className="role-composer">
                       {roleOrder.map((role) => (
@@ -781,7 +836,7 @@ export default function ModeratorPage() {
               )}
 
               {latestBatch && (
-                <section className="setup-card assignment-review">
+                <section className="setup-card assignment-review" id="setup-release">
                   <div className="setup-card-heading"><span>04</span><div><h2>Review assignment batch {latestBatch.revision}</h2><p>Random evidence <code>{latestBatch.randomEvidenceHash.slice(0, 16)}…</code></p></div></div>
                   <div className="assignment-grid">
                     {latestBatch.assignments.map((assignment) => <div key={assignment.seatId}><span>{rosterById.get(assignment.seatId)?.displayName ?? 'Player'}</span><strong>{ROLE_CATALOG[assignment.role].name}</strong></div>)}
@@ -789,12 +844,71 @@ export default function ModeratorPage() {
                   {latestBatch.releasedAt ? <p className="notice success">Released {new Date(latestBatch.releasedAt).toLocaleString()}</p> : setupEditable ? <button className="danger-button" type="button" onClick={() => releaseAssignments(latestBatch.id)}>Release roles to players</button> : <p className="notice warning">This preview cannot be released because setup is locked.</p>}
                 </section>
               )}
-              {latestBatch?.releasedAt && <LiveGamePanel key={`live-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} onChanged={handleLiveChange} />}
-              {latestBatch?.releasedAt && <PlayerChoicesPanel key={`choices-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} />}
-              {latestBatch?.releasedAt && <StatsPanel key={`stats-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} />}
-              {latestBatch?.releasedAt && <SpectatorsPanel key={`spectators-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} />}
-              <OperationsPanel key={`operations-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} onGameChanged={handleLiveChange} />
-            </>
+                {canCancelSetup && <section className="setup-card start-over" id="setup-start-over">
+                  <div className="setup-card-heading"><span aria-hidden="true">▲</span><div><h2>Start over</h2><p>Cancel this unfinished setup and begin a new game. Its invite links and player sessions stop working; its audit history is kept.</p></div></div>
+                  <button className="danger-button" type="button" onClick={() => void cancelSetup()}>Cancel setup and start new game</button>
+                </section>}
+              </ConsolePanel>
+
+              <ConsolePanel id="run" active={activeTab === 'run'}>
+                {activeTab === 'run' && <OpsNotices />}
+                <HealthStrip />
+                {released ? <>
+                  <LiveGamePanel key={`live-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} onChanged={handleLiveChange} onAttention={setRunAttention} />
+                  <PlayerChoicesPanel key={`choices-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} />
+                  <StatsPanel key={`stats-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} />
+                </> : <section className="setup-card run-placeholder">
+                  <div className="setup-card-heading"><span aria-hidden="true">▶</span><div><h2>{selectedGame?.status === 'CANCELLED' || selectedGame?.status === 'STOPPED' ? 'There is no game to run' : 'The game hasn’t started yet'}</h2><p>{selectedGame?.status === 'CANCELLED' ? 'This setup was cancelled.' : selectedGame?.status === 'STOPPED' ? 'This game was stopped before its roles were released.' : 'Phases, results, and every player’s choices appear here once you release the roles.'}</p></div></div>
+                  {setupEditable && <button className="secondary-button" type="button" onClick={() => chooseTab('setup')}>Back to setup</button>}
+                </section>}
+              </ConsolePanel>
+
+              <ConsolePanel id="people" active={activeTab === 'people'}>
+                <section className="setup-card" id="player-access">
+                  <div className="setup-card-heading"><span aria-hidden="true">◈</span><div><h2>Player access</h2><p>Get a player back in when they forget their PIN or their seat locks.</p></div></div>
+                  {activeTab === 'people' && <OpsNotices />}
+                  <div className="card-stack"><PlayerAccessRecovery /></div>
+                </section>
+                {released
+                  ? <SpectatorsPanel key={`spectators-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} />
+                  : <section className="setup-card spectators-card" id="spectators">
+                    <div className="setup-card-heading"><span>◉</span><div><h2>Spectators</h2><p>Let people watch once the game is running. They have no role and no vote.</p></div></div>
+                    <p className="field-help">Spectators can be added after you release the roles.</p>
+                  </section>}
+                <section className="setup-card" id="moderators">
+                  <div className="setup-card-heading"><span aria-hidden="true">◆</span><div><h2>Moderators</h2><p>Share this game with co-moderators. Only the owner can add or remove them, or hand the game over.</p></div></div>
+                  <div className="card-stack"><CoModeratorAccess /></div>
+                </section>
+              </ConsolePanel>
+
+              <ConsolePanel id="messages" active={activeTab === 'messages'}>
+                <section className="setup-card" id="announcements">
+                  <div className="setup-card-heading"><span aria-hidden="true">▤</span><div><h2>Announcements</h2><p>Tell every player something official, then copy it into an email or group chat so nobody misses it.</p></div></div>
+                  {activeTab === 'messages' && <OpsNotices />}
+                  <div className="card-stack"><Announcements /></div>
+                </section>
+                <section className="setup-card" id="chat-moderation">
+                  <div className="setup-card-heading"><span aria-hidden="true">◐</span><div><h2>Chat moderation</h2><p>Read any room, post as Moderator, make a room read-only, or remove a message.</p></div></div>
+                  <div className="card-stack"><ChatRooms /></div>
+                </section>
+                <section className="setup-card" id="feedback">
+                  <div className="setup-card-heading"><span aria-hidden="true">◒</span><div><h2>Feedback and ratings</h2><p>What players and moderators have said about the game so far.</p></div></div>
+                  <div className="card-stack"><FeedbackSection /></div>
+                </section>
+              </ConsolePanel>
+
+              <ConsolePanel id="safety" active={activeTab === 'safety'}>
+                <section className="setup-card" id="records">
+                  <div className="setup-card-heading"><span aria-hidden="true">▦</span><div><h2>Records and backups</h2><p>What the game has been doing, and private copies you can keep or restore from.</p></div></div>
+                  {activeTab === 'safety' && <OpsNotices />}
+                  <div className="card-stack"><EventLog /><BackupControls /></div>
+                </section>
+                <section className="setup-card danger-zone" id="danger-zone">
+                  <div className="setup-card-heading"><span aria-hidden="true">▲</span><div><h2>Danger zone</h2><p>These end a game or rewind it. Read the confirmation before you agree.</p></div></div>
+                  <div className="card-stack"><FailSafeControls /></div>
+                </section>
+              </ConsolePanel>
+            </OperationsProvider>
           )}
         </section>
       </div>

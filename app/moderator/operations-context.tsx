@@ -1,16 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import type { FeedbackSummary } from '../../lib/game/feedback';
-import { AnnouncementCopies, FeedbackBlock, type AnnouncementRecord } from './communications';
-import RoomHistory from './room-history';
-import { ROOM_NAMES } from '../../lib/chat/room-names';
+import type { AnnouncementRecord } from './communications';
 
-interface Operations {
+export interface Operations {
   viewerRole: string | null;
   game: { name: string; status: string; chatRetentionDays: number; finalCutoffAt: string; stoppedAt?: string | null; stopReason?: string | null };
   counts: { total: number; claimed: number; living: number };
@@ -24,7 +21,7 @@ interface Operations {
   events: OperationalEvent[];
 }
 
-interface OperationalEvent {
+export interface OperationalEvent {
   id: string;
   severity: string;
   source: string;
@@ -34,7 +31,7 @@ interface OperationalEvent {
   storySource: 'AI' | 'TEMPLATE' | null;
 }
 
-interface Room {
+export interface Room {
   id: string;
   type: string;
   status: string;
@@ -42,7 +39,7 @@ interface Room {
   messageCount: number;
 }
 
-interface RoomMessage {
+export interface RoomMessage {
   id: string;
   roomType: string;
   authorName: string;
@@ -50,7 +47,7 @@ interface RoomMessage {
   createdAt: string;
 }
 
-interface Moderator {
+export interface Moderator {
   id: string;
   email: string;
   role: string;
@@ -71,12 +68,66 @@ async function parseIfChanged<T>(url: string, etag: string | null): Promise<{ da
   return response ? { data: await parse<T>(response), etag: responseEtag(response) } : null;
 }
 
-export default function OperationsPanel({ gameId, refreshToken = 0, onGameChanged }: { gameId: string; refreshToken?: number; onGameChanged?: () => void }) {
-  const router = useRouter();
+export interface OperationsValue {
+  gameId: string;
+  operations: Operations | null;
+  rooms: Room[];
+  messages: RoomMessage[];
+  /** The room whose full history is open, and a counter that tells it to reload after the console changes a room. */
+  historyRoomId: string | null;
+  setHistoryRoomId: (roomId: string | null) => void;
+  roomChanges: number;
+  moderators: Moderator[];
+  announcements: AnnouncementRecord[];
+  latestAnnouncementId: string | null;
+  feedback: FeedbackSummary | null;
+  recoveryCodes: string[];
+  pinSeatId: string;
+  setPinSeatId: (seatId: string) => void;
+  restoreBackupId: string;
+  setRestoreBackupId: (backupId: string) => void;
+  restoreInviteCsv: string;
+  busyAction: string | null;
+  message: string;
+  error: string;
+  refresh: () => Promise<void>;
+  /** Clears the last action's confirmation or error, so it doesn't follow the moderator to another tab. */
+  clearNotices: () => void;
+  announce: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  addModerator: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  removeModerator: (moderator: Moderator) => Promise<void>;
+  makeOwner: (moderator: Moderator) => Promise<void>;
+  resetPlayerPin: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  exportBackup: () => Promise<void>;
+  toggleRoom: (room: Room) => Promise<void>;
+  purgeRetention: () => Promise<void>;
+  removeMessage: (messageId: string) => Promise<boolean>;
+  stopGame: () => Promise<void>;
+  resetGame: () => Promise<void>;
+  restoreBackup: () => Promise<void>;
+  downloadRestoredInvites: () => void;
+  reconcileDeadlines: () => Promise<void>;
+  submitFeedback: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+}
+
+const OperationsContext = createContext<OperationsValue | null>(null);
+
+export function useOperations(): OperationsValue {
+  const value = useContext(OperationsContext);
+  if (!value) throw new Error('useOperations must be used inside an OperationsProvider.');
+  return value;
+}
+
+/**
+ * The operations data and actions for one game: counts, rooms, moderators,
+ * announcements, feedback, backups, and the event log. The console renders its
+ * parts on different tabs, so one provider owns the polling and the state and
+ * each part reads it from here.
+ */
+export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, children }: { gameId: string; refreshToken?: number; onGameChanged?: () => void; children: ReactNode }) {
   const [operations, setOperations] = useState<Operations | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
-  // The room whose full history is open, and a counter that tells it to reload after the console changes a room.
   const [historyRoomId, setHistoryRoomId] = useState<string | null>(null);
   const [roomChanges, setRoomChanges] = useState(0);
   const [moderators, setModerators] = useState<Moderator[]>([]);
@@ -100,10 +151,10 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
    * Operations and rooms change during play and refresh on every poll, as
    * conditional requests that skip unchanged data. The co-moderator list,
    * announcements, and feedback rarely change, so a poll reloads them at most
-   * once a minute; opening the panel and the moderator's own changes (which
+   * once a minute; opening the console and the moderator's own changes (which
    * call refresh()) always reload everything.
    */
-  const refresh = useCallback(async (options: { onlyLive?: boolean } = {}) => {
+  const refreshInternal = useCallback(async (options: { onlyLive?: boolean } = {}) => {
     const sequence = ++refreshSequence.current;
     const full = !options.onlyLive || Date.now() - lastFullRefresh.current >= SLOW_REFRESH_MS;
     const operationsUrl = `/api/games/${gameId}/operations`;
@@ -140,18 +191,24 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     }
   }, [gameId]);
 
+  const refresh = useCallback(() => refreshInternal(), [refreshInternal]);
+  const clearNotices = useCallback(() => {
+    setMessage('');
+    setError('');
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load operations.'));
+      void refreshInternal().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load operations.'));
     }, 0);
     const stopPolling = pollWhileVisible(() => {
-      void refresh({ onlyLive: true }).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh operations.'));
+      void refreshInternal({ onlyLive: true }).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh operations.'));
     }, RELAXED_POLL_MS);
     return () => {
       window.clearTimeout(timer);
       stopPolling();
     };
-  }, [refresh, refreshToken]);
+  }, [refreshInternal, refreshToken]);
 
   async function post(path: string, body: Record<string, unknown>) {
     const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -419,78 +476,11 @@ export default function OperationsPanel({ gameId, refreshToken = 0, onGameChange
     }
   }
 
-  async function signOut() {
-    await fetch('/api/moderators/logout', { method: 'POST' });
-    router.push('/moderator');
-  }
-
-  if (!operations) return <section className="setup-card"><p className="setup-loading compact">Loading operational controls…</p></section>;
-
-  return (
-    <section className="setup-card operations-panel">
-      <div className="setup-card-heading"><span>06</span><div><h2>Communications & operations</h2><p>Run private rooms, share official notices, and keep recoverable records.</p></div><button className="text-button" type="button" onClick={signOut}>Sign out</button></div>
-      {error && <p className="notice error" role="alert">{error}</p>}
-      {message && <p className="notice success" role="status">{message}</p>}
-
-      <div className="ops-block game-controls">
-        <div><p className="eyebrow accent">Fail-safe controls</p><p className="field-help">Stop freezes a campaign. Reset is an owner-only recovery action that preserves a backup and audit history.</p></div>
-        <div className="button-row">
-          <button className="danger-button" type="button" onClick={() => void stopGame()} disabled={busyAction !== null || ['STOPPED', 'COMPLETED', 'CANCELLED'].includes(operations.game.status)}>{busyAction === 'stop' ? 'Stopping…' : 'Stop game'}</button>
-          {operations.viewerRole === 'OWNER' && <button className="secondary-button" type="button" onClick={() => void resetGame()} disabled={busyAction !== null}>{busyAction === 'reset' ? 'Resetting…' : 'Reset to setup'}</button>}
-        </div>
-        {operations.game.status === 'STOPPED' && <p className="notice warning">Stopped {operations.game.stoppedAt ? new Date(operations.game.stoppedAt).toLocaleString() : ''}: {operations.game.stopReason ?? 'No reason recorded.'}</p>}
-      </div>
-
-      <div className="health-grid">
-        <div><span>Roster</span><strong>{operations.counts.claimed}/{operations.counts.total}</strong><small>claimed</small></div>
-        <div><span>Living</span><strong>{operations.counts.living}</strong><small>players</small></div>
-        <div><span>Sessions</span><strong>{operations.activePlayerSessions}</strong><small>active</small></div>
-        <div className={operations.overduePhase ? 'warning' : ''}><span>Deadlines</span><strong>{operations.overduePhase ? 'Overdue' : 'Healthy'}</strong><small>{operations.overduePhase?.kind ?? 'no stale phase'}</small></div>
-        <div><span>Activity (24h)</span><strong>{operations.activity.submittedActions}</strong><small>{operations.activity.lateRejections} late rejected</small></div>
-      </div>
-      <div className="ops-inline-note"><span>Deadline monitor checks due phases and locks player submissions safely.</span><button className="secondary-button" type="button" onClick={() => void reconcileDeadlines()}>Check deadlines</button></div>
-
-      <EventLog events={operations.events} />
-
-      <div className="operations-columns">
-        <form className="ops-block" onSubmit={announce}><p className="eyebrow accent">Official announcement</p><label>Title<input name="title" required /></label><label>Message<textarea name="body" rows={4} required /></label><button className="primary-button" type="submit">Publish notice</button></form>
-        <form className="ops-block" onSubmit={addModerator}><p className="eyebrow accent">Co-moderator access</p><ul className="moderator-list" aria-label="Moderators">{moderators.map((moderator) => <li key={moderator.id}><span className="moderator-email">{moderator.email}</span><small>{moderator.role === 'OWNER' ? 'Owner' : 'Co-moderator'}</small>{operations.viewerRole === 'OWNER' && moderator.role !== 'OWNER' && <span className="moderator-actions"><button type="button" onClick={() => void makeOwner(moderator)} disabled={busyAction !== null}>Make owner</button><button type="button" onClick={() => void removeModerator(moderator)} disabled={busyAction !== null}>Remove</button></span>}</li>)}</ul><label>Email<input name="email" type="email" required /></label><label>Moderator password<input name="password" type="password" minLength={12} required /></label><p className="field-help">There is no forced expiry; the moderator can recover with a one-time code.</p><button className="secondary-button" type="submit">Add co-moderator</button>{recoveryCodes.length > 0 && <code className="recovery-list">{recoveryCodes.join(' · ')}</code>}</form>
-        <form className="ops-block" onSubmit={resetPlayerPin}><p className="eyebrow accent">Player access recovery</p><p className="field-help">Use when a claimed player forgets a PIN or their seat is locked after 10 wrong PINs in a row. The new PIN is shown only to you, prior sessions are revoked, and the seat unlocks.</p><label>Player<select name="seatId" value={pinSeatId} onChange={(event) => setPinSeatId(event.target.value)} required><option value="">Choose a claimed seat</option>{operations.seats.filter((seat) => seat.status === 'CLAIMED').map((seat) => <option key={seat.id} value={seat.id}>{seat.displayName}{seat.pinLocked ? ' (locked: too many wrong PINs)' : ''}</option>)}</select></label><label>New six-digit PIN<input name="newPin" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required /></label><label>Reason<textarea name="reason" rows={2} minLength={5} required placeholder="Player forgot the previous PIN" /></label><button className="secondary-button" type="submit">Reset player PIN</button></form>
-      </div>
-
-      <div className="ops-block room-operations"><div className="ops-heading"><div><p className="eyebrow accent">Chat rooms</p><p className="field-help">Messages expire after {operations.game.chatRetentionDays} days.</p></div><button className="secondary-button" type="button" onClick={purgeRetention}>Purge expired</button></div><div className="room-health-list">{rooms.map((room) => <div key={room.id}><span>{ROOM_NAMES[room.type] ?? room.type}</span><strong>{room.memberCount} members · {room.messageCount} messages</strong><button className="room-open" type="button" aria-pressed={historyRoomId === room.id} onClick={() => setHistoryRoomId(room.id)}>Open room</button><button type="button" onClick={() => void toggleRoom(room)}>{room.status === 'OPEN' ? 'Make read-only' : 'Reopen'}</button></div>)}</div>{historyRoomId && rooms.some((room) => room.id === historyRoomId) && <RoomHistory key={historyRoomId} gameId={gameId} rooms={rooms} roomId={historyRoomId} reloadToken={roomChanges} onSelect={setHistoryRoomId} onClose={() => setHistoryRoomId(null)} onRemove={removeMessage} onPosted={() => void refresh().catch(() => undefined)} />}{messages.slice(0, 8).map((chat) => <div className="moderation-line" key={chat.id}><span><strong>{chat.authorName}</strong> in {ROOM_NAMES[chat.roomType] ?? chat.roomType}</span><p>{chat.body ?? 'Removed message'}</p>{chat.body && <button type="button" onClick={() => void removeMessage(chat.id)}>Remove</button>}</div>)}</div>
-
-      <AnnouncementCopies announcements={announcements} highlightId={latestAnnouncementId} />
-
-      <FeedbackBlock feedback={feedback} />
-
-      <form className="ops-block pilot-feedback" onSubmit={submitFeedback}><p className="eyebrow accent">Send your own feedback</p><p className="field-help">Add a quick moderator rating; it appears in the Feedback list above.</p><label>Rating<select name="rating" defaultValue="5"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3">3 — mixed</option><option value="2">2 — difficult</option><option value="1">1 — blocked</option></select></label><label>Comment<textarea name="comment" rows={3} maxLength={2000} placeholder="What should we improve before the next game?" /></label><button className="secondary-button" type="submit">Save feedback</button></form>
-
-      <div className="backup-row"><div><p className="eyebrow accent">Verified backup</p><strong>{operations.lastBackup ? `Last export ${new Date(operations.lastBackup.exportedAt).toLocaleString()}` : 'No backup exported yet'}</strong><small>{operations.lastBackup?.checksum ? `Checksum ${operations.lastBackup.checksum.slice(0, 18)}…` : 'Includes game state, audit history, and private rooms.'}</small></div><button className="primary-button" type="button" onClick={exportBackup} disabled={busyAction !== null}>{busyAction === 'export' ? 'Creating…' : 'Download JSON backup'}</button></div>
-      {operations.viewerRole === 'OWNER' && operations.backups.length > 0 && <div className="ops-block restore-backup-block"><p className="eyebrow accent">Recovery restore</p><p className="field-help">Restore a verified snapshot into this game’s setup state. Secrets are never restored; fresh seat links are generated.</p><div className="button-row"><label className="restore-select">Snapshot<select value={restoreBackupId} onChange={(event) => setRestoreBackupId(event.target.value)} disabled={busyAction !== null}>{operations.backups.map((backup) => <option key={backup.id} value={backup.id}>{new Date(backup.exportedAt).toLocaleString()} · {backup.checksum.slice(0, 12)}…</option>)}</select></label><button className="secondary-button" type="button" onClick={() => void restoreBackup()} disabled={busyAction !== null}>{busyAction === 'restore' ? 'Restoring…' : 'Restore to setup'}</button>{restoreInviteCsv && <button className="secondary-button" type="button" onClick={downloadRestoredInvites}>Download fresh invites</button>}</div></div>}
-    </section>
-  );
-}
-
-/** Emails sent or failed, automatic steps that could not run, and deadline locks, newest first. */
-function EventLog({ events }: { events: OperationalEvent[] }) {
-  return (
-    <div className="ops-block event-log">
-      <p className="eyebrow accent">Event log</p>
-      <p className="field-help">Player emails, automatic results, and deadline locks for this game, newest first. Warnings need your attention.</p>
-      {events.length ? (
-        <ul aria-label="Event log">
-          {events.map((event) => (
-            <li key={event.id} className={event.severity === 'WARNING' ? 'warning' : undefined}>
-              <small>{new Date(event.createdAt).toLocaleString()}</small>
-              <span>
-                {event.severity === 'WARNING' ? 'Warning: ' : ''}{event.message}
-                {event.storySource === 'AI' ? ' Story written by AI.' : event.storySource === 'TEMPLATE' ? ' Story from the standard template (the AI story was unavailable).' : ''}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : <p className="field-help">Nothing recorded yet.</p>}
-    </div>
-  );
+  const value: OperationsValue = {
+    gameId, operations, rooms, messages, historyRoomId, setHistoryRoomId, roomChanges, moderators, announcements, latestAnnouncementId, feedback,
+    recoveryCodes, pinSeatId, setPinSeatId, restoreBackupId, setRestoreBackupId, restoreInviteCsv, busyAction, message, error,
+    refresh, clearNotices, announce, addModerator, removeModerator, makeOwner, resetPlayerPin, exportBackup, toggleRoom, purgeRetention, removeMessage,
+    stopGame, resetGame, restoreBackup, downloadRestoredInvites, reconcileDeadlines, submitFeedback,
+  };
+  return <OperationsContext.Provider value={value}>{children}</OperationsContext.Provider>;
 }

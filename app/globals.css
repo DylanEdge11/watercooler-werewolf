@@ -187,8 +187,8 @@ input, textarea, select { background: #fbfaf6; border: 1px solid #d9ddd8; border
 textarea { line-height: 1.55; resize: vertical; }
 .form-error { color: #b14532; font-size: 11px; margin: 0; }
 .console-layout { display: grid; gap: 44px; grid-template-columns: 220px minmax(0, 850px); justify-content: center; padding: 48px 28px 100px; }
-.setup-progress { padding-top: 10px; }
-.setup-progress ol { display: grid; gap: 4px; list-style: none; margin: 18px 0 38px; padding: 0; }
+.setup-progress { align-self: start; padding-top: 10px; position: sticky; top: 20px; }
+.setup-progress ol { display: grid; gap: 4px; list-style: none; margin: 18px 0 26px; padding: 0; }
 .setup-progress li { align-items: center; color: #8a948f; display: grid; gap: 11px; grid-template-columns: 31px 1fr; padding: 10px 0; }
 .setup-progress li > span, .checklist-step > span { align-items: center; border: 1px solid #ccd2ce; border-radius: 50%; display: flex; font-size: 10px; font-weight: 850; height: 29px; justify-content: center; width: 29px; }
 .setup-progress li strong, .setup-progress li small { display: block; }
@@ -200,10 +200,14 @@ textarea { line-height: 1.55; resize: vertical; }
 .setup-progress li.active > span, .setup-progress li.active .checklist-step > span, .setup-progress li.reviewing .checklist-step > span { border-color: var(--coral); box-shadow: 0 0 0 4px #f8e5df; color: var(--coral); }
 .setup-progress li.reviewing .checklist-step > span { background: white; }
 .checklist-step { align-items: center; background: transparent; border: 0; color: inherit; cursor: pointer; display: grid; gap: 11px; grid-column: 1 / -1; grid-template-columns: 31px 1fr; padding: 0; text-align: left; width: 100%; }
-.checklist-step:hover strong { color: var(--coral); }
+.checklist-step:hover:not(:disabled) strong { color: var(--coral); }
+.checklist-step:disabled { cursor: default; }
+.launch-complete { display: none; font-size: 12px; margin: 0 0 12px; }
+.console-links { display: grid; gap: 10px; }
+.console-links .quiet-link { display: block; line-height: 1.4; }
 .quiet-link { color: var(--mint-strong); font-size: 11px; font-weight: 800; text-decoration: none; }
 .console-main { min-width: 0; }
-.console-title { align-items: center; display: flex; justify-content: space-between; margin-bottom: 25px; }
+.console-title { align-items: center; display: flex; justify-content: space-between; margin-bottom: 14px; }
 .console-title-actions { align-items: center; display: flex; gap: 16px; }
 .console-title h1 { font-size: 36px; margin: 0; }
 .setup-card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 9px 35px rgba(45, 58, 52, .045); margin-bottom: 20px; padding: 27px; }
@@ -251,7 +255,32 @@ textarea { line-height: 1.55; resize: vertical; }
 .schedule-lock-note { margin: 18px 0 0; }
 .schedule-note { align-items: center; background: #edf2ed; border-radius: 10px; display: flex; font-size: 10px; justify-content: space-between; padding: 12px 14px; }
 .schedule-note span { color: var(--muted); }
-.game-selector-card { background: rgba(255, 255, 255, .72); }
+.game-bar { align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 12px 18px; justify-content: space-between; margin-bottom: 18px; padding: 12px 16px; }
+.game-bar .game-selector-label { flex: 1 1 260px; }
+.game-bar.bare { background: none; border: 0; box-shadow: none; padding: 0; }
+.game-bar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin-left: auto; }
+/* What to do next: one short line under the game bar, and the same note at the top of the live card. */
+.next-step { background: #edf2ed; border-left: 4px solid var(--mint-strong); border-radius: 10px; font-size: 13px; line-height: 1.5; margin: 0 0 18px; padding: 12px 14px; }
+.next-step strong { display: block; margin-bottom: 2px; }
+.page-next-step { align-items: center; display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; }
+.page-next-step > div { flex: 1 1 320px; }
+.welcome-steps { counter-reset: welcome; display: grid; gap: 10px; list-style: none; margin: 0 0 14px; padding: 0; }
+.welcome-steps li { counter-increment: welcome; font-size: 13px; line-height: 1.55; padding-left: 32px; position: relative; }
+.welcome-steps li::before { align-items: center; background: var(--night); border-radius: 50%; color: var(--mint); content: counter(welcome); display: flex; font-size: 10px; font-weight: 850; height: 22px; justify-content: center; left: 0; position: absolute; top: 1px; width: 22px; }
+/* The console's sections as tabs. The bar stays at the top while a long tab scrolls. */
+.console-tabs { backdrop-filter: blur(6px); background: rgba(246, 244, 238, .94); border-bottom: 1px solid var(--line); display: flex; gap: 4px; margin: 0 0 10px; overflow-x: auto; padding-top: 6px; position: sticky; scrollbar-width: thin; top: 0; z-index: 15; }
+.console-tab { align-items: center; background: transparent; border: 1px solid transparent; border-bottom: 0; border-radius: 10px 10px 0 0; color: var(--muted); cursor: pointer; display: inline-flex; flex: 0 0 auto; font-size: 13px; font-weight: 800; gap: 8px; margin-bottom: -1px; padding: 11px 16px; white-space: nowrap; }
+.console-tab:hover { color: var(--ink); }
+.console-tab.selected { background: var(--panel); border-color: var(--line); box-shadow: inset 0 3px 0 var(--mint-strong); color: var(--ink); }
+.tab-badge { background: var(--coral); border-radius: 999px; color: #fff; font-size: 10px; font-weight: 850; line-height: 1; min-width: 18px; padding: 3px 6px; text-align: center; }
+.tab-badge.dot { height: 9px; min-width: 9px; padding: 0; width: 9px; }
+.console-tab-blurb { color: var(--ink); font-size: 13px; line-height: 1.5; margin: 0 0 18px; }
+.console-panel[hidden] { display: none; }
+/* A section a checklist step or link scrolls to must clear the sticky tab bar. */
+.console-panel [id] { scroll-margin-top: 72px; }
+.card-stack { display: grid; gap: 12px; }
+.card-stack > * { margin-top: 0; }
+.run-placeholder .secondary-button { margin-top: 4px; }
 .game-selector-label { color: #485950; display: grid; flex: 1; font-size: 11px; font-weight: 800; gap: 7px; max-width: 440px; }
 .notice { border-radius: 10px; font-size: 11px; line-height: 1.5; margin: 0 0 18px; padding: 12px 14px; }
 .notice.error { background: #f9e3dd; color: #9e3f2e; }
@@ -282,8 +311,13 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .claim-seal .brand-mark { height: 72px; width: 72px; }
 .primary-link { background: var(--coral); border-radius: 10px; color: white; display: inline-block; font-size: 12px; font-weight: 800; margin-top: 12px; padding: 11px 18px; text-decoration: none; }
 @media (max-width: 800px) {
-  .console-layout { display: block; padding: 28px 16px 70px; }
-  .setup-progress { display: none; }
+  .console-layout { display: block; padding: 22px 16px 70px; }
+  .setup-progress { margin-bottom: 18px; padding-top: 0; position: static; }
+  .setup-progress ol { display: flex; gap: 16px; margin: 10px 0 12px; overflow-x: auto; padding-bottom: 6px; }
+  .setup-progress li { flex: 0 0 auto; padding: 4px 0; }
+  .setup-progress.launched ol { display: none; }
+  .setup-progress.launched .launch-complete { display: block; }
+  .console-links { display: flex; flex-wrap: wrap; gap: 6px 16px; }
   .setup-header { padding: 0 17px; }
   .role-composer { grid-template-columns: repeat(3, 1fr); }
 }
@@ -295,6 +329,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .setup-grid .wide { grid-column: auto; }
   .schedule-note { align-items: flex-start; display: grid; gap: 5px; }
   .console-title { align-items: flex-start; display: grid; gap: 13px; }
+  .console-tab { padding: 10px 12px; }
+  .game-bar-actions { margin-left: 0; }
 }
 
 /* Live player state */
@@ -362,7 +398,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* Live moderator workflow */
 .phase-open-row { align-items: end; display: grid; gap: 12px; grid-template-columns: 1fr 1fr auto; }
 .phase-open-row label, .review-actions label { color: #485950; display: grid; font-size: 10px; font-weight: 800; gap: 6px; }
-.phase-status-row { align-items: center; background: #f4f4ee; border-radius: 12px; display: grid; gap: 18px; grid-template-columns: 1fr auto auto; margin-bottom: 18px; padding: 14px 16px; }
+.phase-status-row { align-items: center; background: #f4f4ee; border-radius: 12px; display: flex; flex-wrap: wrap; gap: 12px 18px; margin-bottom: 18px; padding: 14px 16px; }
+.phase-status-row > div:first-child { flex: 1 1 160px; }
 .phase-status-row .eyebrow { margin-bottom: 4px; }
 .phase-status-row h3 { font-family: Georgia, serif; font-size: 20px; margin: 0; }
 .phase-status-row > div:not(:first-child) { border-left: 1px solid #dcded8; min-width: 80px; padding-left: 16px; text-align: right; }
@@ -382,6 +419,16 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .outcome-row strong { color: var(--coral); font-size: 9px; }
 .outcome-row small { color: var(--muted); font-size: 8px; grid-column: 1 / -1; }
 .player-choices section + section { border-top: 1px solid #e5e5df; margin-top: 12px; padding-top: 12px; }
+/* Player choices: a phase opens to its special powers; the pack's targets and the votes are lists inside it. */
+.choices-phase > summary { align-items: baseline; cursor: pointer; display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.choices-phase > summary .eyebrow { margin: 0; }
+.choices-phase > summary small { color: var(--muted); font-size: 11px; }
+.choices-powers { margin-top: 10px; }
+.choices-powers .eyebrow { margin-bottom: 2px; }
+.choices-group { border: 1px solid var(--line); border-radius: 10px; margin-top: 10px; padding: 8px 12px; }
+.choices-group > summary { cursor: pointer; font-size: 12px; font-weight: 800; }
+.choices-group > summary small { color: var(--muted); font-weight: 400; }
+.choices-group[open] > summary { margin-bottom: 4px; }
 .empty-note, .protected-note, .random-note { color: var(--muted); font-size: 9px; line-height: 1.5; }
 .protected-note { color: var(--mint-strong); }
 .random-note { background: #fff4dd; border-radius: 7px; color: #72551f; padding: 7px; }
@@ -392,9 +439,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .override-grid button { background: white; border: 1px solid #d9ddd8; border-radius: 7px; cursor: pointer; font-size: 8px; padding: 7px; }
 .override-grid button.selected { background: #f7ded7; border-color: var(--coral); color: #9d422f; }
 .review-actions textarea { margin-bottom: 10px; }
+.live-settings { border-top: 1px dashed var(--line); margin-top: 22px; padding-top: 16px; }
+.live-settings > .eyebrow { margin-bottom: 0; }
+.live-control .next-step { margin-bottom: 16px; }
 @media (max-width: 620px) {
   .phase-open-row, .resolution-columns { grid-template-columns: 1fr; }
-  .phase-status-row { grid-template-columns: 1fr 1fr; }
+  .phase-status-row { display: grid; grid-template-columns: 1fr 1fr; }
   .phase-status-row > div:first-child { grid-column: 1 / -1; }
   .phase-status-row > div:not(:first-child) { border-left: 0; border-top: 1px solid #dcded8; padding: 8px 0 0; text-align: left; }
   .hunter-callout { grid-template-columns: 28px 1fr; }
@@ -424,7 +474,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   [data-spotlight] { animation: none; outline-color: var(--coral); }
 }
 .setup-loading.compact { margin: 35px auto; }
-.health-grid { display: grid; gap: 8px; grid-template-columns: repeat(4, 1fr); margin-bottom: 18px; }
+.health-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin-bottom: 18px; }
+.health-strip { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 18px; padding: 14px; }
+.health-strip .health-grid { margin-bottom: 8px; }
+.health-strip .ops-inline-note { margin: 0; }
 .health-grid > div { background: #f3f3ed; border: 1px solid #e2e3dc; border-radius: 10px; padding: 11px; }
 .health-grid > div.warning { background: #fff1e6; border-color: #efd0bc; }
 .health-grid span, .health-grid strong, .health-grid small { display: block; }
@@ -515,7 +568,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .preview-select-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 650px) {
-  .health-grid { grid-template-columns: 1fr 1fr; }
+  .health-grid { grid-template-columns: repeat(3, 1fr); }
+  .health-grid > div { padding: 8px; }
+  .health-grid strong { font-size: 16px; }
   .operations-columns, .room-health-list { grid-template-columns: 1fr; }
   .moderation-line { grid-template-columns: 1fr auto; }
   .moderation-line p { grid-column: 1 / -1; }

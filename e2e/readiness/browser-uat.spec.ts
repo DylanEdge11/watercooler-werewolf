@@ -69,6 +69,8 @@ test('an eight-player game runs from setup to a Village win with private informa
 
     // The moderator sees who still owes a response and copies a nudge that is safe for a group chat.
     const moderatorPage = game.moderator.page;
+    // The console opens on Run game once roles are released; People and Messages hold the rest.
+    const openConsoleTab = (name: 'Run game' | 'People' | 'Messages') => moderatorPage.getByRole('tab', { name, exact: true }).click();
     await moderatorPage.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(BASE_URL).origin });
     const copiedNudge = async (expectedCount: number, expectedNames: BrowserPlayer[]): Promise<string> => {
       await moderatorPage.reload();
@@ -115,7 +117,12 @@ test('an eight-player game runs from setup to a Village win with private informa
     await choices.scrollIntoViewIfNeeded();
     await choices.getByText('Show player choices', { exact: true }).click();
     const dayChoices = choices.getByRole('region', { name: 'Day 1' });
-    await expect(dayChoices.locator('.outcome-row').first()).toBeVisible({ timeout: 30_000 });
+    // The votes are a list to open; a Day has no special powers, so nothing else shows until then.
+    const dayVotes = dayChoices.locator('details.choices-group').filter({ hasText: 'Day votes' });
+    await expect(dayVotes).toBeVisible({ timeout: 30_000 });
+    await expect(dayChoices.locator('.outcome-row').first()).toBeHidden();
+    await dayVotes.locator('summary').click();
+    await expect(dayChoices.locator('.outcome-row').first()).toBeVisible();
     expect(await dayChoices.locator('.outcome-row').first().innerText()).toMatch(/\(.+\)/u);
     let failNextChoices = true;
     // One refresh is refused (429, which the telemetry check accepts when announced); the panel treats any failed answer alike.
@@ -133,6 +140,7 @@ test('an eight-player game runs from setup to a Village win with private informa
     await moderatorPage.unroute(/\/api\/games\/[^/]+\/choices$/u);
 
     // A spectator who forgot their PIN gets a new one from the moderator, is signed out on their old device, and signs back in with it.
+    await openConsoleTab('People');
     const spectators = moderatorPage.locator('#spectators');
     await spectators.scrollIntoViewIfNeeded();
     const spectatorEmail = `riley-${Date.now()}@spectator.test`;
@@ -150,6 +158,7 @@ test('an eight-player game runs from setup to a Village win with private informa
       await expect(spectatorPage.getByRole('heading', { name: 'Your seat in the gallery is ready.' })).toBeVisible();
 
       await moderatorPage.reload();
+      await openConsoleTab('People');
       await expect(spectators.getByText('Watching', { exact: true })).toBeVisible({ timeout: 30_000 });
       await spectators.getByRole('button', { name: 'Reset PIN for Riley Watcher', exact: true }).click();
       await spectators.getByLabel('New six-digit PIN').fill('135790');
@@ -173,6 +182,7 @@ test('an eight-player game runs from setup to a Village win with private informa
     }
 
     // The elimination schedule names the next phase a change affects. One per Day and Night keeps this game's slots.
+    await openConsoleTab('Run game');
     const eliminations = moderatorPage.locator('.schedule-block');
     await expect(eliminations.locator('.schedule-status')).toHaveText('Latest phase: Day 1. A saved change applies from Night 1, the next phase to open. Phases already opened keep their slots.');
     await eliminations.getByText('Change the elimination schedule', { exact: true }).click();
@@ -208,9 +218,24 @@ test('an eight-player game runs from setup to a Village win with private informa
     await game.assertPlayerPrivacy(ordinary);
     await game.assertPlayerPrivacy(seer, { allowOwnInvestigation: true });
 
+    // Player choices lists the special powers first. The pack's target is a list the moderator opens, and an older phase starts closed.
+    await moderatorPage.reload();
+    const powersPanel = moderatorPage.locator('#player-choices');
+    await powersPanel.getByText('Show player choices', { exact: true }).click();
+    const nightChoices = powersPanel.getByRole('region', { name: 'Night 1' });
+    await expect(nightChoices.locator('.choices-powers .outcome-row').filter({ hasText: 'Investigated' })).toHaveCount(1, { timeout: 30_000 });
+    await expect(nightChoices.locator('.choices-powers .outcome-row').filter({ hasText: 'Protected' })).toHaveCount(1);
+    await expect(nightChoices.locator('.choices-powers')).not.toContainText('Pack target');
+    const packTargets = nightChoices.locator('details.choices-group').filter({ hasText: 'Pack targets' });
+    await expect(packTargets.locator('.outcome-row').first()).toBeHidden();
+    await packTargets.locator('summary').click();
+    await expect(packTargets.locator('.outcome-row').first()).toBeVisible();
+    await expect(powersPanel.getByRole('region', { name: 'Day 1' }).locator('details.choices-phase')).not.toHaveAttribute('open', /.*/u);
+
     // The moderator opens the Pack room's history and posts in it; the living Werewolf sees it as "Moderator".
     const livingWolf = game.chooseLiving((player) => player.account.role === 'WEREWOLF');
     await moderatorPage.reload();
+    await openConsoleTab('Messages');
     await moderatorPage.locator('.room-health-list > div').filter({ hasText: 'Pack room' }).getByRole('button', { name: 'Open room', exact: true }).click();
     const roomHistory = moderatorPage.locator('.room-history');
     await expect(roomHistory.getByRole('button', { name: 'Pack room', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -255,6 +280,7 @@ test('an eight-player game runs from setup to a Village win with private informa
     await expect(livingWolf.page.locator('#private-room')).toBeVisible();
 
     // An announcement comes with email and chat copy; player feedback reaches the moderator without a name.
+    await openConsoleTab('Messages');
     const announcementForm = moderatorPage.locator('form').filter({ hasText: 'Official announcement' });
     await announcementForm.getByLabel('Title').fill('Office party pause');
     await announcementForm.getByLabel('Message').fill('No votes during the Friday party.');
@@ -274,6 +300,7 @@ test('an eight-player game runs from setup to a Village win with private informa
     await feedbackCard.getByRole('button', { name: 'Send feedback', exact: true }).click();
     await expect(feedbackCard.getByRole('status')).toContainText('went privately to the moderators');
     await moderatorPage.reload();
+    await openConsoleTab('Messages');
     const feedbackBlock = moderatorPage.locator('.feedback-summary');
     await expect(feedbackBlock).toContainText('The nudges help.', { timeout: 30_000 });
     await expect(feedbackBlock).toContainText('4/5');
