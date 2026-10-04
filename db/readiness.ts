@@ -14,6 +14,7 @@ export const MIGRATION_VERSIONS = [
   '0009_elimination_schedule',
   '0010_moderator_messages',
   '0011_auto_open_next_phase',
+  '0012_sign_ups_and_moderator_applications',
 ] as const;
 
 export async function verifyDatabaseReady(db: Database): Promise<void> {

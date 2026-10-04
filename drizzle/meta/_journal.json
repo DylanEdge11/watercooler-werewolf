@@ -85,6 +85,13 @@
       "when": 1790970435475,
       "tag": "0011_auto_open_next_phase",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791145407584,
+      "tag": "0012_sign_ups_and_moderator_applications",
+      "breakpoints": true
     }
   ]
 }

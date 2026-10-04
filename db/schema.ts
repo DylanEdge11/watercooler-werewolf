@@ -79,6 +79,13 @@ export const games = sqliteTable(
     automationPausedAt: text('automation_paused_at'),
     // In AUTOMATIC mode, open the next Day or Night as soon as a result publishes (lib/game/automation.ts).
     autoOpenNextPhase: integer('auto_open_next_phase', { mode: 'boolean' }).notNull().default(false),
+    // Public sign-up (lib/game/signups.ts). NOT_OPEN until a moderator opens it, then OPEN or CLOSED.
+    signupState: text('signup_state').$type<'NOT_OPEN' | 'OPEN' | 'CLOSED'>().notNull().default('NOT_OPEN'),
+    // The random code in the public /join link. Created the first time sign-ups or applications open; replacing it ends the old link.
+    signupCode: text('signup_code'),
+    signupNote: text('signup_note'),
+    // Whether the public link also takes applications to co-moderate (lib/game/moderator-applications.ts).
+    moderatorApplicationsOpen: integer('moderator_applications_open', { mode: 'boolean' }).notNull().default(false),
     // Incremented whenever setup inputs change. Assignment previews capture
     // this value so an old preview cannot be released after a roster or
     // composition change.
@@ -97,6 +104,64 @@ export const games = sqliteTable(
   (table) => [
     index('idx_games_status').on(table.status),
     index('idx_games_owner').on(table.createdByModeratorId, table.createdAt),
+    uniqueIndex('idx_games_signup_code').on(table.signupCode),
+  ],
+);
+
+/**
+ * People who asked, through a game's public link, to play. They wait here until a
+ * moderator accepts them; accepting creates an ordinary unclaimed seat, so invitation
+ * email, the invite CSV, and claiming with a PIN work as for any other player.
+ */
+export const signups = sqliteTable(
+  'signups',
+  {
+    id: text('id').primaryKey(),
+    gameId: text('game_id')
+      .notNull()
+      .references(() => games.id, { onDelete: 'cascade' }),
+    displayName: text('display_name').notNull(),
+    email: text('email').notNull(),
+    status: text('status').$type<'PENDING' | 'ACCEPTED' | 'DECLINED'>().notNull().default('PENDING'),
+    seatId: text('seat_id').references(() => seats.id),
+    decidedByModeratorId: text('decided_by_moderator_id').references(() => moderatorAccounts.id),
+    decidedAt: text('decided_at'),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('idx_signups_game_email').on(table.gameId, table.email),
+    index('idx_signups_game_status').on(table.gameId, table.status, table.createdAt),
+  ],
+);
+
+/**
+ * People who asked, through a game's public link, to co-moderate it. The owner approves
+ * or declines. An approved applicant without an account gets a one-time setup link
+ * (only its hash is kept) to choose a password; one who already has an account is
+ * added at once.
+ */
+export const moderatorApplications = sqliteTable(
+  'moderator_applications',
+  {
+    id: text('id').primaryKey(),
+    gameId: text('game_id')
+      .notNull()
+      .references(() => games.id, { onDelete: 'cascade' }),
+    displayName: text('display_name').notNull(),
+    email: text('email').notNull(),
+    note: text('note'),
+    status: text('status').$type<'PENDING' | 'APPROVED' | 'DECLINED'>().notNull().default('PENDING'),
+    setupCodeHash: text('setup_code_hash'),
+    setupUsedAt: text('setup_used_at'),
+    moderatorId: text('moderator_id').references(() => moderatorAccounts.id),
+    decidedByModeratorId: text('decided_by_moderator_id').references(() => moderatorAccounts.id),
+    decidedAt: text('decided_at'),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('idx_moderator_applications_game_email').on(table.gameId, table.email),
+    index('idx_moderator_applications_game_status').on(table.gameId, table.status, table.createdAt),
+    uniqueIndex('idx_moderator_applications_setup_code').on(table.setupCodeHash),
   ],
 );
 
