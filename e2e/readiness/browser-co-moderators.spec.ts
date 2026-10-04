@@ -22,6 +22,8 @@ test('the owner adds and removes a co-moderator, then hands the game to another'
   await page.getByRole('button', { name: 'Create game', exact: true }).click();
   await expect(page.getByRole('heading', { name: gameName, exact: true })).toBeVisible();
 
+  // Co-moderator access is on the People tab; a new game opens on Setup.
+  await page.getByRole('tab', { name: 'People', exact: true }).click();
   const access = page.locator('form', { hasText: 'Co-moderator access' });
   const list = access.getByRole('list', { name: 'Moderators' });
   const row = (email: string) => list.getByRole('listitem').filter({ hasText: email });

@@ -227,6 +227,8 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   const preview = await (await previewResponse).json() as { assignments: Array<{ seatId: string; role: RoleKey }> };
   const roleBySeatId = new Map(preview.assignments.map((assignment) => [assignment.seatId, assignment.role]));
   await click(page, page.getByRole('button', { name: 'Release roles to players', exact: true }), 600);
+  // Releasing roles moves the console to Run game; the batch just released is on the Setup tab.
+  await click(page, page.getByRole('tab', { name: 'Setup', exact: true }), 400);
   await page.getByRole('heading', { name: /Review assignment batch/u }).evaluate((element) => element.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   await pause(page, 2800);
 

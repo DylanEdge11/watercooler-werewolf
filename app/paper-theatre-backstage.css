@@ -189,7 +189,24 @@
   box-shadow: 0 1px 2px rgba(35, 29, 24, 0.1), 0 6px 12px -8px rgba(35, 29, 24, 0.3);
   padding-left: 42px;
 }
-.backstage .game-selector-card { background: linear-gradient(90deg, transparent 22px, var(--bs-margin) 22px, var(--bs-margin) 23.5px, transparent 23.5px), var(--bs-card); }
+/* The game bar is an index-card strip; the sections are paper tabs on the desk; a note says what to do next. */
+.backstage .game-bar { background: var(--bs-card); border: 1px solid var(--bs-rule); border-radius: 2px; box-shadow: 0 1px 2px rgba(35, 29, 24, 0.1); }
+.backstage .game-bar.bare { background: none; border: 0; box-shadow: none; }
+.backstage .next-step { background: #fffdf7; border: 1px solid var(--bs-rule); border-left: 4px solid var(--bs-go); border-radius: 2px; box-shadow: 0 1px 2px rgba(35, 29, 24, 0.1); font-size: 14px; }
+.backstage .console-tabs { background: rgba(212, 195, 161, 0.94); border-bottom: 1.5px solid var(--bs-ink-soft); }
+.backstage .console-tab { background: var(--bs-card); border: 1px solid var(--bs-rule); border-bottom: 0; border-radius: 2px 2px 0 0; color: var(--bs-ink-soft); font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; letter-spacing: 0.06em; }
+.backstage .console-tab:hover { background: #fffdf7; color: var(--bs-ink); }
+.backstage .console-tab.selected { background: var(--bs-page); border-color: var(--bs-ink-soft); box-shadow: inset 0 3px 0 var(--bs-tape); color: var(--bs-ink); }
+.backstage .tab-badge { background: var(--bs-stop); border-radius: 2px; font-family: var(--ll-font-type), monospace; font-weight: 400; }
+.backstage .console-tab-blurb { color: var(--bs-ink); font-style: italic; }
+.backstage .health-strip { background: var(--bs-page); border: 1px solid var(--bs-rule); border-radius: 2px; box-shadow: 0 1px 2px rgba(35, 29, 24, 0.1); }
+.backstage .live-settings { border-top: 1px dashed var(--bs-rule); }
+.backstage .live-settings > .eyebrow { margin-top: 2px; }
+.backstage :is(.danger-zone, .start-over) { border-color: var(--bs-stop); }
+.backstage .danger-zone .setup-card-heading > span { background: var(--bs-stop); }
+.backstage .welcome-steps li { font-size: 14px; }
+.backstage .welcome-steps li::before { background: var(--bs-tape); border-radius: 2px; color: var(--pt-gold-soft); font-family: var(--ll-font-type), monospace; font-weight: 400; }
+.backstage .launch-complete { font-family: var(--ll-font-type), monospace; }
 /* Cue numbers are torn strips of gaffer tape. */
 .backstage .setup-card-heading > span {
   background: var(--bs-tape);
