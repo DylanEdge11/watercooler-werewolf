@@ -13,7 +13,7 @@ import PlayerChoicesPanel from './player-choices-panel';
 import SpectatorsPanel from './spectators-panel';
 import StatsPanel from './stats-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
-import { defaultConsoleTab, isConsoleTabId, launchChecklist, setupHint, type ConsoleTabId, type SetupStepKey } from '../../lib/game/console-guidance';
+import { defaultConsoleTab, isConsoleTabId, launchChecklist, resolveConsoleTab, setupHint, type ConsoleTabId, type SetupStepKey, type TabChoice } from '../../lib/game/console-guidance';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
 import { ROLE_KEYS, type RoleKey } from '../../lib/game/types';
 import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
@@ -186,7 +186,7 @@ export default function ModeratorPage() {
   const [showSchedulePanel, setShowSchedulePanel] = useState(false);
   const [compositionDraftIds, setCompositionDraftIds] = useState<Set<string>>(() => new Set());
   // The tab the moderator picked; until they pick one, the console opens on Setup or Run game by the game's status.
-  const [selectedTab, setSelectedTab] = useState<ConsoleTabId | null>(null);
+  const [selectedTab, setSelectedTab] = useState<TabChoice | null>(null);
   // A result or follow-up is waiting on the moderator, reported by the live game panel, so the Run game tab can say so.
   const [runAttention, setRunAttention] = useState(false);
   const selectedGameRef = useRef('');
@@ -271,7 +271,7 @@ export default function ModeratorPage() {
         await loadGames();
         // A link such as /moderator#messages opens that tab.
         const linked = window.location.hash.slice(1);
-        if (isConsoleTabId(linked)) setSelectedTab(linked);
+        if (isConsoleTabId(linked)) setSelectedTab({ id: linked, forDefault: null });
       } catch (caught) {
         // Signed out: the 401 also says whether the first moderator account still has to be created.
         setNeedsBootstrap(caught instanceof RequestError && caught.body.needsBootstrap === true);
@@ -375,15 +375,20 @@ export default function ModeratorPage() {
     } else {
       setShowNewGameForm(false);
       setShowSchedulePanel(true);
-      setSelectedTab('setup');
+      chooseTab('setup');
     }
     window.setTimeout(() => document.getElementById('game-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  }
+
+  /** Picks a tab. It holds until the game flips between setup and running, when the console goes to the tab that suits it. */
+  function chooseTab(id: ConsoleTabId) {
+    setSelectedTab({ id, forDefault: defaultConsoleTab(selectedGame?.status) });
   }
 
   /** Jumps to a step of the launch checklist on the Setup tab. */
   function goToSetupStep(sectionId: string) {
     setShowNewGameForm(false);
-    setSelectedTab('setup');
+    chooseTab('setup');
     window.setTimeout(() => document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   }
 
@@ -598,7 +603,7 @@ export default function ModeratorPage() {
         body: JSON.stringify({ action: 'RELEASE', batchId }),
       });
       setMessage('Roles released. Each player can now see only their own role.');
-      setSelectedTab('run');
+      chooseTab('run');
       await loadGames();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to release roles.');
@@ -630,7 +635,7 @@ export default function ModeratorPage() {
   const latestBatch = batches[0];
   const rosterById = useMemo(() => new Map(roster.map((seat) => [seat.id, seat])), [roster]);
   const gameDates = useMemo(() => defaultGameDates(), []);
-  const activeTab = selectedTab ?? defaultConsoleTab(selectedGame?.status);
+  const activeTab = resolveConsoleTab(selectedTab, defaultConsoleTab(selectedGame?.status));
   const released = Boolean(latestBatch?.releasedAt);
   const checklist = launchChecklist({ gameCount: games.length, seatCount: roster.length, claimedCount: claimed, hasBatch: Boolean(latestBatch), released });
   const hint = setupHint({ status: selectedGame?.status, seatCount: roster.length, claimedCount: claimed, hasBatch: Boolean(latestBatch), released });
@@ -741,7 +746,7 @@ export default function ModeratorPage() {
             </section>
           ) : (
             <OperationsProvider key={`operations-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} onGameChanged={handleLiveChange}>
-              <ConsoleNavigation active={activeTab} onSelect={setSelectedTab} runAttention={runAttention} />
+              <ConsoleNavigation active={activeTab} onSelect={chooseTab} runAttention={runAttention} />
 
               <ConsolePanel id="setup" active={activeTab === 'setup'}>
               {showSchedulePanel && selectedGame && <section className="setup-card" id="game-schedule">
@@ -854,7 +859,7 @@ export default function ModeratorPage() {
                   <StatsPanel key={`stats-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} />
                 </> : <section className="setup-card run-placeholder">
                   <div className="setup-card-heading"><span aria-hidden="true">▶</span><div><h2>{selectedGame?.status === 'CANCELLED' || selectedGame?.status === 'STOPPED' ? 'There is no game to run' : 'The game hasn’t started yet'}</h2><p>{selectedGame?.status === 'CANCELLED' ? 'This setup was cancelled.' : selectedGame?.status === 'STOPPED' ? 'This game was stopped before its roles were released.' : 'Phases, results, and every player’s choices appear here once you release the roles.'}</p></div></div>
-                  {setupEditable && <button className="secondary-button" type="button" onClick={() => setSelectedTab('setup')}>Back to setup</button>}
+                  {setupEditable && <button className="secondary-button" type="button" onClick={() => chooseTab('setup')}>Back to setup</button>}
                 </section>}
               </ConsolePanel>
 

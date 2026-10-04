@@ -124,7 +124,35 @@ export function runNeedsAttention(phaseStatus: string | undefined): boolean {
 /** Event sources that mean something failed. The log also marks a moderator's own audited actions (stop, reset, PIN reset) as warnings; those are a record, not a problem. */
 const PROBLEM_SOURCES = new Set(['EMAIL', 'AUTOMATION']);
 
-/** How many events in the log are real problems: an email batch that failed, or an automatic step that could not run. Drives the badge on the Safety & records tab. */
-export function attentionEventCount(events: ReadonlyArray<{ severity: string; source: string }>): number {
-  return events.filter((event) => event.severity === 'WARNING' && PROBLEM_SOURCES.has(event.source)).length;
+/**
+ * How many events in the log are real problems: an email batch that failed, or an automatic step that could not
+ * run. With `since`, only those logged after it, so the badge on the Safety & records tab counts problems the
+ * moderator has not looked at yet.
+ */
+export function attentionEventCount(events: ReadonlyArray<{ severity: string; source: string; createdAt?: string }>, since: string | null = null): number {
+  return events.filter((event) => event.severity === 'WARNING' && PROBLEM_SOURCES.has(event.source) && (since === null || (event.createdAt ?? '') > since)).length;
+}
+
+/** When the newest problem in the log was recorded (ISO timestamps sort as text), or null if there is none. */
+export function latestAttentionEventAt(events: ReadonlyArray<{ severity: string; source: string; createdAt: string }>): string | null {
+  let latest: string | null = null;
+  for (const event of events) {
+    if (event.severity === 'WARNING' && PROBLEM_SOURCES.has(event.source) && (latest === null || event.createdAt > latest)) latest = event.createdAt;
+  }
+  return latest;
+}
+
+/** A tab the moderator picked, and the tab the console would have opened on when they picked it. */
+export interface TabChoice {
+  id: ConsoleTabId;
+  /** Null for a tab chosen by a link, which holds whatever the game does. */
+  forDefault: ConsoleTabId | null;
+}
+
+/**
+ * The tab to show. A choice holds while the game stays on the same side of release; when it flips (a reset sends a
+ * running game back to setup, a release starts one) the console goes to the tab that suits the new state.
+ */
+export function resolveConsoleTab(choice: TabChoice | null, defaultTab: ConsoleTabId): ConsoleTabId {
+  return choice && (choice.forDefault === null || choice.forDefault === defaultTab) ? choice.id : defaultTab;
 }

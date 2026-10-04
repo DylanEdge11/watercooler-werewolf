@@ -64,3 +64,53 @@ test('the console opens on the right tab, moves between tabs by keyboard, and op
     await linked.close();
   }
 });
+
+test('a new problem in the event log marks Safety & records until the moderator opens it', async ({ browser }) => {
+  const moderator = await getSharedModerator(browser);
+  const { page } = moderator;
+  const gameName = `Console badge ${E2E_RUN_ID} ${randomUUID().slice(0, 6)}`;
+
+  // The console is given problems as if an email batch had failed. Everything else in the answer is real.
+  const problems = [{ id: 'stub-email-1', severity: 'WARNING', source: 'EMAIL', message: 'Day 1 opened: 2 of 8 emails could not be delivered. Check the email settings.', createdAt: '2026-10-04T10:00:00.000Z', storySource: null }];
+  await page.route(/\/api\/games\/[^/]+\/operations$/u, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const etag = `"stub-problems-${problems.length}"`;
+    if (route.request().headers()['if-none-match'] === etag) return route.fulfill({ status: 304, headers: { etag } });
+    const response = await route.fetch({ headers: { ...route.request().headers(), 'if-none-match': '' } });
+    const body = await response.json() as { events: unknown[] };
+    await route.fulfill({ status: 200, headers: { 'content-type': 'application/json', etag }, body: JSON.stringify({ ...body, events: [...problems, ...body.events] }) });
+  });
+
+  await page.goto('/moderator');
+  await page.getByRole('button', { name: 'Start new setup', exact: true }).click();
+  await page.getByLabel('Game name').fill(gameName);
+  await page.getByRole('button', { name: 'Create game', exact: true }).click();
+  await expect(page.getByRole('heading', { name: gameName, exact: true })).toBeVisible();
+
+  const badge = page.locator('#console-tab-safety .tab-badge');
+  await expect(badge).toHaveText('1', { timeout: 30_000 });
+  // Screen readers hear what the number means.
+  await expect(page.getByRole('tab', { name: 'Safety & records', exact: true })).toHaveAccessibleDescription(/1 new problem needs your attention/u);
+
+  // Opening the log clears the number, and it stays clear on other tabs.
+  await page.getByRole('tab', { name: 'Safety & records', exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Event log' })).toContainText('2 of 8 emails could not be delivered');
+  await page.getByRole('tab', { name: 'People', exact: true }).click();
+  await expect(badge).toHaveCount(0);
+
+  // A problem logged after that brings it back, counting only the new one.
+  problems.push({ id: 'stub-email-2', severity: 'WARNING', source: 'EMAIL', message: 'Night 1 opened: 1 of 8 emails could not be delivered. Check the email settings.', createdAt: '2026-10-04T11:00:00.000Z', storySource: null });
+  await page.evaluate(() => {
+    const setHidden = (hidden: boolean) => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    setHidden(true);
+    setHidden(false);
+    delete (document as { hidden?: boolean }).hidden;
+  });
+  await expect(badge).toHaveText('1', { timeout: 30_000 });
+  await page.getByRole('tab', { name: 'Safety & records', exact: true }).click();
+  await expect(badge).toHaveCount(0);
+  await page.unroute(/\/api\/games\/[^/]+\/operations$/u);
+});

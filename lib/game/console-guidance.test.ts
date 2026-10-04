@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attentionEventCount, CONSOLE_TABS, defaultConsoleTab, isConsoleTabId, launchChecklist, runHint, runNeedsAttention, setupHint } from './console-guidance';
+import { attentionEventCount, CONSOLE_TABS, defaultConsoleTab, isConsoleTabId, latestAttentionEventAt, launchChecklist, resolveConsoleTab, runHint, runNeedsAttention, setupHint } from './console-guidance';
 
 describe('console tabs', () => {
   it('names five tabs with unique ids and a one-line purpose each', () => {
@@ -132,5 +132,52 @@ describe('attention event count', () => {
   it('does not count routine entries, such as an email batch that went out', () => {
     expect(attentionEventCount([{ severity: 'INFO', source: 'EMAIL' }, { severity: 'INFO', source: 'AUTOMATION' }])).toBe(0);
     expect(attentionEventCount([])).toBe(0);
+  });
+});
+
+describe('unseen problems', () => {
+  const at = (createdAt: string, source = 'EMAIL', severity = 'WARNING') => ({ severity, source, createdAt });
+
+  it('counts only the problems logged after the moderator last looked', () => {
+    const events = [at('2026-10-04T10:00:00.000Z'), at('2026-10-04T12:00:00.000Z', 'AUTOMATION'), at('2026-10-04T14:00:00.000Z')];
+    expect(attentionEventCount(events, null)).toBe(3);
+    expect(attentionEventCount(events, '2026-10-04T10:00:00.000Z')).toBe(2);
+    expect(attentionEventCount(events, '2026-10-04T14:00:00.000Z')).toBe(0);
+  });
+
+  it('finds the newest problem, ignoring entries that are not problems', () => {
+    const events = [at('2026-10-04T10:00:00.000Z'), at('2026-10-04T15:00:00.000Z', 'GAME_CONTROL'), at('2026-10-04T16:00:00.000Z', 'EMAIL', 'INFO'), at('2026-10-04T12:00:00.000Z', 'AUTOMATION')];
+    expect(latestAttentionEventAt(events)).toBe('2026-10-04T12:00:00.000Z');
+    expect(latestAttentionEventAt([])).toBeNull();
+    expect(latestAttentionEventAt([at('2026-10-04T15:00:00.000Z', 'GAME_CONTROL')])).toBeNull();
+  });
+
+  it('brings the badge back for a problem logged after the moderator looked', () => {
+    const before = [at('2026-10-04T10:00:00.000Z')];
+    const seenThrough = latestAttentionEventAt(before);
+    expect(attentionEventCount(before, seenThrough)).toBe(0);
+    expect(attentionEventCount([...before, at('2026-10-04T11:00:00.000Z', 'AUTOMATION')], seenThrough)).toBe(1);
+  });
+});
+
+describe('resolve console tab', () => {
+  it('uses the default until the moderator picks a tab', () => {
+    expect(resolveConsoleTab(null, 'setup')).toBe('setup');
+    expect(resolveConsoleTab(null, 'run')).toBe('run');
+  });
+
+  it('keeps a picked tab while the game stays on the same side of release', () => {
+    expect(resolveConsoleTab({ id: 'messages', forDefault: 'run' }, 'run')).toBe('messages');
+    expect(resolveConsoleTab({ id: 'people', forDefault: 'setup' }, 'setup')).toBe('people');
+  });
+
+  it('goes back to the tab that suits the game when it flips between setup and running', () => {
+    expect(resolveConsoleTab({ id: 'run', forDefault: 'run' }, 'setup')).toBe('setup');
+    expect(resolveConsoleTab({ id: 'people', forDefault: 'setup' }, 'run')).toBe('run');
+  });
+
+  it('keeps a tab chosen by a link whatever the game does', () => {
+    expect(resolveConsoleTab({ id: 'safety', forDefault: null }, 'setup')).toBe('safety');
+    expect(resolveConsoleTab({ id: 'safety', forDefault: null }, 'run')).toBe('safety');
   });
 });

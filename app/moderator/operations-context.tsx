@@ -1,11 +1,10 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import type { FeedbackSummary } from '../../lib/game/feedback';
-import { attentionEventCount } from '../../lib/game/console-guidance';
 import type { AnnouncementRecord } from './communications';
 
 export interface Operations {
@@ -91,8 +90,6 @@ export interface OperationsValue {
   busyAction: string | null;
   message: string;
   error: string;
-  /** Problems in the event log (a failed email batch, an automatic step that could not run): the console flags them on the tab. */
-  attentionCount: number;
   refresh: () => Promise<void>;
   /** Clears the last action's confirmation or error, so it doesn't follow the moderator to another tab. */
   clearNotices: () => void;
@@ -479,11 +476,9 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     }
   }
 
-  const attentionCount = useMemo(() => attentionEventCount(operations?.events ?? []), [operations]);
-
   const value: OperationsValue = {
     gameId, operations, rooms, messages, historyRoomId, setHistoryRoomId, roomChanges, moderators, announcements, latestAnnouncementId, feedback,
-    recoveryCodes, pinSeatId, setPinSeatId, restoreBackupId, setRestoreBackupId, restoreInviteCsv, busyAction, message, error, attentionCount,
+    recoveryCodes, pinSeatId, setPinSeatId, restoreBackupId, setRestoreBackupId, restoreInviteCsv, busyAction, message, error,
     refresh, clearNotices, announce, addModerator, removeModerator, makeOwner, resetPlayerPin, exportBackup, toggleRoom, purgeRetention, removeMessage,
     stopGame, resetGame, restoreBackup, downloadRestoredInvites, reconcileDeadlines, submitFeedback,
   };

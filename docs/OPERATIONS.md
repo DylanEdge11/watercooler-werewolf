@@ -12,7 +12,7 @@ The moderator console groups its controls into five tabs under the game bar. Che
 | **Messages** | **Official announcement** and **Announcement copy**, **Chat rooms**, and **Feedback** with **Send your own feedback**. |
 | **Safety & records** | **Event log**, **Verified backup**, **Recovery restore**, and **Fail-safe controls** (**Stop game**, **Reset to setup**) under **Danger zone**. |
 
-Three things keep you oriented. The **Launch checklist** beside the page (above it on a phone) shows the four launch steps and jumps to each. A **Next step** note under the game bar says what to do now before and after a game, and the top of **Run the live game** says what to do for the current phase. A dot on **Run game** means a result, Hunter follow-up, or locked phase is waiting for you, and a number on **Safety & records** counts problems in the event log (a failed email batch, or an automatic step that could not run), so nothing urgent hides behind another tab. A link such as `/moderator#messages` opens that tab.
+Three things keep you oriented. The **Launch checklist** beside the page (above it on a phone) shows the four launch steps and jumps to each. A **Next step** note under the game bar says what to do now before and after a game, and the top of **Run the live game** says what to do for the current phase. A dot on **Run game** means a result, Hunter follow-up, or locked phase is waiting for you, and a number on **Safety & records** counts new problems in the event log (a failed email batch, or an automatic step that could not run), so nothing urgent hides behind another tab. Opening **Safety & records** clears the number, and a problem logged after that brings it back. A link such as `/moderator#messages` opens that tab.
 
 ## Who can do what
 
