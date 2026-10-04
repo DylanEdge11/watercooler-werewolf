@@ -201,6 +201,9 @@
 .backstage .console-tab-blurb { color: var(--bs-ink); font-style: italic; }
 .backstage .health-strip { background: var(--bs-page); border: 1px solid var(--bs-rule); border-radius: 2px; box-shadow: 0 1px 2px rgba(35, 29, 24, 0.1); }
 .backstage .live-settings { border-top: 1px dashed var(--bs-rule); }
+.backstage .choices-group { background: #fffdf7; border: 1px dashed #b9a988; border-radius: 2px; }
+.backstage :is(.choices-group > summary, .choices-phase > summary small) { font-family: var(--ll-font-type), monospace; font-size: 12px; font-weight: 400; }
+.backstage .choices-phase > summary small { font-size: 11px; }
 .backstage .live-settings > .eyebrow { margin-top: 2px; }
 .backstage :is(.danger-zone, .start-over) { border-color: var(--bs-stop); }
 .backstage .danger-zone .setup-card-heading > span { background: var(--bs-stop); }

@@ -28,7 +28,7 @@ Requests never change the schema. `ensureDatabase()` checks that every version i
 | Village stats: counting rules | `lib/game/game-stats.ts` (`buildGameStats`, `chatRhythm`), unit-tested beside it |
 | Village stats: data and routes | `lib/player/game-stats-data.ts` (`loadGameStats`), served by `app/api/stats/route.ts` (players, spectators) and `app/api/games/[gameId]/stats/route.ts` (moderators) |
 | Village stats: screens | `app/village-stats.tsx`, `app/village-stats-charts.tsx`, `app/village-stats.css`; the console panel is `app/moderator/stats-panel.tsx` |
-| Moderator player choices | `lib/game/moderator-choices.ts` (`buildModeratorChoices`, unit-tested beside it), `lib/game/moderator-choices-data.ts` (`loadModeratorChoices`), served by `app/api/games/[gameId]/choices/route.ts`; the console panel is `app/moderator/player-choices-panel.tsx` |
+| Moderator player choices | `lib/game/moderator-choices.ts` (`buildModeratorChoices`, `groupPhaseChoices`, `describeChoiceCounts`, unit-tested beside it), `lib/game/moderator-choices-data.ts` (`loadModeratorChoices`), served by `app/api/games/[gameId]/choices/route.ts`; the console panel is `app/moderator/player-choices-panel.tsx` |
 | Stop, reset, restore, cancel, PIN reset | `app/api/games/[gameId]/operations/route.ts`, `lib/backup/` |
 | Sessions, hashing, authorization | `lib/auth/` |
 | Co-moderators: add, remove, transfer ownership | `app/api/games/[gameId]/moderators/`, `lib/auth/game-moderators.ts` |
@@ -121,7 +121,7 @@ The dashboard's **Village stats** tab (a third view beside Today and Timeline, f
 
 ## Moderator player choices
 
-The console's **Player choices** panel lists every phase of the current run, newest first, with each player's current action in it: Day and Final ballot votes, Afterlife votes, each Werewolf's targets, the Seer's or Apprentice Seer's investigation, the Bodyguard's protection, Cupid's pair, and the Hunter's shot. Each chooser and target is shown with their role.
+The console's **Player choices** panel lists every phase of the current run, newest first, with each player's current action in it: Day and Final ballot votes, Afterlife votes, each Werewolf's targets, the Seer's or Apprentice Seer's investigation, the Bodyguard's protection, Cupid's pair, and the Hunter's shot. Each chooser and target is shown with their role. The panel groups each phase with `groupPhaseChoices`: the special powers (`INVESTIGATE`, `PROTECT`, `CUPID_PAIR`, `HUNTER_SHOT`) are shown, and the pack's `WOLF_VOTE`s, the `DAY_VOTE`s, and the `AFTERLIFE_VOTE`s are lists the moderator opens. The newest phase starts open and older phases closed. This is only layout; the response is unchanged.
 
 - **What counts.** Rows of `action_submissions` with `superseded_at IS NULL`, so a resubmitted choice shows only its latest version, the same one the engine counts. Open and unpublished phases are included. Phases before the latest reset or restore are left out (`RUN_BOUNDARY`). Nothing is stored and there is no migration.
 - **Privacy.** The response names every role and private target, so it is served only by `GET /api/games/[gameId]/choices` behind `requireGameModerator` and is never part of a player or spectator response. A moderator who is also playing would see everything; a disguised moderator mode is a possible future enhancement.

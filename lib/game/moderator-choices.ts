@@ -111,3 +111,48 @@ export function buildModeratorChoices(input: {
         order(a.kind) - order(b.kind) || a.actorName.localeCompare(b.actorName, undefined, { sensitivity: 'base' })),
     }));
 }
+
+/** The choices that are a role's own power. The pack's target and the ballots are the bulk of a game, so they are listed apart. */
+const POWER_KINDS: ReadonlySet<ActionKind> = new Set(['INVESTIGATE', 'PROTECT', 'CUPID_PAIR', 'HUNTER_SHOT']);
+
+export interface ChoiceGroup {
+  key: 'pack' | 'votes' | 'afterlife';
+  title: string;
+  choices: PlayerChoice[];
+}
+
+export interface GroupedChoices {
+  /** Seer, Apprentice Seer, Bodyguard, Cupid, and Hunter choices: what a moderator checks to see special powers working. */
+  powers: PlayerChoice[];
+  /** The pack's targets and each kind of ballot, in that order; a group with no choices is left out. */
+  groups: ChoiceGroup[];
+}
+
+/** Splits one phase's choices into special powers and the lists a moderator opens only when they want them. Order within each is kept. */
+export function groupPhaseChoices(phaseKind: PhaseKind, choices: PlayerChoice[]): GroupedChoices {
+  const groups: ChoiceGroup[] = [
+    { key: 'pack', title: 'Pack targets', choices: choices.filter((choice) => choice.kind === 'WOLF_VOTE') },
+    { key: 'votes', title: phaseKind === 'FINAL_BALLOT' ? 'Final ballot votes' : 'Day votes', choices: choices.filter((choice) => choice.kind === 'DAY_VOTE') },
+    { key: 'afterlife', title: 'Afterlife tiebreak votes', choices: choices.filter((choice) => choice.kind === 'AFTERLIFE_VOTE') },
+  ];
+  return {
+    powers: choices.filter((choice) => POWER_KINDS.has(choice.kind)),
+    groups: groups.filter((group) => group.choices.length > 0),
+  };
+}
+
+function count(n: number, singular: string, plural = `${singular}s`): string {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+/** A short line for a collapsed phase, e.g. "2 special powers, 1 pack target, 6 votes"; empty when nothing was saved. */
+export function describeChoiceCounts(grouped: GroupedChoices): string {
+  const parts: string[] = [];
+  if (grouped.powers.length) parts.push(count(grouped.powers.length, 'special power'));
+  for (const group of grouped.groups) {
+    parts.push(group.key === 'pack' ? count(group.choices.length, 'pack target')
+      : group.key === 'afterlife' ? count(group.choices.length, 'Afterlife vote')
+        : count(group.choices.length, 'vote'));
+  }
+  return parts.join(', ');
+}

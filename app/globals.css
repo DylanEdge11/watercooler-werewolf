@@ -419,6 +419,16 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .outcome-row strong { color: var(--coral); font-size: 9px; }
 .outcome-row small { color: var(--muted); font-size: 8px; grid-column: 1 / -1; }
 .player-choices section + section { border-top: 1px solid #e5e5df; margin-top: 12px; padding-top: 12px; }
+/* Player choices: a phase opens to its special powers; the pack's targets and the votes are lists inside it. */
+.choices-phase > summary { align-items: baseline; cursor: pointer; display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.choices-phase > summary .eyebrow { margin: 0; }
+.choices-phase > summary small { color: var(--muted); font-size: 11px; }
+.choices-powers { margin-top: 10px; }
+.choices-powers .eyebrow { margin-bottom: 2px; }
+.choices-group { border: 1px solid var(--line); border-radius: 10px; margin-top: 10px; padding: 8px 12px; }
+.choices-group > summary { cursor: pointer; font-size: 12px; font-weight: 800; }
+.choices-group > summary small { color: var(--muted); font-weight: 400; }
+.choices-group[open] > summary { margin-bottom: 4px; }
 .empty-note, .protected-note, .random-note { color: var(--muted); font-size: 9px; line-height: 1.5; }
 .protected-note { color: var(--mint-strong); }
 .random-note { background: #fff4dd; border-radius: 7px; color: #72551f; padding: 7px; }

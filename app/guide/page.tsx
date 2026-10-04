@@ -13,6 +13,7 @@ const SECTIONS = [
   ['rules', 'The rules'],
   ['roles', 'Roles'],
   ['players', 'For players'],
+  ['spectators', 'For spectators'],
   ['moderators', 'For moderators'],
   ['help', 'Help'],
 ] as const;
@@ -46,6 +47,9 @@ const HELP_ROWS = [
   ['Moderator: I can’t add or remove a player', 'The roster locks once roles are randomized. Select Save composition to discard the preview and unlock it. After release, the roster is final, but you can add someone as a spectator.'],
   ['Moderator: Hunter cannot be finalized', 'Wait for the Hunter to submit or for their window to expire, then try again.'],
   ['Moderator: an action shows an error', 'Refresh first. Another moderator may have completed it already.'],
+  ['Moderator: I forgot my password', 'On the moderator sign-in page select “Forgot password? Use a recovery code”, then enter your email, one unused recovery code, and a new password of 12 or more characters. The code is used up and your other moderator sessions are signed out. There is no email reset: without a recovery code, ask the site operator.'],
+  ['Moderator: I started a game by mistake', 'Before roles are released, the owner can open the Setup tab, find Start over, and select Cancel setup and start new game. After release, Stop game ends play for good, and Reset to setup (owner only) takes a backup and returns the game to setup. Both ask you to confirm first.'],
+  ['Moderator: a phase says Locked or Deadlines says Overdue', 'Voting always closes at the deadline by itself. Select Check deadlines on the Run game tab to lock anything past its deadline now, then select Calculate locked responses to see the result.'],
   ['Moderator: did the emails go out?', 'Check the Event log on the Safety & records tab. Each email batch, failed emails, and automatic steps that could not run are listed there, newest first.'],
 ] as const;
 
@@ -92,7 +96,7 @@ export default function GuidePage() {
             <source src="/guide/walkthrough.mp4" type="video/mp4" />
             Your browser cannot play this video.
           </video>
-          <p>A two-minute tour with fictional players: claiming a seat, receiving a role, voting, and the moderator publishing a result.</p>
+          <p>A two-minute tour with fictional players: claiming a seat, receiving a role, voting, and the moderator publishing a result, then opening a Night, checking special powers in Player choices, and finding the console’s other tabs.</p>
         </section>
 
         <section className="guide-section" id="what">
@@ -166,18 +170,21 @@ export default function GuidePage() {
           <p>Go to <Link href="/player-login">Player sign-in</Link> and enter your invitation email and PIN. Your seat code works too.</p>
           <h3>3. Vote or act</h3>
           <ol>
-            <li>Open <strong>Today</strong> and read what the current phase asks of you and when it closes.</li>
+            <li>Open <strong>Today</strong> and read what the current phase asks of you and when it closes. The card beside the heading counts down to the deadline. In a game with automatic results it says when the result will publish, and “The schedule is paused” means the moderator has paused automation for a while.</li>
             <li>Select one or more player cards, up to the limit shown.</li>
             <li>Select <strong>Save response</strong> and wait for the confirmation. Selecting cards alone does not count.</li>
             <li>You can change your mind and save again until the phase closes. Only your latest saved response counts.</li>
           </ol>
           <Shot src="/guide/player-day-ballot.webp" alt="Player dashboard during a Day ballot with a player selected" caption="Casting a Day vote. The page refreshes by itself: every 10 seconds in the last 15 minutes before a deadline, otherwise every 30 seconds. After five minutes without a tap or key press it pauses and says so; tap anywhere to catch up. Once the game ends it stops refreshing." />
           <h3>4. Follow the story</h3>
+          <p>When a published result eliminates someone, a full-screen notice shows who is out, their role, and how it happened: a vote, a Werewolf attack, the Hunter’s shot, or a lover’s bond. Select <strong>I understand</strong> to close it; on each device you see it once for each result. If it is you, it says so, and reminds you that you can keep watching as a spectator but should not pass information to living players.</p>
           <p>The <strong>Official timeline</strong> shows each published result, who was eliminated, and their role. Select <strong>View votes</strong> to see how everyone voted on a Day, or select <strong>Timeline</strong> in the menu for the whole campaign on one page (the latest 100 updates), with who voted for whom each Day. Private results, such as a Seer’s investigation, appear under <strong>Private result history</strong>.</p>
           <Shot src="/guide/player-timeline.webp" alt="Player dashboard showing the full Timeline of published results" caption="The full Timeline: each published result, who was eliminated and their role, and how everyone voted." />
           <p>For the bigger picture, select <strong>Village stats</strong> in the menu (<strong>Stats</strong> on a phone). Pick a day to see how many votes each player received, or choose <strong>All days</strong> to see who has collected the most. You will also find how many players voted each day and how close the vote was, how many players and werewolves are left after each result, a record of who has left, how busy the Town Hall is by day and hour, and a grid of who voted for whom. It uses only what is already public: published results and message counts, never an open ballot, anyone’s private result, or a living player’s role. The chat total counts every room, including private ones; the chat charts show the Town Hall only. It updates by itself when a result is published, and every chart has a <strong>View as table</strong> twin.</p>
           <h3>5. Get email nudges (optional)</h3>
           <p>If your site operator has turned email on, your dashboard has an <strong>Email</strong> card. It is off until you select <strong>Turn email on</strong>. Once it is on you get an email when a phase opens and you have something to do, another half an hour before it closes if you haven’t saved yet, and a short, silly story when each result is published. The emails never say what your role is or what your action is. They do go only to players with something to do, so if your screen is visible to others, know that getting a phase email on a Night means you have a Night action. Every email has a link to turn them off again.</p>
+          <h3>6. Send feedback (optional)</h3>
+          <p>The <strong>Feedback</strong> card sends the moderators a rating from 1 to 5 and, if you like, a comment. It is private to the moderators. They can see whether feedback came from a player, but not who sent it. Spectators don’t have this card.</p>
           <h3>Good to know</h3>
           <ul>
             <li>The <strong>Town Hall</strong> is the whole village’s chat, open day and night. Every player and spectator can read it; only living players can post.</li>
@@ -191,6 +198,17 @@ export default function GuidePage() {
           </ul>
         </section>
 
+        <section className="guide-section" id="spectators">
+          <h2>For spectators</h2>
+          <p>A spectator watches without playing. Your moderator sends you a private link. Open it, choose a six-digit PIN, and select <strong>Start spectating</strong>. To come back later, sign in on the home page with your email and PIN, or open the link again.</p>
+          <ul>
+            <li>You have no role and no vote, and you never see anyone’s role until a result reveals it.</li>
+            <li>You can follow who is alive and read every published result and ballot, just as players do.</li>
+            <li>You can chat in the <strong>Afterlife</strong>, where your name is marked “(spectator)”, and read the Town Hall but not post there.</li>
+            <li>If you forget your PIN, or your seat locks after 10 wrong tries, ask the moderator to reset it.</li>
+          </ul>
+        </section>
+
         <section className="guide-section" id="moderators">
           <h2>For moderators</h2>
           <p>The moderator runs the game but does not play: the console shows every role. You need a moderator account from the site operator, 6–80 players with unique email addresses, and an agreed place for discussion.</p>
@@ -198,12 +216,13 @@ export default function GuidePage() {
           <p>The <Link href="/moderator">Moderator console</Link> has five tabs under the game bar. <strong>Selected game</strong> in the game bar switches between your games, and everything on the tabs applies to the one you picked.</p>
           <ul>
             <li><strong>Setup</strong>: the schedule, the roster, the roles, and releasing them. It opens first until roles are released.</li>
-            <li><strong>Run game</strong>: the game’s health at a glance, then <strong>Run the live game</strong> for each phase, plus <strong>Player choices</strong> and <strong>Village stats</strong>. It opens first once roles are released.</li>
+            <li><strong>Run game</strong>: the game’s health at a glance (players claimed, players alive, signed-in sessions, whether deadlines are healthy, and the last 24 hours of activity, with <strong>Check deadlines</strong>), then <strong>Run the live game</strong> for each phase, plus <strong>Player choices</strong> and <strong>Village stats</strong>. It opens first once roles are released.</li>
             <li><strong>People</strong>: <strong>Player access recovery</strong> for a forgotten PIN, <strong>Spectators</strong>, and <strong>Co-moderator access</strong>.</li>
             <li><strong>Messages</strong>: <strong>Official announcement</strong>, <strong>Chat rooms</strong>, and <strong>Feedback</strong>.</li>
             <li><strong>Safety &amp; records</strong>: the <strong>Event log</strong>, backups, and under <strong>Danger zone</strong>, <strong>Stop game</strong> and <strong>Reset to setup</strong>.</li>
           </ul>
-          <p>The <strong>Launch checklist</strong> beside the page shows the four launch steps and jumps to each one. A <strong>Next step</strong> note under the game bar says what to do now, and the top of <strong>Run the live game</strong> says what to do for the current phase. A dot on <strong>Run game</strong> means a result is waiting for you. A number on <strong>Safety &amp; records</strong> means the event log has a problem, such as an email batch that failed or an automatic step that could not run.</p>
+          <p>The <strong>Launch checklist</strong> beside the page shows the four launch steps and jumps to each one. A <strong>Next step</strong> note under the game bar says what to do now, and the top of <strong>Run the live game</strong> says what to do for the current phase. A dot on <strong>Run game</strong> means a result, a Hunter follow-up, or a locked phase is waiting for you. A number on <strong>Safety &amp; records</strong> means the event log has a problem, such as an email batch that failed or an automatic step that could not run. On a phone, the checklist becomes a row of steps above the page and the tabs scroll sideways. <strong>Moderator guide</strong>, <strong>Open Player View Studio</strong>, and <strong>View current player session</strong> are links beside the checklist.</p>
+          <Shot src="/guide/moderator-tabs.webp" alt="Moderator console with the five tabs, a next-step note, and the Launch checklist" caption="The console during setup: the Launch checklist on the left, the game bar, a note saying what to do next, and the five tabs." />
           <h3>Set up a game</h3>
           <ol>
             <li><strong>Create the game.</strong> In the <Link href="/moderator">Moderator console</Link>, enter a name, timezone, dates, a final cutoff, and the <strong>Hunter window</strong> (how long an eliminated Hunter has to shoot, 8 hours by default), then select <strong>Create game</strong>. <strong>Advanced: eliminations per phase</strong> sets how many living players each elimination slot covers, with a preview of the slots; most games keep the default of 30. Below it, <strong>Use a fixed elimination schedule</strong> sets exact numbers instead, in stages, such as 2 Day eliminations and 2 Night kills for game days 1–5, then 1 and 1 until the end; a game day is one Day and the Night after it, and skipped calendar days don’t count. The preview lists each stage, and final ballots still use players per Day elimination. Under <strong>Results</strong>, keep <strong>I review and publish each result</strong> or choose <strong>Publish automatically after a review window</strong> (60 minutes by default). You can change all of these under <strong>Game schedule</strong> until roles are released; the Results choice and the elimination schedule can also change at any time in <strong>Run the live game</strong>.</li>
@@ -211,7 +230,8 @@ export default function GuidePage() {
             <li><strong>Balance the roles.</strong> Accept the suggested counts or edit them and select <strong>Save composition</strong>. A 20-player game defaults to 12 Villagers, 3 Werewolves, a Seer, a Bodyguard, a Hunter, and 2 Masons.</li>
             <li><strong>Release roles.</strong> When every seat is claimed, select <strong>Randomize roles</strong>, review the result privately, then <strong>Release roles to players</strong>. Setup is locked after release.</li>
           </ol>
-          <p>Want to see what a role looks like to players? <strong>View player preview</strong> opens the Player View Studio with sample data. <strong>Play elimination scene</strong> there replays the announcement players see when someone is eliminated.</p>
+          <p>Want to see what a role looks like to players? <strong>Open Player View Studio</strong>, beside the Launch checklist, shows the player screens with sample data. Pick a role and a game moment, or select <strong>Play elimination scene</strong> to replay the notice players see when someone is eliminated. <strong>Back to moderator console</strong> returns you.</p>
+          <p>To begin another game, select <strong>Start new setup</strong> in the game bar. It leaves your current game alone, and <strong>Selected game</strong> switches between them. To throw away an unfinished setup, the owner can use <strong>Start over</strong> → <strong>Cancel setup and start new game</strong> at the bottom of the Setup tab. It permanently cancels that game and its invite links and player sessions, and keeps its audit history.</p>
           <h3>Run each phase</h3>
           <p>Repeat this loop, starting with a Day and then alternating Night and Day:</p>
           <ol>
@@ -226,16 +246,19 @@ export default function GuidePage() {
           <h3>Finish</h3>
           <p>The game completes as soon as a published result produces a winner. After the final cutoff, you can instead <strong>Enter final showdown</strong> and run Final ballots until someone wins. Afterwards, select <strong>Download JSON backup</strong> to keep a private record.</p>
           <h3>Moderator tools</h3>
+          <Shot src="/guide/moderator-player-choices.webp" alt="Player choices for Night 1 with the Seer’s investigation listed and the pack’s targets in a closed list" caption="Player choices: the special powers come first, and the pack’s targets and the votes are lists you open when you want them." />
           <ul>
-            <li><strong>Player choices</strong>, on the <strong>Run game</strong> tab below <strong>Run the live game</strong>, shows every vote and Night action in every phase, with each player’s role: whom the Seer investigated, whom the Bodyguard protected, Cupid’s lovers, the pack’s targets, and the Hunter’s shot. Open phases show choices as they are saved, and a changed choice replaces the earlier one. Select <strong>Show player choices</strong> to open it. Only moderators can see it, so it suits a moderator who isn’t playing.</li>
+            <li><strong>Player choices</strong>, on the <strong>Run game</strong> tab below <strong>Run the live game</strong>, is for checking that special powers worked. Select <strong>Show player choices</strong> and each phase lists its <strong>Special powers</strong> first, with each player’s role: whom the Seer investigated, whom the Bodyguard protected, Cupid’s lovers, and the Hunter’s shot. The pack’s targets, the <strong>Day votes</strong>, and the Afterlife’s tiebreak votes are separate lists that stay closed until you open them; the line beside each phase says how many of each it holds. The newest phase starts open and older ones closed. Open phases show choices as they are saved, and a changed choice replaces the earlier one. Only moderators can see it, so it suits a moderator who isn’t playing.</li>
             <li><strong>Village stats</strong>, below <strong>Player choices</strong>, shows you the same numbers players see: votes per player each day, turnout, who has left, chat activity, and who voted for whom. Select <strong>Show the stats</strong> to open it. It shows no living player’s role and no private result; the chat total counts private rooms too, but only as one number.</li>
+            <li><strong>Check deadlines</strong>, at the top of the <strong>Run game</strong> tab, locks any phase that is past its deadline right away. The console also does this by itself every 30 seconds while it is open, so the button is for when you don’t want to wait. <strong>Deadlines</strong> reads <strong>Overdue</strong> until it has.</li>
             <li><strong>Player email is each player’s choice.</strong> When the site operator has turned email on, players can switch on emails for a phase opening, a half-hour warning, and a themed recap of each result. Phase and warning emails go only to players who have something to do; the recap goes to everyone who turned email on. Your <strong>Event log</strong> (<strong>Safety &amp; records</strong> tab) shows how many players each batch reached, and flags any that failed. Nothing is required from you.</li>
             <li><strong>Announcements</strong> (<strong>Messages</strong> tab) appear in every player’s updates. <strong>Announcement copy</strong> then shows each one ready to paste into an email or a group chat, with <strong>Copy email</strong> and <strong>Copy for chat</strong>.</li>
-            <li><strong>Feedback</strong> (<strong>Messages</strong> tab) lists the ratings and comments players and moderators send from the feedback card, with the average. It shows whether each came from a player or a moderator. The list doesn’t name the sender, but the audit log and backups record who sent each one.</li>
+            <li><strong>Feedback</strong> (<strong>Messages</strong> tab) lists the ratings and comments players and moderators send from the feedback card, with the average. It shows whether each came from a player or a moderator. The list doesn’t name the sender, but the audit log and backups record who sent each one. <strong>Send your own feedback</strong> under it adds your own rating.</li>
             <li><strong>Player access recovery</strong> (<strong>People</strong> tab) sets a new PIN for a player who forgot theirs, and unlocks a seat locked after 10 wrong PINs (marked “locked” in the list).</li>
-            <li><strong>Chat rooms</strong> (<strong>Messages</strong> tab; the Town Hall and the private rooms) can be made read-only, and individual messages removed with a reason. Select <strong>Open room</strong> to read a room’s whole history, newest first (<strong>Load earlier messages</strong> at the end goes further back), and to post there. Your messages show to the room as <strong>Moderator</strong>, never your name or email. You can post only while the room is open and the game is running; reopen a read-only room first.</li>
+            <li><strong>Chat rooms</strong> (<strong>Messages</strong> tab; the Town Hall and the private rooms) can be made read-only, and individual messages removed with a reason. Select <strong>Open room</strong> to read a room’s whole history, newest first (<strong>Load earlier messages</strong> at the end goes further back), and to post there. Your messages show to the room as <strong>Moderator</strong>, never your name or email. You can post only while the room is open and the game is running; reopen a read-only room first. Messages expire after seven days by default, and <strong>Purge expired</strong> clears them at once.</li>
             <li><strong>Spectators</strong> (<strong>People</strong> tab) can be added once roles are released and while the game runs. Enter a name and email, select <strong>Add spectator</strong>, and send them the private link shown once. They choose a PIN when they first open it. To come back later they sign in on the home page with their email and PIN, or open the link again. They have no role or vote, see the public game (who is alive, published results and ballots), and can read and post in the Afterlife. A player in the game can’t be a spectator. <strong>Remove</strong> ends their access; if a spectator loses their link before opening it, remove them and add them again. If one who has chosen a PIN forgets it, or is locked out after 10 wrong tries (the list says “locked”), select <strong>Reset PIN</strong> beside their name, choose a new six-digit PIN and a reason, and tell them the PIN privately. Resetting the game removes its spectators.</li>
-            <li><strong>Co-moderators</strong> (<strong>People</strong> tab) can be added by the game owner, who can also <strong>Remove</strong> one or <strong>Make owner</strong> to hand the game over and stay on as a co-moderator.</li>
+            <li><strong>Co-moderators</strong> (<strong>People</strong> tab) can be added by the game owner with an email and a password of 12 or more characters. A new account shows one-time recovery codes; pass them on privately. Any co-moderator can run phases, publish, post announcements, moderate chat, and reset PINs. Only the owner can add or <strong>Remove</strong> co-moderators, <strong>Make owner</strong> to hand the game over and stay on as a co-moderator, reset or restore the game, or cancel a setup.</li>
+            <li><strong>Backups</strong> (<strong>Safety &amp; records</strong> tab): <strong>Download JSON backup</strong> saves a private file with the game’s roles, results, and room messages, but never PINs, passwords, or invite codes. Keep it private. A backup is also taken automatically before every reset and restore. The owner can use <strong>Recovery restore</strong> to rebuild a game’s setup from a stored snapshot; it makes fresh invite links, so select <strong>Download fresh invites</strong> straight away.</li>
             <li><strong>Pause automation</strong> in <strong>Run the live game</strong> stops automatic calculation, publication, and opening the next phase (for an offsite or a long weekend) until you select <strong>Resume automation</strong>. Deadlines still close voting. Players see “The schedule is paused”.</li>
             <li><strong>Stop game</strong> (<strong>Safety &amp; records</strong> tab) ends play permanently. <strong>Reset to setup</strong> (owner only) clears the game back to setup after taking a backup.</li>
           </ul>

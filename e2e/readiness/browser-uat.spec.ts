@@ -117,7 +117,12 @@ test('an eight-player game runs from setup to a Village win with private informa
     await choices.scrollIntoViewIfNeeded();
     await choices.getByText('Show player choices', { exact: true }).click();
     const dayChoices = choices.getByRole('region', { name: 'Day 1' });
-    await expect(dayChoices.locator('.outcome-row').first()).toBeVisible({ timeout: 30_000 });
+    // The votes are a list to open; a Day has no special powers, so nothing else shows until then.
+    const dayVotes = dayChoices.locator('details.choices-group').filter({ hasText: 'Day votes' });
+    await expect(dayVotes).toBeVisible({ timeout: 30_000 });
+    await expect(dayChoices.locator('.outcome-row').first()).toBeHidden();
+    await dayVotes.locator('summary').click();
+    await expect(dayChoices.locator('.outcome-row').first()).toBeVisible();
     expect(await dayChoices.locator('.outcome-row').first().innerText()).toMatch(/\(.+\)/u);
     let failNextChoices = true;
     // One refresh is refused (429, which the telemetry check accepts when announced); the panel treats any failed answer alike.
@@ -212,6 +217,20 @@ test('an eight-player game runs from setup to a Village win with private informa
     await expect(ordinary.page.getByText(/is a werewolf\./iu)).toHaveCount(0);
     await game.assertPlayerPrivacy(ordinary);
     await game.assertPlayerPrivacy(seer, { allowOwnInvestigation: true });
+
+    // Player choices lists the special powers first. The pack's target is a list the moderator opens, and an older phase starts closed.
+    await moderatorPage.reload();
+    const powersPanel = moderatorPage.locator('#player-choices');
+    await powersPanel.getByText('Show player choices', { exact: true }).click();
+    const nightChoices = powersPanel.getByRole('region', { name: 'Night 1' });
+    await expect(nightChoices.locator('.choices-powers .outcome-row').filter({ hasText: 'Investigated' })).toHaveCount(1, { timeout: 30_000 });
+    await expect(nightChoices.locator('.choices-powers .outcome-row').filter({ hasText: 'Protected' })).toHaveCount(1);
+    await expect(nightChoices.locator('.choices-powers')).not.toContainText('Pack target');
+    const packTargets = nightChoices.locator('details.choices-group').filter({ hasText: 'Pack targets' });
+    await expect(packTargets.locator('.outcome-row').first()).toBeHidden();
+    await packTargets.locator('summary').click();
+    await expect(packTargets.locator('.outcome-row').first()).toBeVisible();
+    await expect(powersPanel.getByRole('region', { name: 'Day 1' }).locator('details.choices-phase')).not.toHaveAttribute('open', /.*/u);
 
     // The moderator opens the Pack room's history and posts in it; the living Werewolf sees it as "Moderator".
     const livingWolf = game.chooseLiving((player) => player.account.role === 'WEREWOLF');
