@@ -89,10 +89,11 @@ export async function decideApplication(options: { gameId: string; applicationId
     const member = await db.prepare('SELECT 1 AS found FROM game_moderators WHERE game_id = ? AND moderator_id = ? LIMIT 1').bind(gameId, account.id).first();
     if (member) {
       // Already a moderator of this game (added another way since they applied): record it and stop.
-      await db
-        .prepare(`UPDATE moderator_applications SET status = 'APPROVED', moderator_id = ?, setup_code_hash = NULL, decided_at = ?, decided_by_moderator_id = ? WHERE id = ? AND game_id = ? AND ${waiting}`)
-        .bind(account.id, now, ownerId, applicationId, gameId)
+      const recorded = await db
+        .prepare(`UPDATE moderator_applications SET status = 'APPROVED', moderator_id = ?, setup_code_hash = NULL, decided_at = ?, decided_by_moderator_id = ? WHERE id = ? AND game_id = ? AND ${waiting} AND ${ownerGuard}`)
+        .bind(account.id, now, ownerId, applicationId, gameId, gameId, ownerId)
         .run();
+      if (changes(recorded) !== 1) throw lost();
       return { outcome: 'ALREADY_MEMBER' };
     }
     const eventId = crypto.randomUUID();

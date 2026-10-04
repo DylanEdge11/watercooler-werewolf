@@ -427,6 +427,28 @@ describe('reviewing sign-ups', () => {
     expect((await rows("SELECT status FROM signups WHERE id = 'dupe'"))[0].status).toBe('ACCEPTED');
   });
 
+  test('people already on a full roster are still marked accepted, and nobody else is added', async () => {
+    await seedSeats(MAX_PLAYERS);
+    await client.execute("INSERT INTO signups (id,game_id,display_name,email,status,created_at) VALUES ('dupe','game','Same Person','seat-3@pilot.test','PENDING','2026-02-01')");
+    await seedSignups(1);
+    const accepted = await review('ACCEPT', ['dupe', 'signup-0']);
+    expect(accepted).toMatchObject({ status: 200, body: { added: 0, onRoster: 1, waiting: 1 } });
+    expect((await rows("SELECT status FROM signups WHERE id = 'dupe'"))[0].status).toBe('ACCEPTED');
+    expect(await seatCount()).toBe(MAX_PLAYERS);
+    expect((await review('ACCEPT', ['signup-0'])).body.error).toContain(`${MAX_PLAYERS}`);
+  });
+
+  test('marking people already on the roster never claims success when nothing changed', async () => {
+    await seedSeats(7);
+    await client.execute("INSERT INTO signups (id,game_id,display_name,email,status,created_at) VALUES ('dupe','game','Same Person','seat-3@pilot.test','PENDING','2026-02-01')");
+    const [accepted, declined] = await Promise.all([review('ACCEPT', ['dupe']), review('DECLINE', ['dupe'])]);
+    const status = String((await rows("SELECT status FROM signups WHERE id = 'dupe'"))[0].status);
+    if (accepted.status === 200) expect(status).toBe('ACCEPTED');
+    else expect(accepted.status).toBe(409);
+    if (declined.status === 200) expect(status).toBe('DECLINED');
+    expect([accepted.status, declined.status].filter((code) => code === 200)).toHaveLength(1);
+  });
+
   test('leaves the newest waiting when the roster fills up', async () => {
     await seedSeats(MAX_PLAYERS - 2);
     await seedSignups(4);

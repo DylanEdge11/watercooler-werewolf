@@ -88,6 +88,14 @@ async function applyAndFind(code: string, name: string, email: string, note?: st
   return String((await rows('SELECT id FROM moderator_applications WHERE email = ?', [email]))[0].id);
 }
 
+/** An applicant who already moderates the game another way: the form refuses them, so the row is made directly. */
+async function applyAndFindForMember(code: string): Promise<string> {
+  void code;
+  await client.execute("INSERT INTO moderator_applications (id,game_id,display_name,email,status,created_at) VALUES ('member-app','game','Sam','stranger@pilot.test','PENDING','2026-02-01')");
+  await client.execute("INSERT INTO game_moderators (game_id,moderator_id,role,added_at) VALUES ('game','stranger','CO_MODERATOR','2026-01-02')");
+  return 'member-app';
+}
+
 async function approveForLink(code: string, name = 'Newcomer', email = 'newcomer@pilot.test'): Promise<{ id: string; setupUrl: string; setupCode: string }> {
   const id = await applyAndFind(code, name, email);
   const approved = await decide(id, 'APPROVE');
@@ -357,6 +365,15 @@ describe('approving an applicant who already has a moderator account', () => {
     expect(results.filter((result) => result.status === 200)).toHaveLength(1);
     expect(await count("SELECT COUNT(*) AS count FROM game_moderators WHERE game_id = 'game' AND moderator_id = 'stranger'")).toBe(1);
     expect(await events('CO_MODERATOR_ADDED')).toHaveLength(1);
+  });
+
+  test('recording someone who is already a moderator never claims success after a decline', async () => {
+    const code = await openAndGetCode();
+    const id = await applyAndFindForMember(code);
+    const [approved, declined] = await Promise.all([decide(id, 'APPROVE'), decide(id, 'DECLINE')]);
+    const status = String((await rows('SELECT status FROM moderator_applications WHERE id = ?', [id]))[0].status);
+    expect([approved.status, declined.status].filter((value) => value === 200)).toHaveLength(1);
+    expect(status).toBe(approved.status === 200 ? 'APPROVED' : 'DECLINED');
   });
 
   test('someone added another way since they applied is recorded and not added twice', async () => {

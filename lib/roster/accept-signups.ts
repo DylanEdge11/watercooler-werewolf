@@ -1,5 +1,6 @@
 import { getDb } from '../../db';
 import type { SqlValue } from '../../db/contracts';
+import { changes } from '../../db/results';
 import { randomToken, sha256 } from '../auth/crypto';
 import { canAcceptSignups } from '../game/roster-edit';
 import { describeAcceptance, planAcceptance, type PendingSignup } from '../game/signups';
@@ -52,11 +53,13 @@ export async function acceptSignups(options: { gameId: string; moderatorId: stri
     db.prepare("SELECT email FROM seats WHERE game_id = ? AND status != 'REMOVED'").bind(gameId).all<{ email: string }>(),
   ]);
   if (!pending.results.length) throw new HttpError(409, 'Those sign-ups have already been dealt with. Refresh the list.');
-  const room = canAcceptSignups(snapshot.seatCount);
-  if (!room.allowed) throw new HttpError(409, room.error);
 
   const plan = planAcceptance({ signups: pending.results, seatCount: snapshot.seatCount, rosterEmails: new Set(seats.results.map((seat) => seat.email)) });
-  if (!plan.add.length && !plan.onRoster.length) throw new HttpError(409, describeAcceptance(plan));
+  if (!plan.add.length && !plan.onRoster.length) {
+    // Nobody can be added, so say why: a full roster has its own message. People already seated are still accepted, as below.
+    const room = canAcceptSignups(snapshot.seatCount);
+    throw new HttpError(409, room.allowed ? describeAcceptance(plan) : room.error);
+  }
 
   const now = new Date().toISOString();
   const invites = await Promise.all(
@@ -81,6 +84,8 @@ export async function acceptSignups(options: { gameId: string; moderatorId: stri
   let composition = snapshot.composition;
   let resetToPreset = false;
   let playerCount = snapshot.seatCount;
+  // How many people already on the roster were marked accepted by this request.
+  let markedOnRoster = plan.onRoster.length;
   if (invites.length) {
     const addIds = invites.map((invite) => invite.signup.id);
     const result = await applySeatChange({
@@ -118,13 +123,16 @@ export async function acceptSignups(options: { gameId: string; moderatorId: stri
     });
     ({ composition, resetToPreset, playerCount } = result);
   } else {
-    const guard = "EXISTS (SELECT 1 FROM games g WHERE g.id = ? AND g.status IN ('DRAFT', 'REGISTRATION'))";
-    await db.batch(plan.onRoster.map((signup) => markOnRoster(signup, guard, [gameId])));
+    const guard = "EXISTS (SELECT 1 FROM games g WHERE g.id = ? AND g.status IN ('DRAFT', 'REGISTRATION') AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.game_id = g.id))";
+    const results = await db.batch(plan.onRoster.map((signup) => markOnRoster(signup, guard, [gameId])));
+    markedOnRoster = results.filter((result) => changes(result) === 1).length;
+    // Nothing changed means the game moved on, or each sign-up was dealt with, between reading and writing.
+    if (!markedOnRoster) throw new HttpError(409, 'The roster or the list changed while you were working. Refresh and try again.');
   }
 
   return {
     added: invites.length,
-    onRoster: plan.onRoster.length,
+    onRoster: markedOnRoster,
     waiting: plan.full.length,
     message: describeAcceptance(plan),
     composition,
