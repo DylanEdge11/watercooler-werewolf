@@ -19,7 +19,7 @@ A candidate is ready for release when `npm run verify:full` has passed on its ex
 
 ## Unit tests
 
-`npm test` runs Vitest over `lib/**/*.test.ts`: the game engine, action rules, scheduling, balance, CSV import, auth, rate limits, migrations, backup and restore, and race conditions in the API routes, using an in-memory libSQL database. Village stats are covered by `lib/game/game-stats.test.ts` (the counting rules, including timezones) and `lib/api-stats.test.ts` (the routes: open ballots excluded, privacy, access, reset, chat counts). Player email is covered by `lib/api-email-notifications.test.ts` (recipients, once-only reminders, privacy of the wording, failures, the AI story with a mocked SDK) and the unit tests in `lib/notify/`; none of them send mail or call Claude.
+`npm test` runs Vitest over `lib/**/*.test.ts`: the game engine, action rules, scheduling, balance, CSV import, auth, rate limits, migrations, backup and restore, and race conditions in the API routes, using an in-memory libSQL database. Village stats are covered by `lib/game/game-stats.test.ts` (the counting rules, including timezones) and `lib/api-stats.test.ts` (the routes: open ballots excluded, privacy, access, reset, chat counts). Player email is covered by `lib/api-email-notifications.test.ts` (recipients, once-only reminders, privacy of the wording, failures, the AI story with a mocked SDK) and the unit tests in `lib/notify/`; none of them send mail or call Claude. Player sign-ups are covered by `lib/game/signups.test.ts` (the rules and wording limits) and `lib/api-signups.test.ts` (open, close, and replace the link; the public form's neutral replies, limits, hidden field, and rate limits; accepting into the roster, role counts, races, and claiming an accepted seat). Moderator applications are covered by `lib/game/moderator-applications.test.ts` and `lib/api-moderator-applications.test.ts` (applying, the owner's decisions, the one-time setup link: single use, seven-day expiry, two uses at once, an account that appeared meanwhile). Both mock only the email sender.
 
 ## Rehearse a game
 
@@ -82,7 +82,7 @@ This checks that the deployed Preview, with its real Vercel functions and Turso 
 | --- | --- |
 | `01-smoke` | `--project=chromium --retries=0 e2e/readiness/browser-smoke.spec.ts` |
 | `02-api-suite` | `--project=api --retries=0` |
-| `03-browser-uat` | `--project=chromium --retries=0 e2e/readiness/browser-uat.spec.ts e2e/readiness/browser-setup-navigation.spec.ts` |
+| `03-browser-uat` | `--project=chromium --retries=0 e2e/readiness/browser-uat.spec.ts e2e/readiness/browser-setup-navigation.spec.ts e2e/readiness/browser-signups.spec.ts` |
 
 PowerShell:
 

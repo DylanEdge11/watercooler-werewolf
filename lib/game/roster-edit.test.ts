@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultComposition } from './balance';
 import { MAX_PLAYERS, MIN_PLAYERS } from './player-count';
-import { adjustCompositionForRosterChange, canAddLateVillager, canAddSeat, canEditRoster, canRemoveSeat } from './roster-edit';
+import { adjustCompositionForRosterChange, canAcceptSignups, canAddLateVillager, canAddSeat, canEditRoster, canRemoveSeat } from './roster-edit';
 
 describe('single-seat roster edits', () => {
   it('are open only before roles are randomized', () => {
@@ -22,6 +22,12 @@ describe('single-seat roster edits', () => {
     expect(canRemoveSeat(MIN_PLAYERS, 'INVITED').allowed).toBe(false);
   });
 
+  it('let a roster still being built from sign-ups shrink below the minimum, but not drop to it from the minimum', () => {
+    expect(canRemoveSeat(MIN_PLAYERS - 1, 'INVITED').allowed).toBe(true);
+    expect(canRemoveSeat(1, 'INVITED').allowed).toBe(true);
+    expect(canRemoveSeat(MIN_PLAYERS, 'INVITED')).toMatchObject({ allowed: false, error: expect.stringContaining(`${MIN_PLAYERS}`) });
+  });
+
   it('remove only players who have not claimed their seat', () => {
     expect(canRemoveSeat(20, 'CLAIMED')).toMatchObject({ allowed: false, error: expect.stringContaining('not claimed') });
     expect(canRemoveSeat(20, 'REMOVED').allowed).toBe(false);
@@ -40,6 +46,42 @@ describe('single-seat roster edits', () => {
 
   it('fall back to the preset when the saved counts no longer match the roster', () => {
     expect(adjustCompositionForRosterChange(defaultComposition(20), 22, 1)).toEqual({ composition: defaultComposition(22), resetToPreset: true });
+  });
+});
+
+describe('accepting sign-ups into the roster', () => {
+  const zero = { VILLAGER: 0, WEREWOLF: 0, SEER: 0, BODYGUARD: 0, HUNTER: 0, MASON: 0, APPRENTICE_SEER: 0, MAYOR: 0, CUPID: 0 };
+
+  it('can start from an empty roster and stops at the player limit', () => {
+    expect(canAcceptSignups(0).allowed).toBe(true);
+    expect(canAcceptSignups(MAX_PLAYERS - 1).allowed).toBe(true);
+    expect(canAcceptSignups(MAX_PLAYERS)).toMatchObject({ allowed: false, error: expect.stringContaining(`${MAX_PLAYERS}`) });
+  });
+
+  it('keeps every role at zero until the roster reaches the minimum', () => {
+    for (let count = 1; count < MIN_PLAYERS; count += 1) {
+      expect(adjustCompositionForRosterChange(zero, count, 1)).toEqual({ composition: zero, resetToPreset: false });
+    }
+    expect(adjustCompositionForRosterChange(zero, 3, 3)).toEqual({ composition: zero, resetToPreset: false });
+  });
+
+  it('starts from the preset when a roster first reaches the minimum', () => {
+    expect(adjustCompositionForRosterChange(zero, MIN_PLAYERS, 1)).toEqual({ composition: defaultComposition(MIN_PLAYERS), resetToPreset: true });
+    expect(adjustCompositionForRosterChange(zero, 12, 12)).toEqual({ composition: defaultComposition(12), resetToPreset: true });
+  });
+
+  it('starts from the preset again when several players are added at once', () => {
+    const custom = { ...defaultComposition(8), VILLAGER: 3, WEREWOLF: 2 };
+    expect(adjustCompositionForRosterChange(custom, 11, 3)).toEqual({ composition: defaultComposition(11), resetToPreset: true });
+  });
+
+  it('still absorbs a single added player in Villagers', () => {
+    const custom = { ...defaultComposition(8), VILLAGER: 6, WEREWOLF: 2 };
+    expect(adjustCompositionForRosterChange(custom, 9, 1)).toEqual({ composition: { ...custom, VILLAGER: 7 }, resetToPreset: false });
+  });
+
+  it('empties the counts when removals take a roster below the minimum', () => {
+    expect(adjustCompositionForRosterChange(defaultComposition(MIN_PLAYERS), MIN_PLAYERS - 1, -1)).toEqual({ composition: zero, resetToPreset: false });
   });
 });
 

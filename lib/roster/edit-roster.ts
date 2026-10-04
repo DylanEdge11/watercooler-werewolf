@@ -52,8 +52,9 @@ export async function applySeatChange(options: {
   gameId: string;
   moderatorId: string;
   snapshot: RosterSnapshot;
-  delta: 1 | -1;
-  eventType: 'SEAT_ADDED' | 'SEAT_REMOVED';
+  /** Seats added (positive) or removed (negative) by this change. */
+  delta: number;
+  eventType: 'SEAT_ADDED' | 'SEAT_REMOVED' | 'SIGNUPS_ACCEPTED';
   eventPayload: Record<string, unknown>;
   extraClaimCondition?: { sql: string; args: SqlValue[] };
   seatStatements: (guard: string, guardArgs: SqlValue[]) => PreparedStatement[];

@@ -99,10 +99,13 @@ export async function collectGameBackup(gameId: string): Promise<GameBackup> {
   const [gameRows, moderators, seats, composition, batches, assignments, phases, actions, resolutions, events, rooms, roomMembers, messages, moderatorMessages, announcements, notifications, operations, feedback] = reads;
   const game = gameRows.results[0];
   if (!game) throw new HttpError(404, 'Game not found.');
+  // The public sign-up link is a live invitation to the game, so it stays out of a file that can be passed around.
+  const exportedGame: Record<string, unknown> = { ...game };
+  delete exportedGame.signup_code;
   return {
     schemaVersion: 2,
     exportedAt: new Date().toISOString(),
-    game,
+    game: exportedGame,
     moderators: moderators.results,
     seats: seats.results,
     composition: composition.results,

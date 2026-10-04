@@ -39,6 +39,13 @@ describe('game backup', () => {
     expect(JSON.stringify(backup)).not.toMatch(/claim-secret|pin-secret/u);
   });
 
+  test('leaves out the public sign-up link, which is a live invitation to the game', async () => {
+    await client.execute("UPDATE games SET signup_state = 'OPEN', signup_code = 'public-join-secret' WHERE id = 'game'");
+    const backup = await collectGameBackup('game');
+    expect(JSON.stringify(backup)).not.toContain('public-join-secret');
+    expect(backup.game).not.toHaveProperty('signup_code');
+  });
+
   test('restoring a backup starts the run unpaused and with the next phase no longer opening by itself', async () => {
     // A backup can be restored only with a real roster: six to eighty seats.
     for (let index = 1; index <= 5; index += 1) {

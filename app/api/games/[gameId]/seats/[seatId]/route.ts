@@ -56,6 +56,13 @@ export async function DELETE(request: Request, context: RouteContext) {
           )
           .bind(archivedHash, now, seatId, gameId, ...guardArgs),
         db.prepare(`DELETE FROM seat_sessions WHERE seat_id = ? AND ${guard}`).bind(seatId, ...guardArgs),
+        // A player who came in through sign-up is shown as declined, so the moderator's list matches the roster.
+        db
+          .prepare(
+            `UPDATE signups SET status = 'DECLINED', seat_id = NULL, decided_at = ?, decided_by_moderator_id = ?
+             WHERE seat_id = ? AND game_id = ? AND status = 'ACCEPTED' AND ${guard}`,
+          )
+          .bind(now, moderator.id, seatId, gameId, ...guardArgs),
       ],
     });
     return Response.json({ ok: true, ...result });
