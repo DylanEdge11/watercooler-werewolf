@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { nudgeMessage } from '../../lib/game/moderator-copy';
+import { runHint, runNeedsAttention } from '../../lib/game/console-guidance';
 import { phaseName } from '../../lib/game/timeline-view';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
 import AutomationControls, { type NextAutomaticStep } from './automation-controls';
@@ -99,7 +100,7 @@ interface GameState {
   schedule?: ScheduleDefinition | null;
 }
 
-export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameId: string; gameStatus: string; onChanged?: (action?: string) => void }) {
+export default function LiveGamePanel({ gameId, gameStatus, onChanged, onAttention }: { gameId: string; gameStatus: string; onChanged?: (action?: string) => void; onAttention?: (needsAttention: boolean) => void }) {
   const [phases, setPhases] = useState<Phase[]>([]);
   const [roster, setRoster] = useState<RosterMember[]>([]);
   const [game, setGame] = useState<GameState | null>(null);
@@ -235,6 +236,18 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
   const reviewedOutcome = latest?.proposal?.reviewedOutcome ?? null;
   const publishedOutcome = latest?.proposal?.publishedOutcome ?? null;
   const authoritativeOutcome = latest?.status === 'PUBLISHED' && publishedOutcome ? publishedOutcome : reviewedOutcome ?? proposedOutcome;
+  const hint = runHint({
+    status: effectiveStatus,
+    current: current ? { kind: current.kind, sequence: current.sequence, status: current.status } : null,
+    lastPublishedKind: latestPublished?.kind ?? null,
+  });
+  const needsAttention = runNeedsAttention(current?.status);
+
+  // The console marks the Run game tab while a result or follow-up is waiting on the moderator. Leaving (another game) clears it.
+  useEffect(() => {
+    onAttention?.(needsAttention);
+    return () => onAttention?.(false);
+  }, [needsAttention, onAttention]);
 
   function gameTime(value: string | null | undefined): string {
     if (!value) return 'Not configured';
@@ -247,9 +260,10 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
 
   return (
     <section className="setup-card live-control">
-      <div className="setup-card-heading"><span>05</span><div><h2>Run the live game</h2><p>Lock responses, inspect the calculated outcome, then publish one official result.</p></div></div>
+      <div className="setup-card-heading"><span aria-hidden="true">▶</span><div><h2>Run the live game</h2><p>Lock responses, inspect the calculated outcome, then publish one official result.</p></div></div>
       {error && <p className="notice error" role="alert">{error}</p>}
       {message && <p className="notice success" role="status">{message}</p>}
+      {hint && <p className="next-step"><strong>{hint.title}</strong> {hint.detail}</p>}
 
       {!current && !['COMPLETED', 'STOPPED'].includes(effectiveStatus) && (
         <form className="phase-open-row" onSubmit={openPhase}>
@@ -260,12 +274,6 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
       )}
 
       {!current && effectiveStatus === 'ACTIVE' && latestPublished && <div className="final-showdown-callout"><div><p className="eyebrow accent">Final cutoff · {game?.timezone ?? 'UTC'}</p><strong>{game?.finalCutoffAt ? gameTime(game.finalCutoffAt) : 'Configured in the game schedule'}</strong><p>When the cutoff has passed, enter final showdown to unlock the final ballot.</p></div><button className="secondary-button" type="button" onClick={() => void enterFinalShowdown()}>Enter final showdown</button></div>}
-
-      {game && !['COMPLETED', 'STOPPED', 'CANCELLED'].includes(effectiveStatus) && <AutomationControls gameId={gameId} game={game} nextStep={nextAutomaticStep} formatTime={gameTime} onChanged={refresh} />}
-
-      {game && effectiveStatus === 'ACTIVE' && (phases[0]?.sequence ?? 0) <= LATE_JOIN_LAST_PHASE_SEQUENCE && <LateVillagerForm gameId={gameId} onAdded={() => { void refresh(); onChanged?.('LATE_VILLAGER_ADDED'); }} />}
-
-      {game && ['ACTIVE', 'FINAL_SHOWDOWN'].includes(effectiveStatus) && <EliminationSchedulePanel gameId={gameId} status={effectiveStatus} schedule={game.eliminationSchedule ?? null} latest={latestRegular ? { kind: latestRegular.kind, sequence: latestRegular.sequence, status: latestRegular.status } : null} onChanged={refresh} />}
 
       {latest && (
         <div className="phase-review">
@@ -310,6 +318,15 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged }: { gameI
       )}
 
       {phases.filter((phase) => phase.status === 'PUBLISHED').length > 0 && <p className="field-help">Published: {phases.filter((phase) => phase.status === 'PUBLISHED').map((phase) => phaseName(phase.kind, phase.sequence)).join(', ')}</p>}
+
+      {game && !['COMPLETED', 'STOPPED', 'CANCELLED'].includes(effectiveStatus) && (
+        <div className="live-settings">
+          <p className="eyebrow">Automation and schedule</p>
+          <AutomationControls gameId={gameId} game={game} nextStep={nextAutomaticStep} formatTime={gameTime} onChanged={refresh} />
+          {['ACTIVE', 'FINAL_SHOWDOWN'].includes(effectiveStatus) && <EliminationSchedulePanel gameId={gameId} status={effectiveStatus} schedule={game.eliminationSchedule ?? null} latest={latestRegular ? { kind: latestRegular.kind, sequence: latestRegular.sequence, status: latestRegular.status } : null} onChanged={refresh} />}
+          {effectiveStatus === 'ACTIVE' && (phases[0]?.sequence ?? 0) <= LATE_JOIN_LAST_PHASE_SEQUENCE && <LateVillagerForm gameId={gameId} onAdded={() => { void refresh(); onChanged?.('LATE_VILLAGER_ADDED'); }} />}
+        </div>
+      )}
     </section>
   );
 }
