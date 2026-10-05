@@ -8,7 +8,10 @@ import { INVALID_SPECTATOR_LINK, SPECTATOR_LOCKED_MESSAGE, spectatorLockoutId, s
 import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
 import { routeError } from '../../../../lib/http/errors';
 import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
-import { isSingleEmailAddress } from '../../../../lib/roster/email-address';
+import { isSingleEmailAddress, MAX_EMAIL_LENGTH } from '../../../../lib/roster/email-address';
+
+/** The same answer for every wrong email, seat code, or PIN, so it never reveals which emails have seats. */
+const SIGN_IN_NOT_ACCEPTED = 'Email or seat code and PIN were not accepted.';
 
 /** A seat, or a spectator who has already opened their link and chosen a PIN. */
 interface LoginCandidate {
@@ -33,6 +36,9 @@ export async function POST(request: Request) {
     await ensureDatabase();
     const body = (await request.json()) as { identifier?: string; seatCode?: string; pin?: string };
     const identifier = body.identifier?.trim() ?? body.seatCode?.trim() ?? '';
+    // Nothing a person can type here is longer than an email address. Refuse longer input at once,
+    // before any pattern runs on it and before the rate limiter, so a huge value costs almost nothing.
+    if (identifier.length > MAX_EMAIL_LENGTH) return jsonError(SIGN_IN_NOT_ACCEPTED, 401);
     const pin = body.pin?.trim() ?? '';
     if (!identifier || !pin) throw new Error('Email or seat code and PIN are required.');
     // Seat codes never contain "@"; anything that is one plain address is looked up as an email.
@@ -102,7 +108,7 @@ export async function POST(request: Request) {
       if (candidates.length && !open.length) {
         return jsonError(candidates.every((candidate) => candidate.kind === 'SPECTATOR') ? SPECTATOR_LOCKED_MESSAGE : PIN_LOCKED_MESSAGE, 423);
       }
-      return jsonError('Email or seat code and PIN were not accepted.', 401);
+      return jsonError(SIGN_IN_NOT_ACCEPTED, 401);
     }
     if (match.kind === 'SPECTATOR') {
       if (!await startSpectatorSession(db, match)) return jsonError(INVALID_SPECTATOR_LINK, 404);
