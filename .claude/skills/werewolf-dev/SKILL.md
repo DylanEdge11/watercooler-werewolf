@@ -48,7 +48,7 @@ Add a test for every behavior change that fails without the change. For a bug, w
 | --- | --- |
 | Game rule or permission | Unit test next to it in `lib/game/` |
 | Route, persistence, privacy, or races | `lib/provider-integration.test.ts` style: real in-memory `libSQL`, calls the route |
-| Player or moderator screen or flow | Run the closest browser spec (`npm run test:e2e:uat` for game flow, `e2e/readiness/browser-setup-navigation.spec.ts` for setup); extend it when the flow itself changes |
+| Player or moderator screen or flow | Run the closest browser spec (`npm run test:e2e:uat` for game flow, `e2e/readiness/browser-setup-navigation.spec.ts` for setup, `e2e/readiness/browser-signups.spec.ts` for sign-ups and moderator applications); extend it when the flow itself changes |
 | Game engine end to end | `npm run test:e2e` (20-player API suite, about 30 seconds) |
 
 ## 6. Docs

@@ -59,6 +59,17 @@ export function launchChecklist(progress: LaunchProgress): LaunchChecklist {
   };
 }
 
+/**
+ * What happened to the role counts after people were added to the roster in bulk (accepted from
+ * sign-ups, or a list added to the roster). Below the minimum there are no counts yet; more than
+ * one new player starts again from the standard preset; one new player keeps the moderator's counts.
+ */
+export function rosterCountsNote(result: { playerCount: number; resetToPreset: boolean; villagers: number }): string {
+  if (result.playerCount < MIN_PLAYERS) return `The roster has ${result.playerCount} so far, and a game needs at least ${MIN_PLAYERS}.`;
+  if (result.resetToPreset) return `Role counts were set to the standard preset for ${result.playerCount} players.`;
+  return `Role counts now have ${result.villagers} ${result.villagers === 1 ? 'Villager' : 'Villagers'}; other roles are unchanged.`;
+}
+
 export type SetupStepKey = 'signups' | 'roster' | 'roles' | 'release';
 
 export interface ConsoleHint {
@@ -88,7 +99,7 @@ export function setupHint(input: { status: string | undefined; seatCount: number
     };
   }
   if (seatCount < MIN_PLAYERS) {
-    if (input.signupsOpen) return { title: 'Sign-ups are open', detail: `Share the sign-up link. When everyone you want has signed up, close sign-ups and accept them. A game needs ${MIN_PLAYERS} to ${MAX_PLAYERS} players${seatCount ? `; the roster has ${seatCount}` : ''}.`, step: 'signups' };
+    if (input.signupsOpen) return { title: 'Sign-ups are open', detail: `Share the sign-up link and accept the people you want as they arrive. If you have a list of your own, you can import it too, before or after. A game needs ${MIN_PLAYERS} to ${MAX_PLAYERS} players${seatCount ? `; the roster has ${seatCount}` : ''}.`, step: 'signups' };
     if (seatCount) {
       const need = MIN_PLAYERS - seatCount;
       return { title: `Add ${need} more ${need === 1 ? 'player' : 'players'}`, detail: `A game needs at least ${MIN_PLAYERS} players and the roster has ${seatCount}. Accept more sign-ups, add players one at a time, or import a roster.`, step: 'roster' };

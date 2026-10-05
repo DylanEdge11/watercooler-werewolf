@@ -44,7 +44,13 @@ function parseRows(csv: string): string[][] {
   return rows;
 }
 
-export function parseRosterCsv(csv: string): RosterParseResult {
+/**
+ * Reads a pasted roster. A roster that replaces the old one must hold a playable number of
+ * players; a list added to players already on the roster only has to hold someone, so the caller
+ * lowers `minPlayers` for it.
+ */
+export function parseRosterCsv(csv: string, options: { minPlayers?: number } = {}): RosterParseResult {
+  const minimum = options.minPlayers ?? MIN_PLAYERS;
   const rows = parseRows(csv.replace(/^\uFEFF/u, ''));
   if (rows.length === 0) return { entries: [], errors: ['The CSV is empty.'] };
   const headers = rows[0].map((value) => value.trim().toLowerCase());
@@ -70,8 +76,10 @@ export function parseRosterCsv(csv: string): RosterParseResult {
       seenEmails.add(email);
     }
   });
-  if (entries.length < MIN_PLAYERS || entries.length > MAX_PLAYERS) {
-    errors.push(`The roster must contain between ${MIN_PLAYERS} and ${MAX_PLAYERS} valid players.`);
+  if (entries.length < minimum || entries.length > MAX_PLAYERS) {
+    errors.push(minimum === MIN_PLAYERS
+      ? `The roster must contain between ${MIN_PLAYERS} and ${MAX_PLAYERS} valid players.`
+      : `The list must contain between ${minimum} and ${MAX_PLAYERS} valid players.`);
   }
   return { entries, errors };
 }

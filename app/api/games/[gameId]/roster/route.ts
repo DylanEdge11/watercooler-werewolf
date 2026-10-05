@@ -10,6 +10,7 @@ import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 import { createInviteExport, parseRosterCsv } from '../../../../../lib/roster/csv';
 import { loadRosterView } from '../../../../../lib/game/setup-view';
+import { appendToRoster } from '../../../../../lib/roster/append-roster';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -32,10 +33,17 @@ export async function POST(request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     const moderator = await requireGameModerator(gameId);
-    const body = (await request.json()) as { csv?: string };
-    const parsed = parseRosterCsv(body.csv ?? '');
+    const body = (await request.json()) as { csv?: string; mode?: unknown };
+    // Without a mode the list replaces the roster, as it always has. ADD keeps everyone already on it.
+    if (body.mode !== undefined && body.mode !== 'ADD' && body.mode !== 'REPLACE') throw new Error('Choose ADD or REPLACE.');
+    const adding = body.mode === 'ADD';
+    const parsed = parseRosterCsv(body.csv ?? '', adding ? { minPlayers: 1 } : {});
     if (parsed.errors.length) {
       return Response.json({ ok: false, errors: parsed.errors }, { status: 400 });
+    }
+    if (adding) {
+      const added = await appendToRoster({ gameId, moderatorId: moderator.id, entries: parsed.entries, origin: new URL(request.url).origin });
+      return Response.json({ ok: true, ...added, inviteCsv: createInviteExport(added.invites) });
     }
 
     const db = getDb();

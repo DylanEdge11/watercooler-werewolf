@@ -1,6 +1,6 @@
 # Setup and deployment
 
-For the site operator: the person who installs Watercooler Werewolf, manages Vercel and Turso, and creates the first moderator account. Players and moderators should read the in-app guide at `/guide` instead.
+For the site operator: the person who installs Watercooler Werewolf, manages Vercel and Turso, and creates the first moderator account. Further moderators join when a game owner adds them, or when the owner approves their application (see [invite email](#invite-email)). Players and moderators should read the in-app guide at `/guide` instead.
 
 Keep real passwords, database tokens, and recovery codes out of Git and out of chat. Every value below is a placeholder.
 
@@ -114,7 +114,7 @@ If Deployment Protection is on, scripts need a **Protection Bypass for Automatio
 
 ## Invite email
 
-The moderator console can email each unclaimed player their private claim link. It sends through any SMTP account, so changing sender later is a settings change, not a code change. Set the variables for `preview` and `production` separately, and prefer a test account for Preview.
+The moderator console can email each unclaimed player their private claim link, including players accepted from the public sign-up list. The same settings send the one-time setup link to a moderator applicant the owner approves; without them the owner is shown that link once to pass on, and sign-ups and applications work either way. It sends through any SMTP account, so changing sender later is a settings change, not a code change. Set the variables for `preview` and `production` separately, and prefer a test account for Preview.
 
 **With a Gmail account (no domain needed):**
 

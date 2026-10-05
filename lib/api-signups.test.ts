@@ -21,7 +21,9 @@ vi.mock('./auth/session', () => ({
 
 import { GET as signupsGet, POST as signupsPost } from '../app/api/games/[gameId]/signups/route';
 import { POST as reviewPost } from '../app/api/games/[gameId]/signups/review/route';
+import { POST as assignmentsPost } from '../app/api/games/[gameId]/assignments/route';
 import { POST as rosterPost } from '../app/api/games/[gameId]/roster/route';
+import { POST as seatsPost } from '../app/api/games/[gameId]/seats/route';
 import { DELETE as seatDelete } from '../app/api/games/[gameId]/seats/[seatId]/route';
 import { GET as joinGet } from '../app/api/join/[code]/route';
 import { POST as joinSignupPost } from '../app/api/join/[code]/signup/route';
@@ -532,5 +534,255 @@ describe('reviewing sign-ups', () => {
     const listed = await view();
     expect(listed.body.signups.map((row: { displayName: string; email: string; status: string }) => [row.displayName, row.email, row.status])).toEqual([['Ada', 'ada@pilot.test', 'PENDING'], ['Bo', 'bo@pilot.test', 'PENDING']]);
     expect((await loadRosterView('game')).signups).toEqual({ state: 'OPEN', live: true, pending: 2, accepted: 0, applicationsOpen: false, pendingApplications: 0 });
+  });
+});
+
+describe('a game can use an imported list, sign-ups, or both', () => {
+  const csvOf = (prefix: string, total: number) => ['display_name,email', ...Array.from({ length: total }, (_, index) => `${prefix} ${index},${prefix.toLowerCase()}${index}@pilot.test`)].join('\n');
+  const importList = async (prefix: string, total: number) => read(await rosterPost(request('POST', { csv: csvOf(prefix, total) }), gameCtx));
+  const claim = async (code: string, pin: string) => read(await claimPost(request('POST', { pin }), codeCtx(code)));
+
+  test('a list alone never involves sign-ups', async () => {
+    const imported = await importList('Listed', 8);
+    expect(imported).toMatchObject({ status: 200, body: { playerCount: 8 } });
+    expect((await view()).body).toMatchObject({ state: 'NOT_OPEN', live: false, link: null, counts: { pending: 0, accepted: 0, declined: 0 } });
+    expect((await loadRosterView('game')).signups).toEqual({ state: 'NOT_OPEN', live: false, pending: 0, accepted: 0, applicationsOpen: false, pendingApplications: 0 });
+    expect(await composition()).toEqual(defaultComposition(8));
+  });
+
+  test('sign-ups alone can build a game, from the first visitor to released roles', async () => {
+    const code = await openAndGetCode();
+    for (let index = 0; index < 6; index += 1) expect((await signUp(code, { displayName: `Visitor ${index}`, email: `visitor${index}@pilot.test` })).status).toBe(200);
+    const accepted = await review('ACCEPT', (await waiting()).map((row) => row.id));
+    expect(accepted.body).toMatchObject({ added: 6, playerCount: 6, resetToPreset: true });
+    expect(await composition()).toEqual(defaultComposition(6));
+    for (const [index, invite] of (accepted.body.invites as Array<{ inviteCode: string }>).entries()) expect((await claim(invite.inviteCode, `55000${index}`)).status).toBe(200);
+    const preview = await read(await assignmentsPost(request('POST', { action: 'PREVIEW' }), gameCtx));
+    expect(preview.status).toBe(200);
+    const batchId = String((await rows("SELECT id FROM assignment_batches WHERE game_id = 'game'"))[0].id);
+    expect((await read(await assignmentsPost(request('POST', { action: 'RELEASE', batchId }), gameCtx))).status).toBe(200);
+    expect((await rows("SELECT status FROM games WHERE id = 'game'"))[0].status).toBe('ACTIVE');
+    expect(await count("SELECT COUNT(*) AS count FROM role_assignments WHERE game_id = 'game'")).toBe(6);
+  });
+
+  test('a list and sign-ups together: import first, then accept people on top, and every invite works', async () => {
+    const imported = await importList('Listed', 6);
+    const code = await openAndGetCode();
+    await signUp(code, { displayName: 'Visitor A', email: 'a@pilot.test' });
+    await signUp(code, { displayName: 'Visitor B', email: 'b@pilot.test' });
+    const accepted = await review('ACCEPT', (await waiting()).map((row) => row.id));
+    expect(accepted.body).toMatchObject({ added: 2, playerCount: 8, resetToPreset: true });
+    expect(await seatCount()).toBe(8);
+    expect(await composition()).toEqual(defaultComposition(8));
+    expect(await count("SELECT COUNT(*) AS count FROM seats WHERE status = 'INVITED'")).toBe(8);
+    expect((await view()).body.counts).toEqual({ pending: 0, accepted: 2, declined: 0 });
+    // Players from the list and players from sign-ups claim the same way.
+    const fromList = imported.body.invites[0].inviteCode as string;
+    const fromSignup = accepted.body.invites[0].inviteCode as string;
+    expect((await claim(fromList, '111111')).status).toBe(200);
+    expect((await claim(fromSignup, '222222')).status).toBe(200);
+    expect(await count("SELECT COUNT(*) AS count FROM seats WHERE status = 'CLAIMED'")).toBe(2);
+  });
+
+  test('importing after sign-ups were accepted replaces the roster, and those people can be accepted again on top', async () => {
+    const code = await openAndGetCode();
+    for (let index = 0; index < 3; index += 1) await signUp(code, { displayName: `Visitor ${index}`, email: `visitor${index}@pilot.test` });
+    await review('ACCEPT', (await waiting()).map((row) => row.id));
+    expect(await seatCount()).toBe(3);
+
+    // A list sent with no mode, or as REPLACE, starts the roster over, as it always has.
+    expect((await importList('Listed', 6)).status).toBe(200);
+    expect(await seatCount()).toBe(6);
+    expect((await view()).body.counts).toEqual({ pending: 3, accepted: 0, declined: 0 });
+    // Their old links are dead, and the list is exactly what was imported.
+    expect(await count("SELECT COUNT(*) AS count FROM seats WHERE email LIKE 'visitor%' AND status != 'REMOVED'")).toBe(0);
+
+    const again = await review('ACCEPT', (await waiting()).map((row) => row.id));
+    expect(again.body).toMatchObject({ added: 3, playerCount: 9, resetToPreset: true });
+    expect(await composition()).toEqual(defaultComposition(9));
+  });
+
+  describe('importing a list after sign-ups have started', () => {
+    const addList = async (prefix: string, total: number) => read(await rosterPost(request('POST', { csv: csvOf(prefix, total), mode: 'ADD' }), gameCtx));
+    const signUpAndAccept = async (total: number) => {
+      const code = await openAndGetCode();
+      for (let index = 0; index < total; index += 1) await signUp(code, { displayName: `Visitor ${index}`, email: `visitor${index}@pilot.test` });
+      return review('ACCEPT', (await waiting()).map((row) => row.id));
+    };
+
+    test('adding a list keeps everyone accepted from sign-ups, with their seats and links', async () => {
+      const accepted = await signUpAndAccept(2);
+      const before = await rows("SELECT id, claim_code_hash AS hash FROM seats WHERE email LIKE 'visitor%' ORDER BY email");
+      const added = await addList('Listed', 6);
+      expect(added).toMatchObject({ status: 200, body: { ok: true, added: 6, skipped: 0, playerCount: 8, resetToPreset: true } });
+      expect(added.body.invites).toHaveLength(6);
+      // The file to download holds only the people just added; the others already have their links.
+      expect(added.body.inviteCsv).toContain('listed0@pilot.test');
+      expect(added.body.inviteCsv).not.toContain('visitor0@pilot.test');
+      expect(await seatCount()).toBe(8);
+      expect(await rows("SELECT id, claim_code_hash AS hash FROM seats WHERE email LIKE 'visitor%' ORDER BY email")).toEqual(before);
+      expect((await view()).body.counts).toEqual({ pending: 0, accepted: 2, declined: 0 });
+      expect(await composition()).toEqual(defaultComposition(8));
+      expect(await count("SELECT COUNT(*) AS count FROM seats WHERE status = 'INVITED'")).toBe(8);
+      // Both groups claim the same way.
+      expect((await claim(accepted.body.invites[0].inviteCode, '111111')).status).toBe(200);
+      expect((await claim(added.body.invites[0].inviteCode, '222222')).status).toBe(200);
+      expect(await events('ROSTER_APPENDED')).toHaveLength(1);
+    });
+
+    test('adding to an empty roster is the same as the first import, and a short list can be topped up', async () => {
+      const first = await addList('Listed', 3);
+      expect(first).toMatchObject({ status: 200, body: { added: 3, playerCount: 3 } });
+      // Below the minimum there are no role counts yet.
+      expect(Object.values(await composition()).reduce((sum, value) => sum + value, 0)).toBe(0);
+      const second = await addList('More', 3);
+      expect(second).toMatchObject({ status: 200, body: { added: 3, playerCount: 6, resetToPreset: true } });
+      expect(await composition()).toEqual(defaultComposition(6));
+    });
+
+    test('adding one person keeps the moderator’s own role counts', async () => {
+      await importList('Listed', 8);
+      const added = await addList('One', 1);
+      expect(added).toMatchObject({ status: 200, body: { added: 1, playerCount: 9, resetToPreset: false } });
+      expect((await composition()).VILLAGER).toBe(defaultComposition(8).VILLAGER + 1);
+    });
+
+    test('someone already on the roster is skipped, and a list of only those people changes nothing', async () => {
+      await signUpAndAccept(2);
+      const overlap = ['display_name,email', 'Visitor Zero again,visitor0@pilot.test', 'Fresh One,fresh1@pilot.test', 'Fresh Two,fresh2@pilot.test'].join('\n');
+      const added = await read(await rosterPost(request('POST', { csv: overlap, mode: 'ADD' }), gameCtx));
+      expect(added).toMatchObject({ status: 200, body: { added: 2, skipped: 1, playerCount: 4 } });
+      expect(await count("SELECT COUNT(*) AS count FROM seats WHERE email = 'visitor0@pilot.test'")).toBe(1);
+
+      const revision = (await rows("SELECT setup_revision AS revision FROM games WHERE id = 'game'"))[0].revision;
+      const nothing = await read(await rosterPost(request('POST', { csv: overlap, mode: 'ADD' }), gameCtx));
+      expect(nothing.status).toBe(409);
+      expect(nothing.body.error).toMatch(/already on the roster/u);
+      expect((await rows("SELECT setup_revision AS revision FROM games WHERE id = 'game'"))[0].revision).toBe(revision);
+      expect(await seatCount()).toBe(4);
+    });
+
+    test('a person who signed up and is also on the list gets one seat, and their sign-up shows as accepted', async () => {
+      const code = await openAndGetCode();
+      await signUp(code, { displayName: 'Ada', email: 'ada@pilot.test' });
+      await signUp(code, { displayName: 'Bo', email: 'bo@pilot.test' });
+      const listed = await read(await rosterPost(request('POST', { csv: ['display_name,email', 'Ada Lovelace,ada@pilot.test', 'Cy,cy@pilot.test'].join('\n'), mode: 'ADD' }), gameCtx));
+      expect(listed.body).toMatchObject({ added: 2, playerCount: 2 });
+      expect(await count("SELECT COUNT(*) AS count FROM seats WHERE email = 'ada@pilot.test'")).toBe(1);
+      const ada = (await rows("SELECT status, seat_id AS seat FROM signups WHERE email = 'ada@pilot.test'"))[0];
+      expect(ada.status).toBe('ACCEPTED');
+      expect(ada.seat).toBe((await rows("SELECT id FROM seats WHERE email = 'ada@pilot.test'"))[0].id);
+      // Bo is still waiting, and a declined sign-up on the list is also on the roster now.
+      expect((await view()).body.counts).toEqual({ pending: 1, accepted: 1, declined: 0 });
+    });
+
+    test('a declined sign-up on the list is on the roster and shows as accepted', async () => {
+      const code = await openAndGetCode();
+      await signUp(code, { displayName: 'Ada', email: 'ada@pilot.test' });
+      await review('DECLINE', (await waiting()).map((row) => row.id));
+      await addList('Listed', 1);
+      const listed = await read(await rosterPost(request('POST', { csv: ['display_name,email', 'Ada,ada@pilot.test'].join('\n'), mode: 'ADD' }), gameCtx));
+      expect(listed.status).toBe(200);
+      expect((await view()).body.counts).toEqual({ pending: 0, accepted: 1, declined: 0 });
+    });
+
+    test('the roster can never go over the limit, and a refused list changes nothing', async () => {
+      await seedSeats(MAX_PLAYERS - 1);
+      const refused = await addList('Extra', 3);
+      expect(refused.status).toBe(409);
+      expect(refused.body.error).toMatch(/at most 80/u);
+      expect(refused.body.error).toMatch(/room for 1 more/u);
+      expect(await seatCount()).toBe(MAX_PLAYERS - 1);
+      expect(await addList('Extra', 1)).toMatchObject({ status: 200, body: { playerCount: MAX_PLAYERS } });
+    });
+
+    test('a bad list is refused with the reasons, and a list over the limit is too', async () => {
+      const empty = await read(await rosterPost(request('POST', { csv: '', mode: 'ADD' }), gameCtx));
+      expect(empty.status).toBe(400);
+      const headerOnly = await read(await rosterPost(request('POST', { csv: 'display_name,email', mode: 'ADD' }), gameCtx));
+      expect(headerOnly.status).toBe(400);
+      expect(headerOnly.body.errors.join(' ')).toMatch(/between 1 and 80/u);
+      const badEmail = await read(await rosterPost(request('POST', { csv: 'display_name,email\nNo Email,not-an-email', mode: 'ADD' }), gameCtx));
+      expect(badEmail.status).toBe(400);
+      expect(await seatCount()).toBe(0);
+    });
+
+    test('an unknown mode is refused, and replacing still needs a playable roster', async () => {
+      const unknown = await read(await rosterPost(request('POST', { csv: csvOf('Listed', 6), mode: 'MERGE' }), gameCtx));
+      expect(unknown.status).toBe(400);
+      expect(await seatCount()).toBe(0);
+      const short = await read(await rosterPost(request('POST', { csv: csvOf('Listed', 2), mode: 'REPLACE' }), gameCtx));
+      expect(short.status).toBe(400);
+      expect(short.body.errors.join(' ')).toMatch(/between 6 and 80/u);
+      expect((await rosterPost(request('POST', { csv: csvOf('Listed', 6), mode: 'REPLACE' }), gameCtx)).status).toBe(200);
+    });
+
+    test('replacing still starts the roster over and sends accepted people back to waiting', async () => {
+      await signUpAndAccept(3);
+      const replaced = await read(await rosterPost(request('POST', { csv: csvOf('Listed', 6), mode: 'REPLACE' }), gameCtx));
+      expect(replaced).toMatchObject({ status: 200, body: { playerCount: 6 } });
+      expect(await seatCount()).toBe(6);
+      expect((await view()).body.counts).toEqual({ pending: 3, accepted: 0, declined: 0 });
+    });
+
+    test('only a moderator of the game can add, only before roles are randomized, and a cross-origin post is refused', async () => {
+      await importList('Listed', 6);
+      as('stranger');
+      expect((await addList('Extra', 1)).status).toBe(403);
+      as(null);
+      expect((await addList('Extra', 1)).status).toBe(401);
+      as('owner');
+      expect((await read(await rosterPost(request('POST', { csv: csvOf('Extra', 1), mode: 'ADD' }, { origin: 'https://evil.test' }), gameCtx))).status).toBe(403);
+      await client.execute("UPDATE games SET status = 'ASSIGNMENT_PREVIEW' WHERE id = 'game'");
+      expect((await addList('Extra', 1)).status).toBe(409);
+      await client.execute("UPDATE games SET status = 'ACTIVE' WHERE id = 'game'");
+      expect((await addList('Extra', 1)).status).toBe(409);
+      expect(await seatCount()).toBe(6);
+    });
+
+    test('a roster edit at the same moment leaves one winner and never a half-added list', async () => {
+      await importList('Listed', 8);
+      const [first, second] = await Promise.all([addList('Left', 2), addList('Right', 2)]);
+      const statuses = [first.status, second.status].sort();
+      // Each list is whole or absent, and the roster matches the count the winners report.
+      const total = await seatCount();
+      expect([8, 10, 12]).toContain(total);
+      expect(total).toBe(8 + 2 * statuses.filter((status) => status === 200).length);
+      expect(statuses.every((status) => status === 200 || status === 409)).toBe(true);
+      expect(Object.values(await composition()).reduce((sum, value) => sum + value, 0)).toBe(total);
+    });
+
+    test('two single players added at the same moment never leave seats the role counts do not cover', async () => {
+      await importList('Listed', 8);
+      const add = async (email: string) => read(await seatsPost(request('POST', { displayName: email, email }), gameCtx));
+      const [first, second] = await Promise.all([add('first@pilot.test'), add('second@pilot.test')]);
+      expect([first.status, second.status].sort()).toEqual([200, 409]);
+      expect(await seatCount()).toBe(9);
+      expect(Object.values(await composition()).reduce((sum, value) => sum + value, 0)).toBe(9);
+      expect(await events('SEAT_ADDED')).toHaveLength(1);
+    });
+
+    test('adding and accepting at the same moment never double-seats a person', async () => {
+      const code = await openAndGetCode();
+      await signUp(code, { displayName: 'Ada', email: 'ada@pilot.test' });
+      await importList('Listed', 6);
+      const [accepted, added] = await Promise.all([
+        review('ACCEPT', (await waiting()).map((row) => row.id)),
+        read(await rosterPost(request('POST', { csv: ['display_name,email', 'Ada,ada@pilot.test', 'New,new@pilot.test'].join('\n'), mode: 'ADD' }), gameCtx)),
+      ]);
+      expect([accepted.status, added.status].every((status) => status === 200 || status === 409)).toBe(true);
+      expect(await count("SELECT COUNT(*) AS count FROM seats WHERE email = 'ada@pilot.test' AND status != 'REMOVED'")).toBeLessThanOrEqual(1);
+      const total = await seatCount();
+      expect(Object.values(await composition()).reduce((sum, value) => sum + value, 0)).toBe(total);
+    });
+  });
+
+  test('someone on the imported list who also signs up is not given a second seat', async () => {
+    await importList('Listed', 6);
+    const code = await openAndGetCode();
+    // The form quietly ignores an email that is already on the roster.
+    expect((await signUp(code, { displayName: 'Listed 2 again', email: 'listed2@pilot.test' })).status).toBe(200);
+    expect(await count('SELECT COUNT(*) AS count FROM signups')).toBe(0);
+    expect(await seatCount()).toBe(6);
   });
 });

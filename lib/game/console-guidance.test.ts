@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attentionEventCount, CONSOLE_TABS, defaultConsoleTab, isConsoleTabId, latestAttentionEventAt, launchChecklist, resolveConsoleTab, runHint, runNeedsAttention, setupHint, waitingBadges } from './console-guidance';
+import { attentionEventCount, CONSOLE_TABS, defaultConsoleTab, isConsoleTabId, latestAttentionEventAt, launchChecklist, resolveConsoleTab, rosterCountsNote, runHint, runNeedsAttention, setupHint, waitingBadges } from './console-guidance';
 
 describe('console tabs', () => {
   it('names five tabs with unique ids and a one-line purpose each', () => {
@@ -68,6 +68,17 @@ describe('setup hint with sign-ups', () => {
     expect(hint?.detail).toContain('6 to 80 players');
     expect(hint?.step).toBe('signups');
     expect(setupHint({ ...setup, seatCount: 4, signupsOpen: true })?.detail).toContain('the roster has 4');
+  });
+
+  it('tells a moderator with sign-ups open that a list can be imported before or after', () => {
+    expect(setupHint({ ...setup, signupsOpen: true })?.detail).toContain('import it too, before or after');
+  });
+
+  it('describes the role counts after people are added in bulk', () => {
+    expect(rosterCountsNote({ playerCount: 3, resetToPreset: false, villagers: 0 })).toBe('The roster has 3 so far, and a game needs at least 6.');
+    expect(rosterCountsNote({ playerCount: 8, resetToPreset: true, villagers: 4 })).toBe('Role counts were set to the standard preset for 8 players.');
+    expect(rosterCountsNote({ playerCount: 9, resetToPreset: false, villagers: 5 })).toBe('Role counts now have 5 Villagers; other roles are unchanged.');
+    expect(rosterCountsNote({ playerCount: 7, resetToPreset: false, villagers: 1 })).toBe('Role counts now have 1 Villager; other roles are unchanged.');
   });
 
   it('puts people waiting first, in the singular and the plural', () => {
