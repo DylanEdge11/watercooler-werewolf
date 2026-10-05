@@ -78,7 +78,10 @@ test('people sign up from a link, the moderator accepts them, and invite codes w
     await expect(waiting).toHaveCount(7);
     await expect(card.locator('summary', { hasText: '1 declined' })).toBeVisible();
     await card.getByRole('button', { name: 'Accept all 7', exact: true }).click();
-    await expect(card.getByRole('status').filter({ hasText: '7 players added to the roster.' })).toContainText('standard preset for 7 players');
+    // The result is pinned under the tab bar, so it is in view however far down the card the button was.
+    const banner = page.locator('.console-banner');
+    await expect(banner.getByRole('status').filter({ hasText: '7 players added to the roster.' })).toContainText('standard preset for 7 players');
+    await expect(banner.getByRole('status')).toBeInViewport();
     await expect(card.locator('summary', { hasText: '7 accepted' })).toBeVisible();
     await expect(page.getByText('0 of 7 claimed')).toBeVisible();
 
@@ -195,7 +198,7 @@ test('a visitor applies to moderate, the owner approves, and they set up their o
     // The owner can replace the link from here at any stage of the game, and the old one stops working.
     page.once('dialog', (dialog) => void dialog.accept());
     await card.getByRole('button', { name: 'Replace link', exact: true }).click();
-    await expect(card.getByRole('status').filter({ hasText: 'The link was replaced.' })).toBeVisible();
+    await expect(page.locator('.console-banner').getByRole('status').filter({ hasText: 'The link was replaced.' })).toBeVisible();
     expect(await card.getByLabel('Public link for applications', { exact: true }).inputValue()).not.toBe(link);
     const stale = await visitorContext.request.get(`/api/join/${link.split('/join/')[1]}`, { headers: E2E_REQUEST_HEADERS });
     expect(stale.status()).toBe(404);
@@ -233,7 +236,7 @@ test('one game can use sign-ups and an imported list together, in that order', a
     // The console notices new sign-ups when it next checks in, so allow for that.
     await expect(signups.getByRole('list', { name: 'Waiting sign-ups' }).getByRole('listitem')).toHaveCount(2, { timeout: 45_000 });
     await signups.getByRole('button', { name: 'Accept all 2', exact: true }).click();
-    await expect(signups.getByRole('status').filter({ hasText: '2 players added to the roster.' })).toBeVisible();
+    await expect(page.locator('.console-banner').getByRole('status').filter({ hasText: '2 players added to the roster.' })).toBeVisible();
     await expect(page.getByText('0 of 2 claimed')).toBeVisible();
 
     // With people on the roster the import adds to them, and replacing is a separate, deliberate button.
@@ -325,6 +328,51 @@ test('an imported list can also come first, and replacing the roster is a confir
     await expect(page.getByText('0 of 6 claimed')).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: '6 private seats created.' })).toBeVisible();
     await expect(signups.getByRole('list', { name: 'Waiting sign-ups' }).getByRole('listitem')).toHaveCount(1);
+  } finally {
+    await visitorContext.close();
+  }
+});
+
+test('replacing the roster from a console that missed a change is refused, and nothing is lost', async ({ browser }) => {
+  const moderator = await getSharedModerator(browser);
+  const { page } = moderator;
+  const suffix = randomUUID().slice(0, 6);
+  const gameName = `Stale replace ${E2E_RUN_ID} ${suffix}`;
+  const visitors = [1, 2].map((index) => ({ name: `Visitor ${index}`, email: `stale-${index}-${E2E_RUN_ID}-${suffix}@e2e.test` }));
+  const listed = Array.from({ length: 6 }, (_, index) => `Listed ${index + 1},stale-listed-${index + 1}-${E2E_RUN_ID}-${suffix}@e2e.test`);
+  await startGame(page, gameName);
+  const gameId = await page.locator('select[aria-label="Selected game"]').inputValue();
+  const api = moderator.context.request;
+  const post = async (path: string, data: unknown) => {
+    const response = await api.post(path, { headers: E2E_REQUEST_HEADERS, data });
+    expect(response.ok(), `${path} answered ${response.status()}`).toBe(true);
+    return await response.json() as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  };
+  const opened = await post(`/api/games/${gameId}/signups`, { action: 'OPEN' });
+  const code = String(opened.link).split('/join/')[1];
+  const visitorContext = await newBrowserContext(browser);
+  try {
+    for (const visitor of visitors) {
+      const response = await visitorContext.request.post(`/api/join/${code}/signup`, { headers: E2E_REQUEST_HEADERS, data: { displayName: visitor.name, email: visitor.email } });
+      expect(response.ok()).toBe(true);
+    }
+    // This console still shows an empty roster. Another moderator (here, the API) accepts both people before it is refreshed.
+    await expect(page.getByText('0 of 2 claimed')).toHaveCount(0);
+    const waiting = await (await api.get(`/api/games/${gameId}/signups`, { headers: E2E_REQUEST_HEADERS })).json() as { signups: Array<{ id: string }> };
+    await post(`/api/games/${gameId}/signups/review`, { decision: 'ACCEPT', signupIds: waiting.signups.map((row) => row.id) });
+
+    await page.getByLabel('Roster CSV').fill(['display_name,email', ...listed].join('\n'));
+    await page.getByRole('button', { name: 'Create private seats', exact: true }).click();
+    const refused = page.locator('.console-banner').getByRole('alert');
+    await expect(refused).toContainText('The roster changed while you were on this page: it has 2 players now, but you were looking at 0. Nothing was replaced.');
+    await expect(refused).toBeInViewport();
+    // The console refreshes itself, and the two accepted players are still on the roster with their sign-ups accepted.
+    await expect(page.getByText('0 of 2 claimed')).toBeVisible();
+    const after = await (await api.get(`/api/games/${gameId}/signups`, { headers: E2E_REQUEST_HEADERS })).json() as { counts: { pending: number; accepted: number } };
+    expect(after.counts).toMatchObject({ pending: 0, accepted: 2 });
+    // Now that the page shows the real roster, the same list is added to it.
+    await page.getByRole('button', { name: 'Add these players to the roster', exact: true }).click();
+    await expect(page.getByText('0 of 8 claimed')).toBeVisible();
   } finally {
     await visitorContext.close();
   }

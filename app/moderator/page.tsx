@@ -480,7 +480,8 @@ export default function ModeratorPage() {
     try {
       const data = await requestJson<RosterChange & { invites: InviteRow[]; added?: number; skipped?: number }>(
         `/api/games/${editedGame}/roster`,
-        { method: 'POST', body: JSON.stringify({ csv, mode }) },
+        // A replace says how many players this page is showing, so it is refused if someone else has changed the roster since.
+        { method: 'POST', body: JSON.stringify({ csv, mode, expectedSeatCount: mode === 'REPLACE' ? roster.length : undefined }) },
       );
       if (selectedGameRef.current !== editedGame) return;
       markCompositionDraft(editedGame, null);

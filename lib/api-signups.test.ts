@@ -858,3 +858,58 @@ describe('restoring a backup', () => {
     expect(await seatCount()).toBe(8);
   });
 });
+
+describe('replacing the roster from a page that has gone stale', () => {
+  const csv = ['display_name,email', ...Array.from({ length: 6 }, (_, index) => `Listed ${index},listed${index}@pilot.test`)].join('\n');
+  const replace = async (expectedSeatCount?: unknown) => read(await rosterPost(request('POST', { csv, mode: 'REPLACE', ...(expectedSeatCount === undefined ? {} : { expectedSeatCount }) }), gameCtx));
+
+  test('a replace made from an empty-looking page is refused once people have been accepted, and nothing changes', async () => {
+    await seedSignups(3);
+    await review('ACCEPT', ['signup-0', 'signup-1', 'signup-2']);
+    const before = await rows("SELECT id, claim_code_hash AS hash FROM seats WHERE status != 'REMOVED' ORDER BY id");
+    const revision = (await rows("SELECT setup_revision AS revision FROM games WHERE id = 'game'"))[0].revision;
+
+    const refused = await replace(0);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toMatch(/changed while you were on this page: it has 3 players now, but you were looking at 0\. Nothing was replaced/u);
+    expect(await rows("SELECT id, claim_code_hash AS hash FROM seats WHERE status != 'REMOVED' ORDER BY id")).toEqual(before);
+    expect((await view()).body.counts).toEqual({ pending: 0, accepted: 3, declined: 0 });
+    expect((await rows("SELECT setup_revision AS revision FROM games WHERE id = 'game'"))[0].revision).toBe(revision);
+    expect(await events('ROSTER_IMPORTED')).toHaveLength(0);
+  });
+
+  test('a replace made from a page showing the real roster goes through', async () => {
+    await seedSignups(3);
+    await review('ACCEPT', ['signup-0', 'signup-1', 'signup-2']);
+    expect((await replace(3)).status).toBe(200);
+    expect(await seatCount()).toBe(6);
+    expect((await view()).body.counts).toEqual({ pending: 3, accepted: 0, declined: 0 });
+  });
+
+  test('the first import on a genuinely empty roster says 0 and goes through', async () => {
+    expect((await replace(0)).status).toBe(200);
+    expect(await seatCount()).toBe(6);
+  });
+
+  test('a replace that does not say what it was looking at works as it always has', async () => {
+    await seedSignups(3);
+    await review('ACCEPT', ['signup-0', 'signup-1', 'signup-2']);
+    expect((await replace()).status).toBe(200);
+    expect(await seatCount()).toBe(6);
+  });
+
+  test.each([-1, 1.5, '3', null, {}])('a seat count of %j is a bad request that changes nothing', async (value) => {
+    await seedSignups(3);
+    await review('ACCEPT', ['signup-0', 'signup-1', 'signup-2']);
+    expect((await replace(value)).status).toBe(400);
+    expect(await seatCount()).toBe(3);
+  });
+
+  test('adding a list does not need the count: it keeps whoever is there', async () => {
+    await seedSignups(3);
+    await review('ACCEPT', ['signup-0', 'signup-1', 'signup-2']);
+    const added = await read(await rosterPost(request('POST', { csv, mode: 'ADD', expectedSeatCount: 0 }), gameCtx));
+    expect(added.status).toBe(200);
+    expect(await seatCount()).toBe(9);
+  });
+});
