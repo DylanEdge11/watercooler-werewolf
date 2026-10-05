@@ -111,7 +111,7 @@ Owner only, for games that were never released. **Cancel setup and start new gam
 
 - The first moderator account is created by the operator with `npm run owner:bootstrap` (see [Setup](SETUP.md)). There is no public sign-up.
 - Bootstrap and new co-moderator accounts show eight one-time recovery codes. Store them in a password manager; only hashes are kept.
-- Players sign in with their invitation email and PIN, or their seat code.
+- Players sign in with their invitation email and PIN, or their seat code. A player whose email and PIN fit seats in more than one game still in progress is asked which game to open; finished games (completed, stopped, or cancelled) are skipped. An invitation to a finished game can no longer be claimed.
 
 ## Player email
 
