@@ -9,6 +9,7 @@ import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
 import { MAX_SIGNUP_NOTE_LENGTH } from '../../lib/game/signups';
 import type { RoleComposition } from '../../lib/game/types';
 import CopyButton from './copy-button';
+import { useOperations } from './operations-context';
 
 interface SignupRow {
   id: string;
@@ -64,8 +65,8 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
   onRosterChanged: () => void;
 }) {
   const [data, setData] = useState<SignupsData | null>(null);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  // Results go to the banner under the tab bar, which stays in view however far down this card the button was.
+  const { showMessage, showError, clearNotices } = useOperations();
   const [busy, setBusy] = useState(false);
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const etag = useRef<string | null>(null);
@@ -86,21 +87,20 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
 
   useEffect(() => {
     if (!active) return;
-    const reload = () => void load().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load the sign-ups.'));
+    const reload = () => void load().catch((caught) => showError(caught instanceof Error ? caught.message : 'Unable to load the sign-ups.'));
     const timer = window.setTimeout(reload, 0);
     const stop = pollWhileVisible(reload, RELAXED_POLL_MS);
     return () => { window.clearTimeout(timer); stop(); };
-  }, [active, load, refreshKey]);
+  }, [active, load, refreshKey, showError]);
 
   async function run<T>(action: () => Promise<T>, fallback: string): Promise<T | null> {
     if (busy) return null;
-    setError('');
-    setMessage('');
+    clearNotices();
     setBusy(true);
     try {
       return await action();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : fallback);
+      showError(caught instanceof Error ? caught.message : fallback);
       return null;
     } finally {
       setBusy(false);
@@ -116,10 +116,10 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
     setData(next);
     // The console's next-step note and tab numbers follow the sign-up state, so tell it now rather than at its next refresh.
     onRosterChanged();
-    if (action === 'SET_NOTE') { setNoteDraft(null); setMessage('Note saved.'); }
-    if (action === 'OPEN') setMessage('Sign-ups are open. Share the link below.');
-    if (action === 'CLOSE') setMessage('Sign-ups are closed. People with the link now see that. You can still accept the people who signed up.');
-    if (action === 'ROTATE_LINK') setMessage('The link was replaced. The old one no longer works.');
+    if (action === 'SET_NOTE') { setNoteDraft(null); showMessage('Note saved.'); }
+    if (action === 'OPEN') showMessage('Sign-ups are open. Share the link below.');
+    if (action === 'CLOSE') showMessage('Sign-ups are closed. People with the link now see that. You can still accept the people who signed up.');
+    if (action === 'ROTATE_LINK') showMessage('The link was replaced. The old one no longer works.');
   }
 
   async function decide(decision: 'ACCEPT' | 'DECLINE' | 'RESTORE', ids: string[]) {
@@ -131,7 +131,7 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
     if (decision === 'ACCEPT') {
       onAccepted(result);
       const counts = rosterCountsNote({ playerCount: result.playerCount, resetToPreset: result.resetToPreset, villagers: result.composition.VILLAGER });
-      setMessage(`${result.message} ${counts} Email their invitations below, or download the invite file now; the links are not shown again.`);
+      showMessage(`${result.message} ${counts} Email their invitations below, or download the invite file now; the links are not shown again.`);
     } else {
       onRosterChanged();
     }
@@ -147,8 +147,6 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
   return (
     <section className="setup-card" id="setup-signups">
       <div className="setup-card-heading"><span>2a</span><div><h2>Sign-ups</h2><p>Let people sign up from a link, instead of or as well as importing a roster, in either order: a list you import is added to the people you have already accepted. You choose who joins. Everyone you accept gets an ordinary private seat, so you can email their invitations or download the invite file exactly as you would for an imported roster. A game needs {MIN_PLAYERS} to {MAX_PLAYERS} players.</p></div></div>
-      {error && <p className="notice error" role="alert">{error}</p>}
-      {message && <p className="notice success" role="status">{message}</p>}
       <div className="button-row signup-state">
         <span className="status-pill" aria-label={`Sign-ups: ${STATE_LABEL[state]}`}>{STATE_LABEL[state]}</span>
         {state === 'OPEN' && <button className="secondary-button" type="button" onClick={() => void manage('CLOSE')} disabled={busy}>Close sign-ups</button>}

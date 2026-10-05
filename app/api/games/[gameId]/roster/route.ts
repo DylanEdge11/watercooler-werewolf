@@ -33,10 +33,13 @@ export async function POST(request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     const moderator = await requireGameModerator(gameId);
-    const body = (await request.json()) as { csv?: string; mode?: unknown };
+    const body = (await request.json()) as { csv?: string; mode?: unknown; expectedSeatCount?: unknown };
     // Without a mode the list replaces the roster, as it always has. ADD keeps everyone already on it.
     if (body.mode !== undefined && body.mode !== 'ADD' && body.mode !== 'REPLACE') throw new Error('Choose ADD or REPLACE.');
     const adding = body.mode === 'ADD';
+    // A replace can say how many players the moderator was looking at, so a page that has gone stale cannot wipe a roster it never saw.
+    if (body.expectedSeatCount !== undefined && (!Number.isInteger(body.expectedSeatCount) || Number(body.expectedSeatCount) < 0)) throw new Error('expectedSeatCount must be a whole number.');
+    const expectedSeatCount = body.expectedSeatCount === undefined ? null : Number(body.expectedSeatCount);
     const parsed = parseRosterCsv(body.csv ?? '', adding ? { minPlayers: 1 } : {});
     if (parsed.errors.length) {
       return Response.json({ ok: false, errors: parsed.errors }, { status: 400 });
@@ -67,6 +70,10 @@ export async function POST(request: Request, context: RouteContext) {
       .prepare("SELECT id FROM seats WHERE game_id = ? AND status != 'REMOVED'")
       .bind(gameId)
       .all<{ id: string }>();
+
+    if (expectedSeatCount !== null && existingSeats.results.length !== expectedSeatCount) {
+      return jsonError(`The roster changed while you were on this page: it has ${existingSeats.results.length} ${existingSeats.results.length === 1 ? 'player' : 'players'} now, but you were looking at ${expectedSeatCount}. Nothing was replaced. Check the roster, then try again.`, 409);
+    }
 
     const now = new Date().toISOString();
     const origin = new URL(request.url).origin;

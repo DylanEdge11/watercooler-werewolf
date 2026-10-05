@@ -5,7 +5,7 @@ import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import type { FeedbackSummary } from '../../lib/game/feedback';
-import { csvCell } from '../../lib/roster/csv';
+import { createInviteExport } from '../../lib/roster/csv';
 import type { AnnouncementRecord } from './communications';
 
 export interface Operations {
@@ -96,6 +96,9 @@ export interface OperationsValue {
   clearNotices: () => void;
   /** Clears only the confirmation, so a message that has been on screen long enough fades while an error stays. */
   clearMessage: () => void;
+  /** Lets a card on the console report its result through the same banner, instead of in a corner of its own. */
+  showMessage: (text: string) => void;
+  showError: (text: string) => void;
   announce: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   addModerator: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   removeModerator: (moderator: Moderator) => Promise<void>;
@@ -200,6 +203,8 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     setError('');
   }, []);
   const clearMessage = useCallback(() => setMessage(''), []);
+  const showMessage = useCallback((text: string) => setMessage(text), []);
+  const showError = useCallback((text: string) => setError(text), []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -425,10 +430,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
         body: JSON.stringify({ action: 'RESTORE_BACKUP', backupId: restoreBackupId, confirmed: true, confirmationName }),
       }));
       const rows = result.inviteRows ?? [];
-      setRestoreInviteCsv(rows.length ? [
-        ['display_name', 'email', 'claim_url', 'invite_code'].join(','),
-        ...rows.map((row) => [row.displayName, row.email, row.claimUrl, row.inviteCode].map(csvCell).join(',')),
-      ].join('\r\n') : '');
+      setRestoreInviteCsv(rows.length ? createInviteExport(rows) : '');
       setMessage(`Backup restored to setup with ${result.restoredSeatCount} fresh private seat links. Download the invite CSV now; codes are not shown again.`);
       await refresh();
       onGameChanged?.();
@@ -483,7 +485,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
   const value: OperationsValue = {
     gameId, operations, rooms, messages, historyRoomId, setHistoryRoomId, roomChanges, moderators, announcements, latestAnnouncementId, feedback,
     recoveryCodes, pinSeatId, setPinSeatId, restoreBackupId, setRestoreBackupId, restoreInviteCsv, busyAction, message, error,
-    refresh, clearNotices, clearMessage, announce, addModerator, removeModerator, makeOwner, resetPlayerPin, exportBackup, toggleRoom, purgeRetention, removeMessage,
+    refresh, clearNotices, clearMessage, showMessage, showError, announce, addModerator, removeModerator, makeOwner, resetPlayerPin, exportBackup, toggleRoom, purgeRetention, removeMessage,
     stopGame, resetGame, restoreBackup, downloadRestoredInvites, reconcileDeadlines, submitFeedback,
   };
   return <OperationsContext.Provider value={value}>{children}</OperationsContext.Provider>;

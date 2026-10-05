@@ -5,6 +5,7 @@ import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 import CopyButton from './copy-button';
+import { useOperations } from './operations-context';
 
 interface ApplicationRow {
   id: string;
@@ -70,8 +71,8 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
   onChanged: () => void;
 }) {
   const [data, setData] = useState<ApplicationsData | null>(null);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  // Results go to the banner under the tab bar; the one-time setup link stays in this card, where it can be copied.
+  const { showMessage, showError, clearNotices } = useOperations();
   const [issued, setIssued] = useState<{ displayName: string; url: string; note: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const etag = useRef<string | null>(null);
@@ -90,21 +91,20 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
 
   useEffect(() => {
     if (!active || !isOwner) return;
-    const reload = () => void load().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load the applications.'));
+    const reload = () => void load().catch((caught) => showError(caught instanceof Error ? caught.message : 'Unable to load the applications.'));
     const timer = window.setTimeout(reload, 0);
     const stop = pollWhileVisible(reload, RELAXED_POLL_MS);
     return () => { window.clearTimeout(timer); stop(); };
-  }, [active, isOwner, load, refreshKey]);
+  }, [active, isOwner, load, refreshKey, showError]);
 
   async function run(action: () => Promise<void>, fallback: string) {
     if (busy) return;
-    setError('');
-    setMessage('');
+    clearNotices();
     setBusy(true);
     try {
       await action();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : fallback);
+      showError(caught instanceof Error ? caught.message : fallback);
     } finally {
       setBusy(false);
     }
@@ -118,7 +118,7 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
     setData(next);
     onChanged();
     setIssued(null);
-    setMessage(action === 'OPEN' ? 'Applications are open. Share the link below.' : 'Applications are closed.');
+    showMessage(action === 'OPEN' ? 'Applications are open. Share the link below.' : 'Applications are closed.');
   }, 'Unable to update applications.');
 
   const replaceLink = () => run(async () => {
@@ -128,7 +128,7 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
     onChanged();
     await load();
     setIssued(null);
-    setMessage('The link was replaced. The old one no longer works for applications or for sign-ups.');
+    showMessage('The link was replaced. The old one no longer works for applications or for sign-ups.');
   }, 'Unable to replace the link.');
 
   const decide = (row: ApplicationRow, decision: 'APPROVE' | 'DECLINE' | 'RECONSIDER') => run(async () => {
@@ -140,11 +140,11 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
     if (result.outcome === 'LINK' && result.setupUrl) {
       setIssued({ displayName: row.displayName, url: result.setupUrl, note: emailNote(result, row.email) });
     } else if (result.outcome === 'ADDED') {
-      setMessage(`${row.displayName} is now a co-moderator of this game. ${emailNote(result, row.email)}`);
+      showMessage(`${row.displayName} is now a co-moderator of this game. ${emailNote(result, row.email)}`);
     } else if (result.outcome === 'ALREADY_MEMBER') {
-      setMessage(`${row.displayName} was already a moderator of this game.`);
+      showMessage(`${row.displayName} was already a moderator of this game.`);
     } else if (result.outcome === 'DECLINED') {
-      setMessage(`${row.displayName}’s application was declined.${row.status === 'APPROVED' ? ' Their setup link no longer works.' : ''}`);
+      showMessage(`${row.displayName}’s application was declined.${row.status === 'APPROVED' ? ' Their setup link no longer works.' : ''}`);
     }
     await load().catch(() => {});
   }, 'Unable to update the application.');
@@ -158,8 +158,6 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
     <section className="setup-card" id="moderator-applications">
       <div className="setup-card-heading"><span aria-hidden="true">◇</span><div><h2>Moderator applications</h2><p>Let people ask to help run this game. They apply from the game’s public link and you approve each one. Someone new gets an emailed link to choose their own password and becomes a co-moderator; someone who already has a moderator account is added straight away.</p></div></div>
       {!isOwner ? <p className="field-help">Only the game owner can take and review moderator applications.</p> : <>
-        {error && <p className="notice error" role="alert">{error}</p>}
-        {message && <p className="notice success" role="status">{message}</p>}
         {issued && <div className="notice success" role="status">
           <p><strong>{issued.displayName}</strong> is approved. Their private setup link is shown only now, works once, and lasts 7 days. {issued.note} If it didn’t reach them, copy it and send it to them yourself.</p>
           <code className="recovery-list">{issued.url}</code>

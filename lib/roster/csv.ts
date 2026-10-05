@@ -84,24 +84,29 @@ export function parseRosterCsv(csv: string, options: { minPlayers?: number } = {
   return { entries, errors };
 }
 
+/** One quoted CSV cell, exactly as given. For what the app made itself: a link, a seat code, the message text. */
+export function csvExactCell(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
 /**
- * One quoted CSV cell that a spreadsheet will show as text. A cell that starts with =, +, -, or @ (or a tab or
- * return) is read by Excel and Sheets as a formula, and a name typed on the public sign-up form can start with
- * any of them, so such a cell gets a leading apostrophe. The download opens in a spreadsheet beside private links.
+ * One quoted CSV cell holding text a person typed (a name, an email) that a spreadsheet will show as text. A cell
+ * that starts with =, +, -, or @ (or a tab or return) is read by Excel and Sheets as a formula, and a name typed on
+ * the public sign-up form can start with any of them, so such a cell gets a leading apostrophe. The download opens
+ * in a spreadsheet beside private links. Only text a person typed gets this: a seat code is random base64url text
+ * and starts with "-" about one time in 64, and it has to stay exactly as it is.
  */
-export function csvCell(value: string): string {
-  const safe = /^[=+\-@\t\r]/u.test(value) ? `'${value}` : value;
-  return `"${safe.replaceAll('"', '""')}"`;
+export function csvTextCell(value: string): string {
+  return csvExactCell(/^[=+\-@\t\r]/u.test(value) ? `'${value}` : value);
 }
 
 export function createInviteExport(
   rows: Array<RosterEntry & { claimUrl: string; inviteCode: string }>,
 ): string {
-  const header = ['display_name', 'email', 'claim_url', 'invite_code', 'message_subject', 'message_body'];
+  const header = ['display_name', 'email', 'claim_url', 'invite_code', 'message_subject', 'message_body'].map(csvExactCell).join(',');
   const data = rows.map((row) => {
     const message = inviteMessage(row.displayName, row.claimUrl);
-    return [row.displayName, row.email, row.claimUrl, row.inviteCode, message.subject, message.text];
+    return [csvTextCell(row.displayName), csvTextCell(row.email), csvExactCell(row.claimUrl), csvExactCell(row.inviteCode), csvExactCell(message.subject), csvExactCell(message.text)].join(',');
   });
-  return [header, ...data].map((values) => values.map(csvCell).join(',')).join('\r\n');
+  return [header, ...data].join('\r\n');
 }
-
