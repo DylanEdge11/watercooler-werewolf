@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attentionEventCount, CONSOLE_TABS, defaultConsoleTab, isConsoleTabId, latestAttentionEventAt, launchChecklist, resolveConsoleTab, rosterCountsNote, runHint, runNeedsAttention, setupHint, waitingBadges } from './console-guidance';
+import { attentionEventCount, CONSOLE_TABS, defaultConsoleTab, isConsoleTabId, latestAttentionEventAt, launchChecklist, noticeFadeMs, resolveConsoleTab, rosterCountsNote, runHint, runNeedsAttention, setupHint, waitingBadges } from './console-guidance';
 
 describe('console tabs', () => {
   it('names five tabs with unique ids and a one-line purpose each', () => {
@@ -276,5 +276,14 @@ describe('resolve console tab', () => {
   it('keeps a tab chosen by a link whatever the game does', () => {
     expect(resolveConsoleTab({ id: 'safety', forDefault: null }, 'setup')).toBe('safety');
     expect(resolveConsoleTab({ id: 'safety', forDefault: null }, 'run')).toBe('safety');
+  });
+});
+
+describe('how long a confirmation stays up', () => {
+  it('is long enough to read, a little longer for a long message, and never more than half a minute', () => {
+    expect(noticeFadeMs('Saved.')).toBe(8_000);
+    expect(noticeFadeMs('x'.repeat(200))).toBe(14_000);
+    expect(noticeFadeMs('x'.repeat(5_000))).toBe(30_000);
+    expect(noticeFadeMs('')).toBe(8_000);
   });
 });

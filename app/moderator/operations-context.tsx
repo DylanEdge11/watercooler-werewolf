@@ -94,6 +94,8 @@ export interface OperationsValue {
   refresh: () => Promise<void>;
   /** Clears the last action's confirmation or error, so it doesn't follow the moderator to another tab. */
   clearNotices: () => void;
+  /** Clears only the confirmation, so a message that has been on screen long enough fades while an error stays. */
+  clearMessage: () => void;
   announce: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   addModerator: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   removeModerator: (moderator: Moderator) => Promise<void>;
@@ -197,6 +199,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     setMessage('');
     setError('');
   }, []);
+  const clearMessage = useCallback(() => setMessage(''), []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -480,7 +483,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
   const value: OperationsValue = {
     gameId, operations, rooms, messages, historyRoomId, setHistoryRoomId, roomChanges, moderators, announcements, latestAnnouncementId, feedback,
     recoveryCodes, pinSeatId, setPinSeatId, restoreBackupId, setRestoreBackupId, restoreInviteCsv, busyAction, message, error,
-    refresh, clearNotices, announce, addModerator, removeModerator, makeOwner, resetPlayerPin, exportBackup, toggleRoom, purgeRetention, removeMessage,
+    refresh, clearNotices, clearMessage, announce, addModerator, removeModerator, makeOwner, resetPlayerPin, exportBackup, toggleRoom, purgeRetention, removeMessage,
     stopGame, resetGame, restoreBackup, downloadRestoredInvites, reconcileDeadlines, submitFeedback,
   };
   return <OperationsContext.Provider value={value}>{children}</OperationsContext.Provider>;

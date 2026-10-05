@@ -74,6 +74,14 @@ export function rosterCountsNote(result: { playerCount: number; resetToPreset: b
   return `Role counts now have ${result.villagers} ${result.villagers === 1 ? 'Villager' : 'Villagers'}; other roles are unchanged.`;
 }
 
+/**
+ * How long a confirmation stays on screen before it fades: long enough to read, a little longer for a long one
+ * (some say what to do next), never more than half a minute. An error never fades.
+ */
+export function noticeFadeMs(text: string): number {
+  return Math.min(30_000, Math.max(8_000, text.length * 70));
+}
+
 export type SetupStepKey = 'signups' | 'roster' | 'roles' | 'release';
 
 export interface ConsoleHint {

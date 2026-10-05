@@ -9,7 +9,7 @@ import LiveGamePanel from './live-game-panel';
 import { ConsoleNavigation, ConsolePanel } from './console-tabs';
 import { OperationsProvider } from './operations-context';
 import ApplicationsPanel from './applications-panel';
-import { Announcements, BackupControls, ChatRooms, CoModeratorAccess, EventLog, FailSafeControls, FeedbackSection, HealthStrip, OpsNotices, PlayerAccessRecovery } from './ops-sections';
+import { Announcements, BackupControls, ChatRooms, CoModeratorAccess, EventLog, FailSafeControls, FeedbackSection, HealthStrip, PlayerAccessRecovery, RestoredInvites } from './ops-sections';
 import PlayerChoicesPanel from './player-choices-panel';
 import SignupsPanel, { type AcceptedSignups } from './signups-panel';
 import SpectatorsPanel from './spectators-panel';
@@ -182,7 +182,9 @@ export default function ModeratorPage() {
   const [editingRoster, setEditingRoster] = useState(false);
   const [addedInvite, setAddedInvite] = useState<{ gameId: string; seatId: string; displayName: string; claimUrl: string } | null>(null);
   const [message, setMessage] = useState('');
+  const clearMessage = useCallback(() => setMessage(''), []);
   const [error, setError] = useState('');
+  const clearPageNotices = useCallback(() => { setMessage(''); setError(''); }, []);
   const [liveRefreshToken, setLiveRefreshToken] = useState(0);
   const [showNewGameForm, setShowNewGameForm] = useState(false);
   const [showSchedulePanel, setShowSchedulePanel] = useState(false);
@@ -766,8 +768,11 @@ export default function ModeratorPage() {
               <button className="text-button" type="button" onClick={signOut}>Sign out</button>
             </div>
           </div>
-          {error && <p className="notice error" role="alert">{error}</p>}
-          {message && <p className="notice success" role="status">{message}</p>}
+          {/* With a game open the result is pinned under the tab bar; without one (the new-game form, the welcome page) there is no tab bar, so it is shown here. */}
+          {(!games.length || showNewGameForm) && <>
+            {error && <p className="notice error" role="alert">{error}</p>}
+            {message && <p className="notice success" role="status">{message}</p>}
+          </>}
           {recoveryCodes.length > 0 && (
             <div className="notice warning"><strong>Save these one-time recovery codes now:</strong><code>{recoveryCodes.join(' · ')}</code></div>
           )}
@@ -803,10 +808,10 @@ export default function ModeratorPage() {
             </section>
           ) : (
             <OperationsProvider key={`operations-${gameId}`} gameId={gameId} refreshToken={liveRefreshToken} onGameChanged={handleLiveChange}>
-              <ConsoleNavigation active={activeTab} onSelect={chooseTab} runAttention={runAttention} waiting={waiting} />
+              <ConsoleNavigation active={activeTab} onSelect={chooseTab} runAttention={runAttention} waiting={waiting} notices={{ error, message, clearMessage, clearAll: clearPageNotices }} />
 
               <ConsolePanel id="setup" active={activeTab === 'setup'}>
-              {activeTab === 'setup' && <OpsNotices withInviteDownload />}
+              {activeTab === 'setup' && <RestoredInvites />}
               {showSchedulePanel && selectedGame && <section className="setup-card" id="game-schedule">
                 <div className="setup-card-heading"><span>01</span><div><h2>Game schedule</h2><p>{setupEditable ? 'Review or update the setup details, then continue where you left off.' : 'Review the launch schedule. It becomes read-only after roles are released.'}</p></div></div>
                 <form className="setup-grid" key={`schedule-${selectedGame.id}-${selectedGame.finalCutoffAt}-${selectedGame.hunterWindowMinutes}-${selectedGame.dayDivisor}-${selectedGame.nightDivisor}-${JSON.stringify(selectedGame.eliminationSchedule ?? null)}-${selectedGame.publicationMode}-${selectedGame.reviewWindowMinutes}`} onSubmit={updateSchedule}>
@@ -828,7 +833,7 @@ export default function ModeratorPage() {
               </section>}
               {setupEditable && selectedGame && <SignupsPanel key={`signups-${gameId}`} gameId={gameId} gameStatus={selectedGame.status} active={activeTab === 'setup'} refreshKey={`${signupSummary?.state}-${signupSummary?.pending}-${signupSummary?.accepted}`} onAccepted={signupsAccepted} onRosterChanged={() => void loadGame(gameId).catch(() => {})} />}
               {setupEditable ? <section className="setup-card" id="setup-roster">
-                <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Use this, the <strong>Sign-ups</strong> card above, or both, in either order. Once anyone is on the roster, an imported list is added to it: they keep their seats and links, and anyone on the list who is already there is skipped. To start over from the list instead, use <strong>Replace the whole roster</strong>. To add or remove one player, use <strong>Change the roster</strong> below. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
+                <div className="setup-card-heading"><span>2b</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Use this, the <strong>Sign-ups</strong> card above, or both, in either order. Once anyone is on the roster, an imported list is added to it: they keep their seats and links, and anyone on the list who is already there is skipped. To start over from the list instead, use <strong>Replace the whole roster</strong>. To add or remove one player, use <strong>Change the roster</strong> below. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
                 <form className="form-stack" onSubmit={(event) => { event.preventDefault(); void importRoster(event.currentTarget, roster.length > 0 ? 'ADD' : 'REPLACE'); }}>
                   <label>Roster CSV<textarea name="csv" defaultValue={sampleRoster} rows={8} spellCheck={false} required /></label>
                   {roster.length > 0 && <p className="field-help" role="note">This list will be added to the {roster.length} {roster.length === 1 ? 'player' : 'players'} already on the roster{(signupSummary?.accepted ?? 0) > 0 ? `, including the ${signupSummary?.accepted} you accepted from sign-ups` : ''}. They keep their seats and links.</p>}
@@ -912,7 +917,6 @@ export default function ModeratorPage() {
               </ConsolePanel>
 
               <ConsolePanel id="run" active={activeTab === 'run'}>
-                {activeTab === 'run' && <OpsNotices />}
                 <HealthStrip />
                 {released ? <>
                   <LiveGamePanel key={`live-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} onChanged={handleLiveChange} onAttention={setRunAttention} />
@@ -927,8 +931,7 @@ export default function ModeratorPage() {
               <ConsolePanel id="people" active={activeTab === 'people'}>
                 <section className="setup-card" id="player-access">
                   <div className="setup-card-heading"><span aria-hidden="true">◈</span><div><h2>Player access</h2><p>Get a player back in when they forget their PIN or their seat locks.</p></div></div>
-                  {activeTab === 'people' && <OpsNotices />}
-                  <div className="card-stack"><PlayerAccessRecovery /></div>
+                    <div className="card-stack"><PlayerAccessRecovery /></div>
                 </section>
                 {released
                   ? <SpectatorsPanel key={`spectators-${gameId}`} gameId={gameId} gameStatus={selectedGame?.status ?? ''} />
@@ -946,8 +949,7 @@ export default function ModeratorPage() {
               <ConsolePanel id="messages" active={activeTab === 'messages'}>
                 <section className="setup-card" id="announcements">
                   <div className="setup-card-heading"><span aria-hidden="true">▤</span><div><h2>Announcements</h2><p>Tell every player something official, then copy it into an email or group chat so nobody misses it.</p></div></div>
-                  {activeTab === 'messages' && <OpsNotices />}
-                  <div className="card-stack"><Announcements /></div>
+                    <div className="card-stack"><Announcements /></div>
                 </section>
                 <section className="setup-card" id="chat-moderation">
                   <div className="setup-card-heading"><span aria-hidden="true">◐</span><div><h2>Chat moderation</h2><p>Read any room, post as Moderator, make a room read-only, or remove a message.</p></div></div>
@@ -962,8 +964,7 @@ export default function ModeratorPage() {
               <ConsolePanel id="safety" active={activeTab === 'safety'}>
                 <section className="setup-card" id="records">
                   <div className="setup-card-heading"><span aria-hidden="true">▦</span><div><h2>Records and backups</h2><p>What the game has been doing, and private copies you can keep or restore from.</p></div></div>
-                  {activeTab === 'safety' && <OpsNotices />}
-                  <div className="card-stack"><EventLog /><BackupControls /></div>
+                    <div className="card-stack"><EventLog /><BackupControls /></div>
                 </section>
                 <section className="setup-card danger-zone" id="danger-zone">
                   <div className="setup-card-heading"><span aria-hidden="true">▲</span><div><h2>Danger zone</h2><p>These end a game or rewind it. Read the confirmation before you agree.</p></div></div>
