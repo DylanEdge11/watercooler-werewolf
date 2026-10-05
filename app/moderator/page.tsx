@@ -286,6 +286,16 @@ export default function ModeratorPage() {
     })();
   }, [loadGames]);
 
+  // A link to another tab, such as /moderator#messages, also works while the console is already open.
+  useEffect(() => {
+    const openLinkedTab = () => {
+      const linked = window.location.hash.slice(1);
+      if (isConsoleTabId(linked)) setSelectedTab({ id: linked, forDefault: null });
+    };
+    window.addEventListener('hashchange', openLinkedTab);
+    return () => window.removeEventListener('hashchange', openLinkedTab);
+  }, []);
+
   useEffect(() => {
     if (!authenticated) return;
     // The live game panel keeps its own, faster pace near deadlines.
@@ -386,7 +396,7 @@ export default function ModeratorPage() {
 
   /** Picks a tab. It holds until the game flips between setup and running, when the console goes to the tab that suits it. */
   function chooseTab(id: ConsoleTabId) {
-    setSelectedTab({ id, forDefault: defaultConsoleTab(selectedGame?.status) });
+    setSelectedTab({ id, forDefault: defaultConsoleTab(selectedGame?.status, Boolean(batches[0]?.releasedAt)) });
   }
 
   /** Jumps to a step of the launch checklist on the Setup tab. */
@@ -674,8 +684,8 @@ export default function ModeratorPage() {
   const latestBatch = batches[0];
   const rosterById = useMemo(() => new Map(roster.map((seat) => [seat.id, seat])), [roster]);
   const gameDates = useMemo(() => defaultGameDates(), []);
-  const activeTab = resolveConsoleTab(selectedTab, defaultConsoleTab(selectedGame?.status));
   const released = Boolean(latestBatch?.releasedAt);
+  const activeTab = resolveConsoleTab(selectedTab, defaultConsoleTab(selectedGame?.status, released));
   const checklist = launchChecklist({ gameCount: games.length, seatCount: roster.length, claimedCount: claimed, hasBatch: Boolean(latestBatch), released });
   const hint = setupHint({ status: selectedGame?.status, seatCount: roster.length, claimedCount: claimed, hasBatch: Boolean(latestBatch), released, pendingSignups: signupSummary?.pending ?? 0, signupsOpen: signupSummary?.live ?? false });
   const waiting = waitingBadges({ pendingSignups: signupSummary?.pending ?? 0, pendingApplications: signupSummary?.pendingApplications ?? 0, setupEditable, isOwner: selectedGame?.moderatorRole === 'OWNER' });
@@ -789,6 +799,7 @@ export default function ModeratorPage() {
               <ConsoleNavigation active={activeTab} onSelect={chooseTab} runAttention={runAttention} waiting={waiting} />
 
               <ConsolePanel id="setup" active={activeTab === 'setup'}>
+              {activeTab === 'setup' && <OpsNotices withInviteDownload />}
               {showSchedulePanel && selectedGame && <section className="setup-card" id="game-schedule">
                 <div className="setup-card-heading"><span>01</span><div><h2>Game schedule</h2><p>{setupEditable ? 'Review or update the setup details, then continue where you left off.' : 'Review the launch schedule. It becomes read-only after roles are released.'}</p></div></div>
                 <form className="setup-grid" key={`schedule-${selectedGame.id}-${selectedGame.finalCutoffAt}-${selectedGame.hunterWindowMinutes}-${selectedGame.dayDivisor}-${selectedGame.nightDivisor}-${JSON.stringify(selectedGame.eliminationSchedule ?? null)}-${selectedGame.publicationMode}-${selectedGame.reviewWindowMinutes}`} onSubmit={updateSchedule}>

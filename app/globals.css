@@ -328,7 +328,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .schedule-stage { grid-template-columns: 1fr 1fr; }
   .setup-grid .wide { grid-column: auto; }
   .schedule-note { align-items: flex-start; display: grid; gap: 5px; }
-  .console-title { align-items: flex-start; display: grid; gap: 13px; }
+  .console-title { align-items: flex-start; display: grid; gap: 10px; }
+  /* A long game name must not push the tabs below the first screen. */
+  .console-title h1 { font-size: 26px; line-height: 1.15; overflow-wrap: anywhere; }
   .console-tab { padding: 10px 12px; }
   .game-bar-actions { margin-left: 0; }
 }

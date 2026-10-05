@@ -5,6 +5,7 @@ import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import type { FeedbackSummary } from '../../lib/game/feedback';
+import { csvCell } from '../../lib/roster/csv';
 import type { AnnouncementRecord } from './communications';
 
 export interface Operations {
@@ -423,7 +424,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
       const rows = result.inviteRows ?? [];
       setRestoreInviteCsv(rows.length ? [
         ['display_name', 'email', 'claim_url', 'invite_code'].join(','),
-        ...rows.map((row) => [row.displayName, row.email, row.claimUrl, row.inviteCode].map((value) => `"${value.replaceAll('"', '""')}"`).join(',')),
+        ...rows.map((row) => [row.displayName, row.email, row.claimUrl, row.inviteCode].map(csvCell).join(',')),
       ].join('\r\n') : '');
       setMessage(`Backup restored to setup with ${result.restoredSeatCount} fresh private seat links. Download the invite CSV now; codes are not shown again.`);
       await refresh();

@@ -5,12 +5,18 @@ import { AnnouncementCopies, FeedbackBlock } from './communications';
 import { useOperations, type OperationalEvent } from './operations-context';
 import RoomHistory from './room-history';
 
-/** The result of the moderator's last action on these controls: an error or a confirmation. */
-export function OpsNotices() {
-  const { error, message } = useOperations();
+/**
+ * The result of the moderator's last action on these controls: an error or a confirmation. A reset or a
+ * restore sends the console to Setup, away from the Safety & records tab where the moderator took it, so Setup
+ * shows the result too, with the one-time download of fresh invitations that a restore produces
+ * (`withInviteDownload`, so the same button is not on a tab twice).
+ */
+export function OpsNotices({ withInviteDownload = false }: { withInviteDownload?: boolean }) {
+  const { error, message, restoreInviteCsv, downloadRestoredInvites } = useOperations();
   return <>
     {error && <p className="notice error" role="alert">{error}</p>}
     {message && <p className="notice success" role="status">{message}</p>}
+    {withInviteDownload && restoreInviteCsv && <div className="button-row"><button className="secondary-button" type="button" onClick={downloadRestoredInvites}>Download fresh invites</button></div>}
   </>;
 }
 

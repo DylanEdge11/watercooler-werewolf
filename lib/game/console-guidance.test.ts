@@ -24,6 +24,15 @@ describe('console tabs', () => {
     }
     expect(defaultConsoleTab(undefined)).toBe('setup');
   });
+
+  it('opens a game stopped before roles went out on Safety & records, not on an empty Run game tab', () => {
+    expect(defaultConsoleTab('STOPPED', false)).toBe('safety');
+    expect(defaultConsoleTab('STOPPED', true)).toBe('run');
+    // Everything else is unchanged by whether roles went out.
+    expect(defaultConsoleTab('REGISTRATION', false)).toBe('setup');
+    expect(defaultConsoleTab('ACTIVE', true)).toBe('run');
+    expect(defaultConsoleTab('COMPLETED', true)).toBe('run');
+  });
 });
 
 describe('launch checklist', () => {

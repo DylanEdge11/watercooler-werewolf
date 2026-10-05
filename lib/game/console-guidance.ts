@@ -24,9 +24,13 @@ export function isConsoleTabId(value: string): value is ConsoleTabId {
 /** Statuses where the work is running the game rather than preparing it. */
 const RUN_STATUSES = new Set(['ACTIVE', 'FINAL_SHOWDOWN', 'COMPLETED', 'STOPPED']);
 
-/** The tab a moderator lands on: Setup until roles are released, then Run game. */
-export function defaultConsoleTab(status: string | undefined): ConsoleTabId {
-  return status && RUN_STATUSES.has(status) ? 'run' : 'setup';
+/**
+ * The tab a moderator lands on: Setup until roles are released, then Run game. A game stopped before roles went
+ * out has nothing to run, so it opens on Safety & records, where its backup and the way to start over are.
+ */
+export function defaultConsoleTab(status: string | undefined, released = true): ConsoleTabId {
+  if (!status || !RUN_STATUSES.has(status)) return 'setup';
+  return status === 'STOPPED' && !released ? 'safety' : 'run';
 }
 
 export type ChecklistState = 'done' | 'active' | 'todo';

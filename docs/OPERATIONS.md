@@ -101,7 +101,7 @@ Afterwards, import the roster again, send the new invitations, and release roles
 
 Owner only; requires the exact game name. Restore rebuilds a game's **setup** (configuration, roster, and role counts) from a stored snapshot. It does not restore a game in progress, and there is no file upload.
 
-It verifies the snapshot's checksum, takes a safety backup, and returns the game to `DRAFT`. Every seat gets a new one-time claim link, so **select Download fresh invites immediately** (the codes are not shown again) or use **Email invites** in the roster card. PINs, sessions, and roles are never restored.
+It verifies the snapshot's checksum, takes a safety backup, and returns the game to `DRAFT`. Every seat gets a new one-time claim link, so **select Download fresh invites immediately** (the codes are not shown again) or use **Email invites** in the roster card. The console moves to **Setup** when the game returns there (a reset does the same), and Setup shows the result and the **Download fresh invites** button at the top, so nothing is left behind on the tab you came from. PINs, sessions, and roles are never restored.
 
 ## Cancel setup
 

