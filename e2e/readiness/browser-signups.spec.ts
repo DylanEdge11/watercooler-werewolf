@@ -306,6 +306,8 @@ test('an imported list can also come first, and replacing the roster is a confir
   try {
     const response = await visitorContext.request.post(`/api/join/${code}/signup`, { headers: E2E_REQUEST_HEADERS, data: { displayName: visitor.name, email: visitor.email } });
     expect(response.ok()).toBe(true);
+    // The console notices a new sign-up when it next checks in, so allow for that before accepting.
+    await expect(signups.getByRole('list', { name: 'Waiting sign-ups' }).getByRole('listitem')).toHaveCount(1, { timeout: 45_000 });
     await signups.getByRole('button', { name: `Accept ${visitor.name}`, exact: true }).click();
     await expect(page.getByText('0 of 7 claimed')).toBeVisible();
 
