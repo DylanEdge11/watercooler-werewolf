@@ -398,7 +398,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     setBusyAction('reset');
     try {
       await post(`/api/games/${gameId}/operations`, { action: 'RESET', confirmed: true, confirmationName });
-      setMessage('Game reset to setup state. Re-import the roster before configuring roles.');
+      setMessage('Game reset to setup state. Re-import the roster (use Replace the whole roster) before configuring roles.');
       await refresh();
       onGameChanged?.();
     } catch (caught) {

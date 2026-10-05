@@ -192,6 +192,13 @@ test('a visitor applies to moderate, the owner approves, and they set up their o
     await page.getByRole('tab', { name: 'People', exact: true }).click();
     await card.locator('summary', { hasText: '1 approved' }).click();
     await expect(card.getByRole('list', { name: 'Approved applications' })).toContainText('co-moderator');
+    // The owner can replace the link from here at any stage of the game, and the old one stops working.
+    page.once('dialog', (dialog) => void dialog.accept());
+    await card.getByRole('button', { name: 'Replace link', exact: true }).click();
+    await expect(card.getByRole('status').filter({ hasText: 'The link was replaced.' })).toBeVisible();
+    expect(await card.getByLabel('Public link for applications', { exact: true }).inputValue()).not.toBe(link);
+    const stale = await visitorContext.request.get(`/api/join/${link.split('/join/')[1]}`, { headers: E2E_REQUEST_HEADERS });
+    expect(stale.status()).toBe(404);
     telemetry.assertHealthy();
   } finally {
     await visitorContext.close();
@@ -233,6 +240,10 @@ test('one game can use sign-ups and an imported list together, in that order', a
     await expect(page.getByRole('note').filter({ hasText: 'added to the 2 players already on the roster, including the 2 you accepted from sign-ups' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create private seats', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Replace the whole roster', exact: true })).toBeVisible();
+    // The box still holds the example list. Adding it would put twenty made-up players on the roster, so it is refused.
+    await page.getByRole('button', { name: 'Add these players to the roster', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'only an example' })).toBeVisible();
+    await expect(page.getByText('0 of 2 claimed')).toBeVisible();
     await page.getByLabel('Roster CSV').fill(['display_name,email', ...listed.map((person) => `${person.name},${person.email}`), `Visitor 1 again,${signedUp[0].email}`].join('\n'));
     await page.getByRole('button', { name: 'Add these players to the roster', exact: true }).click();
     // The person who is on both is skipped; the six others join the two already there.

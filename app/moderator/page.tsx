@@ -469,6 +469,11 @@ export default function ModeratorPage() {
     const editedGame = gameId;
     const csv = new FormData(form).get('csv');
     setError('');
+    // The box starts with an example list. Adding it to a real roster would put twenty made-up players on it.
+    if (mode === 'ADD' && String(csv ?? '').trim() === sampleRoster.trim()) {
+      setError('The list in the box is only an example. Paste your own players there first, then add them.');
+      return;
+    }
     setEditingRoster(true);
     try {
       const data = await requestJson<RosterChange & { invites: InviteRow[]; added?: number; skipped?: number }>(
@@ -567,6 +572,8 @@ export default function ModeratorPage() {
   /** People accepted from the sign-up list are now seats; keep their private links for the invite file and show the new role counts. */
   function signupsAccepted(result: AcceptedSignups) {
     const acceptedFor = gameId;
+    // The moderator moved to another game while the accept was in flight: its seats and counts are not this game's.
+    if (selectedGameRef.current !== acceptedFor) return;
     markCompositionDraft(acceptedFor, null);
     setComposition(result.composition);
     setInviteRows((current) => [...current, ...result.invites]);
@@ -865,7 +872,7 @@ export default function ModeratorPage() {
                 </div>}
               </section> : <section className="setup-card" id="setup-roster"><p className="notice warning">This game is {selectedGame?.status.replaceAll('_', ' ').toLowerCase()}. Setup changes are locked. Select another game or start a new setup.</p></section>}
 
-              {setupEditable && composition && (
+              {setupEditable && composition && roster.length >= MIN_PLAYERS && (
                 <section className="setup-card" id="setup-roles">
                   <div className="setup-card-heading"><span>03</span><div><h2>Balance the roles</h2><p>Counts must equal the roster. Unique roles cap at one; Masons travel in groups. Small-game presets are editable before release.</p></div></div>
                   <div className="role-composer">

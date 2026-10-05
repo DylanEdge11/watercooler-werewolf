@@ -29,6 +29,7 @@ import { GET as joinGet } from '../app/api/join/[code]/route';
 import { POST as joinSignupPost } from '../app/api/join/[code]/signup/route';
 import { POST as claimPost } from '../app/api/seats/claim/[code]/route';
 import { sha256 } from './auth/crypto';
+import { createBackupRecord, restoreGameBackup } from './backup/snapshot';
 import { defaultComposition } from './game/balance';
 import { JOIN_COPY } from './game/join-copy';
 import { MAX_PLAYERS } from './game/player-count';
@@ -784,5 +785,76 @@ describe('a game can use an imported list, sign-ups, or both', () => {
     expect((await signUp(code, { displayName: 'Listed 2 again', email: 'listed2@pilot.test' })).status).toBe(200);
     expect(await count('SELECT COUNT(*) AS count FROM signups')).toBe(0);
     expect(await seatCount()).toBe(6);
+  });
+});
+
+describe('sign-ups and the roster agree however people reach it', () => {
+  const csvOf = (people: Array<[string, string]>) => ['display_name,email', ...people.map(([name, email]) => `${name},${email}`)].join('\n');
+  const importList = async (people: Array<[string, string]>, mode?: string) => read(await rosterPost(request('POST', { csv: csvOf(people), ...(mode ? { mode } : {}) }), gameCtx));
+  const six: Array<[string, string]> = Array.from({ length: 6 }, (_, index) => [`Listed ${index}`, `listed${index}@pilot.test`]);
+
+  test('a list that replaces the roster marks waiting and declined sign-ups on it as accepted, with their seats', async () => {
+    await seedSignups(2);
+    await review('DECLINE', ['signup-1']);
+    const replaced = await importList([...six, ['Visitor 0', 'visitor-0@pilot.test'], ['Visitor 1', 'visitor-1@pilot.test']]);
+    expect(replaced.status).toBe(200);
+    expect((await view()).body.counts).toEqual({ pending: 0, accepted: 2, declined: 0 });
+    const seats = await rows("SELECT s.email AS seatEmail, g.email AS signupEmail FROM signups g JOIN seats s ON s.id = g.seat_id WHERE s.status != 'REMOVED'");
+    expect(seats).toHaveLength(2);
+    for (const row of seats) expect(row.seatEmail).toBe(row.signupEmail);
+  });
+
+  test('a person accepted earlier who is also on the replacing list stays accepted with their new seat; one who is not goes back to waiting', async () => {
+    await seedSignups(2);
+    await review('ACCEPT', ['signup-0', 'signup-1']);
+    const replaced = await importList([...six, ['Visitor 0', 'visitor-0@pilot.test']]);
+    expect(replaced.status).toBe(200);
+    expect((await view()).body.counts).toEqual({ pending: 1, accepted: 1, declined: 0 });
+    const kept = (await rows("SELECT g.seat_id AS seatId, s.status AS seatStatus FROM signups g JOIN seats s ON s.id = g.seat_id WHERE g.email = 'visitor-0@pilot.test'"))[0];
+    expect(kept.seatStatus).toBe('INVITED');
+    expect(await seatCount()).toBe(7);
+  });
+
+  test('adding one player by hand who had signed up shows them as accepted', async () => {
+    await seedSeats(6);
+    await seedSignups(1);
+    const added = await read(await seatsPost(request('POST', { displayName: 'Visitor Zero', email: 'visitor-0@pilot.test' }), gameCtx));
+    expect(added.status).toBe(200);
+    expect((await view()).body.counts).toEqual({ pending: 0, accepted: 1, declined: 0 });
+    const linked = (await rows("SELECT seat_id AS seatId FROM signups WHERE email = 'visitor-0@pilot.test'"))[0];
+    expect(linked.seatId).toBe(added.body.seat.id);
+  });
+});
+
+describe('restoring a backup', () => {
+  async function restoreFrom(backupId: string) {
+    const stored = (await rows('SELECT id, game_id AS gameId, schema_version AS schemaVersion, checksum, payload_json AS payloadJson FROM backup_exports WHERE id = ?', [backupId]))[0] as { id: string; gameId: string; schemaVersion: number; checksum: string; payloadJson: string };
+    return restoreGameBackup('game', { id: stored.id, gameId: stored.gameId, schemaVersion: Number(stored.schemaVersion), checksum: stored.checksum, payloadJson: stored.payloadJson }, 'owner', ORIGIN);
+  }
+
+  test('people accepted after the backup go back to waiting and can be accepted again; people whose seat comes back stay accepted', async () => {
+    await seedSeats(6);
+    await seedSignups(4);
+    // Visitor 0 is accepted before the backup, Visitor 1 after; Visitor 2 is declined; Visitor 3 is still waiting.
+    await review('ACCEPT', ['signup-0']);
+    await review('DECLINE', ['signup-2']);
+    const backup = await createBackupRecord('game', 'owner');
+    await review('ACCEPT', ['signup-1']);
+    expect(await seatCount()).toBe(8);
+
+    await restoreFrom(backup.backupId);
+    expect(await seatCount()).toBe(7);
+    expect((await view()).body.counts).toEqual({ pending: 2, accepted: 1, declined: 1 });
+    const status = async (id: string) => (await rows('SELECT status, seat_id AS seatId FROM signups WHERE id = ?', [id]))[0];
+    expect(await status('signup-0')).toMatchObject({ status: 'ACCEPTED' });
+    expect(await status('signup-1')).toMatchObject({ status: 'PENDING', seatId: null });
+    // Whoever is accepted points at a seat that is really on the roster.
+    const onRoster = (await rows("SELECT s.status AS seatStatus FROM signups g JOIN seats s ON s.id = g.seat_id WHERE g.id = 'signup-0'"))[0];
+    expect(onRoster.seatStatus).toBe('INVITED');
+
+    // The person who was dropped can be accepted again, instead of being stuck.
+    const again = await review('ACCEPT', ['signup-1']);
+    expect(again).toMatchObject({ status: 200, body: { added: 1 } });
+    expect(await seatCount()).toBe(8);
   });
 });

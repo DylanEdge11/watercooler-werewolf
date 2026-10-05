@@ -121,6 +121,16 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
     setMessage(action === 'OPEN' ? 'Applications are open. Share the link below.' : 'Applications are closed.');
   }, 'Unable to update applications.');
 
+  const replaceLink = () => run(async () => {
+    await post(`/api/games/${gameId}/signups`, { action: 'ROTATE_LINK' });
+    etag.current = null;
+    request.current += 1;
+    onChanged();
+    await load();
+    setIssued(null);
+    setMessage('The link was replaced. The old one no longer works for applications or for sign-ups.');
+  }, 'Unable to replace the link.');
+
   const decide = (row: ApplicationRow, decision: 'APPROVE' | 'DECLINE' | 'RECONSIDER') => run(async () => {
     const result = await post<DecisionResult>(`/api/games/${gameId}/applications/${row.id}`, { decision });
     etag.current = null;
@@ -167,8 +177,9 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
           <div className="button-row">
             <input readOnly value={data.link} aria-label="Public link for applications" onFocus={(event) => event.currentTarget.select()} />
             <CopyButton text={data.link} label="Copy link" accessibleLabel="Copy the public link for applications" />
+            <button className="text-button" type="button" onClick={() => { if (window.confirm('Replace the link? The old link stops working for applications and for sign-ups, so anyone you already sent it to needs the new one.')) void replaceLink(); }} disabled={busy}>Replace link</button>
           </div>
-          <p className="field-help">This is the same link players sign up with; it shows the application form while applications are open. Replace it from the Sign-ups card on Setup.</p>
+          <p className="field-help">This is the same link players sign up with; it shows the application form while applications are open. Replacing it replaces the sign-up link too.</p>
         </div>}
         <p className="field-help" aria-live="polite">{waiting.length} waiting · {approved.length} approved · {declined.length} declined</p>
         {waiting.length > 0 && <ul className="invite-list" aria-label="Waiting applications">

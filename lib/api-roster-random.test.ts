@@ -25,6 +25,7 @@ import { POST as rosterPost } from '../app/api/games/[gameId]/roster/route';
 import { POST as seatsPost } from '../app/api/games/[gameId]/seats/route';
 import { DELETE as seatDelete } from '../app/api/games/[gameId]/seats/[seatId]/route';
 import { POST as claimPost } from '../app/api/seats/claim/[code]/route';
+import { createBackupRecord, restoreGameBackup } from './backup/snapshot';
 import { validateComposition } from './game/balance';
 import { MAX_PLAYERS, MIN_PLAYERS } from './game/player-count';
 import { ROLE_KEYS, type RoleComposition } from './game/types';
@@ -134,6 +135,7 @@ describe('random roster, sign-up, and list changes keep everything in agreement'
     const random = generator(seed);
     const log: string[] = [];
     let lastRevision = 1;
+    const backups: string[] = [];
     const tally: Record<string, number> = {};
     const note = (name: string, reply: Reply | null) => { if (reply) tally[`${name}:${reply.status}`] = (tally[`${name}:${reply.status}`] ?? 0) + 1; };
 
@@ -192,6 +194,21 @@ describe('random roster, sign-up, and list changes keep everything in agreement'
         if (!invited.length) return null;
         return read(await seatDelete(request('DELETE'), { params: Promise.resolve({ gameId: 'game', seatId: random.pick(invited) }) }));
       },
+      async backup() {
+        backups.push((await createBackupRecord('game', 'owner')).backupId);
+        return null;
+      },
+      async restoreBackup() {
+        if (!backups.length) return null;
+        const stored = (await rows('SELECT id, game_id AS gameId, schema_version AS schemaVersion, checksum, payload_json AS payloadJson FROM backup_exports WHERE id = ?', [random.pick(backups)]))[0] as { id: string; gameId: string; schemaVersion: number; checksum: string; payloadJson: string };
+        try {
+          await restoreGameBackup('game', { id: stored.id, gameId: stored.gameId, schemaVersion: Number(stored.schemaVersion), checksum: stored.checksum, payloadJson: stored.payloadJson }, 'owner', ORIGIN);
+        } catch (error) {
+          // A backup taken while the roster was still being built from sign-ups (under 6) is refused, as it should be.
+          if (!(error instanceof Error && /between 6 and 80 seats/u.test(error.message))) throw error;
+        }
+        return null;
+      },
       async claim() {
         const invited = await idsWhere("SELECT id FROM seats WHERE game_id = 'game' AND status = 'INVITED'");
         if (!invited.length) return null;
@@ -203,7 +220,7 @@ describe('random roster, sign-up, and list changes keep everything in agreement'
       },
     };
     const names = Object.keys(operations);
-    const weights: Record<string, number> = { visitors: 4, accept: 5, decline: 2, restore: 1, addList: 5, replace: 1, addSeat: 3, removeSeat: 3, claim: 1 };
+    const weights: Record<string, number> = { visitors: 4, accept: 5, decline: 2, restore: 1, addList: 5, replace: 1, addSeat: 3, removeSeat: 3, claim: 1, backup: 2, restoreBackup: 1 };
     const weighted = names.flatMap((name) => Array.from({ length: weights[name] }, () => name));
     const racing = ['accept', 'addList', 'addSeat', 'removeSeat', 'decline'];
 

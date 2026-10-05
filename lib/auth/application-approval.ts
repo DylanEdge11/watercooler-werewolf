@@ -53,12 +53,13 @@ export async function decideApplication(options: { gameId: string; applicationId
   const now = new Date().toISOString();
   const ownerGuard = "EXISTS (SELECT 1 FROM game_moderators WHERE game_id = ? AND moderator_id = ? AND role = 'OWNER')";
   const waiting = "status IN ('PENDING', 'APPROVED') AND moderator_id IS NULL AND setup_used_at IS NULL";
+  // The applicant's email stays out of the event: the backup export gives every moderator the events, and only the owner reads applications.
   const event = (eventType: string, payload: Record<string, unknown>, guard: string, guardArgs: Array<string | number>) => db
     .prepare(
       `INSERT INTO game_events (id, game_id, event_type, actor_moderator_id, payload_json, created_at)
        SELECT ?, ?, ?, ?, ?, ? WHERE ${guard}`,
     )
-    .bind(crypto.randomUUID(), gameId, eventType, ownerId, JSON.stringify({ applicationId, email: application.email, ...payload }), now, ...guardArgs);
+    .bind(crypto.randomUUID(), gameId, eventType, ownerId, JSON.stringify({ applicationId, ...payload }), now, ...guardArgs);
   const lost = () => new HttpError(409, 'The application changed while you were deciding. Refresh the list.');
 
   if (decision === 'DECLINE') {
