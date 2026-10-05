@@ -163,6 +163,8 @@ test('a visitor applies to moderate, the owner approves, and they set up their o
     await expect(waiting).toHaveCount(1);
     await expect(waiting).toContainText('I ran the last office game.');
     await card.getByRole('button', { name: 'Approve Nia Newcomer', exact: true }).click();
+    // With the only application decided, the card says nobody is waiting, not that nobody applied.
+    await expect(card.getByText('Nobody is waiting for a decision.')).toBeVisible();
     await expect(card.getByRole('status').filter({ hasText: 'Nia Newcomer is approved.' })).toContainText(/nothing was sent/u);
     const setupUrl = (await card.locator('code.recovery-list').innerText()).trim();
     expect(setupUrl).toMatch(/\/moderator\/join\/[A-Za-z0-9_-]+$/u);
@@ -194,5 +196,74 @@ test('a visitor applies to moderate, the owner approves, and they set up their o
   } finally {
     await visitorContext.close();
     await newModeratorContext.close();
+  }
+});
+
+test('one game can use an imported list and sign-ups together', async ({ browser }) => {
+  const moderator = await getSharedModerator(browser);
+  const { page } = moderator;
+  const suffix = randomUUID().slice(0, 6);
+  const gameName = `List and sign-ups ${E2E_RUN_ID} ${suffix}`;
+  const listed = Array.from({ length: 6 }, (_, index) => ({ name: `Listed ${index + 1}`, email: `listed-${index + 1}-${E2E_RUN_ID}-${suffix}@e2e.test` }));
+  const signedUp = [1, 2].map((index) => ({ name: `Visitor ${index}`, email: `visitor-${index}-${E2E_RUN_ID}-${suffix}@e2e.test` }));
+  await startGame(page, gameName);
+
+  // Both ways to add players are on Setup from the start.
+  const signups = page.locator('#setup-signups');
+  await expect(signups.getByRole('heading', { name: 'Sign-ups', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Import the roster', exact: true })).toBeVisible();
+  await signups.getByRole('button', { name: 'Open sign-ups', exact: true }).click();
+  await expect(signups.locator('.status-pill')).toHaveText('Open');
+  const code = (await signups.getByLabel('Public sign-up link', { exact: true }).inputValue()).split('/join/')[1];
+
+  // Two people sign up from the link while the moderator also imports a list.
+  const visitorContext = await newBrowserContext(browser);
+  try {
+    for (const person of signedUp) {
+      const response = await visitorContext.request.post(`/api/join/${code}/signup`, { headers: E2E_REQUEST_HEADERS, data: { displayName: person.name, email: person.email } });
+      expect(response.ok()).toBe(true);
+    }
+    await page.getByLabel('Roster CSV').fill(['display_name,email', ...listed.map((person) => `${person.name},${person.email}`)].join('\n'));
+    await page.getByRole('button', { name: 'Create private seats', exact: true }).click();
+    await expect(page.getByText('0 of 6 claimed')).toBeVisible();
+
+    // The imported players are on the roster, and the sign-ups are waiting on top of them.
+    const waiting = signups.getByRole('list', { name: 'Waiting sign-ups' }).getByRole('listitem');
+    await expect(waiting).toHaveCount(2);
+    await signups.getByRole('button', { name: 'Accept all 2', exact: true }).click();
+    await expect(signups.getByRole('status').filter({ hasText: '2 players added to the roster.' })).toBeVisible();
+    await expect(page.getByText('0 of 8 claimed')).toBeVisible();
+    // Importing again would now replace the whole roster; the page says so before anyone does it.
+    await expect(page.getByRole('note').filter({ hasText: 'including the 2 people you accepted from sign-ups' })).toBeVisible();
+
+    // One invite file holds everybody, from the list and from sign-ups alike.
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Download invite CSV', exact: true }).click(),
+    ]);
+    const chunks: Buffer[] = [];
+    for await (const chunk of await download.createReadStream()) chunks.push(Buffer.from(chunk));
+    const rows = Buffer.concat(chunks).toString('utf8').split('\r\n').slice(1).map(csvFields);
+    expect(rows).toHaveLength(8);
+    for (const person of [...listed, ...signedUp]) expect(rows.some((row) => row[1] === person.email)).toBe(true);
+
+    // A player from the list and a player from sign-ups claim their seats the same way.
+    for (const person of [listed[0], signedUp[0]]) {
+      const row = rows.find((candidate) => candidate[1] === person.email)!;
+      const claimerContext = await newBrowserContext(browser);
+      try {
+        const claimer = await claimerContext.newPage();
+        await claimer.goto(row[2]);
+        await expect(claimer.getByRole('heading', { name: `Welcome, ${person.name}.`, exact: true })).toBeVisible();
+        await claimer.getByLabel('Six-digit PIN').fill('864209');
+        await claimer.getByRole('button', { name: 'Claim my seat', exact: true }).click();
+        await expect(claimer.getByRole('heading', { name: 'Your seat is ready.', exact: true })).toBeVisible();
+      } finally {
+        await claimerContext.close();
+      }
+    }
+    await expect(page.getByText('2 of 8 claimed')).toBeVisible({ timeout: 45_000 });
+  } finally {
+    await visitorContext.close();
   }
 });

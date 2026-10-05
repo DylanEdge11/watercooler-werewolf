@@ -21,6 +21,7 @@ vi.mock('./auth/session', () => ({
 
 import { GET as signupsGet, POST as signupsPost } from '../app/api/games/[gameId]/signups/route';
 import { POST as reviewPost } from '../app/api/games/[gameId]/signups/review/route';
+import { POST as assignmentsPost } from '../app/api/games/[gameId]/assignments/route';
 import { POST as rosterPost } from '../app/api/games/[gameId]/roster/route';
 import { DELETE as seatDelete } from '../app/api/games/[gameId]/seats/[seatId]/route';
 import { GET as joinGet } from '../app/api/join/[code]/route';
@@ -532,5 +533,79 @@ describe('reviewing sign-ups', () => {
     const listed = await view();
     expect(listed.body.signups.map((row: { displayName: string; email: string; status: string }) => [row.displayName, row.email, row.status])).toEqual([['Ada', 'ada@pilot.test', 'PENDING'], ['Bo', 'bo@pilot.test', 'PENDING']]);
     expect((await loadRosterView('game')).signups).toEqual({ state: 'OPEN', live: true, pending: 2, accepted: 0, applicationsOpen: false, pendingApplications: 0 });
+  });
+});
+
+describe('a game can use an imported list, sign-ups, or both', () => {
+  const csvOf = (prefix: string, total: number) => ['display_name,email', ...Array.from({ length: total }, (_, index) => `${prefix} ${index},${prefix.toLowerCase()}${index}@pilot.test`)].join('\n');
+  const importList = async (prefix: string, total: number) => read(await rosterPost(request('POST', { csv: csvOf(prefix, total) }), gameCtx));
+  const claim = async (code: string, pin: string) => read(await claimPost(request('POST', { pin }), codeCtx(code)));
+
+  test('a list alone never involves sign-ups', async () => {
+    const imported = await importList('Listed', 8);
+    expect(imported).toMatchObject({ status: 200, body: { playerCount: 8 } });
+    expect((await view()).body).toMatchObject({ state: 'NOT_OPEN', live: false, link: null, counts: { pending: 0, accepted: 0, declined: 0 } });
+    expect((await loadRosterView('game')).signups).toEqual({ state: 'NOT_OPEN', live: false, pending: 0, accepted: 0, applicationsOpen: false, pendingApplications: 0 });
+    expect(await composition()).toEqual(defaultComposition(8));
+  });
+
+  test('sign-ups alone can build a game, from the first visitor to released roles', async () => {
+    const code = await openAndGetCode();
+    for (let index = 0; index < 6; index += 1) expect((await signUp(code, { displayName: `Visitor ${index}`, email: `visitor${index}@pilot.test` })).status).toBe(200);
+    const accepted = await review('ACCEPT', (await waiting()).map((row) => row.id));
+    expect(accepted.body).toMatchObject({ added: 6, playerCount: 6, resetToPreset: true });
+    expect(await composition()).toEqual(defaultComposition(6));
+    for (const [index, invite] of (accepted.body.invites as Array<{ inviteCode: string }>).entries()) expect((await claim(invite.inviteCode, `55000${index}`)).status).toBe(200);
+    const preview = await read(await assignmentsPost(request('POST', { action: 'PREVIEW' }), gameCtx));
+    expect(preview.status).toBe(200);
+    const batchId = String((await rows("SELECT id FROM assignment_batches WHERE game_id = 'game'"))[0].id);
+    expect((await read(await assignmentsPost(request('POST', { action: 'RELEASE', batchId }), gameCtx))).status).toBe(200);
+    expect((await rows("SELECT status FROM games WHERE id = 'game'"))[0].status).toBe('ACTIVE');
+    expect(await count("SELECT COUNT(*) AS count FROM role_assignments WHERE game_id = 'game'")).toBe(6);
+  });
+
+  test('a list and sign-ups together: import first, then accept people on top, and every invite works', async () => {
+    const imported = await importList('Listed', 6);
+    const code = await openAndGetCode();
+    await signUp(code, { displayName: 'Visitor A', email: 'a@pilot.test' });
+    await signUp(code, { displayName: 'Visitor B', email: 'b@pilot.test' });
+    const accepted = await review('ACCEPT', (await waiting()).map((row) => row.id));
+    expect(accepted.body).toMatchObject({ added: 2, playerCount: 8, resetToPreset: true });
+    expect(await seatCount()).toBe(8);
+    expect(await composition()).toEqual(defaultComposition(8));
+    expect(await count("SELECT COUNT(*) AS count FROM seats WHERE status = 'INVITED'")).toBe(8);
+    expect((await view()).body.counts).toEqual({ pending: 0, accepted: 2, declined: 0 });
+    // Players from the list and players from sign-ups claim the same way.
+    const fromList = imported.body.invites[0].inviteCode as string;
+    const fromSignup = accepted.body.invites[0].inviteCode as string;
+    expect((await claim(fromList, '111111')).status).toBe(200);
+    expect((await claim(fromSignup, '222222')).status).toBe(200);
+    expect(await count("SELECT COUNT(*) AS count FROM seats WHERE status = 'CLAIMED'")).toBe(2);
+  });
+
+  test('importing after sign-ups were accepted replaces the roster, and those people can be accepted again on top', async () => {
+    const code = await openAndGetCode();
+    for (let index = 0; index < 3; index += 1) await signUp(code, { displayName: `Visitor ${index}`, email: `visitor${index}@pilot.test` });
+    await review('ACCEPT', (await waiting()).map((row) => row.id));
+    expect(await seatCount()).toBe(3);
+
+    expect((await importList('Listed', 6)).status).toBe(200);
+    expect(await seatCount()).toBe(6);
+    expect((await view()).body.counts).toEqual({ pending: 3, accepted: 0, declined: 0 });
+    // Their old links are dead, and the list is exactly what was imported.
+    expect(await count("SELECT COUNT(*) AS count FROM seats WHERE email LIKE 'visitor%' AND status != 'REMOVED'")).toBe(0);
+
+    const again = await review('ACCEPT', (await waiting()).map((row) => row.id));
+    expect(again.body).toMatchObject({ added: 3, playerCount: 9, resetToPreset: true });
+    expect(await composition()).toEqual(defaultComposition(9));
+  });
+
+  test('someone on the imported list who also signs up is not given a second seat', async () => {
+    await importList('Listed', 6);
+    const code = await openAndGetCode();
+    // The form quietly ignores an email that is already on the roster.
+    expect((await signUp(code, { displayName: 'Listed 2 again', email: 'listed2@pilot.test' })).status).toBe(200);
+    expect(await count('SELECT COUNT(*) AS count FROM signups')).toBe(0);
+    expect(await seatCount()).toBe(6);
   });
 });

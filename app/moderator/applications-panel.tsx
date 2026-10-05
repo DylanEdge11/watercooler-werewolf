@@ -180,7 +180,8 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
             </span>
           </li>)}
         </ul>}
-        {waiting.length === 0 && data?.open && <p className="empty-note">No applications yet. Share the link above.</p>}
+        {waiting.length === 0 && rows.length === 0 && data?.open && <p className="empty-note">No applications yet. Share the link above.</p>}
+        {waiting.length === 0 && rows.length > 0 && <p className="empty-note">Nobody is waiting for a decision.</p>}
         {approved.length > 0 && <details>
           <summary>{approved.length} approved</summary>
           <ul className="invite-list" aria-label="Approved applications">

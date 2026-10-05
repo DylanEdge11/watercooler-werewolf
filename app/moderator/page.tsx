@@ -734,7 +734,7 @@ export default function ModeratorPage() {
             <section className="setup-card welcome-card" aria-labelledby="console-welcome-title">
               <div className="setup-card-heading"><span aria-hidden="true">★</span><div><h2 id="console-welcome-title">Welcome, moderator</h2><p>You run the game but don’t play it, so this console shows every role. A game has three parts.</p></div></div>
               <ol className="welcome-steps">
-                <li><strong>Set up.</strong> Choose the dates and rules below, import your players, balance the roles, then release them. Use the launch checklist beside this page to see where you are.</li>
+                <li><strong>Set up.</strong> Choose the dates and rules below, add your players (import a list, let them sign up from a link, or both), balance the roles, then release them. Use the launch checklist beside this page to see where you are.</li>
                 <li><strong>Run.</strong> Each Day and Night: open a phase, nudge anyone who hasn’t responded, lock it, check the result, and publish it. Or let the app publish for you.</li>
                 <li><strong>Look after people.</strong> Reset a forgotten PIN, announce news, add spectators, and keep an eye on the chat.</li>
               </ol>
@@ -784,9 +784,10 @@ export default function ModeratorPage() {
               </section>}
               {setupEditable && selectedGame && <SignupsPanel key={`signups-${gameId}`} gameId={gameId} gameStatus={selectedGame.status} active={activeTab === 'setup'} refreshKey={`${signupSummary?.state}-${signupSummary?.pending}-${signupSummary?.accepted}`} onAccepted={signupsAccepted} onRosterChanged={() => void loadGame(gameId).catch(() => {})} />}
               {setupEditable ? <section className="setup-card" id="setup-roster">
-                <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Re-importing replaces every seat, including people you accepted from sign-ups (they go back to waiting), so everyone must claim again; to add or remove one player, use <strong>Change the roster</strong> below. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
+                <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Use this, the <strong>Sign-ups</strong> card above, or both: import your list first, then accept sign-ups on top of it. Importing again replaces every seat, including people you accepted from sign-ups (they go back to waiting), so everyone must claim again; to add or remove one player, use <strong>Change the roster</strong> below. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
                 <form className="form-stack" onSubmit={importRoster}>
                   <label>Roster CSV<textarea name="csv" defaultValue={sampleRoster} rows={8} spellCheck={false} required /></label>
+                  {roster.length > 0 && (signupSummary?.accepted ?? 0) > 0 && <p className="field-help" role="note">Importing now replaces the whole roster, including the {signupSummary?.accepted} {signupSummary?.accepted === 1 ? 'person' : 'people'} you accepted from sign-ups. They go back to waiting, and you can accept them again afterwards.</p>}
                   <div className="button-row">
                     <button className="primary-button" type="submit">Create private seats</button>
                     {inviteRows.length > 0 && <button className="secondary-button" type="button" onClick={downloadInvites}>Download invite CSV</button>}
