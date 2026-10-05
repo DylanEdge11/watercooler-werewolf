@@ -27,7 +27,7 @@ const PUBLIC_GUIDE = resolve('public/guide');
 const RAW_VIDEO = resolve('work/guide-walkthrough-raw.webm');
 const NARRATOR = 'Alex Morgan';
 const BOTS = ['Casey Rivera', 'Morgan Lee', 'Jamie Park', 'Taylor Reed', 'Riley Chen', 'Jordan Blake'];
-// Joins through the public sign-up link, so the video shows an imported list and sign-ups in one game.
+// Joins through the public sign-up link before the list is imported, so the video shows sign-ups and an imported list in one game.
 const NEWCOMER = 'Sam Okafor';
 // Applies to co-moderate from the same link.
 const HELPER = 'Priya Shah';
@@ -144,7 +144,7 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await mkdir(PUBLIC_GUIDE, { recursive: true });
   await mkdir(resolve('work'), { recursive: true });
 
-  // Disposable setup through the API: a game, a 7-seat roster, and six bot claims.
+  // Disposable setup through the API: just the game. Its players arrive on screen, sign-ups first and then the list.
   const moderatorApi = await newRequestContext();
   await post(moderatorApi, '/api/moderators/login', { email: MODERATOR_EMAIL, password: MODERATOR_PASSWORD });
   const gameName = 'Friday Coffee Club';
@@ -158,19 +158,11 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
     schedule: { dayCloses: '16:00', nightCloses: '09:00' },
   });
   const roster = ['display_name,email', ...[NARRATOR, ...BOTS].map((name) => `${name},${name.toLowerCase().replace(' ', '.')}@example.test`)].join('\n');
-  const { invites } = await post<{ invites: Invite[] }>(moderatorApi, `/api/games/${gameId}/roster`, { csv: roster });
-  const narratorInvite = invites.find((invite) => invite.displayName === NARRATOR);
-  if (!narratorInvite) throw new Error('The narrator invitation was not created.');
   const bots = new Map<string, APIRequestContext>();
-  for (const [index, invite] of invites.filter((item) => item.displayName !== NARRATOR).entries()) {
-    const context = await newRequestContext();
-    await post(context, `/api/seats/claim/${encodeURIComponent(invite.inviteCode)}`, { pin: String(520000 + index) });
-    bots.set(invite.displayName, context);
-  }
   const readSeats = async () => (await (await moderatorApi.get(`/api/games/${gameId}/roster`)).json() as { roster: Array<{ id: string; displayName: string }> }).roster;
-  let seats = await readSeats();
-  const seatIdByName = new Map(seats.map((seat) => [seat.displayName, seat.id]));
-  const nameBySeatId = new Map(seats.map((seat) => [seat.id, seat.displayName]));
+  let seats: Array<{ id: string; displayName: string }> = [];
+  const seatIdByName = new Map<string, string>();
+  const nameBySeatId = new Map<string, string>();
 
   // Compile every route before recording so the video has no dev-server pauses.
   const warm = await browser.newContext(browserContextOptions({ viewport: VIEWPORT }));
@@ -197,9 +189,9 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await page.mouse.move(520, 620);
   await pause(page, 1500);
 
-  // 1. The moderator signs in; the roster card offers to email each unclaimed player.
+  // 1. The moderator signs in and opens sign-ups first.
   await page.goto('/moderator');
-  await caption(page, '1 · The moderator signs in and imports the player list');
+  await caption(page, '1 · The moderator signs in and opens sign-ups');
   await pause(page, 1200);
   await type(page, page.getByLabel('Email'), MODERATOR_EMAIL);
   await type(page, page.getByLabel('Password'), MODERATOR_PASSWORD);
@@ -208,16 +200,7 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await expect(page.getByRole('tablist', { name: 'Console sections' })).toBeVisible();
   await pause(page, 1200);
   await shot(page, 'moderator-tabs.webp');
-  await caption(page, 'Email invites sends each player their own private link');
-  await page.locator('.invite-email:not(.roster-edit)').evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'smooth' }));
-  await pause(page, 1500);
-  await click(page, page.getByText('Waiting on 1 player', { exact: true }), 900);
-  // Hover only: the capture server's email settings are placeholders.
-  await page.getByRole('button', { name: 'Email invites to 1 unclaimed player', exact: true }).hover();
-  await pause(page, 2600);
-
-  // 2. The same game takes sign-ups too: open them, a visitor signs up, the moderator accepts.
-  await caption(page, '2 · Or let people sign themselves up from one link');
+  await caption(page, 'Let people sign themselves up from one link');
   const signupsCard = page.locator('#setup-signups');
   await signupsCard.evaluate((element) => element.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   await pause(page, 1600);
@@ -259,7 +242,40 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   if (!newcomerInvite) throw new Error('Accepting the sign-up did not create a seat.');
   await caption(page, 'An accepted player gets an ordinary seat. Invitations work the same way');
   await pause(page, 2600);
-  // The newcomer claims their seat quietly, like the other bots.
+
+  // 2. Then the list is imported on top: the people who signed up keep their seats.
+  const importCard = page.locator('#setup-roster');
+  await caption(page, '2 · Already have a list? Import it. It is added to the people who signed up');
+  await importCard.evaluate((element) => element.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  await pause(page, 1800);
+  await click(page, page.getByLabel('Roster CSV'), 300);
+  await page.getByLabel('Roster CSV').fill(roster);
+  await pause(page, 1600);
+  const importHeading = await importCard.locator('.setup-card-heading').boundingBox();
+  const importForm = await importCard.locator('form.form-stack').boundingBox();
+  if (!importHeading || !importForm) throw new Error('The import card was not rendered.');
+  // A margin of card paper around the heading and form, so the crop does not touch the textarea's edge.
+  const margin = 18;
+  await shot(page, 'moderator-import.webp', { x: importHeading.x - margin, y: importHeading.y - margin, width: importHeading.width + margin * 2, height: importForm.y + importForm.height - importHeading.y + margin * 2 });
+  const addResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/games/${gameId}/roster`);
+  await click(page, page.getByRole('button', { name: 'Add these players to the roster', exact: true }), 1500);
+  const { invites } = await (await addResponse).json() as { invites: Invite[] };
+  const narratorInvite = invites.find((invite) => invite.displayName === NARRATOR);
+  if (!narratorInvite) throw new Error('The narrator invitation was not created.');
+  await caption(page, 'Email invites sends each player their own private link');
+  await page.locator('.invite-email:not(.roster-edit)').evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  await pause(page, 1500);
+  await click(page, page.getByText('Waiting on 8 players', { exact: true }), 900);
+  // Hover only: the capture server's email settings are placeholders.
+  await page.getByRole('button', { name: 'Email invites to 8 unclaimed players', exact: true }).hover();
+  await pause(page, 2600);
+
+  // Everyone else claims quietly through the API, like the other bots; the narrator claims on screen next.
+  for (const [index, invite] of invites.filter((item) => item.displayName !== NARRATOR).entries()) {
+    const botContext = await newRequestContext();
+    await post(botContext, `/api/seats/claim/${encodeURIComponent(invite.inviteCode)}`, { pin: String(520000 + index) });
+    bots.set(invite.displayName, botContext);
+  }
   const newcomerContext = await newRequestContext();
   await post(newcomerContext, `/api/seats/claim/${encodeURIComponent(newcomerInvite.inviteCode)}`, { pin: '520099' });
   bots.set(NEWCOMER, newcomerContext);

@@ -15,7 +15,7 @@ import SignupsPanel, { type AcceptedSignups } from './signups-panel';
 import SpectatorsPanel from './spectators-panel';
 import StatsPanel from './stats-panel';
 import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
-import { defaultConsoleTab, isConsoleTabId, launchChecklist, resolveConsoleTab, setupHint, waitingBadges, type ConsoleTabId, type SetupStepKey, type TabChoice } from '../../lib/game/console-guidance';
+import { defaultConsoleTab, isConsoleTabId, launchChecklist, resolveConsoleTab, rosterCountsNote, setupHint, waitingBadges, type ConsoleTabId, type SetupStepKey, type TabChoice } from '../../lib/game/console-guidance';
 import { ROLE_CATALOG } from '../../lib/game/catalog';
 import { ROLE_KEYS, type RoleKey } from '../../lib/game/types';
 import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
@@ -450,23 +450,49 @@ export default function ModeratorPage() {
     }
   }
 
-  async function importRoster(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  /**
+   * Imports the pasted list. With people already on the roster it is added to them (ADD): everyone
+   * there keeps their seat and link. The separate Replace button starts the roster over (REPLACE).
+   */
+  async function importRoster(form: HTMLFormElement, mode: 'ADD' | 'REPLACE') {
+    if (editingRoster) return;
+    const editedGame = gameId;
+    const csv = new FormData(form).get('csv');
     setError('');
-    const form = new FormData(event.currentTarget);
+    setEditingRoster(true);
     try {
-      const data = await requestJson<{ invites: InviteRow[]; playerCount: number; composition: Composition }>(
-        `/api/games/${gameId}/roster`,
-        { method: 'POST', body: JSON.stringify({ csv: form.get('csv') }) },
+      const data = await requestJson<RosterChange & { invites: InviteRow[]; added?: number; skipped?: number }>(
+        `/api/games/${editedGame}/roster`,
+        { method: 'POST', body: JSON.stringify({ csv, mode }) },
       );
-      setInviteRows(data.invites);
-      markCompositionDraft(gameId, null);
+      if (selectedGameRef.current !== editedGame) return;
+      markCompositionDraft(editedGame, null);
       setComposition(data.composition);
-      setMessage(`${data.playerCount} private seats created. Email the invitations below, or download the invite file now; codes are not shown again.`);
-      await loadGame(gameId);
+      if (mode === 'ADD') {
+        const added = data.added ?? data.invites.length;
+        const skipped = data.skipped ?? 0;
+        // Links are shown once, so keep them with any from people accepted earlier in this visit.
+        setInviteRows((current) => [...current, ...data.invites]);
+        const counts = rosterCountsNote({ playerCount: data.playerCount, resetToPreset: data.resetToPreset, villagers: data.composition.VILLAGER });
+        setMessage(`${added} ${added === 1 ? 'player was' : 'players were'} added to the roster${skipped ? `; ${skipped} already on it ${skipped === 1 ? 'was' : 'were'} left as they are` : ''}. ${counts} Email their invitations below, or download the invite file now; the links are not shown again.`);
+      } else {
+        setInviteRows(data.invites);
+        setMessage(`${data.playerCount} private seats created. Email the invitations below, or download the invite file now; codes are not shown again.`);
+      }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to import the roster.');
+      if (selectedGameRef.current === editedGame) setError(caught instanceof Error ? caught.message : 'Unable to import the roster.');
+    } finally {
+      setEditingRoster(false);
+      if (selectedGameRef.current === editedGame) await loadGame(editedGame).catch(() => {});
     }
+  }
+
+  function replaceRoster(form: HTMLFormElement | null) {
+    if (!form || editingRoster) return;
+    const accepted = signupSummary?.accepted ?? 0;
+    const fromSignups = accepted > 0 ? ` That includes the ${accepted} ${accepted === 1 ? 'person' : 'people'} you accepted from sign-ups; they go back to waiting, and you can accept them again.` : '';
+    if (!window.confirm(`Replace the whole roster with this list? Everyone on the roster now is removed and every invitation link already sent stops working.${fromSignups} Anyone who already claimed a seat must claim again.`)) return;
+    void importRoster(form, 'REPLACE');
   }
 
   function rosterChangeMessage(summary: string, data: RosterChange) {
@@ -784,12 +810,13 @@ export default function ModeratorPage() {
               </section>}
               {setupEditable && selectedGame && <SignupsPanel key={`signups-${gameId}`} gameId={gameId} gameStatus={selectedGame.status} active={activeTab === 'setup'} refreshKey={`${signupSummary?.state}-${signupSummary?.pending}-${signupSummary?.accepted}`} onAccepted={signupsAccepted} onRosterChanged={() => void loadGame(gameId).catch(() => {})} />}
               {setupEditable ? <section className="setup-card" id="setup-roster">
-                <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Use this, the <strong>Sign-ups</strong> card above, or both: import your list first, then accept sign-ups on top of it. Importing again replaces every seat, including people you accepted from sign-ups (they go back to waiting), so everyone must claim again; to add or remove one player, use <strong>Change the roster</strong> below. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
-                <form className="form-stack" onSubmit={importRoster}>
+                <div className="setup-card-heading"><span>02</span><div><h2>Import the roster</h2><p>Use the exact CSV headers below. Use this, the <strong>Sign-ups</strong> card above, or both, in either order. Once anyone is on the roster, an imported list is added to it: they keep their seats and links, and anyone on the list who is already there is skipped. To start over from the list instead, use <strong>Replace the whole roster</strong>. To add or remove one player, use <strong>Change the roster</strong> below. Presets start at {MIN_PLAYERS} players and add special roles in stages; they are starting points, not a balance guarantee.</p></div></div>
+                <form className="form-stack" onSubmit={(event) => { event.preventDefault(); void importRoster(event.currentTarget, roster.length > 0 ? 'ADD' : 'REPLACE'); }}>
                   <label>Roster CSV<textarea name="csv" defaultValue={sampleRoster} rows={8} spellCheck={false} required /></label>
-                  {roster.length > 0 && (signupSummary?.accepted ?? 0) > 0 && <p className="field-help" role="note">Importing now replaces the whole roster, including the {signupSummary?.accepted} {signupSummary?.accepted === 1 ? 'person' : 'people'} you accepted from sign-ups. They go back to waiting, and you can accept them again afterwards.</p>}
+                  {roster.length > 0 && <p className="field-help" role="note">This list will be added to the {roster.length} {roster.length === 1 ? 'player' : 'players'} already on the roster{(signupSummary?.accepted ?? 0) > 0 ? `, including the ${signupSummary?.accepted} you accepted from sign-ups` : ''}. They keep their seats and links.</p>}
                   <div className="button-row">
-                    <button className="primary-button" type="submit">Create private seats</button>
+                    <button className="primary-button" type="submit" disabled={editingRoster}>{roster.length > 0 ? 'Add these players to the roster' : 'Create private seats'}</button>
+                    {roster.length > 0 && <button className="secondary-button" type="button" onClick={(event) => replaceRoster(event.currentTarget.form)} disabled={editingRoster}>Replace the whole roster</button>}
                     {inviteRows.length > 0 && <button className="secondary-button" type="button" onClick={downloadInvites}>Download invite CSV</button>}
                   </div>
                 </form>

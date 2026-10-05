@@ -199,11 +199,11 @@ test('a visitor applies to moderate, the owner approves, and they set up their o
   }
 });
 
-test('one game can use an imported list and sign-ups together', async ({ browser }) => {
+test('one game can use sign-ups and an imported list together, in that order', async ({ browser }) => {
   const moderator = await getSharedModerator(browser);
   const { page } = moderator;
   const suffix = randomUUID().slice(0, 6);
-  const gameName = `List and sign-ups ${E2E_RUN_ID} ${suffix}`;
+  const gameName = `Sign-ups then list ${E2E_RUN_ID} ${suffix}`;
   const listed = Array.from({ length: 6 }, (_, index) => ({ name: `Listed ${index + 1}`, email: `listed-${index + 1}-${E2E_RUN_ID}-${suffix}@e2e.test` }));
   const signedUp = [1, 2].map((index) => ({ name: `Visitor ${index}`, email: `visitor-${index}-${E2E_RUN_ID}-${suffix}@e2e.test` }));
   await startGame(page, gameName);
@@ -216,25 +216,29 @@ test('one game can use an imported list and sign-ups together', async ({ browser
   await expect(signups.locator('.status-pill')).toHaveText('Open');
   const code = (await signups.getByLabel('Public sign-up link', { exact: true }).inputValue()).split('/join/')[1];
 
-  // Two people sign up from the link while the moderator also imports a list.
   const visitorContext = await newBrowserContext(browser);
   try {
+    // Sign-ups come first: two people sign up from the link and the moderator accepts them.
     for (const person of signedUp) {
       const response = await visitorContext.request.post(`/api/join/${code}/signup`, { headers: E2E_REQUEST_HEADERS, data: { displayName: person.name, email: person.email } });
       expect(response.ok()).toBe(true);
     }
-    await page.getByLabel('Roster CSV').fill(['display_name,email', ...listed.map((person) => `${person.name},${person.email}`)].join('\n'));
-    await page.getByRole('button', { name: 'Create private seats', exact: true }).click();
-    await expect(page.getByText('0 of 6 claimed')).toBeVisible();
-
-    // The imported players are on the roster, and the sign-ups are waiting on top of them.
-    const waiting = signups.getByRole('list', { name: 'Waiting sign-ups' }).getByRole('listitem');
-    await expect(waiting).toHaveCount(2);
+    // The console notices new sign-ups when it next checks in, so allow for that.
+    await expect(signups.getByRole('list', { name: 'Waiting sign-ups' }).getByRole('listitem')).toHaveCount(2, { timeout: 45_000 });
     await signups.getByRole('button', { name: 'Accept all 2', exact: true }).click();
     await expect(signups.getByRole('status').filter({ hasText: '2 players added to the roster.' })).toBeVisible();
+    await expect(page.getByText('0 of 2 claimed')).toBeVisible();
+
+    // With people on the roster the import adds to them, and replacing is a separate, deliberate button.
+    await expect(page.getByRole('note').filter({ hasText: 'added to the 2 players already on the roster, including the 2 you accepted from sign-ups' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create private seats', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Replace the whole roster', exact: true })).toBeVisible();
+    await page.getByLabel('Roster CSV').fill(['display_name,email', ...listed.map((person) => `${person.name},${person.email}`), `Visitor 1 again,${signedUp[0].email}`].join('\n'));
+    await page.getByRole('button', { name: 'Add these players to the roster', exact: true }).click();
+    // The person who is on both is skipped; the six others join the two already there.
+    await expect(page.getByRole('status').filter({ hasText: '6 players were added to the roster; 1 already on it was left as they are.' })).toBeVisible();
     await expect(page.getByText('0 of 8 claimed')).toBeVisible();
-    // Importing again would now replace the whole roster; the page says so before anyone does it.
-    await expect(page.getByRole('note').filter({ hasText: 'including the 2 people you accepted from sign-ups' })).toBeVisible();
+    await expect(signups.getByText('2 accepted', { exact: true })).toBeVisible();
 
     // One invite file holds everybody, from the list and from sign-ups alike.
     const [download] = await Promise.all([
@@ -263,6 +267,51 @@ test('one game can use an imported list and sign-ups together', async ({ browser
       }
     }
     await expect(page.getByText('2 of 8 claimed')).toBeVisible({ timeout: 45_000 });
+  } finally {
+    await visitorContext.close();
+  }
+});
+
+test('an imported list can also come first, and replacing the roster is a confirmed choice', async ({ browser }) => {
+  const moderator = await getSharedModerator(browser);
+  const { page } = moderator;
+  const suffix = randomUUID().slice(0, 6);
+  const gameName = `List then sign-ups ${E2E_RUN_ID} ${suffix}`;
+  const listed = Array.from({ length: 6 }, (_, index) => `Listed ${index + 1},listed-${index + 1}-${E2E_RUN_ID}-${suffix}@e2e.test`);
+  const fresh = Array.from({ length: 6 }, (_, index) => `Fresh ${index + 1},fresh-${index + 1}-${E2E_RUN_ID}-${suffix}@e2e.test`);
+  const visitor = { name: 'Visitor One', email: `visitor-1-${E2E_RUN_ID}-${suffix}@e2e.test` };
+  await startGame(page, gameName);
+
+  // On an empty roster the button is the one it has always been.
+  await page.getByLabel('Roster CSV').fill(['display_name,email', ...listed].join('\n'));
+  await page.getByRole('button', { name: 'Create private seats', exact: true }).click();
+  await expect(page.getByText('0 of 6 claimed')).toBeVisible();
+
+  const signups = page.locator('#setup-signups');
+  await signups.getByRole('button', { name: 'Open sign-ups', exact: true }).click();
+  await expect(signups.locator('.status-pill')).toHaveText('Open');
+  const code = (await signups.getByLabel('Public sign-up link', { exact: true }).inputValue()).split('/join/')[1];
+  const visitorContext = await newBrowserContext(browser);
+  try {
+    const response = await visitorContext.request.post(`/api/join/${code}/signup`, { headers: E2E_REQUEST_HEADERS, data: { displayName: visitor.name, email: visitor.email } });
+    expect(response.ok()).toBe(true);
+    await signups.getByRole('button', { name: `Accept ${visitor.name}`, exact: true }).click();
+    await expect(page.getByText('0 of 7 claimed')).toBeVisible();
+
+    // Declining the confirmation changes nothing.
+    await page.getByLabel('Roster CSV').fill(['display_name,email', ...fresh].join('\n'));
+    let asked = '';
+    page.once('dialog', (dialog) => { asked = dialog.message(); void dialog.dismiss(); });
+    await page.getByRole('button', { name: 'Replace the whole roster', exact: true }).click();
+    await expect.poll(() => asked).toContain('That includes the 1 person you accepted from sign-ups');
+    await expect(page.getByText('0 of 7 claimed')).toBeVisible();
+
+    // Confirming starts over from the list; the accepted person goes back to waiting.
+    page.once('dialog', (dialog) => void dialog.accept());
+    await page.getByRole('button', { name: 'Replace the whole roster', exact: true }).click();
+    await expect(page.getByText('0 of 6 claimed')).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: '6 private seats created.' })).toBeVisible();
+    await expect(signups.getByRole('list', { name: 'Waiting sign-ups' }).getByRole('listitem')).toHaveCount(1);
   } finally {
     await visitorContext.close();
   }

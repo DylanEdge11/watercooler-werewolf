@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { rosterCountsNote } from '../../lib/game/console-guidance';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
 import { MAX_SIGNUP_NOTE_LENGTH } from '../../lib/game/signups';
 import type { RoleComposition } from '../../lib/game/types';
@@ -129,11 +130,7 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
     request.current += 1;
     if (decision === 'ACCEPT') {
       onAccepted(result);
-      const counts = result.playerCount < MIN_PLAYERS
-        ? `The roster has ${result.playerCount} so far, and a game needs at least ${MIN_PLAYERS}.`
-        : result.resetToPreset
-          ? `Role counts were set to the standard preset for ${result.playerCount} players.`
-          : `Role counts now have ${result.composition.VILLAGER} ${result.composition.VILLAGER === 1 ? 'Villager' : 'Villagers'}; other roles are unchanged.`;
+      const counts = rosterCountsNote({ playerCount: result.playerCount, resetToPreset: result.resetToPreset, villagers: result.composition.VILLAGER });
       setMessage(`${result.message} ${counts} Email their invitations below, or download the invite file now; the links are not shown again.`);
     } else {
       onRosterChanged();
@@ -149,7 +146,7 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
 
   return (
     <section className="setup-card" id="setup-signups">
-      <div className="setup-card-heading"><span>02</span><div><h2>Sign-ups</h2><p>Let people sign up from a link, instead of or as well as importing a roster. If you do both, import your list first and accept sign-ups afterwards. You choose who joins. Everyone you accept gets an ordinary private seat, so you can email their invitations or download the invite file exactly as you would for an imported roster. A game needs {MIN_PLAYERS} to {MAX_PLAYERS} players.</p></div></div>
+      <div className="setup-card-heading"><span>02</span><div><h2>Sign-ups</h2><p>Let people sign up from a link, instead of or as well as importing a roster, in either order: a list you import is added to the people you have already accepted. You choose who joins. Everyone you accept gets an ordinary private seat, so you can email their invitations or download the invite file exactly as you would for an imported roster. A game needs {MIN_PLAYERS} to {MAX_PLAYERS} players.</p></div></div>
       {error && <p className="notice error" role="alert">{error}</p>}
       {message && <p className="notice success" role="status">{message}</p>}
       <div className="button-row signup-state">

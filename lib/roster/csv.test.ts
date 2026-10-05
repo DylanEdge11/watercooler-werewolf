@@ -21,6 +21,15 @@ describe('roster CSV', () => {
     expect(result.errors).toContain('The roster must contain between 6 and 80 valid players.');
   });
 
+  it('lets a list added to an existing roster be any size from one player up', () => {
+    expect(parseRosterCsv(validCsv(1), { minPlayers: 1 }).errors).toEqual([]);
+    expect(parseRosterCsv(validCsv(80), { minPlayers: 1 }).errors).toEqual([]);
+    const tooMany = parseRosterCsv(validCsv(81), { minPlayers: 1 });
+    expect(tooMany.errors).toContain('The list must contain between 1 and 80 valid players.');
+    // Without the option a roster still needs a playable number of players.
+    expect(parseRosterCsv(validCsv(1)).errors).toContain('The roster must contain between 6 and 80 valid players.');
+  });
+
   it('parses the required headers and a valid 20-player roster', () => {
     const result = parseRosterCsv(validCsv());
     expect(result.errors).toEqual([]);
