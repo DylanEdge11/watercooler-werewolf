@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { E2E_RUN_ID } from '../constants';
+import { E2E_REQUEST_HEADERS, newBrowserContext } from '../transport';
 import { closeSharedModerator, getSharedModerator } from './browser-fixture';
 
 test.afterAll(async () => {
@@ -113,4 +114,157 @@ test('a new problem in the event log marks Safety & records until the moderator 
   await page.getByRole('tab', { name: 'Safety & records', exact: true }).click();
   await expect(badge).toHaveCount(0);
   await page.unroute(/\/api\/games\/[^/]+\/operations$/u);
+});
+
+/** A game with an 8-player roster made through the API, still in setup. Returns its id and the invitations. */
+async function registeredGame(browser: import('@playwright/test').Browser, name: string, players = 6): Promise<{ gameId: string; invites: Array<{ inviteCode: string }>; post: <T>(path: string, data: unknown) => Promise<T> }> {
+  const moderator = await getSharedModerator(browser);
+  const api = moderator.context.request;
+  const post = async <T>(path: string, data: unknown): Promise<T> => {
+    const response = await api.post(path, { headers: E2E_REQUEST_HEADERS, data });
+    expect(response.ok(), `${path} answered ${response.status()}`).toBe(true);
+    return await response.json() as T;
+  };
+  const suffix = randomUUID().slice(0, 6);
+  const { gameId } = await post<{ gameId: string }>('/api/games', {
+    name, timezone: 'America/Regina', startDate: '2000-01-01', endDate: '2099-12-31', finalCutoffAt: '2099-12-01T17:00',
+    activeWeekdays: [1, 2, 3, 4, 5], schedule: { dayCloses: '16:00', nightCloses: '09:00' }, publicationMode: 'REVIEW',
+  });
+  const csv = ['display_name,email', ...Array.from({ length: players }, (_, index) => `Player ${index + 1},tabs-${index + 1}-${E2E_RUN_ID}-${suffix}@e2e.test`)].join('\n');
+  const { invites } = await post<{ invites: Array<{ inviteCode: string }> }>(`/api/games/${gameId}/roster`, { csv });
+  return { gameId, invites, post };
+}
+
+/** A game with six claimed seats and released roles, made through the API, so the console can be pointed at a running game. */
+async function launchedGame(browser: import('@playwright/test').Browser, name: string): Promise<string> {
+  const { gameId, invites, post } = await registeredGame(browser, name);
+  for (const [index, invite] of invites.entries()) {
+    const claimer = await newBrowserContext(browser);
+    try {
+      const response = await claimer.request.post(`/api/seats/claim/${encodeURIComponent(invite.inviteCode)}`, { headers: E2E_REQUEST_HEADERS, data: { pin: String(730000 + index) } });
+      expect(response.ok()).toBe(true);
+    } finally {
+      await claimer.close();
+    }
+  }
+  const { batchId } = await post<{ batchId: string }>(`/api/games/${gameId}/assignments`, { action: 'PREVIEW' });
+  await post(`/api/games/${gameId}/assignments`, { action: 'RELEASE', batchId });
+  return gameId;
+}
+
+async function openRunningGame(page: import('@playwright/test').Page, gameId: string, name: string) {
+  await page.goto('/moderator');
+  await page.getByLabel('Selected game').selectOption(gameId);
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  // A running game opens on Run game.
+  await expect(page.getByRole('tab', { name: 'Run game', exact: true })).toHaveAttribute('aria-selected', 'true');
+}
+
+test('a restore sends the moderator to Setup, which shows what happened and the fresh invitations', async ({ browser }) => {
+  const moderator = await getSharedModerator(browser);
+  const { page } = moderator;
+  const name = `Console restore ${E2E_RUN_ID} ${randomUUID().slice(0, 6)}`;
+  const gameId = await launchedGame(browser, name);
+  await openRunningGame(page, gameId, name);
+
+  await page.getByRole('tab', { name: 'Safety & records', exact: true }).click();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download JSON backup', exact: true }).click()]);
+  expect(download.suggestedFilename()).toMatch(/\.json$/u);
+  await expect(page.getByRole('status').filter({ hasText: 'Verified JSON backup created' })).toBeVisible();
+
+  // The page is shared with other tests, so the dialog answer is removed again afterwards.
+  const answer = (dialog: import('@playwright/test').Dialog) => void (dialog.type() === 'prompt' ? dialog.accept(name) : dialog.accept());
+  page.on('dialog', answer);
+  try {
+    await page.getByRole('button', { name: 'Restore to setup', exact: true }).click();
+
+    // The game is back in setup, so the console moves to Setup: the result and the download come with it.
+    await expect(page.getByRole('tab', { name: 'Setup', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('status').filter({ hasText: 'Backup restored to setup with 6 fresh private seat links' })).toBeVisible();
+    const [invites] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download fresh invites', exact: true }).click()]);
+    expect(invites.suggestedFilename()).toMatch(/\.csv$/u);
+  } finally {
+    page.off('dialog', answer);
+  }
+});
+
+test('a reset sends the moderator to Setup, which says what happened', async ({ browser }) => {
+  const moderator = await getSharedModerator(browser);
+  const { page } = moderator;
+  const name = `Console reset ${E2E_RUN_ID} ${randomUUID().slice(0, 6)}`;
+  const gameId = await launchedGame(browser, name);
+  await openRunningGame(page, gameId, name);
+
+  await page.getByRole('tab', { name: 'Safety & records', exact: true }).click();
+  const answer = (dialog: import('@playwright/test').Dialog) => void (dialog.type() === 'prompt' ? dialog.accept(name) : dialog.accept());
+  page.on('dialog', answer);
+  try {
+    await page.getByRole('button', { name: 'Reset to setup', exact: true }).click();
+    await expect(page.getByRole('tab', { name: 'Setup', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('status').filter({ hasText: 'Game reset to setup state' })).toBeVisible();
+  } finally {
+    page.off('dialog', answer);
+  }
+});
+
+test('a link to a tab works while the console is already open', async ({ browser }) => {
+  const moderator = await getSharedModerator(browser);
+  const { page } = moderator;
+  await page.goto('/moderator');
+  await expect(page.getByRole('tablist', { name: 'Console sections' })).toBeVisible();
+  await page.evaluate(() => { window.location.hash = '#messages'; });
+  await expect(page.getByRole('tab', { name: 'Messages', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.evaluate(() => { window.location.hash = '#safety'; });
+  await expect(page.getByRole('tab', { name: 'Safety & records', exact: true })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('what an action did stays in view wherever the page is scrolled, and a confirmation fades by itself', async ({ browser }) => {
+  const moderator = await getSharedModerator(browser);
+  const { page } = moderator;
+  const name = `Console banner pin ${E2E_RUN_ID} ${randomUUID().slice(0, 6)}`;
+  const { gameId } = await registeredGame(browser, name, 8);
+  await page.goto('/moderator');
+  await page.getByLabel('Selected game').selectOption(gameId);
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+
+  // The role counts are near the bottom of Setup, so pressing Save composition leaves the top of the page out of sight.
+  const save = page.getByRole('button', { name: 'Save composition', exact: true });
+  await save.scrollIntoViewIfNeeded();
+  await save.click();
+  const saved = page.getByRole('status').filter({ hasText: 'Role composition saved' });
+  await expect(saved).toBeVisible();
+  await expect(saved).toBeInViewport();
+  await expect(page.getByRole('tab', { name: 'Setup', exact: true })).toBeInViewport();
+  // A confirmation fades by itself once it has been up long enough to read.
+  await expect(saved).toBeHidden({ timeout: 25_000 });
+  await expect(page.locator('.console-banner')).toHaveCount(0);
+});
+
+test('an error stays in view until it is dismissed, and replaces a confirmation still showing', async ({ browser }) => {
+  const moderator = await getSharedModerator(browser);
+  const { page } = moderator;
+  const name = `Console banner error ${E2E_RUN_ID} ${randomUUID().slice(0, 6)}`;
+  const { gameId } = await registeredGame(browser, name, 8);
+  await page.goto('/moderator');
+  await page.getByLabel('Selected game').selectOption(gameId);
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+
+  const save = page.getByRole('button', { name: 'Save composition', exact: true });
+  await save.scrollIntoViewIfNeeded();
+  await save.click();
+  const banner = page.locator('.console-banner');
+  await expect(banner.getByRole('status')).toContainText('Role composition saved');
+
+  // Counts that do not add up are refused. The refusal takes the place of the earlier confirmation and stays in view.
+  await page.getByRole('spinbutton', { name: 'Villager', exact: true }).fill('1');
+  await save.scrollIntoViewIfNeeded();
+  await save.click();
+  const refused = banner.getByRole('alert');
+  await expect(refused).toBeVisible();
+  await expect(refused).toBeInViewport();
+  await expect(banner.getByRole('status')).toHaveCount(0);
+  await page.waitForTimeout(10_000);
+  await expect(refused).toBeVisible();
+  await page.getByRole('button', { name: 'Dismiss message', exact: true }).click();
+  await expect(banner).toHaveCount(0);
 });

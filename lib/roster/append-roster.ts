@@ -5,6 +5,7 @@ import type { RoleComposition } from '../game/types';
 import { HttpError } from '../http/errors';
 import { applySeatChange, loadEditableRoster } from './edit-roster';
 import type { RosterEntry } from './csv';
+import { markSignupAcceptedStatement } from './signup-store';
 
 export interface AppendResult {
   added: number;
@@ -69,13 +70,7 @@ export async function appendToRoster(options: { gameId: string; moderatorId: str
         )
         .bind(invite.seatId, gameId, invite.displayName, invite.email, invite.codeHash, now, now, ...guardArgs),
       // Someone who signed up and is also on this list is on the roster now, so the sign-up list says so.
-      db
-        .prepare(
-          `UPDATE signups SET status = 'ACCEPTED', seat_id = ?, decided_at = ?, decided_by_moderator_id = ?
-           WHERE game_id = ? AND email = ? AND status != 'ACCEPTED'
-             AND EXISTS (SELECT 1 FROM seats WHERE id = ? AND game_id = ?) AND ${guard}`,
-        )
-        .bind(invite.seatId, now, moderatorId, gameId, invite.email, invite.seatId, gameId, ...guardArgs),
+      markSignupAcceptedStatement(db, { gameId, seatId: invite.seatId, email: invite.email, moderatorId, now }, guard, guardArgs),
     ]),
   });
   return {

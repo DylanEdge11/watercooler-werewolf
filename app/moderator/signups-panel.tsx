@@ -146,7 +146,7 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
 
   return (
     <section className="setup-card" id="setup-signups">
-      <div className="setup-card-heading"><span>02</span><div><h2>Sign-ups</h2><p>Let people sign up from a link, instead of or as well as importing a roster, in either order: a list you import is added to the people you have already accepted. You choose who joins. Everyone you accept gets an ordinary private seat, so you can email their invitations or download the invite file exactly as you would for an imported roster. A game needs {MIN_PLAYERS} to {MAX_PLAYERS} players.</p></div></div>
+      <div className="setup-card-heading"><span>2a</span><div><h2>Sign-ups</h2><p>Let people sign up from a link, instead of or as well as importing a roster, in either order: a list you import is added to the people you have already accepted. You choose who joins. Everyone you accept gets an ordinary private seat, so you can email their invitations or download the invite file exactly as you would for an imported roster. A game needs {MIN_PLAYERS} to {MAX_PLAYERS} players.</p></div></div>
       {error && <p className="notice error" role="alert">{error}</p>}
       {message && <p className="notice success" role="status">{message}</p>}
       <div className="button-row signup-state">

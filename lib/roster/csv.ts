@@ -84,8 +84,14 @@ export function parseRosterCsv(csv: string, options: { minPlayers?: number } = {
   return { entries, errors };
 }
 
-function escapeCsv(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
+/**
+ * One quoted CSV cell that a spreadsheet will show as text. A cell that starts with =, +, -, or @ (or a tab or
+ * return) is read by Excel and Sheets as a formula, and a name typed on the public sign-up form can start with
+ * any of them, so such a cell gets a leading apostrophe. The download opens in a spreadsheet beside private links.
+ */
+export function csvCell(value: string): string {
+  const safe = /^[=+\-@\t\r]/u.test(value) ? `'${value}` : value;
+  return `"${safe.replaceAll('"', '""')}"`;
 }
 
 export function createInviteExport(
@@ -96,6 +102,6 @@ export function createInviteExport(
     const message = inviteMessage(row.displayName, row.claimUrl);
     return [row.displayName, row.email, row.claimUrl, row.inviteCode, message.subject, message.text];
   });
-  return [header, ...data].map((values) => values.map(escapeCsv).join(',')).join('\r\n');
+  return [header, ...data].map((values) => values.map(csvCell).join(',')).join('\r\n');
 }
 

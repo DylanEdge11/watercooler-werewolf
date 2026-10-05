@@ -5,13 +5,19 @@ import { AnnouncementCopies, FeedbackBlock } from './communications';
 import { useOperations, type OperationalEvent } from './operations-context';
 import RoomHistory from './room-history';
 
-/** The result of the moderator's last action on these controls: an error or a confirmation. */
-export function OpsNotices() {
-  const { error, message } = useOperations();
-  return <>
-    {error && <p className="notice error" role="alert">{error}</p>}
-    {message && <p className="notice success" role="status">{message}</p>}
-  </>;
+/**
+ * The fresh invitations a restore produces. They are shown only once, so this stays on Setup, where a restore
+ * sends the console, until the moderator leaves the game; the message about the restore is in the banner.
+ */
+export function RestoredInvites() {
+  const { restoreInviteCsv, downloadRestoredInvites } = useOperations();
+  if (!restoreInviteCsv) return null;
+  return (
+    <div className="notice success restored-invites">
+      <p>The backup was restored and every player has a fresh private link. They are shown only once, so download them now.</p>
+      <div className="button-row"><button className="secondary-button" type="button" onClick={downloadRestoredInvites}>Download fresh invites</button></div>
+    </div>
+  );
 }
 
 function Loading() {

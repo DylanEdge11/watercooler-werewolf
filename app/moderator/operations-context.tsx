@@ -5,6 +5,7 @@ import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import type { FeedbackSummary } from '../../lib/game/feedback';
+import { csvCell } from '../../lib/roster/csv';
 import type { AnnouncementRecord } from './communications';
 
 export interface Operations {
@@ -93,6 +94,8 @@ export interface OperationsValue {
   refresh: () => Promise<void>;
   /** Clears the last action's confirmation or error, so it doesn't follow the moderator to another tab. */
   clearNotices: () => void;
+  /** Clears only the confirmation, so a message that has been on screen long enough fades while an error stays. */
+  clearMessage: () => void;
   announce: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   addModerator: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   removeModerator: (moderator: Moderator) => Promise<void>;
@@ -196,6 +199,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     setMessage('');
     setError('');
   }, []);
+  const clearMessage = useCallback(() => setMessage(''), []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -397,7 +401,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     setBusyAction('reset');
     try {
       await post(`/api/games/${gameId}/operations`, { action: 'RESET', confirmed: true, confirmationName });
-      setMessage('Game reset to setup state. Re-import the roster before configuring roles.');
+      setMessage('Game reset to setup state. Re-import the roster (use Replace the whole roster) before configuring roles.');
       await refresh();
       onGameChanged?.();
     } catch (caught) {
@@ -423,7 +427,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
       const rows = result.inviteRows ?? [];
       setRestoreInviteCsv(rows.length ? [
         ['display_name', 'email', 'claim_url', 'invite_code'].join(','),
-        ...rows.map((row) => [row.displayName, row.email, row.claimUrl, row.inviteCode].map((value) => `"${value.replaceAll('"', '""')}"`).join(',')),
+        ...rows.map((row) => [row.displayName, row.email, row.claimUrl, row.inviteCode].map(csvCell).join(',')),
       ].join('\r\n') : '');
       setMessage(`Backup restored to setup with ${result.restoredSeatCount} fresh private seat links. Download the invite CSV now; codes are not shown again.`);
       await refresh();
@@ -479,7 +483,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
   const value: OperationsValue = {
     gameId, operations, rooms, messages, historyRoomId, setHistoryRoomId, roomChanges, moderators, announcements, latestAnnouncementId, feedback,
     recoveryCodes, pinSeatId, setPinSeatId, restoreBackupId, setRestoreBackupId, restoreInviteCsv, busyAction, message, error,
-    refresh, clearNotices, announce, addModerator, removeModerator, makeOwner, resetPlayerPin, exportBackup, toggleRoom, purgeRetention, removeMessage,
+    refresh, clearNotices, clearMessage, announce, addModerator, removeModerator, makeOwner, resetPlayerPin, exportBackup, toggleRoom, purgeRetention, removeMessage,
     stopGame, resetGame, restoreBackup, downloadRestoredInvites, reconcileDeadlines, submitFeedback,
   };
   return <OperationsContext.Provider value={value}>{children}</OperationsContext.Provider>;

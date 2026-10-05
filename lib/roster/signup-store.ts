@@ -1,4 +1,5 @@
 import { getDb } from '../../db';
+import type { PreparedStatement, SqlValue } from '../../db/contracts';
 import { HttpError } from '../http/errors';
 import { randomToken } from '../auth/crypto';
 import { publicSignupAvailability, type SignupState, type SignupStatus } from '../game/signups';
@@ -95,4 +96,24 @@ export async function loadSignupSummary(gameId: string): Promise<SignupSummary> 
     applicationsOpen: Boolean(Number(row.applicationsOpen)),
     pendingApplications: Number(row.pendingApplications),
   };
+}
+
+/**
+ * A person who signed up and has now been put on the roster another way (a pasted list, or added by hand) is
+ * shown as accepted, with that seat, so the sign-up list and the roster agree. Part of the roster change's own
+ * transaction: `guard` and `guardArgs` are the change's guard, and the seat must exist by the time this runs.
+ */
+export function markSignupAcceptedStatement(
+  db: ReturnType<typeof getDb>,
+  change: { gameId: string; seatId: string; email: string; moderatorId: string; now: string },
+  guard: string,
+  guardArgs: SqlValue[],
+): PreparedStatement {
+  return db
+    .prepare(
+      `UPDATE signups SET status = 'ACCEPTED', seat_id = ?, decided_at = ?, decided_by_moderator_id = ?
+       WHERE game_id = ? AND email = ? AND status != 'ACCEPTED'
+         AND EXISTS (SELECT 1 FROM seats WHERE id = ? AND game_id = ?) AND ${guard}`,
+    )
+    .bind(change.seatId, change.now, change.moderatorId, change.gameId, change.email, change.seatId, change.gameId, ...guardArgs);
 }

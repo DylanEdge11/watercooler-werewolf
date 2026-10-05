@@ -135,6 +135,19 @@ export async function POST(request: Request, context: RouteContext) {
           .bind(invite.id, gameId, invite.displayName, invite.email, invite.codeHash, now, now, gameId, nextRevision),
       );
     }
+    // Anyone on the new list who had signed up (waiting, declined, or accepted before) is on the roster now, so the sign-up list says so.
+    statements.push(
+      db
+        .prepare(
+          `UPDATE signups
+           SET status = 'ACCEPTED', decided_at = ?, decided_by_moderator_id = ?,
+               seat_id = (SELECT s.id FROM seats s WHERE s.game_id = signups.game_id AND s.email = signups.email AND s.status != 'REMOVED' LIMIT 1)
+           WHERE game_id = ? AND status != 'ACCEPTED'
+             AND EXISTS (SELECT 1 FROM seats s WHERE s.game_id = signups.game_id AND s.email = signups.email AND s.status != 'REMOVED')
+             AND ${setupGuard}`,
+        )
+        .bind(now, moderator.id, gameId, gameId, nextRevision),
+    );
     for (const roleKey of ROLE_KEYS) {
       statements.push(
         db

@@ -6,6 +6,7 @@ import { canAddSeat } from '../../../../../lib/game/roster-edit';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { routeError } from '../../../../../lib/http/errors';
 import { applySeatChange, loadEditableRoster } from '../../../../../lib/roster/edit-roster';
+import { markSignupAcceptedStatement } from '../../../../../lib/roster/signup-store';
 import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
 
 interface RouteContext {
@@ -59,6 +60,8 @@ export async function POST(request: Request, context: RouteContext) {
              SELECT ?, ?, ?, ?, 'INVITED', ?, 1, 1, ?, ? WHERE ${guard}`,
           )
           .bind(seatId, gameId, displayName, email, codeHash, now, now, ...guardArgs),
+        // Someone who had signed up and is added by hand is on the roster now, so the sign-up list says so.
+        markSignupAcceptedStatement(db, { gameId, seatId, email, moderatorId: moderator.id, now }, guard, guardArgs),
       ],
     });
     return Response.json({

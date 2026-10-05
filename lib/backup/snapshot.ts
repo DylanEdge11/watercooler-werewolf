@@ -270,6 +270,13 @@ export async function restoreGameBackup(
       ).bind(seat.id, gameId, seat.displayName, seat.email, seat.claimCodeHash, seat.createdAt, now, gameId, now, moderatorId),
     );
   }
+  // A sign-up accepted after the backup was taken has a seat the restore removed. Those people go back to waiting,
+  // as they do when the roster is replaced, so they can be accepted again. Accepted people whose seat is back stay accepted.
+  statements.push(
+    db.prepare(
+      "UPDATE signups SET status = 'PENDING', seat_id = NULL, decided_at = NULL, decided_by_moderator_id = NULL WHERE game_id = ? AND status = 'ACCEPTED' AND NOT EXISTS (SELECT 1 FROM seats s WHERE s.id = signups.seat_id AND s.status != 'REMOVED') AND " + restoreGuard,
+    ).bind(gameId, gameId, now, moderatorId),
+  );
   for (const composition of backupComposition(data)) {
     statements.push(
       db.prepare('INSERT INTO game_role_counts (game_id, role_key, count, power_snapshot) SELECT ?, ?, ?, ? WHERE ' + restoreGuard)

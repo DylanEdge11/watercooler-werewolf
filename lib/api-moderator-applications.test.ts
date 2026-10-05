@@ -36,6 +36,8 @@ import { GET as joinGet } from '../app/api/join/[code]/route';
 import { POST as applyPost } from '../app/api/join/[code]/apply/route';
 import { GET as setupGet, POST as setupPost } from '../app/api/moderators/join/[code]/route';
 import { POST as signupsPost } from '../app/api/games/[gameId]/signups/route';
+import { DELETE as moderatorRemove } from '../app/api/games/[gameId]/moderators/[moderatorId]/route';
+import { collectGameBackup } from './backup/snapshot';
 import { authenticateModerator } from './auth/moderators';
 import { sha256 } from './auth/crypto';
 import { JOIN_COPY, MODERATOR_SETUP_COPY } from './game/join-copy';
@@ -496,5 +498,69 @@ describe('the setup link', () => {
     let last: Reply | null = null;
     for (let attempt = 0; attempt < 9; attempt += 1) last = await read(await setupPost(request('POST', { password: 'short' }, { 'x-forwarded-for': '203.0.113.5' }), codeCtx(setupCode)));
     expect(last).toMatchObject({ status: 429 });
+  });
+});
+
+describe('after a co-moderator who applied is removed', () => {
+  const remove = async (moderatorId: string) => read(await moderatorRemove(request('DELETE'), { params: Promise.resolve({ gameId: 'game', moderatorId }) }));
+
+  test('a new account that joined through the link: the application goes to Declined, and the owner can reconsider and approve again', async () => {
+    const code = await openAndGetCode();
+    const { id, setupCode } = await approveForLink(code, 'Hal', 'hal@pilot.test');
+    expect((await redeem(setupCode)).status).toBe(200);
+    const halId = String((await rows("SELECT id FROM moderator_accounts WHERE email = 'hal@pilot.test'"))[0].id);
+    expect(await list()).toMatchObject({ body: { applications: [{ id, status: 'APPROVED', joined: true }] } });
+
+    expect((await remove(halId)).status).toBe(200);
+    // No longer "added": the row is not tied to an account and shows under Declined.
+    expect((await list()).body.applications[0]).toMatchObject({ id, status: 'DECLINED', joined: false });
+    expect(await rows('SELECT moderator_id AS moderatorId, setup_used_at AS used, setup_code_hash AS hash FROM moderator_applications')).toEqual([{ moderatorId: null, used: null, hash: null }]);
+
+    // The owner can reconsider and approve again; Hal already has an account, so he is added straight away.
+    expect(await decide(id, 'RECONSIDER')).toMatchObject({ status: 200, body: { outcome: 'RECONSIDERED' } });
+    expect(await decide(id, 'APPROVE')).toMatchObject({ status: 200, body: { outcome: 'ADDED' } });
+    expect(await count("SELECT COUNT(*) AS count FROM game_moderators WHERE game_id = 'game' AND moderator_id = ?", [halId])).toBe(1);
+  });
+
+  test('an existing account added by approval: removing them frees the application the same way', async () => {
+    const code = await openAndGetCode();
+    const id = await applyAndFind(code, 'Cora Two', 'stranger@pilot.test');
+    expect(await decide(id, 'APPROVE')).toMatchObject({ status: 200, body: { outcome: 'ADDED' } });
+    expect((await remove('stranger')).status).toBe(200);
+    expect((await list()).body.applications[0]).toMatchObject({ id, status: 'DECLINED', joined: false });
+    expect(await decide(id, 'RECONSIDER')).toMatchObject({ status: 200 });
+  });
+
+  test('removing a co-moderator who never applied touches no application', async () => {
+    const code = await openAndGetCode();
+    const id = await applyAndFind(code, 'Bystander', 'bystander@pilot.test');
+    expect((await remove('cora')).status).toBe(200);
+    expect((await list()).body.applications[0]).toMatchObject({ id, status: 'PENDING' });
+  });
+
+  test('a removal that loses a race to another removal changes nothing more', async () => {
+    const code = await openAndGetCode();
+    const id = await applyAndFind(code, 'Cora Two', 'stranger@pilot.test');
+    await decide(id, 'APPROVE');
+    const replies = await Promise.all([remove('stranger'), remove('stranger')]);
+    expect(replies.map((reply) => reply.status).sort()).toEqual([200, 409]);
+    expect((await list()).body.applications[0]).toMatchObject({ id, status: 'DECLINED', joined: false });
+  });
+});
+
+describe('what the backup export carries about applicants', () => {
+  test('an applicant’s email is never written into the audit events every moderator can export', async () => {
+    const code = await openAndGetCode();
+    const approved = await applyAndFind(code, 'Zed', 'zed@pilot.test');
+    await decide(approved, 'APPROVE');
+    const declined = await applyAndFind(code, 'Yan', 'yan@pilot.test');
+    await decide(declined, 'DECLINE');
+    const exported = JSON.stringify((await collectGameBackup('game')).gameEvents);
+    expect(exported).not.toContain('zed@pilot.test');
+    expect(exported).not.toContain('yan@pilot.test');
+    // The event still names the application, so the audit trail is intact.
+    expect(await events('MODERATOR_APPLICATION_APPROVED')).toHaveLength(1);
+    expect(await events('MODERATOR_APPLICATION_DECLINED')).toHaveLength(1);
+    expect(exported).toContain(approved);
   });
 });
