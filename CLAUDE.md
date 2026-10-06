@@ -64,7 +64,7 @@ Changes reach `main` only through pull requests. *Never base work on `main`, nev
 
 ## Security and data boundaries
 
-- Point tests, pilot scripts, migrations, and the `Vercel` bypass secret at the Preview only, because Preview and Production have separate databases. *Never aim them at Production.*
+- Point tests, pilot scripts, and the `Vercel` bypass secret at the Preview only, because Preview and Production have separate databases. *Never aim them at Production.* Migrations follow the same rule, with one exception that belongs to the owner: during `/werewolf-prod` the owner runs `npm run db:migrate` against Production. *Claude never runs a migration, or any script, against Production.*
 - Keep secrets out of output and commits: `.env*` files, `VERCEL_*` tokens, `E2E_*` passwords, `PREVIEW_TURSO_*` credentials, invite CSVs, and recovery codes. *Never print, paste, or commit them.*
 - Use fictional players with `.test` addresses in all test data.
 
