@@ -280,7 +280,7 @@ export async function runPhaseAction(
            (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
            SELECT ?, ?, ?, 'HUNTER_RESOLVED', ?, ?, ? WHERE ${finalizedGuard}`,
         )
-        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ submitted: Boolean(hunterAction), source: actor.source, endedEarly }), now, phase.id, gameId, finalizedVersion, now),
+        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ submitted: Boolean(hunterAction), source: actor.source, ...(endedEarly ? { endedEarly: true } : {}) }), now, phase.id, gameId, finalizedVersion, now),
       // The event log says so when a moderator cut the Hunter's turn short.
       ...(endedEarly ? [db
         .prepare(
