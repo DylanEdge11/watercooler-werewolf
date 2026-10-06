@@ -14,6 +14,8 @@ import BrandMark from './brand-mark';
 import { IDLE_AFTER_MS, pollWhileVisible } from '../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
 import { pollInterval } from '../lib/http/poll-interval';
+import { plainError } from '../lib/http/plain-error';
+import { phaseCardCaption, phaseIsClosed } from '../lib/player/phase-card';
 import { CONCEALED_ACTION_HINT, ROLE_VISIBILITY_COOKIE, concealedPermission, roleVisibilityCookieValue } from '../lib/player/role-visibility';
 import { currentCycle, describeTimelineEvent, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
 import type { GameStats } from '../lib/game/game-stats';
@@ -160,6 +162,8 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
   const [selected, setSelected] = useState<string[]>(() => (previewMode ? previewData : initialData)?.currentAction?.targetIds ?? []);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  // Set while refreshes fail: when the page last heard from the game, as an ISO time (D68).
+  const [lostAt, setLostAt] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackError, setFeedbackError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -194,6 +198,14 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
   const initialDataRef = useRef(initialData);
   const olderNotifications = useRef<DashboardData['notifications']>([]);
   const refreshSequence = useRef(0);
+  const lastHeardAt = useRef<number | null>(null);
+  const reachable = useCallback(() => {
+    lastHeardAt.current = Date.now();
+    setLostAt(null);
+  }, []);
+  const unreachable = useCallback(() => {
+    setLostAt((current) => current ?? new Date(lastHeardAt.current ?? Date.now()).toISOString());
+  }, []);
   // The ETag of the dashboard on screen (lib/http/conditional-get.ts), and the
   // phase that sets how often it refreshes (lib/http/poll-interval.ts).
   const dashboardEtag = useRef<string | null>(null);
@@ -224,7 +236,10 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
     const response = await conditionalGet('/api/player', dashboardEtag.current);
     if (sequence !== refreshSequence.current) return;
     // null: nothing changed since the dashboard on screen, so nothing re-renders.
-    if (!response) return;
+    if (!response) {
+      reachable();
+      return;
+    }
     if (response.status === 401) {
       dashboardEtag.current = null;
       setUnauthenticated(true);
@@ -252,10 +267,16 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
       setSelected(result.currentAction?.targetIds ?? []);
       selectionDirty.current = false;
     }
+    // "Response saved" and a failed save belong to the phase they were made in, not the next ballot (D62).
+    if (selectionPhaseId.current !== incomingPhaseId) {
+      setMessage('');
+      setError('');
+    }
     selectionPhaseId.current = incomingPhaseId;
+    reachable();
     setUnauthenticated(false);
     setLoading(false);
-  }, [previewMode, applyDeviceState]);
+  }, [previewMode, applyDeviceState, reachable]);
 
   async function loadOlderNotifications() {
     if (previewMode) return;
@@ -282,11 +303,16 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
         return { ...current, notifications: merged, notificationsHasMore: result.notificationsHasMore, notificationsNextCursor: result.notificationsNextCursor };
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to load older updates.');
+      setError(plainError(caught, 'Unable to load older updates.'));
     } finally {
       setLoadingOlderNotifications(false);
     }
   }
+
+  // The page counts as up to date from the moment it first shows (server-rendered or not).
+  useEffect(() => {
+    lastHeardAt.current ??= Date.now();
+  }, []);
 
   useEffect(() => {
     if (previewMode) return;
@@ -295,14 +321,14 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
     const serverRendered = Boolean(initialDataRef.current);
     const timer = window.setTimeout(() => {
       void refresh(serverRendered).catch((caught) => {
-        setError(caught instanceof Error ? caught.message : 'Unable to load the game.');
+        // With the page already on screen a failed refresh is the connection line; with nothing to show it is the error page.
+        if (serverRendered) unreachable();
+        else setError(plainError(caught, 'Unable to load the game.'));
         setLoading(false);
       });
     }, 0);
     const stopPolling = pollWhileVisible(() => {
-      void refresh(true).catch((caught) => {
-        setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.');
-      });
+      void refresh(true).catch(() => unreachable());
     }, () => pollInterval(pacing.current), {
       idleAfterMs: IDLE_AFTER_MS,
       onIdleChange: setUpdatesPaused,
@@ -312,7 +338,7 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
       window.clearTimeout(timer);
       stopPolling();
     };
-  }, [previewMode, refresh]);
+  }, [previewMode, refresh, unreachable]);
 
   useEffect(() => {
     if (!activeModal) return;
@@ -396,7 +422,7 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
       setMessage(`Response saved as revision ${result.version}. You can change it until the phase locks.`);
       await refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to submit your action.');
+      setError(plainError(caught, 'Unable to submit your action.'));
     } finally {
       setSubmitting(false);
     }
@@ -463,7 +489,7 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
       }
       setData((current) => current ? { ...current, emailNotifications: { available: true, enabled } } : current);
     } catch (caught) {
-      setEmailError(caught instanceof Error ? caught.message : 'Unable to save your email choice.');
+      setEmailError(plainError(caught, 'Unable to save your email choice.'));
     } finally {
       setSavingEmail(false);
     }
@@ -496,7 +522,7 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
       form.reset();
       setFeedbackMessage('Thanks — your feedback went privately to the moderators.');
     } catch (caught) {
-      setFeedbackError(caught instanceof Error ? caught.message : 'Unable to save feedback.');
+      setFeedbackError(plainError(caught, 'Unable to save feedback.'));
     } finally {
       setSendingFeedback(false);
     }
@@ -605,9 +631,10 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
             <div><p className="eyebrow accent">{data.phase ? phaseName(data.phase.kind, data.phase.sequence) : data.game.status.replaceAll('_', ' ')}</p><h1>{phaseTitle}</h1><p>{permission.label}</p></div>
             {data.phase?.autoPublishAt && !['COMPLETED', 'STOPPED'].includes(data.game.status)
               ? <div className="deadline-card"><span>Results</span><strong suppressHydrationWarning>by {clockTime(data.phase.autoPublishAt, data.game.timezone)}</strong><small suppressHydrationWarning>Results publish by {clockTime(data.phase.autoPublishAt, data.game.timezone)} unless the moderator reviews them first.</small></div>
-              : <div className="deadline-card"><span>Response window</span><strong suppressHydrationWarning>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : <DeadlineCountdown deadline={data.phase?.deadline ?? null} />}</strong><small>{data.game.automationPaused && !['COMPLETED', 'STOPPED'].includes(data.game.status) ? 'The schedule is paused' : data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>}
+              : <div className="deadline-card"><span>Response window</span><strong suppressHydrationWarning>{data.game.status === 'COMPLETED' ? 'Complete' : data.game.status === 'STOPPED' ? 'Stopped' : phaseIsClosed(data.phase?.status) ? 'Closed' : <DeadlineCountdown deadline={data.phase?.deadline ?? null} />}</strong><small>{data.game.automationPaused && !['COMPLETED', 'STOPPED'].includes(data.game.status) ? 'The schedule is paused' : phaseCardCaption(data.phase?.status) ?? data.phase?.status.replaceAll('_', ' ') ?? (data.game.status === 'COMPLETED' ? 'Campaign complete' : 'No open phase')}</small></div>}
           </div>
-          {updatesPaused && !FINISHED_GAME_STATUSES.has(data.game.status) && <p className="notice warning" role="status">Updates are paused while you’re away. Tap anywhere to catch up, or <button className="text-button" type="button" onClick={() => void refresh(true).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.'))}>refresh now</button>.</p>}
+          {updatesPaused && !FINISHED_GAME_STATUSES.has(data.game.status) && <p className="notice warning" role="status">Updates are paused while you’re away. Tap anywhere to catch up, or <button className="text-button" type="button" onClick={() => void refresh(true).catch(() => unreachable())}>refresh now</button>.</p>}
+          {lostAt && !previewMode && <p className="notice warning" role="status">Can’t reach the game · last updated <span suppressHydrationWarning>{clockTime(lostAt, data.game.timezone)}</span></p>}
           {data.game.status === 'STOPPED' && <p className="notice warning" role="status">{data.game.stopReason ?? 'This game is stopped. Player actions and rooms are read-only.'}</p>}
 
           {spectating ? <section className="role-card spectator-role" aria-labelledby="spectator-title">
