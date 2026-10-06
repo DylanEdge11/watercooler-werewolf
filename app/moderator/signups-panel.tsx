@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
-import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { IDLE_AFTER_MS, pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { useGameEnded } from './use-game-ended';
 import { rosterCountsNote } from '../../lib/game/console-guidance';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
 import { MAX_SIGNUP_NOTE_LENGTH } from '../../lib/game/signups';
@@ -67,6 +68,7 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
   const [data, setData] = useState<SignupsData | null>(null);
   // Results go to the banner under the tab bar, which stays in view however far down this card the button was.
   const { showMessage, showError, clearNotices } = useOperations();
+  const ended = useGameEnded(gameStatus);
   const [busy, setBusy] = useState(false);
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const etag = useRef<string | null>(null);
@@ -89,9 +91,9 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
     if (!active) return;
     const reload = () => void load().catch((caught) => showError(caught instanceof Error ? caught.message : 'Unable to load the sign-ups.'));
     const timer = window.setTimeout(reload, 0);
-    const stop = pollWhileVisible(reload, RELAXED_POLL_MS);
+    const stop = pollWhileVisible(reload, RELAXED_POLL_MS, { idleAfterMs: IDLE_AFTER_MS, stopWhen: () => ended.current });
     return () => { window.clearTimeout(timer); stop(); };
-  }, [active, load, refreshKey, showError]);
+  }, [active, load, refreshKey, showError, ended]);
 
   async function run<T>(action: () => Promise<T>, fallback: string): Promise<T | null> {
     if (busy) return null;
