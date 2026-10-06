@@ -40,6 +40,8 @@ interface Phase {
   currentSubmissions: number;
   /** Optional Afterlife tiebreak votes saved on a Day or Final ballot. */
   afterlifeSubmissions?: number;
+  /** The Hunter has saved a shot, so the phase can be finalized with it at any time. */
+  hunterShotSaved?: boolean;
   /** Open phase only: living players who still owe a response. For the moderator's eyes alone. */
   outstanding?: Array<{ id: string; displayName: string }>;
   /** Published by the sweep after the review window, with no moderator attached. */
@@ -289,7 +291,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged, onAttenti
           {latest.status === 'OPEN' && <OutstandingBlock phase={latest} timeZone={gameTimeZone} />}
           {['OPEN', 'LOCKED'].includes(latest.status) && <button className="danger-button" type="button" onClick={() => void run('LOCK_AND_PROPOSE', latest.id)}>{latest.status === 'LOCKED' ? 'Calculate locked responses' : 'Lock responses & calculate'}</button>}
           {(latest.status === 'PENDING_HUNTER' || latest.status === 'HUNTER_FINALIZING') && (
-            <div className="hunter-callout"><span aria-hidden="true">➶</span><div><strong>Hunter follow-up required</strong><p>Deadline {latest.hunterDeadlineAt ? gameTime(latest.hunterDeadlineAt) : 'pending'} ({game?.timezone ?? 'UTC'}).</p></div><button className="primary-button" type="button" onClick={() => void run('FINALIZE_HUNTER', latest.id, { skipHunter: latest.hunterDeadlineAt ? new Date(latest.hunterDeadlineAt) <= new Date() : false })}>Finalize Hunter</button></div>
+            <div className="hunter-callout"><span aria-hidden="true">➶</span><div><strong>Hunter follow-up required</strong><p>Deadline {latest.hunterDeadlineAt ? gameTime(latest.hunterDeadlineAt) : 'pending'} ({game?.timezone ?? 'UTC'}).</p></div><button className="primary-button" type="button" onClick={() => void run('FINALIZE_HUNTER', latest.id, { skipHunter: latest.hunterDeadlineAt ? new Date(latest.hunterDeadlineAt) <= new Date() : false })}>Finalize Hunter</button>{latest.status === 'PENDING_HUNTER' && !latest.hunterShotSaved && latest.hunterDeadlineAt && new Date(latest.hunterDeadlineAt) > new Date() && <button className="secondary-button" type="button" onClick={() => { if (window.confirm('End the Hunter’s turn now? The Hunter will not get to shoot, and this can’t be undone.')) void run('FINALIZE_HUNTER', latest.id, { skipHunter: true, endHunterEarly: true }); }}>End Hunter’s turn now</button>}</div>
           )}
 
           {latest.proposal && authoritativeOutcome && (

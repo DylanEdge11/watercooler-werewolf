@@ -33,6 +33,8 @@ export interface PhaseActionBody {
   action?: string;
   phaseId?: string;
   skipHunter?: boolean;
+  /** A moderator ends the Hunter's turn before the window closes. Automation never sends this. */
+  endHunterEarly?: boolean;
   overrideReason?: string;
   overrideEliminationIds?: string[];
 }
@@ -229,9 +231,11 @@ export async function runPhaseAction(
     const players = await loadPlayers(gameId);
     const actions = await loadActions(phase.id);
     const hunterAction = actions.find((action) => action.kind === 'HUNTER_SHOT');
-    if (!hunterAction && (!body.skipHunter || !deadlinePassed)) {
+    if (!hunterAction && (!body.skipHunter || !(deadlinePassed || body.endHunterEarly === true))) {
       throw new Error('The Hunter has not submitted and their response window is still open.');
     }
+    // No shot and the window still open: only a moderator's explicit "end the Hunter's turn now" gets here.
+    const endedEarly = !hunterAction && !deadlinePassed;
     const proposedOutcome = JSON.parse(proposal.outcomeJson) as PhaseResolution;
     const storedOverrideIds = overrideIdsFromJson(proposal.overrideJson);
     const currentOutcome = proposal.reviewedOutcomeJson
@@ -244,7 +248,9 @@ export async function runPhaseAction(
       : {
           ...currentOutcome,
           hunterRequiredIds: [],
-          warnings: [...currentOutcome.warnings, { actionId: 'hunter-timeout', reason: 'Hunter response window expired without a shot.' }],
+          warnings: [...currentOutcome.warnings, endedEarly
+            ? { actionId: 'hunter-ended-early', reason: 'A moderator ended the Hunter’s turn before the window closed.' }
+            : { actionId: 'hunter-timeout', reason: 'Hunter response window expired without a shot.' }],
         };
     const now = new Date().toISOString();
     const finalizedVersion = Number(phase.version) + 1;
@@ -274,7 +280,14 @@ export async function runPhaseAction(
            (id, game_id, phase_id, event_type, actor_moderator_id, payload_json, created_at)
            SELECT ?, ?, ?, 'HUNTER_RESOLVED', ?, ?, ? WHERE ${finalizedGuard}`,
         )
-        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ submitted: Boolean(hunterAction), source: actor.source }), now, phase.id, gameId, finalizedVersion, now),
+        .bind(crypto.randomUUID(), gameId, phase.id, actor.moderatorId, JSON.stringify({ submitted: Boolean(hunterAction), source: actor.source, ...(endedEarly ? { endedEarly: true } : {}) }), now, phase.id, gameId, finalizedVersion, now),
+      // The event log says so when a moderator cut the Hunter's turn short.
+      ...(endedEarly ? [db
+        .prepare(
+          `INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at)
+           SELECT ?, ?, 'INFO', 'GAME_CONTROL', ?, ?, ? WHERE ${finalizedGuard}`,
+        )
+        .bind(crypto.randomUUID(), gameId, 'Hunter’s turn ended early by a moderator.', JSON.stringify({ phaseId: phase.id, moderatorId: actor.moderatorId }), now, phase.id, gameId, finalizedVersion, now)] : []),
     ]);
     if (changes(result[0]) !== 1) return conflict('The Hunter follow-up or game changed before it could be finalized. Refresh and try again.');
     return done({ ok: true, outcome });
