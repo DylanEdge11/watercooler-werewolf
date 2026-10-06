@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     // Any automatic step that is due (lock and calculate, Hunter follow-up, publish) happens
     // on this visit, so the game moves on even with no cron. When nothing is due, the sweep costs one query.
     const automation = await advanceGameSafely(identity.gameId);
-    const dashboard = await loadDashboard(identity.seatId, { cursor, automation });
+    const dashboard = await loadDashboard(identity.seatId, { cursor, automation, gameId: identity.gameId });
     if (!dashboard) return jsonError('Player seat not found.', 404);
     return respondJsonWithEtag(request, { ok: true, ...dashboard });
   } catch (error) {

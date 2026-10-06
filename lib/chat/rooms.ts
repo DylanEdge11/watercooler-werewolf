@@ -5,6 +5,8 @@ import type { PrivateRoomType } from './policy';
 export { allowedRoomTypes, normalizeChatBody } from './policy';
 
 const ROOM_TYPES: PrivateRoomType[] = ['WEREWOLF', 'MASON', 'DEAD', 'TOWN_HALL'];
+/** A game with fewer rooms than this is missing some and gets them repaired. */
+export const ROOM_TYPE_COUNT = ROOM_TYPES.length;
 
 /**
  * Creates the game's rooms and brings every membership in line with

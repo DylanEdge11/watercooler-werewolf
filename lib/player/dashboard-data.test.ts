@@ -6,7 +6,7 @@ import { loadMigrations, runMigrations } from '../../scripts/db-migration-runner
 const shared = vi.hoisted(() => ({ db: null as LibsqlDatabase | null }));
 vi.mock('../../db', () => ({ getDb: () => shared.db }));
 
-import { loadBallotVotes, loadDashboard } from './dashboard-data';
+import { loadBallotVotes, loadDashboard, loadSpectatorDashboard } from './dashboard-data';
 
 let client: Client;
 const exec = (sql: string, args: Array<string | number | null> = []) => client.execute({ sql, args });
@@ -105,5 +105,59 @@ describe('loadBallotVotes', () => {
     expect(await loadBallotVotes('game', 'night')).toBeNull();
     await exec("INSERT INTO game_events (id,game_id,event_type,payload_json,created_at) VALUES ('reset','game','GAME_RESET','{}','2026-01-05T00:00:00.000Z')");
     expect(await loadBallotVotes('game', 'day-1')).toBeNull();
+  });
+});
+
+describe('the reads behind one refresh', () => {
+  beforeEach(async () => {
+    await exec("INSERT INTO assignment_batches (id,game_id,revision,setup_revision,roster_fingerprint,composition_fingerprint,assignments_json,random_evidence_hash,created_by_moderator_id,created_at) VALUES ('batch','game',1,1,'roster','composition','[]','hash','mod','2026-01-01')");
+    for (const [seat, role] of [['s1', 'CUPID'], ['s2', 'VILLAGER'], ['s3', 'SEER']]) {
+      await exec("INSERT INTO role_assignments (game_id,seat_id,role_key,assignment_batch_id) VALUES ('game',?,?,'batch')", [seat, role]);
+    }
+    await exec("INSERT INTO phases (id,game_id,sequence,kind,status,opens_at,closes_at,slots,divisor_snapshot,created_at,updated_at) VALUES ('night','game',1,'NIGHT','OPEN','2026-02-01','2099-01-01',1,30,'2026-02-01','2026-02-01')");
+    // The first refresh of a game with roles creates its chat rooms; later ones only read.
+    await loadDashboard('s2', { gameId: 'game' });
+  });
+
+  test('a refresh is two read batches and eight statements for a player with nothing to answer, with no lover-pair read', async () => {
+    const batch = vi.spyOn(shared.db!, 'batch');
+    const prepare = vi.spyOn(shared.db!, 'prepare');
+    const view = await loadDashboard('s2', { gameId: 'game' });
+    expect(view?.permission.actionKind).toBeNull();
+    // Seat, phase, roster, the three timeline reads, rooms; then notifications. Each batch is one request and one snapshot.
+    expect(batch.mock.calls.map(([statements, mode]) => [statements.length, mode])).toEqual([[7, 'read'], [1, 'read']]);
+    expect(prepare).toHaveBeenCalledTimes(8);
+    expect(prepare.mock.calls.some(([sql]) => sql.includes('CUPID_PAIR_SET'))).toBe(false);
+  });
+
+  test('a Cupid still reads the pair, which decides whether they have a choice to make', async () => {
+    const withoutPair = await loadDashboard('s1', { gameId: 'game' });
+    expect(withoutPair?.permission.actionKind).toBe('CUPID_PAIR');
+    await exec("INSERT INTO game_events (id,game_id,event_type,payload_json,created_at) VALUES ('pair','game','CUPID_PAIR_SET','{\"cupidId\":\"s1\",\"playerIds\":[\"s2\",\"s3\"]}','2026-02-01T10:00:00.000Z')");
+    const prepare = vi.spyOn(shared.db!, 'prepare');
+    const withPair = await loadDashboard('s1', { gameId: 'game' });
+    expect(withPair?.permission.actionKind).toBeNull();
+    expect(prepare.mock.calls.filter(([sql]) => sql.includes('CUPID_PAIR_SET'))).toHaveLength(1);
+  });
+
+  test('missing rooms are repaired before the rooms are read, so the first answer already has them', async () => {
+    await exec('DELETE FROM chat_rooms WHERE game_id = ?', ['game']);
+    const view = await loadDashboard('s2', { gameId: 'game' });
+    expect(view?.rooms.map((room) => room.type)).toEqual(['TOWN_HALL']);
+  });
+
+  test('a seat is never answered with another game’s data, and asking without the game id gives the same answer', async () => {
+    expect(await loadDashboard('s2', { gameId: 'some-other-game' })).toBeNull();
+    expect(await loadDashboard('missing-seat', { gameId: 'game' })).toBeNull();
+    expect(await loadDashboard('s2')).toEqual(await loadDashboard('s2', { gameId: 'game' }));
+  });
+
+  test('a spectator’s public view is read in one batch', async () => {
+    await exec("INSERT INTO spectators (id,game_id,display_name,email,status,claim_code_hash,created_at,updated_at) VALUES ('w1','game','Watcher','w1@pilot.test','ACTIVE','w-hash','2026-01-01','2026-01-01')");
+    const batch = vi.spyOn(shared.db!, 'batch');
+    const view = await loadSpectatorDashboard('w1');
+    expect(view?.viewer).toBe('SPECTATOR');
+    expect(view?.game.counts.total).toBe(3);
+    expect(batch.mock.calls.map(([statements, mode]) => [statements.length, mode])).toEqual([[6, 'read']]);
   });
 });
