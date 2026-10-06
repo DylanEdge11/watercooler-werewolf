@@ -47,7 +47,7 @@ function respondentLabel(type: string): string {
 export function FeedbackBlock({ feedback }: { feedback: FeedbackSummary | null }) {
   return <div className="ops-block feedback-summary">
     <div className="ops-heading">
-      <div><p className="eyebrow accent">Feedback</p><p className="field-help">What players and moderators sent from the feedback card. Names are never recorded.</p></div>
+      <div><p className="eyebrow accent">Feedback</p><p className="field-help">What players and moderators sent from the feedback card. Names are not shown here; backups record which seat sent each one.</p></div>
       <div className="feedback-average"><strong>{feedback?.average ?? '–'}</strong><small>{feedback?.count ? `average of ${feedback.count}` : 'no ratings yet'}</small></div>
     </div>
     {feedback?.entries.length
