@@ -186,6 +186,10 @@ button { color: inherit; }
 input, textarea, select { background: #fbfaf6; border: 1px solid #d9ddd8; border-radius: 9px; color: var(--ink); font: inherit; font-size: 13px; padding: 11px 12px; width: 100%; }
 textarea { line-height: 1.55; resize: vertical; }
 .form-error { color: #b14532; font-size: 11px; margin: 0; }
+.signin-choices { display: grid; gap: 8px; }
+.signin-choices-title { color: #485950; font-size: 12px; font-weight: 800; margin: 0; }
+.signin-choices .secondary-button { text-align: left; }
+.signin-choices .secondary-button:disabled { cursor: progress; opacity: .7; }
 .console-layout { display: grid; gap: 44px; grid-template-columns: 220px minmax(0, 850px); justify-content: center; padding: 48px 28px 100px; }
 .setup-progress { align-self: start; padding-top: 10px; position: sticky; top: 20px; }
 .setup-progress ol { display: grid; gap: 4px; list-style: none; margin: 18px 0 26px; padding: 0; }

@@ -251,8 +251,8 @@ describe('spectators', () => {
     expect(Number((await client.execute('SELECT COUNT(*) AS count FROM spectator_sessions')).rows[0]?.count)).toBe(0);
   });
 
-  async function homePageSignIn(identifier: string, pin: string) {
-    const response = await loginPost(post('/api/seats/login', { identifier, pin }));
+  async function homePageSignIn(identifier: string, pin: string, choiceId?: string) {
+    const response = await loginPost(post('/api/seats/login', { identifier, pin, ...(choiceId ? { choiceId } : {}) }));
     return { status: response.status, body: await response.json() as Record<string, unknown> };
   }
 
@@ -329,12 +329,19 @@ describe('spectators', () => {
     expect(await homePageSignIn('riley@pilot.test', '123456')).toEqual({ status: 200, body: { ok: true, seat: { displayName: 'Riley Watcher', gameId: 'game' } } });
   });
 
-  test('a player in one finished game and a spectator in another finished game still sign in as the player', async () => {
+  test('a player in one finished game and a spectator in another finished game are both offered, and the player seat can be chosen', async () => {
     const added = await addSpectator('Riley Watcher', 'riley@pilot.test');
     await openLink(added.body.spectateUrl!, '123456');
     await playerInAnotherGame('riley@pilot.test', '123456', 'COMPLETED');
     await client.execute("UPDATE games SET status = 'COMPLETED' WHERE id = 'game'");
-    expect((await homePageSignIn('riley@pilot.test', '123456')).body).toMatchObject({ ok: true, seat: { gameId: 'other' } });
+    // With every match in a finished game none is preferred, so the person is asked which one to open.
+    const asked = await homePageSignIn('riley@pilot.test', '123456');
+    expect(asked.status).toBe(409);
+    expect(asked.body.choices).toEqual(expect.arrayContaining([
+      { id: 'riley-seat', kind: 'SEAT', gameName: 'Other game', displayName: 'Riley' },
+      expect.objectContaining({ kind: 'SPECTATOR', displayName: 'Riley Watcher' }),
+    ]));
+    expect((await homePageSignIn('riley@pilot.test', '123456', 'riley-seat')).body).toMatchObject({ ok: true, seat: { gameId: 'other' } });
   });
 
   test('a spectator sees the public game and the Afterlife, but no roles, votes in progress, or private rooms', async () => {

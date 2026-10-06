@@ -3,7 +3,7 @@ import { getDb } from '../../db';
 import type { Database } from '../../db/contracts';
 import { hashSecret, verifySecret } from './crypto';
 import { bootstrapPrimaryModerator, hasModeratorAccountInDatabase as hasModeratorAccountInDatabaseCore, INSERT_MODERATOR_SQL, normalizeModeratorEmail, prepareModeratorAccount, type CreatedModerator } from './bootstrap';
-import { isSingleEmailAddress } from '../roster/email-address';
+import { isSingleEmailAddress, MAX_EMAIL_LENGTH } from '../roster/email-address';
 
 export async function hasModeratorAccount(): Promise<boolean> {
   await ensureDatabase();
@@ -72,6 +72,8 @@ export async function redeemModeratorRecoveryCode(
   recoveryCode: string,
   newPassword: string,
 ): Promise<{ id: string; email: string } | null> {
+  // An address this long cannot belong to an account; refuse it before any other work.
+  if (email.length > MAX_EMAIL_LENGTH) return null;
   await ensureDatabase();
   const normalizedEmail = normalizeModeratorEmail(email);
   if (!isSingleEmailAddress(normalizedEmail) || recoveryCode.trim().length < 8 || newPassword.length < 12) return null;

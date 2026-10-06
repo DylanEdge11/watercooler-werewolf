@@ -1,7 +1,8 @@
 import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { preparePlayerSession } from '../../../../../lib/auth/session';
-import { INVALID_CLAIM_LINK, lookupClaimSeat } from '../../../../../lib/auth/claim';
+import { CLAIM_GAME_ENDED, INVALID_CLAIM_LINK, lookupClaimSeat } from '../../../../../lib/auth/claim';
+import { ENDED_GAME_STATUSES, isEndedGameStatus } from '../../../../../lib/auth/login-matches';
 import { pinFailureKey } from '../../../../../lib/auth/pin-lockout';
 import { changes } from '../../../../../db/results';
 import { townHallJoinStatement } from '../../../../../lib/chat/rooms';
@@ -39,8 +40,9 @@ export async function POST(request: Request, context: RouteContext) {
     const db = getDb();
     const seat = await db
       .prepare(
-        `SELECT id, game_id AS gameId, display_name AS displayName, status, session_version AS sessionVersion
-         FROM seats WHERE claim_code_hash = ? LIMIT 1`,
+        `SELECT s.id, s.game_id AS gameId, s.display_name AS displayName, s.status, s.session_version AS sessionVersion,
+                g.status AS gameStatus
+         FROM seats s JOIN games g ON g.id = s.game_id WHERE s.claim_code_hash = ? LIMIT 1`,
       )
       .bind(await sha256(code))
       .first<{
@@ -49,11 +51,14 @@ export async function POST(request: Request, context: RouteContext) {
         displayName: string;
         status: string;
         sessionVersion: number;
+        gameStatus: string;
       }>();
     if (!seat) return jsonError('This private seat link is not valid.', 404);
     if (seat.status !== 'INVITED') {
       return jsonError('This seat is already claimed. Use seat sign-in instead.', 409);
     }
+    // A leftover invitation to a game that has ended must not create a second seat that the same email and PIN could reach.
+    if (isEndedGameStatus(seat.gameStatus)) return jsonError(CLAIM_GAME_ENDED, 409);
 
     const now = new Date().toISOString();
     const pinHash = await hashSecret(pin);
@@ -61,15 +66,17 @@ export async function POST(request: Request, context: RouteContext) {
     // One transaction: the claim, its audit event, and the new session. The
     // claim is conditional on the seat still being INVITED, so when two
     // requests race, the loser changes nothing and gets no session. The salted
-    // PIN hash identifies this request's claim; two claims can share a timestamp.
+    // PIN hash identifies this request's claim; two claims can share a timestamp. The claim also
+    // requires the game not to have ended, in case it ends between the read above and this write.
     const claimedGuard = "EXISTS (SELECT 1 FROM seats WHERE id = ? AND status = 'CLAIMED' AND claimed_at = ? AND pin_hash = ? AND session_version = ?)";
     const result = await db.batch([
       db
         .prepare(
           `UPDATE seats SET status = 'CLAIMED', pin_hash = ?, claimed_at = ?, updated_at = ?
-           WHERE id = ? AND status = 'INVITED' AND session_version = ?`,
+           WHERE id = ? AND status = 'INVITED' AND session_version = ?
+             AND EXISTS (SELECT 1 FROM games WHERE games.id = seats.game_id AND games.status NOT IN (${ENDED_GAME_STATUSES.map(() => '?').join(', ')}))`,
         )
-        .bind(pinHash, now, now, seat.id, seat.sessionVersion),
+        .bind(pinHash, now, now, seat.id, seat.sessionVersion, ...ENDED_GAME_STATUSES),
       db
         .prepare(
           `INSERT INTO game_events
@@ -86,7 +93,12 @@ export async function POST(request: Request, context: RouteContext) {
       db.prepare(`DELETE FROM rate_limit_buckets WHERE bucket_key = ? AND ${claimedGuard}`).bind(pinFailureKey(seat.id), seat.id, now, pinHash, seat.sessionVersion),
       townHallJoinStatement(db, seat.id, now),
     ]);
-    if (changes(result[0]) !== 1) return jsonError('This seat was claimed by another request. Use seat sign-in instead.', 409);
+    if (changes(result[0]) !== 1) {
+      // Either another request claimed the seat first, or the game ended just now; tell the person which.
+      const game = await db.prepare('SELECT status FROM games WHERE id = ?').bind(seat.gameId).first<{ status: string }>();
+      if (game && isEndedGameStatus(game.status)) return jsonError(CLAIM_GAME_ENDED, 409);
+      return jsonError('This seat was claimed by another request. Use seat sign-in instead.', 409);
+    }
     await session.setCookie();
     return Response.json({ ok: true, seat: { displayName: seat.displayName, gameId: seat.gameId } });
   } catch (error) {

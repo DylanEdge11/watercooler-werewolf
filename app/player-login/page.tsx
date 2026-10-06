@@ -1,28 +1,38 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import BrandMark from '../brand-mark';
+import SignInChoices from '../sign-in-choices';
 import { withRetryAfter } from '../../lib/http/retry-after';
+import type { SignInChoice } from '../../lib/auth/login-matches';
 
 export default function PlayerLoginPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Set when the email and PIN fit seats in more than one game that has not ended: the person picks one.
+  const [choices, setChoices] = useState<SignInChoice[]>([]);
+  const credentials = useRef({ identifier: '', pin: '' });
 
-  async function signIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submit(choiceId?: string) {
     // A second Enter while the first check runs would spend another of the eight attempts.
     if (busy) return;
     setError('');
     setBusy(true);
-    const form = new FormData(event.currentTarget);
     try {
       const response = await fetch('/api/seats/login', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ identifier: form.get('identifier'), pin: form.get('pin') }),
+        body: JSON.stringify({ ...credentials.current, ...(choiceId ? { choiceId } : {}) }),
       });
-      const data = await response.json().catch(() => ({})) as { error?: string };
+      const data = await response.json().catch(() => ({})) as { error?: string; choices?: SignInChoice[] };
+      if (response.status === 409 && Array.isArray(data.choices) && data.choices.length > 1) {
+        setChoices(data.choices);
+        setBusy(false);
+        return;
+      }
       if (!response.ok) {
+        // After a choice that failed, the list stays so another game can still be picked.
+        if (!choiceId) setChoices([]);
         setError(withRetryAfter(data.error ?? 'Unable to sign in.', response));
         setBusy(false);
         return;
@@ -38,6 +48,15 @@ export default function PlayerLoginPage() {
     }
   }
 
+  function signIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const form = new FormData(event.currentTarget);
+    credentials.current = { identifier: String(form.get('identifier') ?? ''), pin: String(form.get('pin') ?? '') };
+    setChoices([]);
+    void submit();
+  }
+
   return (
     <main className="setup-shell centered front-of-house">
       <section className="auth-card claim-card">
@@ -45,10 +64,20 @@ export default function PlayerLoginPage() {
         <p className="eyebrow accent">Return to the village</p>
         <h1>Player sign-in</h1>
         <p>Use the email address from your invitation and the PIN you chose. Your seat code also works if you need it.</p>
-        <form className="form-stack" onSubmit={signIn}>
+        <form className="form-stack" onSubmit={signIn} onInput={() => setChoices([])}>
           <label>Email or seat code<input name="identifier" autoComplete="username" required /></label>
           <label>Six-digit PIN<input name="pin" type="password" inputMode="numeric" pattern="[0-9]{6}" autoComplete="current-password" required /></label>
           {error && <p className="form-error" role="alert">{error}</p>}
+          {choices.length > 1 && (
+            <SignInChoices
+              choices={choices}
+              busy={busy}
+              onChoose={(choice) => void submit(choice.id)}
+              className="signin-choices"
+              headingClassName="signin-choices-title"
+              buttonClassName="secondary-button"
+            />
+          )}
           <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Checking…' : 'Enter the game'}</button>
         </form>
         <div className="button-row">

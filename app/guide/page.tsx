@@ -38,6 +38,7 @@ const SLOT_ROWS = [
 
 const HELP_ROWS = [
   ['I lost my invitation link', 'Sign in at Player sign-in with your invitation email and PIN. If that fails, ask the moderator for your seat code.'],
+  ['“Which game do you want to open?”', 'Your email and PIN fit a seat in more than one game that is still going. Choose the one you want. Finished games no longer count, so you are only asked while two or more games are in progress.'],
   ['I forgot my PIN', 'Ask the moderator. They can set a new PIN, which signs out your old sessions.'],
   ['“This seat is locked”', 'After 10 wrong PINs in a row your seat stops accepting sign-in. Ask the moderator for a new PIN; that unlocks it.'],
   ['My role says “Not released”', 'The moderator has not released roles yet. Every seat must be claimed first.'],
