@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canCancelSetup, canResetGame, canStopGame } from './lifecycle';
+import { canCancelSetup, canResetGame, canRestoreGame, canStopGame } from './lifecycle';
 
 describe('game lifecycle safety policy', () => {
   it('requires confirmation and a reason to stop, and makes repeat stop harmless', () => {
@@ -22,5 +22,9 @@ describe('game lifecycle safety policy', () => {
     expect(canCancelSetup('REGISTRATION', 'Office Game', 'office game', 'OWNER', true).allowed).toBe(false);
     expect(canCancelSetup('ACTIVE', 'Office Game', 'Office Game', 'OWNER', true).allowed).toBe(false);
     expect(canCancelSetup('REGISTRATION', 'Office Game', 'Office Game', 'OWNER', true)).toEqual({ allowed: true });
+  });
+  it('refuses to restore a cancelled game, with a plain reason, and allows every other state', () => {
+    expect(canRestoreGame('CANCELLED')).toEqual({ allowed: false, error: 'A cancelled game can’t be restored. Start a new setup instead.' });
+    for (const status of ['DRAFT', 'REGISTRATION', 'ACTIVE', 'STOPPED', 'COMPLETED']) expect(canRestoreGame(status)).toEqual({ allowed: true });
   });
 });

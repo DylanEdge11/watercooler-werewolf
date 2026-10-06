@@ -309,6 +309,14 @@ describe('setup and publication invariants', () => {
     expect((await operations({ action: 'CANCEL_SETUP', confirmed: true, confirmationName: 'Review' })).status).toBe(400);
   });
 
+  test('a cancelled game cannot be restored from a backup, with a plain reason', async () => {
+    expect((await operations({ action: 'CANCEL_SETUP', confirmed: true, confirmationName: 'Review' })).status).toBe(200);
+    const response = await operations({ action: 'RESTORE_BACKUP', backupId: 'any-backup', confirmed: true, confirmationName: 'Review' });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: 'A cancelled game can’t be restored. Start a new setup instead.' });
+    expect((sqlite.prepare("SELECT status FROM games WHERE id = 'game'").get() as { status: string }).status).toBe('CANCELLED');
+  });
+
   test('a roster replacement records its audit event and returns to registration', async () => {
     const csv = ['display_name,email', ...Array.from({ length: 20 }, (_, index) => `New Player ${index},new${index}@pilot.test`)].join('\n');
     const response = await rosterPost(request({ csv }), { params: Promise.resolve({ gameId: 'game' }) });
