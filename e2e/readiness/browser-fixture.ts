@@ -590,6 +590,7 @@ export class BrowserGame {
         }
         await expect(moderator.page.getByRole('button', { name: 'Release roles to players', exact: true })).toBeVisible();
         const releaseResponsePromise = moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/games/${gameId}/assignments`);
+        moderator.page.once('dialog', (dialog) => void dialog.accept());
         await moderator.page.getByRole('button', { name: 'Release roles to players', exact: true }).click();
         const releaseResponse = await releaseResponsePromise;
         if (!releaseResponse.ok()) throw new Error('The moderator UI could not release assignments.');
@@ -673,6 +674,7 @@ export class BrowserGame {
     const publishButton = this.moderator.page.getByRole('button', { name: 'Approve & publish', exact: true });
     await expect(publishButton).toBeVisible();
     const responsePromise = this.moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/games/${this.gameId}/phases`);
+    this.moderator.page.once('dialog', (dialog) => void dialog.accept());
     await publishButton.click();
     return json<{ outcome: PhaseResolution; winner: 'VILLAGE' | 'WEREWOLF' | null }>(await responsePromise, `publish phase ${phaseId}`);
   }
