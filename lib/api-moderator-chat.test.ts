@@ -216,6 +216,16 @@ describe('posting as Moderator', () => {
     expect(response.status).toBe(403);
   });
 
+  test('a purge leaves a message a moderator already removed labelled as removed, not expired', async () => {
+    const sent = await moderatorPost(rooms.DEAD, 'Remove me first');
+    const messageId = (sent.body.message as { id: string }).id;
+    await roomsPost(post('/api/games/game/rooms', { action: 'DELETE_MESSAGE', messageId, reason: 'Posted by mistake' }), { params: Promise.resolve({ gameId: 'game' }) });
+    await client.execute({ sql: "UPDATE moderator_messages SET created_at = '2026-01-01T00:00:00.000Z' WHERE id = ?", args: [messageId] });
+    const purged = await roomsPost(post('/api/games/game/rooms', { action: 'PURGE_RETENTION' }), { params: Promise.resolve({ gameId: 'game' }) });
+    expect(await purged.json()).toMatchObject({ purged: 0 });
+    expect((await client.execute({ sql: 'SELECT deleted_at AS deletedAt, purged_at AS purgedAt FROM moderator_messages WHERE id = ?', args: [messageId] })).rows[0]).toMatchObject({ purgedAt: null });
+  });
+
   test('can be removed and purged like any other message, and is kept in backups', async () => {
     const sent = await moderatorPost(rooms.DEAD, 'Remove me');
     const messageId = (sent.body.message as { id: string }).id;

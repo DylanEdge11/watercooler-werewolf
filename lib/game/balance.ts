@@ -124,6 +124,11 @@ export function validateComposition(
   }
   if (composition.MASON === 1) errors.push('Masons require either zero or at least two seats.');
   if (composition.WEREWOLF < 1) errors.push('At least one Werewolf is required.');
+  // The engine ends a game as a Werewolf win when the Werewolf side is at least as large as the rest.
+  const werewolfSide = ROLE_KEYS.reduce((total, role) => total + (ROLE_CATALOG[role].faction === 'WEREWOLF' ? composition[role] : 0), 0);
+  if (werewolfSide >= 1 && werewolfSide >= countComposition(composition) - werewolfSide) {
+    errors.push('With these roles the Werewolves would already win before anyone votes. Use fewer Werewolves or more of the other roles.');
+  }
 
   return { valid: errors.length === 0, errors };
 }

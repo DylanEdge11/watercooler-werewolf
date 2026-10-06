@@ -32,6 +32,12 @@ export function canResetGame(
   return { allowed: true, idempotent: status === 'DRAFT' };
 }
 
+/** A cancelled game stays cancelled: a stored backup cannot bring it back. */
+export function canRestoreGame(status: string): LifecycleDecision {
+  if (status === 'CANCELLED') return { allowed: false, error: 'A cancelled game can’t be restored. Start a new setup instead.' };
+  return { allowed: true };
+}
+
 export function canCancelSetup(
   status: string,
   gameName: string,

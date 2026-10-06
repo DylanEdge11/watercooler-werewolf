@@ -63,6 +63,7 @@ test.describe('browser regression coverage for private outcomes and Hunter revie
       await game.moderator.page.getByRole('button', { name: hunter.account.displayName, exact: true }).click();
       await game.moderator.page.getByLabel('Audit reason').fill('Recorded browser regression review.');
       const publishOverride = game.moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/games/${game.gameId}/phases`);
+      game.moderator.page.once('dialog', (dialog) => void dialog.accept());
       await game.moderator.page.getByRole('button', { name: 'Publish override', exact: true }).click();
       expect((await publishOverride).status()).toBe(200);
       await hunter.reload();

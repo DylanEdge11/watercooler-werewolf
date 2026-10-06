@@ -4,7 +4,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import GameSettingsFields from './game-settings-fields';
-import { useRouter } from 'next/navigation';
 import LiveGamePanel from './live-game-panel';
 import { ConsoleNavigation, ConsolePanel } from './console-tabs';
 import { OperationsProvider } from './operations-context';
@@ -24,6 +23,7 @@ import BrandHeader from './brand-header';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
+import { COULD_NOT_REACH, plainError } from '../../lib/http/plain-error';
 import { createInviteExport } from '../../lib/roster/csv';
 
 const sampleRoster = [
@@ -163,7 +163,6 @@ interface SelectedGameSetup {
 }
 
 export default function ModeratorPage() {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
   const [recoveryMode, setRecoveryMode] = useState(false);
@@ -655,6 +654,7 @@ export default function ModeratorPage() {
   }
 
   async function releaseAssignments(batchId: string) {
+    if (!window.confirm('Release roles? Every player will see their role, and this can’t be undone.')) return;
     setError('');
     try {
       await requestJson(`/api/games/${gameId}/assignments`, {
@@ -670,8 +670,15 @@ export default function ModeratorPage() {
   }
 
   async function signOut() {
-    await fetch('/api/moderators/logout', { method: 'POST' });
-    router.push('/moderator');
+    try {
+      const response = await fetch('/api/moderators/logout', { method: 'POST' });
+      if (!response.ok) throw new Error(COULD_NOT_REACH);
+    } catch (caught) {
+      setError(plainError(caught, COULD_NOT_REACH));
+      return;
+    }
+    // A full page load, so nothing from the signed-in console (games, roster, roles) stays in memory.
+    window.location.reload();
   }
 
   function downloadInvites() {

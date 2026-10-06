@@ -197,6 +197,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged, onAttenti
   }
 
   async function run(action: string, phaseId: string, extra: Record<string, unknown> = {}) {
+    if (action === 'PUBLISH' && !window.confirm('Publish this result? Players will see it right away, and this can’t be undone.')) return;
     try {
       await mutate({ action, phaseId, ...extra });
       setMessage(

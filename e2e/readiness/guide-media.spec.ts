@@ -321,6 +321,7 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await click(page, page.getByRole('button', { name: 'Randomize roles', exact: true }), 1800);
   const preview = await (await previewResponse).json() as { assignments: Array<{ seatId: string; role: RoleKey }> };
   const roleBySeatId = new Map(preview.assignments.map((assignment) => [assignment.seatId, assignment.role]));
+  page.once('dialog', (dialog) => void dialog.accept());
   await click(page, page.getByRole('button', { name: 'Release roles to players', exact: true }), 600);
   // Releasing roles moves the console to Run game; the batch just released is on the Setup tab.
   await click(page, page.getByRole('tab', { name: 'Setup', exact: true }), 400);
@@ -386,6 +387,7 @@ test('captures /guide screenshots and the walkthrough video', async ({ browser }
   await shot(page, 'moderator-live-game.webp');
   await pause(page, 1800);
   await caption(page, 'Publishing makes the result official for everyone');
+  page.once('dialog', (dialog) => void dialog.accept());
   await click(page, publishButton, 2200);
 
   // 8. The result reaches the players.

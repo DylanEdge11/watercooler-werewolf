@@ -1,9 +1,9 @@
 import './lib/stable-euid.mjs';
 import { stdin, stdout } from 'node:process';
 import { loadLocalEnv } from './load-env.mjs';
+import { confirmDatabaseTarget, envSource } from './lib/target-database.mjs';
 
-
-loadLocalEnv();
+const { sources } = loadLocalEnv();
 
 function readHiddenSecret(prompt) {
   if (!stdin.isTTY || !stdout.isTTY) {
@@ -58,6 +58,8 @@ if (!url) throw new Error('Set TURSO_DATABASE_URL before bootstrapping the prima
 if (process.env.VERCEL === '1') {
   throw new Error('Run the one-time bootstrap from a trusted operator machine, not inside a deployed function.');
 }
+
+await confirmDatabaseTarget({ url, source: envSource(sources, 'TURSO_DATABASE_URL') });
 
 const password = await readHiddenSecret('Primary moderator password: ');
 const confirmation = await readHiddenSecret('Repeat password: ');

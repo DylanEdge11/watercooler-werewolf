@@ -15,7 +15,7 @@ export default function StatsPanel({ gameId, refreshToken }: { gameId: string; r
         <span aria-hidden="true">▥</span>
         <div>
           <h2 id="console-village-stats-title">Village stats</h2>
-          <p>Votes per day, turnout, who has left, and chat activity: the same numbers players see. Nothing private is included.</p>
+          <p>Votes per day, turnout, who has left, and chat activity: the same numbers players see. Only public information is included. The message total counts every room, including private ones, but never what was said.</p>
         </div>
       </div>
       <details className="stats-panel-toggle" onToggle={(event) => setOpen(event.currentTarget.open)}>

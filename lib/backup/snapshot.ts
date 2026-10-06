@@ -126,18 +126,40 @@ export async function collectGameBackup(gameId: string): Promise<GameBackup> {
   };
 }
 
-export async function createBackupRecord(gameId: string, moderatorId: string): Promise<{ backupId: string; data: GameBackup; checksum: string }> {
+/** Each game keeps this many stored backups; saving another deletes the oldest. */
+export const BACKUPS_KEPT_PER_GAME = 5;
+
+/**
+ * Stores a backup and, in the same transaction, deletes the game's older ones beyond the newest
+ * BACKUPS_KEPT_PER_GAME. `keepBackupIds` are never deleted: a Restore passes the backup it is restoring from.
+ */
+export async function createBackupRecord(
+  gameId: string,
+  moderatorId: string,
+  { keepBackupIds = [] }: { keepBackupIds?: string[] } = {},
+): Promise<{ backupId: string; data: GameBackup; checksum: string }> {
   const data = await collectGameBackup(gameId);
   const payloadJson = JSON.stringify(data);
   const checksum = await sha256(payloadJson);
   const backupId = crypto.randomUUID();
-  await getDb()
-    .prepare(
-      `INSERT INTO backup_exports (id, game_id, moderator_id, schema_version, checksum, payload_json, exported_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(backupId, gameId, moderatorId, data.schemaVersion, checksum, payloadJson, data.exportedAt)
-    .run();
+  const db = getDb();
+  const kept = keepBackupIds.map(() => '?').join(', ');
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO backup_exports (id, game_id, moderator_id, schema_version, checksum, payload_json, exported_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(backupId, gameId, moderatorId, data.schemaVersion, checksum, payloadJson, data.exportedAt),
+    db
+      .prepare(
+        `DELETE FROM backup_exports
+         WHERE game_id = ?
+         AND id NOT IN (SELECT id FROM backup_exports WHERE game_id = ? ORDER BY exported_at DESC, id DESC LIMIT ?)
+         ${keepBackupIds.length ? `AND id NOT IN (${kept})` : ''}`,
+      )
+      .bind(gameId, gameId, BACKUPS_KEPT_PER_GAME, ...keepBackupIds),
+  ]);
   return { backupId, data, checksum };
 }
 
@@ -191,7 +213,7 @@ export async function restoreGameBackup(
   if (!backupGame) throw new Error('The selected backup has invalid game configuration.');
 
   const db = getDb();
-  const safetyBackup = await createBackupRecord(gameId, moderatorId);
+  const safetyBackup = await createBackupRecord(gameId, moderatorId, { keepBackupIds: [sourceBackup.id] });
   const currentGame = await db
     .prepare('SELECT status, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1')
     .bind(gameId)

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { LatestRoomRequest } from '../lib/chat/latest-room-request';
 import { IDLE_AFTER_MS, pollWhileVisible } from '../lib/http/poll-while-visible';
 import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
+import { plainError } from '../lib/http/plain-error';
 import { RELAXED_POLL_MS, URGENT_POLL_MS } from '../lib/http/poll-interval';
 import { ROOM_NAMES } from '../lib/chat/room-names';
 
@@ -76,7 +77,10 @@ export default function RoomChat({ rooms, previewMode = false, sectionId, spotli
   const [previewMessagesByRoom, setPreviewMessagesByRoom] = useState<Record<string, Message[]>>(
     () => previewMode ? Object.fromEntries(rooms.map((candidate) => [candidate.id, previewMessages(candidate.type)] as const)) : {},
   );
+  // A failed send, kept until the next send; and a failed load, cleared as soon as one succeeds.
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [sending, setSending] = useState(false);
   const messageRequest = useRef<LatestRoomRequest | null>(null);
   if (messageRequest.current === null) {
     messageRequest.current = new LatestRoomRequest(roomId);
@@ -109,19 +113,20 @@ export default function RoomChat({ rooms, previewMode = false, sectionId, spotli
         return { messages: data.messages ?? [], etag: responseEtag(response) };
       },
       (result) => {
+        setLoadError('');
         if (!result) return;
         etagByRoom.current[roomId] = result.etag;
         newestMessageAtByRoom.current[roomId] = Math.max(0, ...result.messages.map((message) => Date.parse(message.createdAt) || 0));
         setLoadedMessagesByRoom((current) => ({ ...current, [roomId]: result.messages }));
       },
-      (caught) => setError(caught instanceof Error ? caught.message : 'Unable to load messages.'),
+      (caught) => setLoadError(plainError(caught, 'Unable to load messages.')),
     );
   }, [previewMode, roomId]);
 
   useEffect(() => {
     if (previewMode) return;
     const initial = window.setTimeout(() => {
-      void load().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load messages.'));
+      void load().catch((caught) => setLoadError(plainError(caught, 'Unable to load messages.')));
     }, 0);
     // A room with a message in the last two minutes refreshes every 10 s; a quiet one every 30 s.
     const inUse = () => Date.now() - (newestMessageAtByRoom.current[roomId] ?? 0) < CHAT_ACTIVE_MS;
@@ -161,15 +166,27 @@ export default function RoomChat({ rooms, previewMode = false, sectionId, spotli
       form.reset();
       return;
     }
-    const response = await fetch(`/api/rooms/${room.id}/messages`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ body: data.get('body') }),
-    });
-    const result = await response.json() as { error?: string };
-    if (!response.ok) return setError(result.error ?? 'Unable to send this message.');
-    form.reset();
-    await load();
+    // One send at a time, so a double tap posts once, and a failure says so and keeps the text.
+    if (sending) return;
+    setSending(true);
+    try {
+      const response = await fetch(`/api/rooms/${room.id}/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ body: data.get('body') }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) {
+        setError(result.error ?? 'Unable to send this message.');
+        return;
+      }
+      form.reset();
+      await load();
+    } catch (caught) {
+      setError(plainError(caught, 'Unable to send this message.'));
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -180,8 +197,8 @@ export default function RoomChat({ rooms, previewMode = false, sectionId, spotli
       <div className="chat-scroll">
         {messages.length ? messages.map((message) => <article key={message.id} className={message.byModerator ? 'chat-line moderator' : 'chat-line'}><div><strong>{message.authorName}</strong><small suppressHydrationWarning>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small></div><p>{message.body ?? (message.purgedAt ? 'Message expired.' : 'Message removed by a moderator.')}</p></article>) : <p className="empty-note">{townHall ? 'No messages yet. Start the village conversation.' : 'No messages yet. This room is visible only to its members.'}</p>}
       </div>
-      {room.status === 'OPEN' && room.access === 'WRITE' ? <form className="chat-compose" onSubmit={send}><label><span className="sr-only">Message</span><textarea name="body" rows={2} maxLength={1000} placeholder={townHall ? 'Write to the whole village…' : 'Write a private message…'} required /></label><button className="primary-button" type="submit">{previewMode ? 'Add preview message' : 'Send'}</button></form> : <p className="field-help">{townHall && room.status === 'OPEN' ? 'Only living players can post in the Town Hall.' : 'This room is read-only.'}</p>}
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {room.status === 'OPEN' && room.access === 'WRITE' ? <form className="chat-compose" onSubmit={send}><label><span className="sr-only">Message</span><textarea name="body" rows={2} maxLength={1000} placeholder={townHall ? 'Write to the whole village…' : 'Write a private message…'} required /></label><button className="primary-button" type="submit" disabled={sending}>{previewMode ? 'Add preview message' : 'Send'}</button></form> : <p className="field-help">{townHall && room.status === 'OPEN' ? 'Only living players can post in the Town Hall.' : 'This room is read-only.'}</p>}
+      {(error || loadError) && <p className="form-error" role="alert">{error || loadError}</p>}
     </section>
   );
 }
