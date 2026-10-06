@@ -655,6 +655,7 @@ export default function ModeratorPage() {
   }
 
   async function releaseAssignments(batchId: string) {
+    if (!window.confirm('Release roles? Every player will see their role, and this can’t be undone.')) return;
     setError('');
     try {
       await requestJson(`/api/games/${gameId}/assignments`, {
