@@ -86,6 +86,8 @@ function providerCompatible(): TestDatabase {
       sqlite.exec('BEGIN');
       try {
         const results = statements.map((statement) => {
+          // A read batch, as the player dashboard sends, answers with rows.
+          if (/^\s*SELECT\b/u.test(statement.sql)) return { results: sqlite.prepare(statement.sql).all(...statement.getArgs()) };
           const result = sqlite.prepare(statement.sql).run(...statement.getArgs());
           return { meta: { changes: Number(result.changes) } };
         });
