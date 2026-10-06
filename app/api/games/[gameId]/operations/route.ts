@@ -2,7 +2,7 @@ import { getDb } from '../../../../../db';
 import { ensureDatabase } from '../../../../../db/migrate';
 import { requireGameModerator, requireGameOwner } from '../../../../../lib/auth/authorization';
 import { createBackupRecord, restoreGameBackup } from '../../../../../lib/backup/snapshot';
-import { canCancelSetup, canResetGame, canStopGame } from '../../../../../lib/game/lifecycle';
+import { canCancelSetup, canResetGame, canRestoreGame, canStopGame } from '../../../../../lib/game/lifecycle';
 import { reconcileDuePhases } from '../../../../../lib/game/scheduling';
 import { hashSecret, randomToken, sha256 } from '../../../../../lib/auth/crypto';
 import { PIN_LOCKOUT_ATTEMPTS, pinFailureKey } from '../../../../../lib/auth/pin-lockout';
@@ -322,6 +322,8 @@ export async function POST(request: Request, context: RouteContext) {
     }
     if (body.action === 'RESTORE_BACKUP') {
       await requireGameOwner(gameId);
+      const restoreDecision = canRestoreGame(game.status);
+      if (!restoreDecision.allowed) throw new HttpError(409, restoreDecision.error ?? 'This game can’t be restored.');
       const confirmationError = restoreConfirmation(game.name, body.confirmationName?.trim() ?? '', body.confirmed === true);
       if (confirmationError) throw new Error(confirmationError);
       if (!body.backupId) throw new Error('Choose a stored backup to restore.');
