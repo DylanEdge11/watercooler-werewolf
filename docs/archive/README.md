@@ -22,3 +22,4 @@ Dated records kept for history. **None of these are current instructions.** Link
 | [INTERACTIVE_HUMAN_PLAYER_TEST_PROMPT.md](INTERACTIVE_HUMAN_PLAYER_TEST_PROMPT.md) | Prompt for a human-plus-bots acceptance game. |
 | [PILOT_DAY_WALKTHROUGH_2026-09-22.md](PILOT_DAY_WALKTHROUGH_2026-09-22.md) | Moderator checklist for the Sept 22 human pilot. |
 | [HOW_TO_USE_WATERCOOLER_WEREWOLF.md](HOW_TO_USE_WATERCOOLER_WEREWOLF.md) (and `.html`) | The previous player and moderator guide, replaced by the in-app `/guide` page. |
+| [AUDIT_2026-09-26.md](AUDIT_2026-09-26.md) | Sept 26 codebase audit of version 1.4 (findings D1–D21, E1–E9, R1–R11, Doc1–Doc10, and the owner's decisions). Reconciled at `d4aff81` in the October 5 audit's section 12; its open items are carried there. |
