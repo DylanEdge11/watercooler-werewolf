@@ -132,7 +132,7 @@ export function ChatRooms() {
   return (
     <div className="ops-block room-operations">
       <div className="ops-heading">
-        <div><p className="eyebrow accent">Chat rooms</p><p className="field-help">Messages expire after {operations.game.chatRetentionDays} days.</p></div>
+        <div><p className="eyebrow accent">Chat rooms</p><p className="field-help">Messages older than {operations.game.chatRetentionDays} days are removed when you select Purge expired.</p></div>
         <button className="secondary-button" type="button" onClick={() => void purgeRetention()}>Purge expired</button>
       </div>
       <div className="room-health-list">{rooms.map((room) => <div key={room.id}><span>{ROOM_NAMES[room.type] ?? room.type}</span><strong>{room.memberCount} members · {room.messageCount} messages</strong><button className="room-open" type="button" aria-pressed={historyRoomId === room.id} onClick={() => setHistoryRoomId(room.id)}>Open room</button><button type="button" onClick={() => void toggleRoom(room)}>{room.status === 'OPEN' ? 'Make read-only' : 'Reopen'}</button></div>)}</div>

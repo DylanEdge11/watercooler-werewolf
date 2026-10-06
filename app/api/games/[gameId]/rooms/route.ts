@@ -144,7 +144,7 @@ export async function POST(request: Request, context: RouteContext) {
         .prepare(
           `UPDATE ${table} SET body = NULL, purged_at = ?
            WHERE room_id IN (SELECT id FROM chat_rooms WHERE game_id = ?)
-           AND created_at < ? AND purged_at IS NULL`,
+           AND created_at < ? AND purged_at IS NULL AND deleted_at IS NULL`,
         )
         .bind(now, gameId, cutoff)));
       return Response.json({ ok: true, purged: result.reduce((total, item) => total + changes(item), 0), cutoff });

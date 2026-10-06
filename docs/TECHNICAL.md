@@ -75,7 +75,7 @@ Requests never change the schema. `ensureDatabase()` checks that every version i
 
 ## Time
 
-Deadlines are entered in the game's IANA timezone and stored as UTC. Impossible dates and times that fall in a daylight-saving gap are rejected; an ambiguous fall-back time uses the earlier instant. The weekday cadence on a game is informational: phases never open on their own.
+Deadlines are entered in the game's IANA timezone and stored as UTC. Impossible dates and times that fall in a daylight-saving gap are rejected; an ambiguous fall-back time uses the earlier instant. The weekday cadence sets the suggested deadline and the close time of an automatically opened phase. Phases open on their own only when the moderator has turned on `auto_open_next_phase`.
 
 ## Automatic results
 

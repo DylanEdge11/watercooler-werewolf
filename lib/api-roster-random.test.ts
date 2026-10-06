@@ -199,8 +199,11 @@ describe('random roster, sign-up, and list changes keep everything in agreement'
         return null;
       },
       async restoreBackup() {
-        if (!backups.length) return null;
-        const stored = (await rows('SELECT id, game_id AS gameId, schema_version AS schemaVersion, checksum, payload_json AS payloadJson FROM backup_exports WHERE id = ?', [random.pick(backups)]))[0] as { id: string; gameId: string; schemaVersion: number; checksum: string; payloadJson: string };
+        // A game keeps only its newest backups, so an older one this run made may be gone by now.
+        const existing = new Set((await rows("SELECT id FROM backup_exports WHERE game_id = 'game'")).map((row) => String(row.id)));
+        const available = backups.filter((id) => existing.has(id));
+        if (!available.length) return null;
+        const stored = (await rows('SELECT id, game_id AS gameId, schema_version AS schemaVersion, checksum, payload_json AS payloadJson FROM backup_exports WHERE id = ?', [random.pick(available)]))[0] as { id: string; gameId: string; schemaVersion: number; checksum: string; payloadJson: string };
         try {
           await restoreGameBackup('game', { id: stored.id, gameId: stored.gameId, schemaVersion: Number(stored.schemaVersion), checksum: stored.checksum, payloadJson: stored.payloadJson }, 'owner', ORIGIN);
         } catch (error) {
