@@ -207,6 +207,8 @@ export const seats = sqliteTable(
   },
   (table) => [
     uniqueIndex('idx_seats_game_email').on(table.gameId, table.email),
+    // Sign-in by email compares lower(email); an expression index lets it search instead of scanning every game.
+    index('idx_seats_email_lower').on(sql`lower(${table.email})`),
     uniqueIndex('idx_seats_claim_code').on(table.claimCodeHash),
     index('idx_seats_game_status').on(table.gameId, table.status),
     index('idx_seats_game_alive').on(table.gameId, table.alive),
@@ -258,6 +260,7 @@ export const spectators = sqliteTable(
   (table) => [
     uniqueIndex('idx_spectators_claim_code').on(table.claimCodeHash),
     index('idx_spectators_game_status').on(table.gameId, table.status),
+    index('idx_spectators_email_lower').on(sql`lower(${table.email})`),
   ],
 );
 
@@ -616,7 +619,11 @@ export const operationalEvents = sqliteTable(
     detailsJson: text('details_json').notNull(),
     createdAt: text('created_at').notNull(),
   },
-  (table) => [index('idx_operational_events_recent').on(table.severity, table.createdAt)],
+  (table) => [
+    index('idx_operational_events_recent').on(table.severity, table.createdAt),
+    // The console event log and the late-attempt count read one game's events newest first.
+    index('idx_operational_events_game_time').on(table.gameId, table.createdAt),
+  ],
 );
 
 export const pilotFeedback = sqliteTable(
