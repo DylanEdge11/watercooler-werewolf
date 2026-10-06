@@ -1,7 +1,8 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { IDLE_AFTER_MS, pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { useGameEnded } from './use-game-ended';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import type { FeedbackSummary } from '../../lib/game/feedback';
@@ -132,6 +133,7 @@ export function useOperations(): OperationsValue {
  */
 export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, children }: { gameId: string; refreshToken?: number; onGameChanged?: () => void; children: ReactNode }) {
   const [operations, setOperations] = useState<Operations | null>(null);
+  const ended = useGameEnded(operations?.game?.status);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [historyRoomId, setHistoryRoomId] = useState<string | null>(null);
@@ -212,12 +214,12 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     }, 0);
     const stopPolling = pollWhileVisible(() => {
       void refreshInternal({ onlyLive: true }).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh operations.'));
-    }, RELAXED_POLL_MS);
+    }, RELAXED_POLL_MS, { idleAfterMs: IDLE_AFTER_MS, stopWhen: () => ended.current });
     return () => {
       window.clearTimeout(timer);
       stopPolling();
     };
-  }, [refreshInternal, refreshToken]);
+  }, [refreshInternal, refreshToken, ended]);
 
   async function post(path: string, body: Record<string, unknown>) {
     const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });

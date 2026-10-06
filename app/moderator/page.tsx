@@ -20,7 +20,8 @@ import { ROLE_KEYS, type RoleKey } from '../../lib/game/types';
 import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
 import BrandHeader from './brand-header';
-import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { IDLE_AFTER_MS, pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { useGameEnded } from './use-game-ended';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import { COULD_NOT_REACH, plainError } from '../../lib/http/plain-error';
@@ -170,6 +171,7 @@ export default function ModeratorPage() {
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [games, setGames] = useState<GameSummary[]>([]);
   const [gameId, setGameId] = useState('');
+  const ended = useGameEnded(games.find((game) => game.id === gameId)?.status);
   const [roster, setRoster] = useState<RosterSeat[]>([]);
   const [composition, setComposition] = useState<Composition | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -302,8 +304,8 @@ export default function ModeratorPage() {
     // The live game panel keeps its own, faster pace near deadlines.
     return pollWhileVisible(() => {
       void loadGames(gameId).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh the game.'));
-    }, RELAXED_POLL_MS);
-  }, [authenticated, gameId, loadGames]);
+    }, RELAXED_POLL_MS, { idleAfterMs: IDLE_AFTER_MS, stopWhen: () => ended.current });
+  }, [authenticated, gameId, loadGames, ended]);
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

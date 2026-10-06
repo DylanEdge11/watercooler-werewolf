@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
-import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { IDLE_AFTER_MS, pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { useGameEnded } from './use-game-ended';
 import CopyButton from './copy-button';
 import { useOperations } from './operations-context';
 
@@ -72,7 +73,8 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
 }) {
   const [data, setData] = useState<ApplicationsData | null>(null);
   // Results go to the banner under the tab bar; the one-time setup link stays in this card, where it can be copied.
-  const { showMessage, showError, clearNotices } = useOperations();
+  const { showMessage, showError, clearNotices, operations } = useOperations();
+  const ended = useGameEnded(operations?.game?.status);
   const [issued, setIssued] = useState<{ displayName: string; url: string; note: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const etag = useRef<string | null>(null);
@@ -93,9 +95,9 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
     if (!active || !isOwner) return;
     const reload = () => void load().catch((caught) => showError(caught instanceof Error ? caught.message : 'Unable to load the applications.'));
     const timer = window.setTimeout(reload, 0);
-    const stop = pollWhileVisible(reload, RELAXED_POLL_MS);
+    const stop = pollWhileVisible(reload, RELAXED_POLL_MS, { idleAfterMs: IDLE_AFTER_MS, stopWhen: () => ended.current });
     return () => { window.clearTimeout(timer); stop(); };
-  }, [active, isOwner, load, refreshKey, showError]);
+  }, [active, isOwner, load, refreshKey, showError, ended]);
 
   async function run(action: () => Promise<void>, fallback: string) {
     if (busy) return;

@@ -13,6 +13,7 @@ import CopyButton from './copy-button';
 import { LATE_JOIN_LAST_PHASE_SEQUENCE } from '../../lib/game/roster-edit';
 import { formatZonedDateTimeLocal, nextScheduledClose, type ScheduleDefinition } from '../../lib/game/scheduling';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { useGameEnded } from './use-game-ended';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { pollInterval } from '../../lib/http/poll-interval';
 
@@ -118,6 +119,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged, onAttenti
   // phase, which sets how often the panel refreshes (lib/http/poll-interval.ts).
   const etag = useRef<string | null>(null);
   const pacing = useRef<{ status: string; deadline: string | null } | null>(null);
+  const ended = useGameEnded(game?.status ?? gameStatus);
 
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
@@ -142,12 +144,16 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged, onAttenti
     }, 0);
     const stopPolling = pollWhileVisible(() => {
       void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh phases.'));
-    }, () => pollInterval(pacing.current));
+    }, () => pollInterval(pacing.current), {
+      // No idle cutoff: each refresh also runs the game's due automatic steps (the phases route), so it keeps
+      // going while the game is running, whether or not anyone is at the console. It stops once the game has ended.
+      stopWhen: () => ended.current,
+    });
     return () => {
       window.clearTimeout(timer);
       stopPolling();
     };
-  }, [refresh]);
+  }, [refresh, ended]);
 
   async function mutate(payload: Record<string, unknown>) {
     setError('');

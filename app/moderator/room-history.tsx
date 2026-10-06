@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { IDLE_AFTER_MS, pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { useOperations } from './operations-context';
+import { useGameEnded } from './use-game-ended';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS, URGENT_POLL_MS } from '../../lib/http/poll-interval';
 import { ROOM_NAMES as roomNames } from '../../lib/chat/room-names';
@@ -68,6 +70,8 @@ export default function RoomHistory({
   onRemove: (messageId: string) => Promise<boolean>;
   onPosted: () => void;
 }) {
+  const { operations } = useOperations();
+  const ended = useGameEnded(operations?.game?.status);
   const [page, setPage] = useState<HistoryPage | null>(null);
   const [earlier, setEarlier] = useState<HistoryMessage[]>([]);
   const [earlierCursor, setEarlierCursor] = useState<string | null>(null);
@@ -99,12 +103,13 @@ export default function RoomHistory({
     const stopPolling = pollWhileVisible(
       () => void load().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load this room.')),
       () => (inUse() ? URGENT_POLL_MS : RELAXED_POLL_MS),
+      { idleAfterMs: IDLE_AFTER_MS, stopWhen: () => ended.current },
     );
     return () => {
       window.clearTimeout(initial);
       stopPolling();
     };
-  }, [load, reloadToken]);
+  }, [load, reloadToken, ended]);
 
   // Kept oldest first for merging pages; shown newest first.
   const messages = page ? mergeMessages(earlier, page.messages).reverse() : [];
