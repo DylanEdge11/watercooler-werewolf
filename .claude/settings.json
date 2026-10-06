@@ -1,4 +1,17 @@
 {
+  "permissions": {
+    "deny": [
+      "Bash(vercel*--prod*)",
+      "Bash(vercel*--target=production*)",
+      "Bash(vercel*--target production*)",
+      "Bash(vercel*promote*)",
+      "Bash(npx vercel*--prod*)",
+      "Bash(npx vercel*--target=production*)",
+      "Bash(npx vercel*--target production*)",
+      "Bash(npx vercel*promote*)",
+      "mcp__Vercel__request_promote"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
