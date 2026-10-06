@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { MIGRATION_FILES } from '../scripts/db-migration-runner.mjs';
+import { purgeExpiredRows } from './maintenance';
+import type { Database } from '../db/contracts';
 
 interface TestProviderStatement {
   readonly sql: string;
@@ -181,6 +183,20 @@ describe('provider race invariants', () => {
     const refused = await action({ actionKind: 'DAY_VOTE', targetIds: ['p0'] });
     expect(refused.status).toBe(400);
     expect((sqlite.prepare('SELECT COUNT(*) AS count FROM action_submissions').get() as { count: number }).count).toBe(0);
+  });
+
+  test('a late action is logged as the kind of row the 30-day cleanup removes, and nothing else is', async () => {
+    sqlite.exec("UPDATE phases SET closes_at = '2026-01-01T00:00:00.000Z'");
+    const refused = await action({ actionKind: 'DAY_VOTE', targetIds: ['p1'] });
+    expect(refused.ok).toBe(false);
+    sqlite.exec("INSERT INTO operational_events (id, game_id, severity, source, message, details_json, created_at) VALUES ('audit', 'game', 'WARNING', 'GAME_CONTROL', 'The game was reset to setup state.', '{}', '2026-01-01T00:00:00.000Z')");
+    const logged = sqlite.prepare('SELECT severity, source FROM operational_events WHERE source = ?').all('DEADLINE_MONITOR') as Array<{ severity: string; source: string }>;
+    expect(logged).toEqual([{ severity: 'WARNING', source: 'DEADLINE_MONITOR' }]);
+
+    const later = new Date(Date.now() + 31 * 24 * 60 * 60_000);
+    const purged = await purgeExpiredRows(shared.db as unknown as Database, later);
+    expect(purged.lateAttemptEvents).toBe(1);
+    expect((sqlite.prepare('SELECT id FROM operational_events').all() as Array<{ id: string }>).map((row) => row.id)).toEqual(['audit']);
   });
 
   test('a scheduler-locked phase can still be proposed without reopening it', async () => {

@@ -83,7 +83,7 @@ describe('expired-row cleanup', () => {
       { sql: "INSERT INTO spectator_sessions (id,spectator_id,token_hash,session_version,expires_at,created_at) VALUES ('old-watch','watcher','s1',1,'2026-01-01T00:00:00.000Z','2026-01-01'), ('live-watch','watcher','s2',1,'2099-01-01T00:00:00.000Z','2026-01-01')", args: [] },
       { sql: "INSERT INTO rate_limit_buckets (bucket_key,window_started_at,attempts) VALUES ('seat-login:x','2026-01-01T00:00:00.000Z',3), ('pin-failures:ana','2026-01-01T00:00:00.000Z',4)", args: [] },
     ], 'write');
-    expect(await purgeExpiredRows(shared.db!, new Date('2026-09-26T00:00:00.000Z'))).toEqual({ moderatorSessions: 1, seatSessions: 1, spectatorSessions: 1, rateLimitBuckets: 1 });
+    expect(await purgeExpiredRows(shared.db!, new Date('2026-09-26T00:00:00.000Z'))).toEqual({ moderatorSessions: 1, seatSessions: 1, spectatorSessions: 1, rateLimitBuckets: 1, lateAttemptEvents: 0 });
     expect((await client.execute('SELECT id FROM spectator_sessions')).rows.map((row) => row.id)).toEqual(['live-watch']);
     expect((await client.execute('SELECT id FROM seat_sessions')).rows.map((row) => row.id)).toEqual(['live']);
     expect((await client.execute('SELECT bucket_key FROM rate_limit_buckets')).rows.map((row) => row.bucket_key)).toEqual(['pin-failures:ana']);

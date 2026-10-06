@@ -82,4 +82,20 @@ describe('libSQL migration chain', () => {
     expect(Number(rows.rows[0]?.count)).toBe(0);
   });
 
+  test('the console event log and email sign-in search by index instead of scanning every game', async () => {
+    await runMigrations(client, await loadMigrations());
+    // The statements below copy the WHERE clauses of app/api/games/[gameId]/operations/route.ts and app/api/seats/login/route.ts.
+    const lookups: Array<[string, string, unknown[]]> = [
+      ['event log list', "SELECT id FROM operational_events WHERE game_id = ? AND source != 'DEADLINE_MONITOR' ORDER BY created_at DESC LIMIT 20", ['game']],
+      ['late-attempt count', "SELECT COUNT(*) FROM operational_events WHERE game_id = ? AND source = 'DEADLINE_MONITOR' AND created_at >= ?", ['game', '2026-01-01']],
+      ['seat sign-in', "SELECT s.id FROM seats s JOIN games g ON g.id = s.game_id WHERE lower(s.email) = ? AND s.status = 'CLAIMED' ORDER BY s.claimed_at DESC", ['ana@pilot.test']],
+      ['spectator sign-in', "SELECT sp.id FROM spectators sp JOIN games g ON g.id = sp.game_id WHERE lower(sp.email) = ? AND sp.status = 'ACTIVE' ORDER BY sp.claimed_at DESC", ['ana@pilot.test']],
+    ];
+    for (const [label, sql, args] of lookups) {
+      const plan = await client.execute({ sql: `EXPLAIN QUERY PLAN ${sql}`, args: args as Array<string> });
+      const detail = plan.rows.map((row) => String(row.detail)).join(' | ');
+      expect(detail, label).not.toMatch(/\bSCAN (operational_events|seats|spectators|sp|s)\b/u);
+      expect(detail, label).toContain('USING INDEX');
+    }
+  });
 });
