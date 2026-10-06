@@ -72,7 +72,7 @@ Follow [Schema changes](../../../docs/SETUP.md#schema-changes). If the change ca
 
 - Read credentials from `PREVIEW_TURSO_DATABASE_URL` / `PREVIEW_TURSO_AUTH_TOKEN`, or from an ignored file the owner provides, and pass them to the command without echoing them. *Never print them.*
 - Confirm the URL names the Preview database (it contains `watercooler-werewolf-preview`). If it could be Production, stop and ask.
-- Run `TURSO_DATABASE_URL="$PREVIEW_TURSO_DATABASE_URL" TURSO_AUTH_TOKEN="$PREVIEW_TURSO_AUTH_TOKEN" node scripts/db-migrate.mjs`.
+- Run `TURSO_DATABASE_URL="$PREVIEW_TURSO_DATABASE_URL" TURSO_AUTH_TOKEN="$PREVIEW_TURSO_AUTH_TOKEN" node scripts/db-migrate.mjs --confirm-host=<host of the Preview URL>`. The script prints its target database; it must be the Preview host you named, and a mismatch stops the run.
 - Confirm anonymous `GET /api/games` on the Preview returns 401; a 5xx means it isn't migrated.
 - Production migrations belong to `/werewolf-prod`. *Never migrate Production here.*
 
