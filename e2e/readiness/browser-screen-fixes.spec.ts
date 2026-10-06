@@ -10,8 +10,8 @@ test.afterAll(async () => {
   await closeSharedModerator();
 });
 
-test.describe('screens the audit found wrong (D62, D63, D64)', () => {
-  test('a closed phase waits for the moderator in plain words, and a saved response does not follow the player into the next phase', async ({ browser }, testInfo) => {
+test.describe('screens the audit found wrong (D62, D63, D64, D68)', () => {
+  test('a closed phase waits for the moderator in plain words, a saved response does not follow the player into the next phase, and a lost connection is said out loud', async ({ browser }, testInfo) => {
     const game = await BrowserGame.create(browser, testInfo, { name: 'Browser screens: review card and saved banner' });
     try {
       const day = await game.openPhase('DAY');
@@ -38,6 +38,14 @@ test.describe('screens the audit found wrong (D62, D63, D64)', () => {
       await expect(seer.page.getByRole('button', { name: 'Save response', exact: true })).toBeVisible({ timeout: 90_000 });
       await expect(seer.page.getByText('Response saved as revision')).toHaveCount(0);
       await game.assertHealthy();
+
+      // D68: with the connection down the page says so and keeps the last screen; the line goes when it returns.
+      // (After the health check, because the refused requests are meant to fail.)
+      await seer.page.route('**/api/player', (route) => route.abort());
+      await expect(seer.page.getByText(/Can.t reach the game · last updated \d{1,2}:\d{2}/u)).toBeVisible({ timeout: 90_000 });
+      await expect(seer.page.getByRole('button', { name: 'Save response', exact: true })).toBeVisible();
+      await seer.page.unroute('**/api/player');
+      await expect(seer.page.getByText(/Can.t reach the game/u)).toHaveCount(0, { timeout: 90_000 });
     } finally {
       await game.dispose();
     }
