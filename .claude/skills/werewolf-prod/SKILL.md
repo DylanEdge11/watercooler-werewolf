@@ -23,7 +23,7 @@ Every API route refuses to serve until the database has every migration in `db/r
 1. List each new migration and its SQL in plain language. Confirm it's additive and that the code on `main` works with it. If not, stop and plan a staged release with the owner.
 2. Confirm a recent Production backup exists (see `docs/OPERATIONS.md`).
 3. Explain exactly what will run, and get the owner's explicit go-ahead for this specific migration; the release request alone is not enough.
-4. Have the owner run `npm run db:migrate` with Production credentials, or use an ignored credentials file the owner provides for this step only. *Never print the values, and never run bootstrap, seed, or pilot scripts against Production.*
+4. Have the owner run `npm run db:migrate` with Production credentials (the script prints its target and asks the owner to type the Production host name), or use an ignored credentials file the owner provides for this step only. *Never print the values, and never run bootstrap, seed, or pilot scripts against Production.*
 5. Confirm it reports the database is current and anonymous `GET /api/games` on Production still returns 401.
 
 ## 3. Release PR

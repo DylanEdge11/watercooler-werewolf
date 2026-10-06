@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { readSetCookie, sendJson } from './lib/http.mjs';
+import { assertPilotTarget, readSetCookie, sendJson } from './lib/http.mjs';
 
 const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '');
-const parsedBaseUrl = new URL(baseUrl);
-const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
-if (!localHosts.has(parsedBaseUrl.hostname) && process.env.PILOT_ALLOW_REMOTE !== 'yes') {
-  throw new Error('This rehearsal is local by default. Set PILOT_ALLOW_REMOTE=yes only for an explicitly approved fictional staging URL.');
+const target = await assertPilotTarget(baseUrl);
+if (target.remote && process.env.PILOT_ALLOW_MUTATION !== 'yes') {
+  throw new Error('This rehearsal creates and resets a game. For a remote host, re-run with PILOT_ALLOW_MUTATION=yes and fictional .test credentials.');
 }
 
 const moderatorEmail = (process.env.PILOT_MODERATOR_EMAIL ?? 'moderator@pilot.test').trim().toLowerCase();
-const moderatorPassword = process.env.PILOT_MODERATOR_PASSWORD ?? 'fictional-review-password-2026';
+const moderatorPassword = process.env.PILOT_MODERATOR_PASSWORD ?? (target.remote ? '' : 'fictional-review-password-2026');
+if (!moderatorPassword) throw new Error('Set PILOT_MODERATOR_PASSWORD for a remote rehearsal; the built-in password is for local runs only.');
 let moderatorCookie = '';
 const checks = [];
 

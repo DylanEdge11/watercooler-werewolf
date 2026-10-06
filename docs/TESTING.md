@@ -33,7 +33,7 @@ npm run pilot:setup       # creates a 20-player game from fixtures/roster-20.csv
 npm run pilot:rehearsal   # scripted HTTP run of claim, review, privacy, and recovery paths
 ```
 
-`pilot:setup` writes a private invite CSV under `outputs/`. For a Preview, also set `PILOT_BASE_URL` and `PILOT_ALLOW_REMOTE=yes`, plus `VERCEL_AUTOMATION_BYPASS_SECRET` if the Preview is protected.
+`pilot:setup` writes a private invite CSV under `outputs/`. For a Preview, also set `PILOT_BASE_URL` and `PILOT_ALLOW_REMOTE=yes`, plus `VERCEL_AUTOMATION_BYPASS_SECRET` if the Preview is protected (it is sent only to `*.vercel.app` addresses). A remote run also needs an `https://` address and the host named with `--confirm-host=<host>` (or `CONFIRM_HOST`); `pilot:rehearsal` additionally needs `PILOT_ALLOW_MUTATION=yes` and `PILOT_MODERATOR_PASSWORD` for a remote host.
 
 For a manual rehearsal, give the moderator and each player a separate browser profile (private windows in one browser share cookies), then play at least one Day and one Night with the Hunter, a tie, an override, room moderation, and a backup.
 

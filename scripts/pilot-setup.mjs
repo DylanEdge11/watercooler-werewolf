@@ -1,19 +1,11 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { readSetCookie, sendJson } from './lib/http.mjs';
+import { assertPilotTarget, readSetCookie, sendJson } from './lib/http.mjs';
 
 const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '');
 const moderatorEmail = (process.env.PILOT_MODERATOR_EMAIL ?? 'moderator@pilot.test').trim().toLowerCase();
 const moderatorPassword = process.env.PILOT_MODERATOR_PASSWORD ?? '';
-const parsedBaseUrl = new URL(baseUrl);
-
-if (!['http:', 'https:'].includes(parsedBaseUrl.protocol)) {
-  throw new Error('PILOT_BASE_URL must be an http:// or https:// preview URL.');
-}
-const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
-if (!localHosts.has(parsedBaseUrl.hostname) && process.env.PILOT_ALLOW_REMOTE !== 'yes') {
-  throw new Error('PILOT_BASE_URL is not local. Set PILOT_ALLOW_REMOTE=yes only for an explicitly approved fictional staging environment; never point this helper at production.');
-}
+await assertPilotTarget(baseUrl);
 
 if (process.env.PILOT_ALLOW_MUTATION !== 'yes') {
   throw new Error('This setup creates a disposable game. Re-run with PILOT_ALLOW_MUTATION=yes and fictional .test credentials.');
