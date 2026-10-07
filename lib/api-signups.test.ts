@@ -315,6 +315,28 @@ describe('signing up from the public page', () => {
     // Another address is unaffected.
     expect((await signUp(code, { displayName: 'Other', email: 'other@pilot.test' }, { 'x-forwarded-for': '203.0.113.10' })).status).toBe(200);
   });
+
+  test('guessing codes costs one row for the address, never one per guess, and no key contains a guess', async () => {
+    await openAndGetCode();
+    const headers = { 'x-forwarded-for': '203.0.113.20' };
+    const guesses = Array.from({ length: 25 }, (_, index) => `guess${String(index).padStart(3, '0')}abcdef`);
+    for (const guess of guesses) expect(await signUp(guess, { displayName: 'Guesser', email: 'guesser@pilot.test' }, headers)).toMatchObject({ status: 404 });
+    const keys = (await rows('SELECT bucket_key AS key FROM rate_limit_buckets')).map((row) => String(row.key));
+    expect(keys).toEqual(['signup:203.0.113.20']);
+    expect(keys.some((key) => guesses.some((guess) => key.includes(guess)))).toBe(false);
+  });
+
+  test('a bot-filled form gets the same answer but does not count toward the game’s allowance', async () => {
+    const code = await openAndGetCode();
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect(await signUp(code, { displayName: 'Bot', email: `bot${attempt}@pilot.test`, website: 'http://spam.test' }, { 'x-forwarded-for': `203.0.113.${30 + attempt}` })).toMatchObject({ status: 200 });
+    }
+    expect(await count('SELECT COUNT(*) AS count FROM signups')).toBe(0);
+    expect(await count("SELECT COUNT(*) AS count FROM rate_limit_buckets WHERE bucket_key LIKE 'signup-flood:%'")).toBe(0);
+    expect((await signUp(code, { displayName: 'Real Visitor', email: 'real@pilot.test' })).status).toBe(200);
+    // The game-wide allowance is keyed by the game, and only the real sign-up used any of it.
+    expect(await rows("SELECT bucket_key AS key, attempts FROM rate_limit_buckets WHERE bucket_key LIKE 'signup-flood:%'")).toEqual([{ key: 'signup-flood:game', attempts: 1 }]);
+  });
 });
 
 describe('reviewing sign-ups', () => {

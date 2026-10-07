@@ -32,7 +32,9 @@ export async function POST(request: Request, context: RouteContext) {
     assertSameOrigin(request);
     await ensureDatabase();
     const { code } = await context.params;
-    await enforceRateLimit(requestRateLimitKey(request, `moderator-setup:${code.slice(0, 80)}`), 8, 15 * 60_000);
+    // Per address, not per typed code: setup links are long random tokens, and a key built from the code would let
+    // anyone create bookkeeping rows by trying codes.
+    await enforceRateLimit(requestRateLimitKey(request, 'moderator-setup'), 8, 15 * 60_000);
     const body: unknown = await request.json().catch(() => null);
     const password = typeof (body as { password?: unknown } | null)?.password === 'string' ? (body as { password: string }).password : '';
     if (password.length < 12) return jsonError('Choose a password of at least 12 characters.', 400);
