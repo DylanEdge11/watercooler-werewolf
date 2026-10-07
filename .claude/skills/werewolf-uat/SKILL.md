@@ -37,7 +37,7 @@ Block the release on a confirmed privacy, authorization, data-loss, or broken-ga
 
 Start both checks at once; they don't interfere.
 
-1. Local, in the background: run `npm run verify:full` at the SHA (about 20 minutes). Run `npm ci` first only if `package-lock.json` changed. Record the exit code, per-suite pass/fail/flaky counts, and elapsed time. Report a test that passed only on retry as a flaky risk.
+1. Local, in the background: run `npm run verify:full` at the SHA (about 1 to 1.5 hours: the fast gates and API suite take about 2 minutes, and the browser suite about an hour on a quiet machine, of which the three randomized games are about 10 minutes each and a retry adds up to 16; start it with a time limit of at least 7200 seconds, for example `timeout 7200`, because a shorter one can stop it before the last games). Run `npm ci` first only if `package-lock.json` changed. Record the exit code, per-suite pass/fail/flaky counts, and elapsed time. Report a test that passed only on retry as a flaky risk.
 2. Hosted Preview: get the Preview deployment for the SHA (Vercel MCP tools or `vercel ls` / `vercel inspect`) and confirm it's `READY` with target `preview`. If there's a migration, confirm anonymous `GET /api/games` on the Preview returns 401; a 5xx means the Preview database isn't migrated, so hand back to Dev. Then run the three-step [hosted Preview run](../../../docs/TESTING.md#hosted-preview-runbook) once, with one `E2E_RUN_ID`, following its configuration notes.
 
 Rules for both checks:

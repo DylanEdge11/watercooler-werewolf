@@ -9,7 +9,7 @@ The checks run locally, because GitHub Actions minutes are limited (2,000 a mont
 | Command | What it runs | When |
 | --- | --- | --- |
 | `npm run verify` | The fast gates: unit tests, lint, type check (`npm run typecheck`, which first clears the route type files a local browser run leaves in `.next/dev/types`), production build, and the production dependency audit. A few minutes. | Before every push. |
-| `npm run verify:full` | `verify`, then the 20-player API suite, then the full 20-player Chromium browser suite, one game at a time. About 20 minutes; run it in the background. | Once per release candidate, during UAT. |
+| `npm run verify:full` | `verify`, then the 20-player API suite, then the full 20-player Chromium browser suite, one game at a time. About 1 to 1.5 hours (the fast gates and API suite take about 2 minutes; the three randomized browser games take about 10 minutes each, and a retry adds up to 16); run it in the background with a time limit of at least two hours. | Once per release candidate, during UAT. |
 
 The API and browser suites use a disposable local server and database, so they need no secrets and never touch a Preview. Each 20-player browser game may run for up to 20 minutes.
 
