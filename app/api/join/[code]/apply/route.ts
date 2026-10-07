@@ -23,18 +23,21 @@ export async function POST(request: Request, context: RouteContext) {
     assertSameOrigin(request);
     await ensureDatabase();
     const { code } = await context.params;
-    await enforceRateLimit(requestRateLimitKey(request, `apply:${code.slice(0, 80)}`), 10, 60 * 60_000);
-    await enforceRateLimit(`apply-flood:${code.slice(0, 80)}`, 40, 60 * 60_000);
+    // One allowance per address for every link, counted before the code is looked up and never keyed by it, so
+    // guessing codes cannot create bookkeeping rows.
+    await enforceRateLimit(requestRateLimitKey(request, 'apply'), 10, 60 * 60_000);
+    const page = await lookupJoinPage(code);
+    if (!page) return jsonError(JOIN_COPY.invalidLink, 404);
+    if (!page.applications) throw new HttpError(409, JOIN_COPY.applicationsClosed(page.gameName));
     const body: unknown = await request.json().catch(() => null);
+    // A hidden field only a bot fills in: it gets the success reply and no row, and does not count toward the game's allowance.
     if (honeypotFilled(body)) return Response.json({ ok: true });
     const person = parsePerson(body);
     if (!person.ok) return jsonError(person.error, 400);
     const note = parseApplicationNote((body as { note?: unknown }).note);
     if (!note.ok) return jsonError(note.error, 400);
-
-    const page = await lookupJoinPage(code);
-    if (!page) return jsonError(JOIN_COPY.invalidLink, 404);
-    if (!page.applications) throw new HttpError(409, JOIN_COPY.applicationsClosed(page.gameName));
+    // The game-wide allowance is keyed by the game, not by what the visitor typed, and only a request about to write counts.
+    await enforceRateLimit(`apply-flood:${page.gameId}`, 40, 60 * 60_000);
 
     const db = getDb();
     const inserted = await db

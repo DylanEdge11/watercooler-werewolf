@@ -23,19 +23,20 @@ export async function POST(request: Request, context: RouteContext) {
     assertSameOrigin(request);
     await ensureDatabase();
     const { code } = await context.params;
-    // Several people at one office share an address, so the per-address allowance is generous; the
-    // game-wide one stops a flood from anywhere.
-    await enforceRateLimit(requestRateLimitKey(request, `signup:${code.slice(0, 80)}`), 60, 60 * 60_000);
-    await enforceRateLimit(`signup-flood:${code.slice(0, 80)}`, 300, 60 * 60_000);
-    const body: unknown = await request.json().catch(() => null);
-    // A hidden field only a bot fills in: it gets the success reply and no row.
-    if (honeypotFilled(body)) return Response.json({ ok: true });
-    const person = parsePerson(body);
-    if (!person.ok) return jsonError(person.error, 400);
-
+    // One allowance per address for every link, counted before the code is looked up and never keyed by it, so
+    // guessing codes cannot create bookkeeping rows. Several people at one office share an address, so it is generous.
+    await enforceRateLimit(requestRateLimitKey(request, 'signup'), 60, 60 * 60_000);
     const page = await lookupJoinPage(code);
     if (!page) return jsonError(JOIN_COPY.invalidLink, 404);
     if (page.signups !== 'OPEN') return jsonError(JOIN_COPY.closed(page.gameName), 409);
+    const body: unknown = await request.json().catch(() => null);
+    // A hidden field only a bot fills in: it gets the success reply and no row, and does not count toward the game's allowance.
+    if (honeypotFilled(body)) return Response.json({ ok: true });
+    const person = parsePerson(body);
+    if (!person.ok) return jsonError(person.error, 400);
+    // The game-wide allowance stops a flood from anywhere. It is keyed by the game, not by what the visitor typed,
+    // and only a request that is about to write counts against it.
+    await enforceRateLimit(`signup-flood:${page.gameId}`, 300, 60 * 60_000);
 
     const db = getDb();
     const now = new Date().toISOString();

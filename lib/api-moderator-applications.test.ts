@@ -251,6 +251,25 @@ describe('applying from the public page', () => {
     expect(Number(last?.headers.get('retry-after'))).toBeGreaterThan(0);
   });
 
+  test('guessing codes costs one row for the address, never one per guess, and no key contains a guess', async () => {
+    await openAndGetCode();
+    const headers = { 'x-forwarded-for': '203.0.113.8' };
+    const guesses = Array.from({ length: 8 }, (_, index) => `guess${String(index).padStart(3, '0')}abcdef`);
+    for (const guess of guesses) expect(await apply(guess, { displayName: 'Guesser', email: 'guesser@pilot.test' }, headers)).toMatchObject({ status: 404 });
+    const keys = (await rows('SELECT bucket_key AS key FROM rate_limit_buckets')).map((row) => String(row.key));
+    expect(keys).toEqual(['apply:203.0.113.8']);
+    expect(keys.some((key) => guesses.some((guess) => key.includes(guess)))).toBe(false);
+  });
+
+  test('a bot-filled application gets the same answer but does not count toward the game’s allowance, which is keyed by the game', async () => {
+    const code = await openAndGetCode();
+    expect(await apply(code, { displayName: 'Bot', email: 'bot@pilot.test', website: 'http://spam.test' }, { 'x-forwarded-for': '203.0.113.40' })).toMatchObject({ status: 200 });
+    expect(await count('SELECT COUNT(*) AS count FROM moderator_applications')).toBe(0);
+    expect(await count("SELECT COUNT(*) AS count FROM rate_limit_buckets WHERE bucket_key LIKE 'apply-flood:%'")).toBe(0);
+    expect((await apply(code, { displayName: 'Real Applicant', email: 'real@pilot.test' })).status).toBe(200);
+    expect(await rows("SELECT bucket_key AS key, attempts FROM rate_limit_buckets WHERE bucket_key LIKE 'apply-flood:%'")).toEqual([{ key: 'apply-flood:game', attempts: 1 }]);
+  });
+
   test('the owner sees the applicant’s name, email, and note; the console summary counts them', async () => {
     const code = await openAndGetCode();
     await apply(code, { displayName: 'Nia', email: 'nia@pilot.test', note: 'Hello' });
@@ -498,6 +517,15 @@ describe('the setup link', () => {
     let last: Reply | null = null;
     for (let attempt = 0; attempt < 9; attempt += 1) last = await read(await setupPost(request('POST', { password: 'short' }, { 'x-forwarded-for': '203.0.113.5' }), codeCtx(setupCode)));
     expect(last).toMatchObject({ status: 429 });
+  });
+
+  test('trying codes on the setup route costs one row for the address, never one per guess', async () => {
+    const guesses = Array.from({ length: 6 }, (_, index) => `guess${String(index).padStart(3, '0')}abcdef`);
+    for (const guess of guesses) {
+      expect((await read(await setupPost(request('POST', { password: PASSWORD }, { 'x-forwarded-for': '203.0.113.6' }), codeCtx(guess)))).status).toBe(404);
+    }
+    const keys = (await rows('SELECT bucket_key AS key FROM rate_limit_buckets')).map((row) => String(row.key));
+    expect(keys).toEqual(['moderator-setup:203.0.113.6']);
   });
 });
 
