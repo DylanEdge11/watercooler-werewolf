@@ -20,7 +20,7 @@ html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--paper); color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
 button, a { font: inherit; }
 button { color: inherit; }
-.app-shell { background: var(--paper); min-height: 100vh; transition: background .25s ease; }
+.app-shell { min-height: 100vh; transition: background .25s ease; }
 .topbar { align-items: center; background: rgba(255, 253, 250, .95); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 250px minmax(0, 1fr) minmax(250px, 340px); height: 76px; padding: 0 28px; position: sticky; top: 0; z-index: 20; }
 .brand { align-items: center; color: inherit; display: flex; gap: 11px; text-decoration: none; }
 .brand > span:last-child { display: grid; line-height: 1; }
@@ -585,7 +585,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 
 /* Public how-to-play guide */
-.guide-shell { background: var(--paper); min-height: 100vh; }
+.guide-shell { min-height: 100vh; }
 .guide-header { align-items: center; background: rgba(255, 253, 250, .95); border-bottom: 1px solid var(--line); display: flex; gap: 16px; justify-content: space-between; padding: 14px 32px; position: sticky; top: 0; z-index: 20; }
 .guide-header-links { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: flex-end; }
 .guide-header-links a { color: var(--mint-strong); font-size: 12px; font-weight: 800; text-decoration: none; }
