@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { keysOf } from './test-support/keys-of';
 import { createClient, type Client } from '@libsql/client';
 import { LibsqlDatabase, type LibsqlClient } from '../db/libsql';
 import { loadMigrations, runMigrations } from '../scripts/db-migration-runner.mjs';
@@ -81,17 +82,6 @@ async function phaseAction(body: Record<string, unknown>) {
 async function dashboard() {
   const response = await playerGet(get('/api/player'));
   return { status: response.status, body: await response.json() as Record<string, unknown> };
-}
-
-function keysOf(value: unknown, keys = new Set<string>()): Set<string> {
-  if (Array.isArray(value)) value.forEach((item) => keysOf(item, keys));
-  else if (value && typeof value === 'object') {
-    for (const [key, child] of Object.entries(value)) {
-      keys.add(key);
-      keysOf(child, keys);
-    }
-  }
-  return keys;
 }
 
 function expectNoPrivateKeys(payload: unknown) {

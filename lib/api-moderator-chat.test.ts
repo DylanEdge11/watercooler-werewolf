@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { keysOf } from './test-support/keys-of';
 import { createClient, type Client } from '@libsql/client';
 import { LibsqlDatabase, type LibsqlClient } from '../db/libsql';
 import { loadMigrations, runMigrations } from '../scripts/db-migration-runner.mjs';
@@ -71,17 +72,6 @@ async function playerView(seatId: string, roomId: string, alive = true) {
   shared.currentPlayer = { seatId, gameId: 'game', displayName: seatId, alive };
   const response = await playerRoomGet(get(`/api/rooms/${roomId}/messages`), { params: Promise.resolve({ roomId }) });
   return { status: response.status, body: await response.json() as { messages: Array<Record<string, unknown>> } };
-}
-
-function keysOf(value: unknown, keys = new Set<string>()): Set<string> {
-  if (Array.isArray(value)) value.forEach((item) => keysOf(item, keys));
-  else if (value && typeof value === 'object') {
-    for (const [key, child] of Object.entries(value)) {
-      keys.add(key);
-      keysOf(child, keys);
-    }
-  }
-  return keys;
 }
 
 /** Six fictional players on an open Day: two Werewolves, two Masons, a Villager, and an eliminated Villager. */

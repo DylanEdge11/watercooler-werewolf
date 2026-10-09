@@ -1,22 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
+import { providerDatabase, type TestDatabase, type ReadGate } from './test-support/provider-database';
 import { readFileSync } from 'node:fs';
 import { MIGRATION_FILES } from '../scripts/db-migration-runner.mjs';
-
-interface TestStatement {
-  readonly sql: string;
-  getArgs(): SQLInputValue[];
-}
-
-interface TestDatabase {
-  prepare(sql: string): TestStatement;
-  batch(statements: TestStatement[]): Promise<unknown>;
-}
 
 const shared = vi.hoisted(() => ({
   db: null as TestDatabase | null,
   // Lets a test pause a route after one of its reads, to commit a competing write.
-  gate: null as null | ((sql: string) => Promise<void>),
+  gate: null as ReadGate | null,
 }));
 
 vi.mock('../db', () => ({ getDb: () => shared.db }));
@@ -39,56 +30,6 @@ import { PATCH as setupPatch } from '../app/api/games/[gameId]/schedule/route';
 import { GET as gamesGet, POST as gamesPost } from '../app/api/games/route';
 
 let sqlite: DatabaseSync;
-
-class ProviderStatement {
-  private args: SQLInputValue[] = [];
-
-  constructor(readonly sql: string) {}
-
-  bind(...args: SQLInputValue[]): this {
-    this.args = args;
-    return this;
-  }
-
-  getArgs(): SQLInputValue[] {
-    return this.args;
-  }
-
-  async first<T = Record<string, unknown>>(): Promise<T | null> {
-    const row = sqlite.prepare(this.sql).get(...this.args) as T | undefined;
-    await shared.gate?.(this.sql);
-    return row ?? null;
-  }
-
-  async all<T = Record<string, unknown>>(): Promise<{ results: T[] }> {
-    return { results: sqlite.prepare(this.sql).all(...this.args) as T[] };
-  }
-
-  async run(): Promise<{ meta: { changes: number } }> {
-    const result = sqlite.prepare(this.sql).run(...this.args);
-    return { meta: { changes: Number(result.changes) } };
-  }
-}
-
-function providerCompatible(): TestDatabase {
-  return {
-    prepare: (sql) => new ProviderStatement(sql),
-    batch: async (statements) => {
-      sqlite.exec('BEGIN');
-      try {
-        const results = statements.map((statement) => {
-          const result = sqlite.prepare(statement.sql).run(...statement.getArgs());
-          return { meta: { changes: Number(result.changes) } };
-        });
-        sqlite.exec('COMMIT');
-        return results;
-      } catch (error) {
-        sqlite.exec('ROLLBACK');
-        throw error;
-      }
-    },
-  };
-}
 
 function request(body: Record<string, unknown>, method = 'POST'): Request {
   return new Request('http://localhost:3000/api/test', {
@@ -143,7 +84,7 @@ beforeEach(() => {
     sqlite.exec(readFileSync(new URL('../drizzle/' + file, import.meta.url), 'utf8'));
   }
   shared.gate = null;
-  shared.db = providerCompatible();
+  shared.db = providerDatabase(sqlite, shared);
   sqlite.exec("INSERT INTO moderator_accounts (id,email,password_hash,recovery_codes_json,created_at,updated_at) VALUES ('mod','review@pilot.test','fake','[]','2026-01-01','2026-01-01'); INSERT INTO games (id,name,status,timezone,start_date,end_date,active_weekdays_json,schedule_json,final_cutoff_at,created_by_moderator_id,created_at,updated_at) VALUES ('game','Review','REGISTRATION','UTC','2026-01-01','2027-01-01','[1]','{}','2099-01-01','mod','2026-01-01','2026-01-01'); INSERT INTO game_moderators (game_id,moderator_id,role,added_at) VALUES ('game','mod','OWNER','2026-01-01'); INSERT INTO assignment_batches (id,game_id,revision,setup_revision,roster_fingerprint,composition_fingerprint,assignments_json,random_evidence_hash,created_by_moderator_id,created_at) VALUES ('batch','game',1,1,'roster','composition','[]','hash','mod','2026-01-01');");
   for (let index = 0; index < 20; index += 1) {
     sqlite.prepare("INSERT INTO seats (id,game_id,display_name,email,status,claim_code_hash,created_at,updated_at) VALUES (?,'game',?,?,'CLAIMED',?,'2026-01-01','2026-01-01')").run('p' + index, 'Player ' + index, 'p' + index + '@pilot.test', 'hash' + index);
