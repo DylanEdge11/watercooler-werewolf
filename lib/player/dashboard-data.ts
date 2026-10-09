@@ -1,5 +1,6 @@
 import { getDb } from '../../db';
-import { ensureGameRoomsExist } from '../chat/rooms';
+import type { PreparedStatement, QueryResult, RunResult } from '../../db/contracts';
+import { ensureGameRooms, ROOM_TYPE_COUNT } from '../chat/rooms';
 import { afterlifePermission, participationCounter, participationCountsAcrossPlayers, permissionForRole } from '../game/actions';
 import { automaticStepDueAt } from '../game/automation';
 import type { advanceGameSafely } from '../game/automation-sweep';
@@ -122,7 +123,19 @@ export type RosterSeat = { id: string; displayName: string; alive: boolean; role
 interface TimelineRow { id: string; eventType: string; phaseId: string | null; phaseSequence: number | null; payloadJson: string; createdAt: string }
 
 /** The open (or awaiting) phase of a game, if any. */
-function loadCurrentPhase(gameId: string) {
+interface CurrentPhaseRow {
+  id: string;
+  sequence: number;
+  kind: PhaseKind;
+  status: string;
+  slots: number;
+  opensAt: string;
+  closesAt: string;
+  hunterDeadlineAt: string | null;
+}
+
+/** The game's open, hunter-pending, or awaiting-approval phase, newest first. */
+function currentPhaseStatement(gameId: string) {
   return getDb()
     .prepare(
       `SELECT id, sequence, kind, status, slots, opens_at AS opensAt, closes_at AS closesAt,
@@ -131,34 +144,37 @@ function loadCurrentPhase(gameId: string) {
        AND status IN ('OPEN', 'PENDING_HUNTER', 'PENDING_APPROVAL')
        ORDER BY sequence DESC LIMIT 1`,
     )
-    .bind(gameId)
-    .first<{
-      id: string;
-      sequence: number;
-      kind: PhaseKind;
-      status: string;
-      slots: number;
-      opensAt: string;
-      closesAt: string;
-      hunterDeadlineAt: string | null;
-    }>();
+    .bind(gameId);
 }
 
-/** Every claimed seat with its role. Roles are for the server's own decisions; callers send only public fields. */
-export async function loadRoster(gameId: string): Promise<RosterSeat[]> {
-  const rows = await getDb()
+interface RosterRow { id: string; displayName: string; alive: number; role: RoleKey | null }
+
+function rosterStatement(gameId: string) {
+  return getDb()
     .prepare(
       `SELECT s.id, s.display_name AS displayName, s.alive, ra.role_key AS role
        FROM seats s LEFT JOIN role_assignments ra ON ra.game_id = s.game_id AND ra.seat_id = s.id
        WHERE s.game_id = ? AND s.status = 'CLAIMED' ORDER BY s.display_name COLLATE NOCASE`,
     )
-    .bind(gameId)
-    .all<{ id: string; displayName: string; alive: number; role: RoleKey | null }>();
-  return rows.results.map((seat) => ({ ...seat, role: seat.role ? canonicalRoleKey(seat.role) : null, alive: Boolean(seat.alive) }));
+    .bind(gameId);
 }
 
-/** The three reads behind the public timeline: its events, the newest ballot's votes, and each ballot's vote count. */
-function publicTimelineReads(gameId: string) {
+function rosterFromRows(rows: RosterRow[]): RosterSeat[] {
+  return rows.map((seat) => ({ ...seat, role: seat.role ? canonicalRoleKey(seat.role) : null, alive: Boolean(seat.alive) }));
+}
+
+/** Every claimed seat with its role. Roles are for the server's own decisions; callers send only public fields. */
+export async function loadRoster(gameId: string): Promise<RosterSeat[]> {
+  return rosterFromRows((await rosterStatement(gameId).all<RosterRow>()).results);
+}
+
+/** The rows of one result in a batch. */
+function rowsOf<Row>(result: QueryResult | RunResult | undefined): Row[] {
+  return (result?.results ?? []) as Row[];
+}
+
+/** The three reads behind the public timeline, ready to batch: its events, the newest ballot's votes, and each ballot's vote count. */
+function publicTimelineStatements(gameId: string) {
   const db = getDb();
   return [
     db
@@ -169,8 +185,7 @@ function publicTimelineReads(gameId: string) {
          WHERE ${PUBLIC_EVENT_FILTER}
          ORDER BY ge.created_at DESC LIMIT ${TIMELINE_LIMIT + 1}`,
       )
-      .bind(gameId, gameId, gameId)
-      .all<{ id: string; eventType: string; phaseId: string | null; phaseSequence: number | null; payloadJson: string; createdAt: string }>(),
+      .bind(gameId, gameId, gameId),
     // Who voted for whom, for the newest published ballot in the timeline only. Older ballots
     // send a count, and the timeline loads their votes on request, so a long
     // game's refresh doesn't resend every vote ever cast.
@@ -185,8 +200,7 @@ function publicTimelineReads(gameId: string) {
            )
          ${BALLOT_VOTE_ORDER}`,
       )
-      .bind(gameId, gameId, gameId, gameId, gameId, gameId)
-      .all<PublicVoteRow>(),
+      .bind(gameId, gameId, gameId, gameId, gameId, gameId),
     // Vote counts for the ballots in the timeline this response returns.
     db
       .prepare(
@@ -200,8 +214,7 @@ function publicTimelineReads(gameId: string) {
            AND p.id IN (${SHOWN_PHASE_IDS})
          GROUP BY p.id`,
       )
-      .bind(gameId, gameId, gameId, gameId, gameId)
-      .all<{ phaseId: string; count: number }>(),
+      .bind(gameId, gameId, gameId, gameId, gameId),
   ] as const;
 }
 
@@ -284,63 +297,94 @@ function buildTimeline(
   return { timeline, timelineHasMore };
 }
 
-/**
- * Everything the player dashboard shows, for one seat. Returns null when the
- * seat does not exist. The reads run in three rounds: the seat, then every
- * read that needs only the game, then the reads that need the open phase and
- * the player's permission.
- */
-export async function loadDashboard(seatId: string, options: { cursor?: NotificationCursor; automation?: Automation } = {}) {
-  const db = getDb();
-  const { cursor, automation } = options;
-  const due = automation ? automaticStepDueAt(automation.game, automation.phase) : null;
+interface PlayerRow {
+  id: string;
+  displayName: string;
+  alive: number;
+  gameId: string;
+  gameName: string;
+  gameStatus: string;
+  timezone: string;
+  stopReason: string | null;
+  role: RoleKey | null;
+  emailEnabled: number;
+  /** How many chat rooms the game has; fewer than a full set means some need repairing. */
+  roomCount: number;
+}
 
-  // Round 1: the seat, its game, and its role.
-  const player = await db
+function playerStatement(seatId: string) {
+  return getDb()
     .prepare(
       `SELECT s.id, s.display_name AS displayName, s.alive, g.id AS gameId, g.name AS gameName,
               g.status AS gameStatus, g.timezone, g.stop_reason AS stopReason, ra.role_key AS role,
-              COALESCE(ep.enabled, 0) AS emailEnabled
+              COALESCE(ep.enabled, 0) AS emailEnabled,
+              (SELECT COUNT(*) FROM chat_rooms cr WHERE cr.game_id = g.id) AS roomCount
        FROM seats s JOIN games g ON g.id = s.game_id
        LEFT JOIN role_assignments ra ON ra.game_id = s.game_id AND ra.seat_id = s.id
        LEFT JOIN email_preferences ep ON ep.seat_id = s.id
        WHERE s.id = ? LIMIT 1`,
     )
-    .bind(seatId)
-    .first<{
-      id: string;
-      displayName: string;
-      alive: number;
-      gameId: string;
-      gameName: string;
-      gameStatus: string;
-      timezone: string;
-      stopReason: string | null;
-      role: RoleKey | null;
-      emailEnabled: number;
-    }>();
-  if (!player) return null;
-  if (player.role) player.role = canonicalRoleKey(player.role);
-  const gameId = player.gameId;
+    .bind(seatId);
+}
 
-  // Round 2: everything that needs only the game and the seat.
-  const [, phase, roster, loverPair, timelineRows, newestBallotRows, ballotCountRows, roomRows] = await Promise.all([
-    // Membership is kept current by release and publish; this only repairs missing rooms.
-    player.role ? ensureGameRoomsExist(gameId) : Promise.resolve(),
-    loadCurrentPhase(gameId),
-    loadRoster(gameId),
-    loadCurrentLoverPair(gameId),
-    ...publicTimelineReads(gameId),
-    db
-      .prepare(
-        `SELECT cr.id, cr.type, cr.status, crm.access
-         FROM chat_rooms cr JOIN chat_room_members crm ON crm.room_id = cr.id
-         WHERE cr.game_id = ? AND crm.seat_id = ? AND crm.access != 'REVOKED' AND cr.status != 'PURGED'
-         ORDER BY cr.type`,
-      )
-      .bind(gameId, player.id)
-      .all(),
-  ]);
+interface PlayerRoomRow { id: string; type: string; status: string; access: string }
+
+function playerRoomsStatement(gameId: string, seatId: string) {
+  return getDb()
+    .prepare(
+      `SELECT cr.id, cr.type, cr.status, crm.access
+       FROM chat_rooms cr JOIN chat_room_members crm ON crm.room_id = cr.id
+       WHERE cr.game_id = ? AND crm.seat_id = ? AND crm.access != 'REVOKED' AND cr.status != 'PURGED'
+       ORDER BY cr.type`,
+    )
+    .bind(gameId, seatId);
+}
+
+/**
+ * Everything the player dashboard shows, for one seat. Returns null when the
+ * seat does not exist. The reads run in two batches, each one request whose
+ * statements see one snapshot: first the seat, the current phase, the roster,
+ * the public timeline, and the player's rooms (none needs another's answer
+ * once the game id is known), then the reads that need the open phase and the
+ * player's permission. Callers that already know the seat's game pass its id
+ * as `gameId`; without it one extra read finds it first. A Cupid's lover-pair
+ * read sits between the two batches, because only a Cupid's own permission
+ * depends on it.
+ */
+export async function loadDashboard(seatId: string, options: { cursor?: NotificationCursor; automation?: Automation; gameId?: string } = {}) {
+  const db = getDb();
+  const { cursor, automation } = options;
+  const due = automation ? automaticStepDueAt(automation.game, automation.phase) : null;
+
+  let gameId = options.gameId;
+  if (!gameId) {
+    const owner = await db.prepare('SELECT game_id AS gameId FROM seats WHERE id = ? LIMIT 1').bind(seatId).first<{ gameId: string }>();
+    if (!owner) return null;
+    gameId = owner.gameId;
+  }
+
+  // Batch 1: the seat with its game and role, and everything that needs only the game and the seat.
+  const [playerResult, phaseResult, rosterResult, timelineResult, newestBallotResult, ballotCountResult, roomResult] = await db.batch([
+    playerStatement(seatId),
+    currentPhaseStatement(gameId),
+    rosterStatement(gameId),
+    ...publicTimelineStatements(gameId),
+    playerRoomsStatement(gameId, seatId),
+  ], 'read');
+  const player = rowsOf<PlayerRow>(playerResult)[0];
+  // A seat that belongs to some other game than the one asked about is treated as not found, never answered with the wrong game's data.
+  if (!player || player.gameId !== gameId) return null;
+  if (player.role) player.role = canonicalRoleKey(player.role);
+  const phase = rowsOf<CurrentPhaseRow>(phaseResult)[0] ?? null;
+  const roster = rosterFromRows(rowsOf<RosterRow>(rosterResult));
+  let roomRows = rowsOf<PlayerRoomRow>(roomResult);
+  // Membership is kept current by release and publish; this only repairs missing rooms.
+  if (player.role && Number(player.roomCount) < ROOM_TYPE_COUNT) {
+    await ensureGameRooms(gameId);
+    roomRows = (await playerRoomsStatement(gameId, player.id).all<PlayerRoomRow>()).results;
+  }
+  // Only a Cupid's permission depends on whether the pair has been chosen.
+  const loverPair = player.role === 'CUPID' ? await loadCurrentLoverPair(gameId) : null;
 
   const seerAlive = roster.some((seat) => seat.alive && seat.role === 'SEER');
   const alive = Boolean(player.alive);
@@ -352,7 +396,7 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
         })
       : afterlifePermission(phase.kind, Number(phase.slots), phase.status === 'PENDING_HUNTER')
     : { actionKind: null as ActionKind | null, maxTargets: 0, label: 'Waiting for the moderator' };
-  // These always end with no action, so round 3 skips the action reads for them.
+  // These always end with no action, so batch 2 skips the action reads for them.
   const actionWithdrawn = phase?.status === 'PENDING_APPROVAL' || player.gameStatus === 'STOPPED';
   const actionKind = actionWithdrawn ? null : basePermission.actionKind;
   const inheritedSeer = player.role === 'APPRENTICE_SEER' && !seerAlive
@@ -366,45 +410,48 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
   if (cursor) notificationBindings.push(cursor.before, cursor.before, cursor.beforeId);
   notificationBindings.push(NOTIFICATION_LIMIT);
 
-  // Round 3: reads that need the open phase, the permission, or the roster.
-  const [proposal, fetchedAction, sharedSubmissions, notificationRows] = await Promise.all([
-    phase?.status === 'PENDING_HUNTER'
-      ? db
-          .prepare(
-            `SELECT COALESCE(reviewed_outcome_json, outcome_json) AS outcomeJson FROM resolution_proposals
-             WHERE phase_id = ? AND status = 'PROPOSED' ORDER BY created_at DESC LIMIT 1`,
-          )
-          .bind(phase.id)
-          .first<{ outcomeJson: string }>()
-      : Promise.resolve(null),
-    phase && actionKind
-      ? db
-          .prepare(
-            `SELECT id, kind, target_ids_json AS targetIdsJson, version, submitted_at AS submittedAt
-             FROM action_submissions
-             WHERE phase_id = ? AND actor_seat_id = ? AND kind = ? AND superseded_at IS NULL LIMIT 1`,
-          )
-          .bind(phase.id, player.id, actionKind)
-          .first<{ id: string; kind: ActionKind; targetIdsJson: string; version: number; submittedAt: string }>()
-      : Promise.resolve(null),
-    phase && actionKind && participationCountsAcrossPlayers(actionKind)
-      ? db
-          .prepare(
-            `SELECT COUNT(DISTINCT actor_seat_id) AS count FROM action_submissions
-             WHERE phase_id = ? AND kind = ? AND superseded_at IS NULL`,
-          )
-          .bind(phase.id, actionKind)
-          .first<{ count: number }>()
-      : Promise.resolve(null),
-    db
+  // Batch 2: reads that need the open phase, the permission, or the roster. Only the ones that apply are sent.
+  const reads: PreparedStatement[] = [];
+  const slot = { proposal: -1, action: -1, shared: -1, notifications: -1 };
+  if (phase?.status === 'PENDING_HUNTER') {
+    slot.proposal = reads.push(db
       .prepare(
-        `SELECT id, type, title, body, created_at AS createdAt
-         FROM notifications WHERE ${notificationSeatFilter}${cursor ? ' AND (created_at < ? OR (created_at = ? AND id < ?))' : ''}
-         ORDER BY created_at DESC, id DESC LIMIT ?`,
+        `SELECT COALESCE(reviewed_outcome_json, outcome_json) AS outcomeJson FROM resolution_proposals
+         WHERE phase_id = ? AND status = 'PROPOSED' ORDER BY created_at DESC LIMIT 1`,
       )
-      .bind(...notificationBindings)
-      .all<{ id: string; type: string; title: string; body: string; createdAt: string }>(),
-  ]);
+      .bind(phase.id)) - 1;
+  }
+  if (phase && actionKind) {
+    slot.action = reads.push(db
+      .prepare(
+        `SELECT id, kind, target_ids_json AS targetIdsJson, version, submitted_at AS submittedAt
+         FROM action_submissions
+         WHERE phase_id = ? AND actor_seat_id = ? AND kind = ? AND superseded_at IS NULL LIMIT 1`,
+      )
+      .bind(phase.id, player.id, actionKind)) - 1;
+  }
+  if (phase && actionKind && participationCountsAcrossPlayers(actionKind)) {
+    slot.shared = reads.push(db
+      .prepare(
+        `SELECT COUNT(DISTINCT actor_seat_id) AS count FROM action_submissions
+         WHERE phase_id = ? AND kind = ? AND superseded_at IS NULL`,
+      )
+      .bind(phase.id, actionKind)) - 1;
+  }
+  slot.notifications = reads.push(db
+    .prepare(
+      `SELECT id, type, title, body, created_at AS createdAt
+       FROM notifications WHERE ${notificationSeatFilter}${cursor ? ' AND (created_at < ? OR (created_at = ? AND id < ?))' : ''}
+       ORDER BY created_at DESC, id DESC LIMIT ?`,
+    )
+    .bind(...notificationBindings)) - 1;
+  const secondBatch = await db.batch(reads, 'read');
+  const proposal = slot.proposal >= 0 ? rowsOf<{ outcomeJson: string }>(secondBatch[slot.proposal])[0] ?? null : null;
+  const fetchedAction = slot.action >= 0
+    ? rowsOf<{ id: string; kind: ActionKind; targetIdsJson: string; version: number; submittedAt: string }>(secondBatch[slot.action])[0] ?? null
+    : null;
+  const sharedSubmissions = slot.shared >= 0 ? rowsOf<{ count: number }>(secondBatch[slot.shared])[0] ?? null : null;
+  const notificationRows = rowsOf<{ id: string; type: string; title: string; body: string; createdAt: string }>(secondBatch[slot.notifications]);
 
   let permission = basePermission;
   let hunterEliminatedIds: string[] = [];
@@ -421,7 +468,7 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
   if (player.gameStatus === 'STOPPED') {
     permission = { actionKind: null, maxTargets: 0, label: 'This game has been stopped by a moderator.' };
   }
-  // Round 3 read these for the permission before the Hunter check; drop them if it took the action away.
+  // Batch 2 read these for the permission before the Hunter check; drop them if it took the action away.
   const currentAction = permission.actionKind ? fetchedAction : null;
   const sharedCount = permission.actionKind ? Number(sharedSubmissions?.count ?? 0) : 0;
 
@@ -448,13 +495,13 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
   });
 
   const { timeline, timelineHasMore } = buildTimeline(
-    { timelineRows: timelineRows.results, newestBallotRows: newestBallotRows.results, ballotCountRows: ballotCountRows.results },
+    { timelineRows: rowsOf<TimelineRow>(timelineResult), newestBallotRows: rowsOf<PublicVoteRow>(newestBallotResult), ballotCountRows: rowsOf<{ phaseId: string; count: number }>(ballotCountResult) },
     roster,
     player.id,
   );
 
-  const notificationsHasMore = notificationRows.results.length === NOTIFICATION_LIMIT;
-  const lastNotification = notificationRows.results.at(-1);
+  const notificationsHasMore = notificationRows.length === NOTIFICATION_LIMIT;
+  const lastNotification = notificationRows.at(-1);
 
   return {
     player: {
@@ -494,10 +541,10 @@ export async function loadDashboard(seatId: string, options: { cursor?: Notifica
     timelineHasMore,
     // The player's own email switch. Absent from the choice when this site cannot send email.
     emailNotifications: { available: emailNotificationsAvailable(), enabled: Boolean(player.emailEnabled) },
-    notifications: notificationRows.results,
+    notifications: notificationRows,
     notificationsHasMore,
     notificationsNextCursor: notificationsHasMore && lastNotification ? { createdAt: lastNotification.createdAt, id: lastNotification.id } : null,
-    rooms: roomRows.results,
+    rooms: roomRows,
   };
 }
 
@@ -526,17 +573,19 @@ export async function loadSpectatorDashboard(spectatorId: string, options: { aut
   if (!spectator) return null;
   const gameId = spectator.gameId;
 
-  const [phase, roster, timelineRows, newestBallotRows, ballotCountRows, publicRooms] = await Promise.all([
-    loadCurrentPhase(gameId),
-    loadRoster(gameId),
-    ...publicTimelineReads(gameId),
+  const [phaseResult, rosterResult, timelineResult, newestBallotResult, ballotCountResult, publicRoomsResult] = await db.batch([
+    currentPhaseStatement(gameId),
+    rosterStatement(gameId),
+    ...publicTimelineStatements(gameId),
     db
       .prepare("SELECT id, type, status FROM chat_rooms WHERE game_id = ? AND type IN ('DEAD', 'TOWN_HALL') AND status != 'PURGED' ORDER BY type")
-      .bind(gameId)
-      .all<{ id: string; type: 'DEAD' | 'TOWN_HALL'; status: string }>(),
-  ]);
-  const afterlife = publicRooms.results.find((room) => room.type === 'DEAD');
-  const townHall = publicRooms.results.find((room) => room.type === 'TOWN_HALL');
+      .bind(gameId),
+  ], 'read');
+  const phase = rowsOf<CurrentPhaseRow>(phaseResult)[0] ?? null;
+  const roster = rosterFromRows(rowsOf<RosterRow>(rosterResult));
+  const publicRooms = rowsOf<{ id: string; type: 'DEAD' | 'TOWN_HALL'; status: string }>(publicRoomsResult);
+  const afterlife = publicRooms.find((room) => room.type === 'DEAD');
+  const townHall = publicRooms.find((room) => room.type === 'TOWN_HALL');
   const { livingPlayers, eliminatedPlayers, werewolvesRemaining } = publicRoster(roster);
   // How many living players have voted on an open Day or Final ballot, as every voter sees. Night counts stay private.
   const openBallot = phase?.status === 'OPEN' && phase.kind !== 'NIGHT';
@@ -550,7 +599,7 @@ export async function loadSpectatorDashboard(spectatorId: string, options: { aut
         .first<{ count: number }>()
     : null;
   const { timeline, timelineHasMore } = buildTimeline(
-    { timelineRows: timelineRows.results, newestBallotRows: newestBallotRows.results, ballotCountRows: ballotCountRows.results },
+    { timelineRows: rowsOf<TimelineRow>(timelineResult), newestBallotRows: rowsOf<PublicVoteRow>(newestBallotResult), ballotCountRows: rowsOf<{ phaseId: string; count: number }>(ballotCountResult) },
     roster,
     null,
   );

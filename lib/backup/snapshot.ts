@@ -99,10 +99,13 @@ export async function collectGameBackup(gameId: string): Promise<GameBackup> {
   const [gameRows, moderators, seats, composition, batches, assignments, phases, actions, resolutions, events, rooms, roomMembers, messages, moderatorMessages, announcements, notifications, operations, feedback] = reads;
   const game = gameRows.results[0];
   if (!game) throw new HttpError(404, 'Game not found.');
+  // The public sign-up link is a live invitation to the game, so it stays out of a file that can be passed around.
+  const exportedGame: Record<string, unknown> = { ...game };
+  delete exportedGame.signup_code;
   return {
     schemaVersion: 2,
     exportedAt: new Date().toISOString(),
-    game,
+    game: exportedGame,
     moderators: moderators.results,
     seats: seats.results,
     composition: composition.results,
@@ -123,18 +126,40 @@ export async function collectGameBackup(gameId: string): Promise<GameBackup> {
   };
 }
 
-export async function createBackupRecord(gameId: string, moderatorId: string): Promise<{ backupId: string; data: GameBackup; checksum: string }> {
+/** Each game keeps this many stored backups; saving another deletes the oldest. */
+export const BACKUPS_KEPT_PER_GAME = 5;
+
+/**
+ * Stores a backup and, in the same transaction, deletes the game's older ones beyond the newest
+ * BACKUPS_KEPT_PER_GAME. `keepBackupIds` are never deleted: a Restore passes the backup it is restoring from.
+ */
+export async function createBackupRecord(
+  gameId: string,
+  moderatorId: string,
+  { keepBackupIds = [] }: { keepBackupIds?: string[] } = {},
+): Promise<{ backupId: string; data: GameBackup; checksum: string }> {
   const data = await collectGameBackup(gameId);
   const payloadJson = JSON.stringify(data);
   const checksum = await sha256(payloadJson);
   const backupId = crypto.randomUUID();
-  await getDb()
-    .prepare(
-      `INSERT INTO backup_exports (id, game_id, moderator_id, schema_version, checksum, payload_json, exported_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(backupId, gameId, moderatorId, data.schemaVersion, checksum, payloadJson, data.exportedAt)
-    .run();
+  const db = getDb();
+  const kept = keepBackupIds.map(() => '?').join(', ');
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO backup_exports (id, game_id, moderator_id, schema_version, checksum, payload_json, exported_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(backupId, gameId, moderatorId, data.schemaVersion, checksum, payloadJson, data.exportedAt),
+    db
+      .prepare(
+        `DELETE FROM backup_exports
+         WHERE game_id = ?
+         AND id NOT IN (SELECT id FROM backup_exports WHERE game_id = ? ORDER BY exported_at DESC, id DESC LIMIT ?)
+         ${keepBackupIds.length ? `AND id NOT IN (${kept})` : ''}`,
+      )
+      .bind(gameId, gameId, BACKUPS_KEPT_PER_GAME, ...keepBackupIds),
+  ]);
   return { backupId, data, checksum };
 }
 
@@ -188,7 +213,7 @@ export async function restoreGameBackup(
   if (!backupGame) throw new Error('The selected backup has invalid game configuration.');
 
   const db = getDb();
-  const safetyBackup = await createBackupRecord(gameId, moderatorId);
+  const safetyBackup = await createBackupRecord(gameId, moderatorId, { keepBackupIds: [sourceBackup.id] });
   const currentGame = await db
     .prepare('SELECT status, updated_at AS updatedAt FROM games WHERE id = ? LIMIT 1')
     .bind(gameId)
@@ -267,6 +292,13 @@ export async function restoreGameBackup(
       ).bind(seat.id, gameId, seat.displayName, seat.email, seat.claimCodeHash, seat.createdAt, now, gameId, now, moderatorId),
     );
   }
+  // A sign-up accepted after the backup was taken has a seat the restore removed. Those people go back to waiting,
+  // as they do when the roster is replaced, so they can be accepted again. Accepted people whose seat is back stay accepted.
+  statements.push(
+    db.prepare(
+      "UPDATE signups SET status = 'PENDING', seat_id = NULL, decided_at = NULL, decided_by_moderator_id = NULL WHERE game_id = ? AND status = 'ACCEPTED' AND NOT EXISTS (SELECT 1 FROM seats s WHERE s.id = signups.seat_id AND s.status != 'REMOVED') AND " + restoreGuard,
+    ).bind(gameId, gameId, now, moderatorId),
+  );
   for (const composition of backupComposition(data)) {
     statements.push(
       db.prepare('INSERT INTO game_role_counts (game_id, role_key, count, power_snapshot) SELECT ?, ?, ?, ? WHERE ' + restoreGuard)

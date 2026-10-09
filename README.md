@@ -35,5 +35,6 @@ Then open `http://localhost:3000`. See [Setup](docs/SETUP.md) for Preview and Pr
 
 - Use the exact site address your organizer gives you. Preview and Production are separate sites with separate data.
 - The app emails invitations when SMTP is set up ([SETUP](docs/SETUP.md#invite-email)). Players can also opt in to emails for a phase opening, a half-hour warning, and a themed recap of each result ([SETUP](docs/SETUP.md#player-email)). Announcements are copied and sent by the moderator.
-- Phases never open on their own. By default the moderator also locks and publishes each result; a game switched to automatic results locks at its deadline and publishes after a review window unless the moderator steps in.
+- A moderator can add players by importing a list, by opening a public sign-up link and accepting who joins, or both. People can also apply to help moderate a game; the game owner approves. Nobody is emailed until a moderator accepts or approves them, and each game's sign-ups and applications start switched off.
+- Phases open only when the moderator opens them, unless the moderator ticks “Open the next Day or Night automatically” for an automatic-results game. The first Day and the final showdown are always opened by the moderator. By default the moderator also locks and publishes each result; a game switched to automatic results locks at its deadline and publishes after a review window unless the moderator steps in.
 - Keep invite files, role assignments, private rooms, and backups private.

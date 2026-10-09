@@ -8,8 +8,8 @@ The checks run locally, because GitHub Actions minutes are limited (2,000 a mont
 
 | Command | What it runs | When |
 | --- | --- | --- |
-| `npm run verify` | The fast gates: unit tests, lint, type check, production build, and the production dependency audit. A few minutes. | Before every push. |
-| `npm run verify:full` | `verify`, then the 20-player API suite, then the full 20-player Chromium browser suite, one game at a time. About 20 minutes; run it in the background. | Once per release candidate, during UAT. |
+| `npm run verify` | The fast gates: unit tests, lint, type check (`npm run typecheck`, which first clears the route type files a local browser run leaves in `.next/dev/types`), production build, and the production dependency audit. A few minutes. | Before every push. |
+| `npm run verify:full` | `verify`, then the 20-player API suite, then the full 20-player Chromium browser suite, one game at a time. About 1 to 1.5 hours (the fast gates and API suite take about 2 minutes; the three randomized browser games take about 10 minutes each, and a retry adds up to 16); run it in the background with a time limit of at least two hours. | Once per release candidate, during UAT. |
 
 The API and browser suites use a disposable local server and database, so they need no secrets and never touch a Preview. Each 20-player browser game may run for up to 20 minutes.
 
@@ -19,7 +19,7 @@ A candidate is ready for release when `npm run verify:full` has passed on its ex
 
 ## Unit tests
 
-`npm test` runs Vitest over `lib/**/*.test.ts`: the game engine, action rules, scheduling, balance, CSV import, auth, rate limits, migrations, backup and restore, and race conditions in the API routes, using an in-memory libSQL database. Village stats are covered by `lib/game/game-stats.test.ts` (the counting rules, including timezones) and `lib/api-stats.test.ts` (the routes: open ballots excluded, privacy, access, reset, chat counts). Player email is covered by `lib/api-email-notifications.test.ts` (recipients, once-only reminders, privacy of the wording, failures, the AI story with a mocked SDK) and the unit tests in `lib/notify/`; none of them send mail or call Claude.
+`npm test` runs Vitest over `lib/**/*.test.ts`: the game engine, action rules, scheduling, balance, CSV import, auth, rate limits, migrations, backup and restore, and race conditions in the API routes, using an in-memory libSQL database. Village stats are covered by `lib/game/game-stats.test.ts` (the counting rules, including timezones) and `lib/api-stats.test.ts` (the routes: open ballots excluded, privacy, access, reset, chat counts). Player email is covered by `lib/api-email-notifications.test.ts` (recipients, once-only reminders, privacy of the wording, failures, the AI story with a mocked SDK) and the unit tests in `lib/notify/`; none of them send mail or call Claude. Player sign-ups are covered by `lib/game/signups.test.ts` (the rules and wording limits) and `lib/api-signups.test.ts` (open, close, and replace the link; the public form's neutral replies, limits, hidden field, and rate limits; accepting into the roster, role counts, races, and claiming an accepted seat). Moderator applications are covered by `lib/game/moderator-applications.test.ts` and `lib/api-moderator-applications.test.ts` (applying, the owner's decisions, the one-time setup link: single use, seven-day expiry, two uses at once, an account that appeared meanwhile). Both mock only the email sender. `lib/api-signups-upgrade.test.ts` is the proof that existing games are untouched: it writes games with the schema as it stood at migration 0011, applies 0012 over them as Production will, and checks every row, the console's view, claiming, adding, removing, replacing the roster, and restoring a backup made before the migration. As a one-off check before a release, put the new migration (`drizzle/`, `drizzle/meta/_journal.json`, `scripts/db-migration-runner.mjs`, `db/readiness.ts`) into a worktree of `main` and run `main`'s own `npm test` there: Production's current code must pass against the new schema.
 
 ## Rehearse a game
 
@@ -33,7 +33,7 @@ npm run pilot:setup       # creates a 20-player game from fixtures/roster-20.csv
 npm run pilot:rehearsal   # scripted HTTP run of claim, review, privacy, and recovery paths
 ```
 
-`pilot:setup` writes a private invite CSV under `outputs/`. For a Preview, also set `PILOT_BASE_URL` and `PILOT_ALLOW_REMOTE=yes`, plus `VERCEL_AUTOMATION_BYPASS_SECRET` if the Preview is protected.
+`pilot:setup` writes a private invite CSV under `outputs/`. For a Preview, also set `PILOT_BASE_URL` and `PILOT_ALLOW_REMOTE=yes`, plus `VERCEL_AUTOMATION_BYPASS_SECRET` if the Preview is protected (it is sent only to `*.vercel.app` addresses). A remote run also needs an `https://` address and the host named with `--confirm-host=<host>` (or `CONFIRM_HOST`); `pilot:rehearsal` additionally needs `PILOT_ALLOW_MUTATION=yes` and `PILOT_MODERATOR_PASSWORD` for a remote host.
 
 For a manual rehearsal, give the moderator and each player a separate browser profile (private windows in one browser share cookies), then play at least one Day and one Night with the Hunter, a tie, an override, room moderation, and a backup.
 
@@ -82,7 +82,7 @@ This checks that the deployed Preview, with its real Vercel functions and Turso 
 | --- | --- |
 | `01-smoke` | `--project=chromium --retries=0 e2e/readiness/browser-smoke.spec.ts` |
 | `02-api-suite` | `--project=api --retries=0` |
-| `03-browser-uat` | `--project=chromium --retries=0 e2e/readiness/browser-uat.spec.ts e2e/readiness/browser-setup-navigation.spec.ts` |
+| `03-browser-uat` | `--project=chromium --retries=0 e2e/readiness/browser-uat.spec.ts e2e/readiness/browser-setup-navigation.spec.ts e2e/readiness/browser-signups.spec.ts` |
 
 PowerShell:
 
@@ -120,7 +120,7 @@ The `/guide` screenshots and walkthrough video come from a fictional local game.
 CAPTURE_GUIDE_MEDIA=1 node scripts/run-playwright.mjs --project=chromium --retries=0 e2e/readiness/guide-media.spec.ts
 ```
 
-The recording follows the console's tabs, a Night with the Seer, Bodyguard, and pack acting, and Player choices, so it shows what the guide's moderator section describes; when the console changes, update the scenes in `e2e/readiness/guide-media.spec.ts` too, and check that the guide's text and captions still match. This writes the screenshots to `public/guide/` as WebP (quality 82, about a quarter of a PNG's size, so there is no separate shrinking step) and a raw recording to `work/guide-walkthrough-raw.webm`. With `CAPTURE_GUIDE_MEDIA=1`, the runner gives the local server placeholder email settings (an `.invalid` host), so **Email invites** appears switched on. The recording only hovers it, and nothing can be sent. Encode the published files with a full ffmpeg build (Playwright's bundled ffmpeg can't write MP4; `pip install imageio-ffmpeg` provides a portable one). The paper grain is expensive to encode, so these settings are tuned for it:
+The recording (about three minutes) follows the moderator opening sign-ups, a visitor signing up from the public link and the moderator accepting them, an imported list added on top of the people already accepted, the narrator claiming a seat, the roles, a Day and a Night with the Seer, Bodyguard, and pack acting, Player choices, a helper applying to co-moderate and the owner approving them, and the console's tabs, so it shows what the guide's moderator section describes; when the console changes, update the scenes in `e2e/readiness/guide-media.spec.ts` too, and check that the guide's text and captions still match. This writes the screenshots to `public/guide/` as WebP (quality 82, about a quarter of a PNG's size, so there is no separate shrinking step) and a raw recording to `work/guide-walkthrough-raw.webm`. With `CAPTURE_GUIDE_MEDIA=1`, the runner gives the local server placeholder email settings (an `.invalid` host), so **Email invites** appears switched on. The recording only hovers it, and nothing can be sent. Encode the published files with a full ffmpeg build (Playwright's bundled ffmpeg can't write MP4; `pip install imageio-ffmpeg` provides a portable one). The paper grain is expensive to encode, so these settings are tuned for it:
 
 ```sh
 ffmpeg -y -i work/guide-walkthrough-raw.webm -c:v libx264 -preset slow -crf 30 -pix_fmt yuv420p -movflags +faststart -an public/guide/walkthrough.mp4
@@ -132,4 +132,4 @@ On Windows, `winget install Gyan.FFmpeg` installs a full build.
 
 `public/og.png` (the link-preview card) is a static image; redraw it if the emblem or title styling changes, and save it as a 256-colour PNG under 300 KB (`sharp` does it: `.png({ palette: true, quality: 90, effort: 10 })`).
 
-Regenerate the media once per release candidate rather than in every pull request: each regeneration adds about 5 MB of binaries to the repository's history.
+Regenerate the media once per release candidate rather than in every pull request: each regeneration adds about 10 MB of binaries to the repository’s history.

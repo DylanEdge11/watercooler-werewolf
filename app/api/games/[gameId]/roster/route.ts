@@ -10,6 +10,7 @@ import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 import { createInviteExport, parseRosterCsv } from '../../../../../lib/roster/csv';
 import { loadRosterView } from '../../../../../lib/game/setup-view';
+import { appendToRoster } from '../../../../../lib/roster/append-roster';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -32,10 +33,20 @@ export async function POST(request: Request, context: RouteContext) {
     await ensureDatabase();
     const { gameId } = await context.params;
     const moderator = await requireGameModerator(gameId);
-    const body = (await request.json()) as { csv?: string };
-    const parsed = parseRosterCsv(body.csv ?? '');
+    const body = (await request.json()) as { csv?: string; mode?: unknown; expectedSeatCount?: unknown };
+    // Without a mode the list replaces the roster, as it always has. ADD keeps everyone already on it.
+    if (body.mode !== undefined && body.mode !== 'ADD' && body.mode !== 'REPLACE') throw new Error('Choose ADD or REPLACE.');
+    const adding = body.mode === 'ADD';
+    // A replace can say how many players the moderator was looking at, so a page that has gone stale cannot wipe a roster it never saw.
+    if (body.expectedSeatCount !== undefined && (!Number.isInteger(body.expectedSeatCount) || Number(body.expectedSeatCount) < 0)) throw new Error('expectedSeatCount must be a whole number.');
+    const expectedSeatCount = body.expectedSeatCount === undefined ? null : Number(body.expectedSeatCount);
+    const parsed = parseRosterCsv(body.csv ?? '', adding ? { minPlayers: 1 } : {});
     if (parsed.errors.length) {
       return Response.json({ ok: false, errors: parsed.errors }, { status: 400 });
+    }
+    if (adding) {
+      const added = await appendToRoster({ gameId, moderatorId: moderator.id, entries: parsed.entries, origin: new URL(request.url).origin });
+      return Response.json({ ok: true, ...added, inviteCsv: createInviteExport(added.invites) });
     }
 
     const db = getDb();
@@ -59,6 +70,10 @@ export async function POST(request: Request, context: RouteContext) {
       .prepare("SELECT id FROM seats WHERE game_id = ? AND status != 'REMOVED'")
       .bind(gameId)
       .all<{ id: string }>();
+
+    if (expectedSeatCount !== null && existingSeats.results.length !== expectedSeatCount) {
+      return jsonError(`The roster changed while you were on this page: it has ${existingSeats.results.length} ${existingSeats.results.length === 1 ? 'player' : 'players'} now, but you were looking at ${expectedSeatCount}. Nothing was replaced. Check the roster, then try again.`, 409);
+    }
 
     const now = new Date().toISOString();
     const origin = new URL(request.url).origin;
@@ -107,6 +122,15 @@ export async function POST(request: Request, context: RouteContext) {
         db.prepare(`DELETE FROM seat_sessions WHERE seat_id = ? AND ${setupGuard}`).bind(archived.id, gameId, nextRevision),
       );
     }
+    // Replacing the roster archives every seat, including those made from sign-ups; those people go back to waiting.
+    statements.push(
+      db
+        .prepare(
+          `UPDATE signups SET status = 'PENDING', seat_id = NULL, decided_at = NULL, decided_by_moderator_id = NULL
+           WHERE game_id = ? AND status = 'ACCEPTED' AND ${setupGuard}`,
+        )
+        .bind(gameId, gameId, nextRevision),
+    );
     for (const invite of invites) {
       statements.push(
         db
@@ -118,6 +142,19 @@ export async function POST(request: Request, context: RouteContext) {
           .bind(invite.id, gameId, invite.displayName, invite.email, invite.codeHash, now, now, gameId, nextRevision),
       );
     }
+    // Anyone on the new list who had signed up (waiting, declined, or accepted before) is on the roster now, so the sign-up list says so.
+    statements.push(
+      db
+        .prepare(
+          `UPDATE signups
+           SET status = 'ACCEPTED', decided_at = ?, decided_by_moderator_id = ?,
+               seat_id = (SELECT s.id FROM seats s WHERE s.game_id = signups.game_id AND s.email = signups.email AND s.status != 'REMOVED' LIMIT 1)
+           WHERE game_id = ? AND status != 'ACCEPTED'
+             AND EXISTS (SELECT 1 FROM seats s WHERE s.game_id = signups.game_id AND s.email = signups.email AND s.status != 'REMOVED')
+             AND ${setupGuard}`,
+        )
+        .bind(now, moderator.id, gameId, gameId, nextRevision),
+    );
     for (const roleKey of ROLE_KEYS) {
       statements.push(
         db

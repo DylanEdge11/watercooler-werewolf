@@ -38,6 +38,15 @@ export function removeCoModeratorStatements(db: Database, change: MembershipChan
     db
       .prepare("DELETE FROM game_moderators WHERE game_id = ? AND moderator_id = ? AND role = 'CO_MODERATOR' AND EXISTS (SELECT 1 FROM game_events WHERE id = ?)")
       .bind(change.gameId, change.moderatorId, change.eventId),
+    // Someone who joined through an application and is now removed is no longer "added": the application goes
+    // to Declined, where the owner can reconsider it, instead of staying a dead end that blocks a new application.
+    db
+      .prepare(
+        `UPDATE moderator_applications
+         SET status = 'DECLINED', moderator_id = NULL, setup_code_hash = NULL, setup_used_at = NULL, decided_at = ?, decided_by_moderator_id = ?
+         WHERE game_id = ? AND moderator_id = ? AND EXISTS (SELECT 1 FROM game_events WHERE id = ?)`,
+      )
+      .bind(change.now, change.ownerId, change.gameId, change.moderatorId, change.eventId),
   ];
 }
 

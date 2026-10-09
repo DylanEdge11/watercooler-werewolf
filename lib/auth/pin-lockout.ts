@@ -9,6 +9,14 @@ export const PIN_LOCKOUT_ATTEMPTS = 10;
 
 export const PIN_LOCKED_MESSAGE = 'This seat is locked after too many wrong PINs. Ask your moderator to reset your PIN.';
 
+/**
+ * Shown for every wrong email, seat code, or PIN, whether or not the email has a
+ * seat, so it never reveals which emails do. The count in the second sentence
+ * is PIN_LOCKOUT_ATTEMPTS.
+ */
+export const SIGN_IN_NOT_ACCEPTED_MESSAGE =
+  'Email or seat code and PIN were not accepted. After ten wrong PINs a seat is locked until a moderator resets it.';
+
 /** The counters live in rate_limit_buckets, so no migration is needed. */
 export function pinFailureKey(seatId: string): string {
   return `pin-failures:${seatId}`;

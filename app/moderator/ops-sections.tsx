@@ -5,13 +5,19 @@ import { AnnouncementCopies, FeedbackBlock } from './communications';
 import { useOperations, type OperationalEvent } from './operations-context';
 import RoomHistory from './room-history';
 
-/** The result of the moderator's last action on these controls: an error or a confirmation. */
-export function OpsNotices() {
-  const { error, message } = useOperations();
-  return <>
-    {error && <p className="notice error" role="alert">{error}</p>}
-    {message && <p className="notice success" role="status">{message}</p>}
-  </>;
+/**
+ * The fresh invitations a restore produces. They are shown only once, so this stays on Setup, where a restore
+ * sends the console, until the moderator leaves the game; the message about the restore is in the banner.
+ */
+export function RestoredInvites() {
+  const { restoreInviteCsv, downloadRestoredInvites } = useOperations();
+  if (!restoreInviteCsv) return null;
+  return (
+    <div className="notice success restored-invites">
+      <p>The backup was restored and every player has a fresh private link. They are shown only once, so download them now.</p>
+      <div className="button-row"><button className="secondary-button" type="button" onClick={downloadRestoredInvites}>Download fresh invites</button></div>
+    </div>
+  );
 }
 
 function Loading() {
@@ -87,7 +93,7 @@ export function BackupControls() {
   if (!operations) return <Loading />;
   return <>
     <div className="backup-row"><div><p className="eyebrow accent">Verified backup</p><strong>{operations.lastBackup ? `Last export ${new Date(operations.lastBackup.exportedAt).toLocaleString()}` : 'No backup exported yet'}</strong><small>{operations.lastBackup?.checksum ? `Checksum ${operations.lastBackup.checksum.slice(0, 18)}…` : 'Includes game state, audit history, and private rooms.'}</small></div><button className="primary-button" type="button" onClick={() => void exportBackup()} disabled={busyAction !== null}>{busyAction === 'export' ? 'Creating…' : 'Download JSON backup'}</button></div>
-    {operations.viewerRole === 'OWNER' && operations.backups.length > 0 && <div className="ops-block restore-backup-block"><p className="eyebrow accent">Recovery restore</p><p className="field-help">Restore a verified snapshot into this game’s setup state. Secrets are never restored; fresh seat links are generated.</p><div className="button-row"><label className="restore-select">Snapshot<select value={restoreBackupId} onChange={(event) => setRestoreBackupId(event.target.value)} disabled={busyAction !== null}>{operations.backups.map((backup) => <option key={backup.id} value={backup.id}>{new Date(backup.exportedAt).toLocaleString()} · {backup.checksum.slice(0, 12)}…</option>)}</select></label><button className="secondary-button" type="button" onClick={() => void restoreBackup()} disabled={busyAction !== null}>{busyAction === 'restore' ? 'Restoring…' : 'Restore to setup'}</button>{restoreInviteCsv && <button className="secondary-button" type="button" onClick={downloadRestoredInvites}>Download fresh invites</button>}</div></div>}
+    {operations.viewerRole === 'OWNER' && operations.game.status !== 'CANCELLED' && operations.backups.length > 0 && <div className="ops-block restore-backup-block"><p className="eyebrow accent">Recovery restore</p><p className="field-help">Restore a verified snapshot into this game’s setup state. Secrets are never restored; fresh seat links are generated.</p><div className="button-row"><label className="restore-select">Snapshot<select value={restoreBackupId} onChange={(event) => setRestoreBackupId(event.target.value)} disabled={busyAction !== null}>{operations.backups.map((backup) => <option key={backup.id} value={backup.id}>{new Date(backup.exportedAt).toLocaleString()} · {backup.checksum.slice(0, 12)}…</option>)}</select></label><button className="secondary-button" type="button" onClick={() => void restoreBackup()} disabled={busyAction !== null}>{busyAction === 'restore' ? 'Restoring…' : 'Restore to setup'}</button>{restoreInviteCsv && <button className="secondary-button" type="button" onClick={downloadRestoredInvites}>Download fresh invites</button>}</div></div>}
   </>;
 }
 
@@ -126,7 +132,7 @@ export function ChatRooms() {
   return (
     <div className="ops-block room-operations">
       <div className="ops-heading">
-        <div><p className="eyebrow accent">Chat rooms</p><p className="field-help">Messages expire after {operations.game.chatRetentionDays} days.</p></div>
+        <div><p className="eyebrow accent">Chat rooms</p><p className="field-help">Messages older than {operations.game.chatRetentionDays} days are removed when you select Purge expired.</p></div>
         <button className="secondary-button" type="button" onClick={() => void purgeRetention()}>Purge expired</button>
       </div>
       <div className="room-health-list">{rooms.map((room) => <div key={room.id}><span>{ROOM_NAMES[room.type] ?? room.type}</span><strong>{room.memberCount} members · {room.messageCount} messages</strong><button className="room-open" type="button" aria-pressed={historyRoomId === room.id} onClick={() => setHistoryRoomId(room.id)}>Open room</button><button type="button" onClick={() => void toggleRoom(room)}>{room.status === 'OPEN' ? 'Make read-only' : 'Reopen'}</button></div>)}</div>

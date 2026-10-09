@@ -8,9 +8,9 @@ import { phaseName } from './timeline-view';
  */
 
 export const CONSOLE_TABS = [
-  { id: 'setup', label: 'Setup', blurb: 'Schedule, roster, roles, and release. This is the one-time launch.' },
+  { id: 'setup', label: 'Setup', blurb: 'Schedule, sign-ups, roster, roles, and release. This is the one-time launch.' },
   { id: 'run', label: 'Run game', blurb: 'Open each phase, chase missing responses, lock, review, and publish.' },
-  { id: 'people', label: 'People', blurb: 'Help a player back in, manage spectators, and share the game with co-moderators.' },
+  { id: 'people', label: 'People', blurb: 'Help a player back in, manage spectators, and share the game with co-moderators, including people who apply.' },
   { id: 'messages', label: 'Messages', blurb: 'Announce to everyone, moderate the chat rooms, and read player feedback.' },
   { id: 'safety', label: 'Safety & records', blurb: 'What the game has been doing, backups, and the controls that stop or reset a game.' },
 ] as const;
@@ -24,9 +24,13 @@ export function isConsoleTabId(value: string): value is ConsoleTabId {
 /** Statuses where the work is running the game rather than preparing it. */
 const RUN_STATUSES = new Set(['ACTIVE', 'FINAL_SHOWDOWN', 'COMPLETED', 'STOPPED']);
 
-/** The tab a moderator lands on: Setup until roles are released, then Run game. */
-export function defaultConsoleTab(status: string | undefined): ConsoleTabId {
-  return status && RUN_STATUSES.has(status) ? 'run' : 'setup';
+/**
+ * The tab a moderator lands on: Setup until roles are released, then Run game. A game stopped before roles went
+ * out has nothing to run, so it opens on Safety & records, where its backup and the way to start over are.
+ */
+export function defaultConsoleTab(status: string | undefined, released = true): ConsoleTabId {
+  if (!status || !RUN_STATUSES.has(status)) return 'setup';
+  return status === 'STOPPED' && !released ? 'safety' : 'run';
 }
 
 export type ChecklistState = 'done' | 'active' | 'todo';
@@ -49,15 +53,36 @@ export interface LaunchChecklist {
 /** The four launch steps: done once passed, active when it is the one to do now. */
 export function launchChecklist(progress: LaunchProgress): LaunchChecklist {
   const { gameCount, seatCount, hasBatch, released } = progress;
+  // A roster built from sign-ups passes through sizes too small to play, so the roster is done only at the minimum.
+  const rosterReady = seatCount >= MIN_PLAYERS;
   return {
     schedule: gameCount ? 'done' : 'active',
-    roster: seatCount ? 'done' : gameCount ? 'active' : 'todo',
-    roles: hasBatch ? 'done' : seatCount ? 'active' : 'todo',
+    roster: rosterReady ? 'done' : gameCount ? 'active' : 'todo',
+    roles: hasBatch ? 'done' : rosterReady ? 'active' : 'todo',
     release: released ? 'done' : hasBatch ? 'active' : 'todo',
   };
 }
 
-export type SetupStepKey = 'roster' | 'roles' | 'release';
+/**
+ * What happened to the role counts after people were added to the roster in bulk (accepted from
+ * sign-ups, or a list added to the roster). Below the minimum there are no counts yet; more than
+ * one new player starts again from the standard preset; one new player keeps the moderator's counts.
+ */
+export function rosterCountsNote(result: { playerCount: number; resetToPreset: boolean; villagers: number }): string {
+  if (result.playerCount < MIN_PLAYERS) return `The roster has ${result.playerCount} so far, and a game needs at least ${MIN_PLAYERS}.`;
+  if (result.resetToPreset) return `Role counts were set to the standard preset for ${result.playerCount} players.`;
+  return `Role counts now have ${result.villagers} ${result.villagers === 1 ? 'Villager' : 'Villagers'}; other roles are unchanged.`;
+}
+
+/**
+ * How long a confirmation stays on screen before it fades: long enough to read, a little longer for a long one
+ * (some say what to do next), never more than half a minute. An error never fades.
+ */
+export function noticeFadeMs(text: string): number {
+  return Math.min(30_000, Math.max(8_000, text.length * 70));
+}
+
+export type SetupStepKey = 'signups' | 'roster' | 'roles' | 'release';
 
 export interface ConsoleHint {
   title: string;
@@ -70,18 +95,55 @@ export interface ConsoleHint {
  * The next thing to do before and after a game, shown above the tabs. While a
  * game is running, the Run game tab says what to do for the current phase.
  */
-export function setupHint(input: { status: string | undefined; seatCount: number; claimedCount: number; hasBatch: boolean; released: boolean }): ConsoleHint | null {
+export function setupHint(input: { status: string | undefined; seatCount: number; claimedCount: number; hasBatch: boolean; released: boolean; pendingSignups?: number; signupsOpen?: boolean }): ConsoleHint | null {
   const { status, seatCount, claimedCount, hasBatch, released } = input;
+  const pendingSignups = input.pendingSignups ?? 0;
   if (status === 'COMPLETED') return { title: 'The game is over', detail: 'Download a JSON backup under Safety & records to keep a private record of it.' };
   if (status === 'STOPPED') return { title: 'This game was stopped', detail: 'Players can no longer act and the rooms are read-only. Download a backup under Safety & records, or start a new setup.' };
   if (!status || !['DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'].includes(status) || released) return null;
-  if (!seatCount) return { title: 'Next: add your players', detail: `Paste a roster of ${MIN_PLAYERS} to ${MAX_PLAYERS} players under Import the roster. Each player gets their own private seat link.`, step: 'roster' };
+  // People waiting come first: they are the one thing here that changes without the moderator doing anything.
+  if (pendingSignups > 0 && status !== 'ASSIGNMENT_PREVIEW') {
+    const need = Math.max(0, MIN_PLAYERS - seatCount);
+    return {
+      title: `${pendingSignups} ${pendingSignups === 1 ? 'person has' : 'people have'} signed up`,
+      detail: `Accept the people you want in the game. A game needs ${MIN_PLAYERS} to ${MAX_PLAYERS} players${seatCount ? `, and the roster has ${seatCount}${need ? `, so ${need} more ${need === 1 ? 'is' : 'are'} needed` : ''}` : ''}.`,
+      step: 'signups',
+    };
+  }
+  if (seatCount < MIN_PLAYERS) {
+    if (input.signupsOpen) return { title: 'Sign-ups are open', detail: `Share the sign-up link and accept the people you want as they arrive. If you have a list of your own, you can import it too, before or after. A game needs ${MIN_PLAYERS} to ${MAX_PLAYERS} players${seatCount ? `; the roster has ${seatCount}` : ''}.`, step: 'signups' };
+    if (seatCount) {
+      const need = MIN_PLAYERS - seatCount;
+      return { title: `Add ${need} more ${need === 1 ? 'player' : 'players'}`, detail: `A game needs at least ${MIN_PLAYERS} players and the roster has ${seatCount}. Accept more sign-ups, add players one at a time, or import a roster.`, step: 'roster' };
+    }
+    return { title: 'Next: add your players', detail: `Paste a roster of ${MIN_PLAYERS} to ${MAX_PLAYERS} players under Import the roster, or open sign-ups and let people join from a link. Each player gets their own private seat link.`, step: 'roster' };
+  }
   if (claimedCount < seatCount) {
     const waiting = seatCount - claimedCount;
     return { title: `Waiting for ${waiting} ${waiting === 1 ? 'player' : 'players'} to claim a seat`, detail: 'Email the invitations or send each person their own link. You can add or remove a player until you randomize roles.', step: 'roster' };
   }
   if (!hasBatch) return { title: 'Next: balance the roles', detail: 'Everyone has a seat. Check the role counts, save them, then randomize. Players see nothing until you release.', step: 'roles' };
   return { title: 'Next: review and release the roles', detail: 'The roles are randomized but still private. Releasing is permanent: it starts the game and locks setup.', step: 'release' };
+}
+
+export interface TabCount {
+  count: number;
+  description: string;
+}
+
+/**
+ * The numbers on the Setup and People tabs: people waiting to be accepted onto the roster, and
+ * applications waiting for the owner. Only counted where the moderator can act on them.
+ */
+export function waitingBadges(input: { pendingSignups: number; pendingApplications: number; setupEditable: boolean; isOwner: boolean }): { setup?: TabCount; people?: TabCount } {
+  const badges: { setup?: TabCount; people?: TabCount } = {};
+  if (input.setupEditable && input.pendingSignups > 0) {
+    badges.setup = { count: input.pendingSignups, description: `${input.pendingSignups} ${input.pendingSignups === 1 ? 'person is' : 'people are'} waiting to be accepted into the game` };
+  }
+  if (input.isOwner && input.pendingApplications > 0) {
+    badges.people = { count: input.pendingApplications, description: `${input.pendingApplications} moderator ${input.pendingApplications === 1 ? 'application is' : 'applications are'} waiting for your decision` };
+  }
+  return badges;
 }
 
 export interface RunPhase {

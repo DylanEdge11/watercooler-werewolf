@@ -158,8 +158,9 @@ describe('real libSQL provider integration', () => {
     const batch = vi.spyOn(shared.db!, 'batch');
     for (let poll = 0; poll < 2; poll += 1) expect((await playerGet(new Request('http://localhost:3000/api/player'))).status).toBe(200);
     expect((await memberships()).rows).toEqual(membershipsBeforePolling.rows);
-    // A player poll runs no write batch at all.
-    expect(batch).not.toHaveBeenCalled();
+    // A player poll runs no write batch: the ones it sends are read-only, so they cannot change a membership.
+    expect(batch).toHaveBeenCalled();
+    expect(batch.mock.calls.every(([, mode]) => mode === 'read')).toBe(true);
     batch.mockRestore();
 
     const membership = await client.execute(`SELECT r.type, m.access, m.granted_at AS grantedAt, m.revoked_at AS revokedAt

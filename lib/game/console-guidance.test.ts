@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attentionEventCount, CONSOLE_TABS, defaultConsoleTab, isConsoleTabId, latestAttentionEventAt, launchChecklist, resolveConsoleTab, runHint, runNeedsAttention, setupHint } from './console-guidance';
+import { attentionEventCount, CONSOLE_TABS, defaultConsoleTab, isConsoleTabId, latestAttentionEventAt, launchChecklist, noticeFadeMs, resolveConsoleTab, rosterCountsNote, runHint, runNeedsAttention, setupHint, waitingBadges } from './console-guidance';
 
 describe('console tabs', () => {
   it('names five tabs with unique ids and a one-line purpose each', () => {
@@ -24,6 +24,15 @@ describe('console tabs', () => {
     }
     expect(defaultConsoleTab(undefined)).toBe('setup');
   });
+
+  it('opens a game stopped before roles went out on Safety & records, not on an empty Run game tab', () => {
+    expect(defaultConsoleTab('STOPPED', false)).toBe('safety');
+    expect(defaultConsoleTab('STOPPED', true)).toBe('run');
+    // Everything else is unchanged by whether roles went out.
+    expect(defaultConsoleTab('REGISTRATION', false)).toBe('setup');
+    expect(defaultConsoleTab('ACTIVE', true)).toBe('run');
+    expect(defaultConsoleTab('COMPLETED', true)).toBe('run');
+  });
 });
 
 describe('launch checklist', () => {
@@ -38,6 +47,94 @@ describe('launch checklist', () => {
     expect(launchChecklist({ ...base, gameCount: 1, seatCount: 8 })).toEqual({ schedule: 'done', roster: 'done', roles: 'active', release: 'todo' });
     expect(launchChecklist({ ...base, gameCount: 1, seatCount: 8, claimedCount: 8, hasBatch: true })).toEqual({ schedule: 'done', roster: 'done', roles: 'done', release: 'active' });
     expect(launchChecklist({ ...base, gameCount: 1, seatCount: 8, claimedCount: 8, hasBatch: true, released: true })).toEqual({ schedule: 'done', roster: 'done', roles: 'done', release: 'done' });
+  });
+});
+
+describe('launch checklist with a roster still being built from sign-ups', () => {
+  const base = { gameCount: 1, seatCount: 0, claimedCount: 0, hasBatch: false, released: false };
+
+  it('is not done with the roster until it reaches the minimum', () => {
+    for (const seatCount of [1, 3, 5]) {
+      expect(launchChecklist({ ...base, seatCount })).toEqual({ schedule: 'done', roster: 'active', roles: 'todo', release: 'todo' });
+    }
+    expect(launchChecklist({ ...base, seatCount: 6 })).toEqual({ schedule: 'done', roster: 'done', roles: 'active', release: 'todo' });
+  });
+});
+
+describe('setup hint with sign-ups', () => {
+  const setup = { status: 'REGISTRATION', seatCount: 0, claimedCount: 0, hasBatch: false, released: false };
+
+  it('offers sign-ups as a way to add players when the roster is empty', () => {
+    const hint = setupHint(setup);
+    expect(hint?.title).toBe('Next: add your players');
+    expect(hint?.detail).toContain('open sign-ups');
+    expect(hint?.step).toBe('roster');
+  });
+
+  it('says sign-ups are open, and what to do with them', () => {
+    const hint = setupHint({ ...setup, signupsOpen: true });
+    expect(hint?.title).toBe('Sign-ups are open');
+    expect(hint?.detail).toContain('6 to 80 players');
+    expect(hint?.step).toBe('signups');
+    expect(setupHint({ ...setup, seatCount: 4, signupsOpen: true })?.detail).toContain('the roster has 4');
+  });
+
+  it('tells a moderator with sign-ups open that a list can be imported before or after', () => {
+    expect(setupHint({ ...setup, signupsOpen: true })?.detail).toContain('import it too, before or after');
+  });
+
+  it('describes the role counts after people are added in bulk', () => {
+    expect(rosterCountsNote({ playerCount: 3, resetToPreset: false, villagers: 0 })).toBe('The roster has 3 so far, and a game needs at least 6.');
+    expect(rosterCountsNote({ playerCount: 8, resetToPreset: true, villagers: 4 })).toBe('Role counts were set to the standard preset for 8 players.');
+    expect(rosterCountsNote({ playerCount: 9, resetToPreset: false, villagers: 5 })).toBe('Role counts now have 5 Villagers; other roles are unchanged.');
+    expect(rosterCountsNote({ playerCount: 7, resetToPreset: false, villagers: 1 })).toBe('Role counts now have 1 Villager; other roles are unchanged.');
+  });
+
+  it('puts people waiting first, in the singular and the plural', () => {
+    expect(setupHint({ ...setup, pendingSignups: 1, signupsOpen: true })).toMatchObject({ title: '1 person has signed up', step: 'signups' });
+    expect(setupHint({ ...setup, pendingSignups: 3 })).toMatchObject({ title: '3 people have signed up', step: 'signups' });
+    expect(setupHint({ ...setup, pendingSignups: 3, seatCount: 8, claimedCount: 8 })?.title).toBe('3 people have signed up');
+  });
+
+  it('counts how many more players a short roster needs', () => {
+    expect(setupHint({ ...setup, pendingSignups: 2, seatCount: 4 })?.detail).toContain('the roster has 4, so 2 more are needed');
+    expect(setupHint({ ...setup, pendingSignups: 2, seatCount: 5 })?.detail).toContain('so 1 more is needed');
+    expect(setupHint({ ...setup, pendingSignups: 2, seatCount: 7, claimedCount: 7 })?.detail).not.toContain('more');
+  });
+
+  it('asks for more players when a closed roster is still too small', () => {
+    expect(setupHint({ ...setup, seatCount: 4 })).toMatchObject({ title: 'Add 2 more players', step: 'roster' });
+    expect(setupHint({ ...setup, seatCount: 5 })?.title).toBe('Add 1 more player');
+  });
+
+  it('does not offer to balance the roles for a roster that is too small, even when everyone has claimed', () => {
+    expect(setupHint({ ...setup, seatCount: 5, claimedCount: 5 })?.title).toBe('Add 1 more player');
+  });
+
+  it('stays quiet about waiting people once roles are randomized or the game is running', () => {
+    expect(setupHint({ ...setup, status: 'ASSIGNMENT_PREVIEW', pendingSignups: 2, seatCount: 8, claimedCount: 8, hasBatch: true })?.title).toBe('Next: review and release the roles');
+    expect(setupHint({ ...setup, status: 'ACTIVE', pendingSignups: 2, seatCount: 8, claimedCount: 8, hasBatch: true, released: true })).toBeNull();
+  });
+});
+
+describe('waiting badges', () => {
+  it('count sign-ups on Setup and applications on People, where the moderator can act on them', () => {
+    const badges = waitingBadges({ pendingSignups: 2, pendingApplications: 1, setupEditable: true, isOwner: true });
+    expect(badges.setup).toEqual({ count: 2, description: '2 people are waiting to be accepted into the game' });
+    expect(badges.people).toEqual({ count: 1, description: '1 moderator application is waiting for your decision' });
+  });
+
+  it('read in the singular', () => {
+    expect(waitingBadges({ pendingSignups: 1, pendingApplications: 2, setupEditable: true, isOwner: true })).toMatchObject({
+      setup: { description: '1 person is waiting to be accepted into the game' },
+      people: { description: '2 moderator applications are waiting for your decision' },
+    });
+  });
+
+  it('show nothing when nobody is waiting, setup is locked, or the moderator is not the owner', () => {
+    expect(waitingBadges({ pendingSignups: 0, pendingApplications: 0, setupEditable: true, isOwner: true })).toEqual({});
+    expect(waitingBadges({ pendingSignups: 4, pendingApplications: 0, setupEditable: false, isOwner: true })).toEqual({});
+    expect(waitingBadges({ pendingSignups: 0, pendingApplications: 3, setupEditable: true, isOwner: false })).toEqual({});
   });
 });
 
@@ -179,5 +276,14 @@ describe('resolve console tab', () => {
   it('keeps a tab chosen by a link whatever the game does', () => {
     expect(resolveConsoleTab({ id: 'safety', forDefault: null }, 'setup')).toBe('safety');
     expect(resolveConsoleTab({ id: 'safety', forDefault: null }, 'run')).toBe('safety');
+  });
+});
+
+describe('how long a confirmation stays up', () => {
+  it('is long enough to read, a little longer for a long message, and never more than half a minute', () => {
+    expect(noticeFadeMs('Saved.')).toBe(8_000);
+    expect(noticeFadeMs('x'.repeat(200))).toBe(14_000);
+    expect(noticeFadeMs('x'.repeat(5_000))).toBe(30_000);
+    expect(noticeFadeMs('')).toBe(8_000);
   });
 });

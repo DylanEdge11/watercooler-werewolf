@@ -138,6 +138,10 @@
 .ll-stamp-button:active { box-shadow: 0 0 0 color-mix(in srgb, var(--ll-accent) 60%, black); transform: translateY(2px); }
 .ll-stamp-button:disabled { cursor: progress; opacity: 0.7; }
 
+.ll-signin-choices { display: grid; gap: 8px; }
+.ll-signin-choices-title { font-size: 15px; font-style: italic; margin: 4px 0 0; }
+.ll-signin-choice { letter-spacing: 0.04em; margin-top: 0; text-align: left; text-transform: none; transform: none; }
+
 .ll-signin-links { display: grid; font-size: 13px; gap: 3px; margin: 12px 0 0; }
 .ll-signin-links a { color: var(--ll-accent); font-style: italic; text-decoration: none; }
 .ll-signin-links a:hover { text-decoration: underline; }

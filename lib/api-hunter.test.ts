@@ -121,6 +121,51 @@ describe('Hunter follow-up', () => {
     expect(await phaseStatus()).toBe('PENDING_HUNTER');
   });
 
+  describe('ending the Hunter’s turn early', () => {
+    const EARLY_WARNING = 'A moderator ended the Hunter’s turn before the window closed.';
+    const EARLY_EVENT = 'Hunter’s turn ended early by a moderator.';
+    const earlyEvents = async () => (await client.execute("SELECT message FROM operational_events WHERE game_id = 'game' AND message = ?", [EARLY_EVENT])).rows;
+
+    test('a moderator can end it before the window closes; the result says so, the event log records it, and the phase publishes', async () => {
+      const early = await act({ action: 'FINALIZE_HUNTER', skipHunter: true, endHunterEarly: true });
+      expect(early.status).toBe(200);
+      expect(await phaseStatus()).toBe('PENDING_APPROVAL');
+      const outcome = early.body.outcome as { hunterRequiredIds: string[]; eliminations: Array<{ playerId: string }>; warnings: Array<{ reason: string }> };
+      expect(outcome.hunterRequiredIds).toEqual([]);
+      expect(outcome.eliminations.map((item) => item.playerId)).toEqual(['p0']);
+      expect(outcome.warnings).toContainEqual(expect.objectContaining({ reason: EARLY_WARNING }));
+      expect(await earlyEvents()).toHaveLength(1);
+      const resolved = (await client.execute("SELECT payload_json AS payload FROM game_events WHERE event_type = 'HUNTER_RESOLVED'")).rows[0];
+      expect(JSON.parse(String(resolved?.payload))).toMatchObject({ submitted: false, endedEarly: true });
+      expect((await act({ action: 'PUBLISH' })).body).toMatchObject({ ok: true });
+      expect(await phaseStatus()).toBe('PUBLISHED');
+    });
+
+    test('skipping alone still does not end a window that is open', async () => {
+      const refused = await act({ action: 'FINALIZE_HUNTER', skipHunter: true });
+      expect(refused.status).toBe(400);
+      expect(String(refused.body.error)).toContain('still open');
+      expect(await phaseStatus()).toBe('PENDING_HUNTER');
+      expect(await earlyEvents()).toHaveLength(0);
+    });
+
+    test('with a shot already saved the shot applies and nothing is logged as ended early', async () => {
+      await saveShot('shot', 'p1');
+      const finalized = await act({ action: 'FINALIZE_HUNTER', skipHunter: true, endHunterEarly: true });
+      expect(finalized.status).toBe(200);
+      expect((finalized.body.outcome as { eliminations: Array<{ playerId: string }> }).eliminations.map((item) => item.playerId)).toEqual(['p0', 'p1']);
+      expect(await earlyEvents()).toHaveLength(0);
+    });
+
+    test('a window that really ran out keeps its own wording', async () => {
+      await expireHunterWindow();
+      const finalized = await act({ action: 'FINALIZE_HUNTER', skipHunter: true });
+      expect(finalized.status).toBe(200);
+      expect((finalized.body.outcome as { warnings: Array<{ reason: string }> }).warnings).toContainEqual(expect.objectContaining({ reason: 'Hunter response window expired without a shot.' }));
+      expect(await earlyEvents()).toHaveLength(0);
+    });
+  });
+
   test('a shot saved after the finalize read makes the finalize change nothing', async () => {
     await saveShot('late-shot', 'p1');
     await expireHunterWindow();

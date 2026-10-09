@@ -1,10 +1,12 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { IDLE_AFTER_MS, pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { useGameEnded } from './use-game-ended';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
 import type { FeedbackSummary } from '../../lib/game/feedback';
+import { createInviteExport } from '../../lib/roster/csv';
 import type { AnnouncementRecord } from './communications';
 
 export interface Operations {
@@ -93,6 +95,11 @@ export interface OperationsValue {
   refresh: () => Promise<void>;
   /** Clears the last action's confirmation or error, so it doesn't follow the moderator to another tab. */
   clearNotices: () => void;
+  /** Clears only the confirmation, so a message that has been on screen long enough fades while an error stays. */
+  clearMessage: () => void;
+  /** Lets a card on the console report its result through the same banner, instead of in a corner of its own. */
+  showMessage: (text: string) => void;
+  showError: (text: string) => void;
   announce: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   addModerator: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   removeModerator: (moderator: Moderator) => Promise<void>;
@@ -126,6 +133,7 @@ export function useOperations(): OperationsValue {
  */
 export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, children }: { gameId: string; refreshToken?: number; onGameChanged?: () => void; children: ReactNode }) {
   const [operations, setOperations] = useState<Operations | null>(null);
+  const ended = useGameEnded(operations?.game?.status);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [historyRoomId, setHistoryRoomId] = useState<string | null>(null);
@@ -196,6 +204,9 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     setMessage('');
     setError('');
   }, []);
+  const clearMessage = useCallback(() => setMessage(''), []);
+  const showMessage = useCallback((text: string) => setMessage(text), []);
+  const showError = useCallback((text: string) => setError(text), []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -203,12 +214,12 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     }, 0);
     const stopPolling = pollWhileVisible(() => {
       void refreshInternal({ onlyLive: true }).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh operations.'));
-    }, RELAXED_POLL_MS);
+    }, RELAXED_POLL_MS, { idleAfterMs: IDLE_AFTER_MS, stopWhen: () => ended.current });
     return () => {
       window.clearTimeout(timer);
       stopPolling();
     };
-  }, [refreshInternal, refreshToken]);
+  }, [refreshInternal, refreshToken, ended]);
 
   async function post(path: string, body: Record<string, unknown>) {
     const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -397,7 +408,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     setBusyAction('reset');
     try {
       await post(`/api/games/${gameId}/operations`, { action: 'RESET', confirmed: true, confirmationName });
-      setMessage('Game reset to setup state. Re-import the roster before configuring roles.');
+      setMessage('Game reset to setup state. Re-import the roster (use Replace the whole roster) before configuring roles.');
       await refresh();
       onGameChanged?.();
     } catch (caught) {
@@ -421,10 +432,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
         body: JSON.stringify({ action: 'RESTORE_BACKUP', backupId: restoreBackupId, confirmed: true, confirmationName }),
       }));
       const rows = result.inviteRows ?? [];
-      setRestoreInviteCsv(rows.length ? [
-        ['display_name', 'email', 'claim_url', 'invite_code'].join(','),
-        ...rows.map((row) => [row.displayName, row.email, row.claimUrl, row.inviteCode].map((value) => `"${value.replaceAll('"', '""')}"`).join(',')),
-      ].join('\r\n') : '');
+      setRestoreInviteCsv(rows.length ? createInviteExport(rows) : '');
       setMessage(`Backup restored to setup with ${result.restoredSeatCount} fresh private seat links. Download the invite CSV now; codes are not shown again.`);
       await refresh();
       onGameChanged?.();
@@ -479,7 +487,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
   const value: OperationsValue = {
     gameId, operations, rooms, messages, historyRoomId, setHistoryRoomId, roomChanges, moderators, announcements, latestAnnouncementId, feedback,
     recoveryCodes, pinSeatId, setPinSeatId, restoreBackupId, setRestoreBackupId, restoreInviteCsv, busyAction, message, error,
-    refresh, clearNotices, announce, addModerator, removeModerator, makeOwner, resetPlayerPin, exportBackup, toggleRoom, purgeRetention, removeMessage,
+    refresh, clearNotices, clearMessage, showMessage, showError, announce, addModerator, removeModerator, makeOwner, resetPlayerPin, exportBackup, toggleRoom, purgeRetention, removeMessage,
     stopGame, resetGame, restoreBackup, downloadRestoredInvites, reconcileDeadlines, submitFeedback,
   };
   return <OperationsContext.Provider value={value}>{children}</OperationsContext.Provider>;

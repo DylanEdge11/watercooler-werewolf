@@ -170,7 +170,7 @@ export default function VillageStats({ endpoint, refreshKey, pacing = null, samp
           <div>
             <p className="eyebrow accent">Village stats</p>
             <h1 id="village-stats-title">How the village is playing</h1>
-            <p>Built from the results the moderator has published and from chat activity. Nothing private is shown here.</p>
+            <p>Built from the results the moderator has published and from chat activity. Only public information is shown here. The message total counts every room, including private ones, but never what was said.</p>
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
 # Setup and deployment
 
-For the site operator: the person who installs Watercooler Werewolf, manages Vercel and Turso, and creates the first moderator account. Players and moderators should read the in-app guide at `/guide` instead.
+For the site operator: the person who installs Watercooler Werewolf, manages Vercel and Turso, and creates the first moderator account. Further moderators join when a game owner adds them, or when the owner approves their application (see [invite email](#invite-email)). Players and moderators should read the in-app guide at `/guide` instead.
 
 Keep real passwords, database tokens, and recovery codes out of Git and out of chat. Every value below is a placeholder.
 
@@ -62,7 +62,7 @@ npm run owner:bootstrap
 npm run dev
 ```
 
-`owner:bootstrap` applies any pending migrations first, then prompts for a password (12+ characters, not echoed) and prints eight recovery codes once. Then open `http://localhost:3000/`, `/player-login`, `/moderator`, and `/guide`.
+Both scripts print the target database and which file or variable its address came from; a local `file:` database needs nothing more. `owner:bootstrap` applies any pending migrations first, then prompts for a password (12+ characters, not echoed) and prints eight recovery codes once. Then open `http://localhost:3000/`, `/player-login`, `/moderator`, and `/guide`.
 
 To fill the local game with 20 fictional players, see [Testing](TESTING.md#rehearse-a-game).
 
@@ -104,7 +104,7 @@ Do this once per fresh environment. Do not repeat migrations or bootstrap agains
    npm run owner:bootstrap
    ```
 
-   Both scripts refuse to run inside Vercel. `scripts/load-env.mjs` also reads `.env` and `.env.local` for unset variables, so set both database variables explicitly.
+   Both scripts refuse to run inside Vercel. They print the target database and where its address came from, and for a remote database they stop unless you name the host: type it at the prompt, or pass it as `npm run db:migrate -- --confirm-host=<preview-host>` (or set `CONFIRM_HOST`). `scripts/load-env.mjs` also reads `.env` and `.env.local` for unset variables (`.env` wins, unlike Next.js, and a warning names the clash), so still set both database variables explicitly.
 
 4. **Deploy.** Push a branch; the Vercel Git integration builds a Preview.
 
@@ -114,7 +114,7 @@ If Deployment Protection is on, scripts need a **Protection Bypass for Automatio
 
 ## Invite email
 
-The moderator console can email each unclaimed player their private claim link. It sends through any SMTP account, so changing sender later is a settings change, not a code change. Set the variables for `preview` and `production` separately, and prefer a test account for Preview.
+The moderator console can email each unclaimed player their private claim link, including players accepted from the public sign-up list. The same settings send the one-time setup link to a moderator applicant the owner approves; without them the owner is shown that link once to pass on, and sign-ups and applications work either way. It sends through any SMTP account, so changing sender later is a settings change, not a code change. Set the variables for `preview` and `production` separately, and prefer a test account for Preview.
 
 **With a Gmail account (no domain needed):**
 
@@ -144,7 +144,7 @@ Gmail sends at most about 500 messages a day and always shows the Gmail address 
 
 1. Create a separate database, such as `watercooler-werewolf-production`, and its own token.
 2. Add `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `SITE_ORIGIN`, `WATERCOOLER_OWNER_EMAIL`, and optionally `CRON_SECRET` and the [invite email](#invite-email) variables to the `production` environment only.
-3. Run `npm run db:migrate`, then `npm run owner:bootstrap` once, against the Production database. Store the recovery codes.
+3. Run `npm run db:migrate`, then `npm run owner:bootstrap` once, against the Production database. Each script prints its target and asks you to type the Production host name before it changes anything. Store the recovery codes.
 4. Confirm `main` is the Vercel Production Branch. Production deploys are built from `main`; never promote a Preview deployment, because Preview uses a different database.
 5. Run a small fictional smoke test. Never copy Preview data into Production.
 

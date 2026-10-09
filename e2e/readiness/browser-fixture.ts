@@ -103,13 +103,15 @@ function redactMessage(value: string): string {
   return value
     .replace(/\b\d{6}\b/gu, REDACTED_MESSAGE)
     .replace(/\b(?:VILLAGER|WEREWOLF|SEER|BODYGUARD|HUNTER|MASON|APPRENTICE_SEER|MAYOR|CUPID)\b/giu, '[role]')
-    .replace(/\/claim\/[^/?#]+/gu, '/claim/[redacted]');
+    .replace(/\/claim\/[^/?#]+/gu, '/claim/[redacted]')
+    .replace(/\/join\/[^/?#\s]+/gu, '/join/[redacted]');
 }
 
 function redactedUrl(value: string): string {
   try {
     const url = new URL(value, BASE_URL);
-    return `${url.origin}${url.pathname.replace(/^\/claim\/[^/]+$/u, '/claim/[redacted]')}`;
+    // Claim, sign-up, and moderator setup codes are credentials or private links: never in a report.
+    return `${url.origin}${url.pathname.replace(/^\/claim\/[^/]+$/u, '/claim/[redacted]').replace(/^(\/(?:moderator\/)?join)\/[^/]+$/u, '$1/[redacted]')}`;
   } catch {
     return '[invalid-url]';
   }
@@ -246,7 +248,7 @@ export class BrowserTelemetry {
         state.entries.push({ kind: 'navigation', label, detail: '[invalid-navigation]' });
         return;
       }
-      const allowed = pathname === '/' || pathname === '/player-login' || pathname === '/moderator' || /^\/claim\/[^/]+$/u.test(pathname);
+      const allowed = pathname === '/' || pathname === '/player-login' || pathname === '/moderator' || /^\/claim\/[^/]+$/u.test(pathname) || /^\/(?:moderator\/)?join\/[^/]+$/u.test(pathname);
       if (!allowed) state.entries.push({ kind: 'navigation', label, detail: redactedUrl(frame.url()) });
     });
   }
@@ -588,6 +590,7 @@ export class BrowserGame {
         }
         await expect(moderator.page.getByRole('button', { name: 'Release roles to players', exact: true })).toBeVisible();
         const releaseResponsePromise = moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/games/${gameId}/assignments`);
+        moderator.page.once('dialog', (dialog) => void dialog.accept());
         await moderator.page.getByRole('button', { name: 'Release roles to players', exact: true }).click();
         const releaseResponse = await releaseResponsePromise;
         if (!releaseResponse.ok()) throw new Error('The moderator UI could not release assignments.');
@@ -671,6 +674,7 @@ export class BrowserGame {
     const publishButton = this.moderator.page.getByRole('button', { name: 'Approve & publish', exact: true });
     await expect(publishButton).toBeVisible();
     const responsePromise = this.moderator.page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/games/${this.gameId}/phases`);
+    this.moderator.page.once('dialog', (dialog) => void dialog.accept());
     await publishButton.click();
     return json<{ outcome: PhaseResolution; winner: 'VILLAGE' | 'WEREWOLF' | null }>(await responsePromise, `publish phase ${phaseId}`);
   }

@@ -24,7 +24,8 @@
     "test:e2e:readiness:random": "node scripts/run-playwright.mjs --project=chromium e2e/readiness/browser-z-randomized.spec.ts",
     "test:e2e:uat": "node scripts/run-playwright.mjs --project=chromium e2e/readiness/browser-uat.spec.ts",
     "test": "vitest run --config vitest.config.ts",
-    "verify": "npm test && npm run lint && tsc --noEmit --incremental false && npm run build && npm audit --omit=dev --audit-level=moderate",
+    "typecheck": "node scripts/typecheck.mjs",
+    "verify": "npm test && npm run lint && npm run typecheck && npm run build && npm audit --omit=dev --audit-level=moderate",
     "verify:full": "npm run verify && npm run test:e2e && node scripts/run-playwright.mjs --project=chromium",
     "test:watch": "vitest --config vitest.config.ts"
   },
@@ -47,7 +48,7 @@
     "drizzle-orm": "0.45.2",
     "eslint": "9.39.4",
     "eslint-config-next": "16.3.8",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "tailwindcss": "4.2.1",
     "tsx": "4.23.13",
     "typescript": "5.9.3",

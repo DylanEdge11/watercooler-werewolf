@@ -1,6 +1,6 @@
 import { defaultComposition, validateComposition } from './balance';
 import { MAX_PLAYERS, MIN_PLAYERS } from './player-count';
-import type { RoleComposition } from './types';
+import { ROLE_KEYS, type RoleComposition } from './types';
 
 /**
  * Seats can be added or removed one at a time only before roles are
@@ -27,11 +27,21 @@ export function canAddSeat(currentCount: number): RosterEditDecision {
   return { allowed: true };
 }
 
+/**
+ * A roster never drops from the minimum to below it. One still being built from sign-ups can hold
+ * fewer players than that, and a player accepted by mistake can still be taken off it.
+ */
 export function canRemoveSeat(currentCount: number, seatStatus: string): RosterEditDecision {
   if (seatStatus !== 'INVITED') {
     return { allowed: false, error: 'Only players who have not claimed their seat can be removed.' };
   }
-  if (currentCount <= MIN_PLAYERS) return { allowed: false, error: `A game needs at least ${MIN_PLAYERS} players.` };
+  if (currentCount === MIN_PLAYERS) return { allowed: false, error: `A game needs at least ${MIN_PLAYERS} players.` };
+  return { allowed: true };
+}
+
+/** Sign-ups can fill an empty roster, so unlike a single added player they need no roster to start from. */
+export function canAcceptSignups(currentCount: number): RosterEditDecision {
+  if (currentCount >= MAX_PLAYERS) return { allowed: false, error: `A game can have at most ${MAX_PLAYERS} players.` };
   return { allowed: true };
 }
 
@@ -41,16 +51,28 @@ export interface AdjustedComposition {
   resetToPreset: boolean;
 }
 
+/** Every role at zero: a roster below the minimum has no role counts to keep yet. */
+function emptyComposition(): RoleComposition {
+  return Object.fromEntries(ROLE_KEYS.map((role) => [role, 0])) as RoleComposition;
+}
+
 /**
  * Keeps the moderator's saved role counts and absorbs the change in Villagers.
  * Falls back to the standard preset for the new size when that is impossible
  * (no Villager left to remove, or the saved counts were already invalid).
+ * `delta` is how many seats were added (positive) or removed (negative). A change of
+ * more than one seat is a different size of game, so it starts from the preset again
+ * rather than piling every new seat onto the Villagers. A roster still below the
+ * minimum, as one built from sign-ups is on its way up, has no counts until it
+ * reaches it.
  */
 export function adjustCompositionForRosterChange(
   composition: RoleComposition,
   newPlayerCount: number,
-  delta: 1 | -1,
+  delta: number,
 ): AdjustedComposition {
+  if (newPlayerCount < MIN_PLAYERS) return { composition: emptyComposition(), resetToPreset: false };
+  if (Math.abs(delta) > 1) return { composition: defaultComposition(newPlayerCount), resetToPreset: true };
   const adjusted = { ...composition, VILLAGER: composition.VILLAGER + delta };
   if (validateComposition(adjusted, newPlayerCount).valid) {
     return { composition: adjusted, resetToPreset: false };

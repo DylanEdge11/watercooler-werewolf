@@ -13,6 +13,7 @@ import CopyButton from './copy-button';
 import { LATE_JOIN_LAST_PHASE_SEQUENCE } from '../../lib/game/roster-edit';
 import { formatZonedDateTimeLocal, nextScheduledClose, type ScheduleDefinition } from '../../lib/game/scheduling';
 import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { useGameEnded } from './use-game-ended';
 import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
 import { pollInterval } from '../../lib/http/poll-interval';
 
@@ -40,6 +41,8 @@ interface Phase {
   currentSubmissions: number;
   /** Optional Afterlife tiebreak votes saved on a Day or Final ballot. */
   afterlifeSubmissions?: number;
+  /** The Hunter has saved a shot, so the phase can be finalized with it at any time. */
+  hunterShotSaved?: boolean;
   /** Open phase only: living players who still owe a response. For the moderator's eyes alone. */
   outstanding?: Array<{ id: string; displayName: string }>;
   /** Published by the sweep after the review window, with no moderator attached. */
@@ -116,6 +119,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged, onAttenti
   // phase, which sets how often the panel refreshes (lib/http/poll-interval.ts).
   const etag = useRef<string | null>(null);
   const pacing = useRef<{ status: string; deadline: string | null } | null>(null);
+  const ended = useGameEnded(game?.status ?? gameStatus);
 
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
@@ -140,12 +144,16 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged, onAttenti
     }, 0);
     const stopPolling = pollWhileVisible(() => {
       void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to refresh phases.'));
-    }, () => pollInterval(pacing.current));
+    }, () => pollInterval(pacing.current), {
+      // No idle cutoff: each refresh also runs the game's due automatic steps (the phases route), so it keeps
+      // going while the game is running, whether or not anyone is at the console. It stops once the game has ended.
+      stopWhen: () => ended.current,
+    });
     return () => {
       window.clearTimeout(timer);
       stopPolling();
     };
-  }, [refresh]);
+  }, [refresh, ended]);
 
   async function mutate(payload: Record<string, unknown>) {
     setError('');
@@ -195,6 +203,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged, onAttenti
   }
 
   async function run(action: string, phaseId: string, extra: Record<string, unknown> = {}) {
+    if (action === 'PUBLISH' && !window.confirm('Publish this result? Players will see it right away, and this can’t be undone.')) return;
     try {
       await mutate({ action, phaseId, ...extra });
       setMessage(
@@ -288,7 +297,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged, onAttenti
           {latest.status === 'OPEN' && <OutstandingBlock phase={latest} timeZone={gameTimeZone} />}
           {['OPEN', 'LOCKED'].includes(latest.status) && <button className="danger-button" type="button" onClick={() => void run('LOCK_AND_PROPOSE', latest.id)}>{latest.status === 'LOCKED' ? 'Calculate locked responses' : 'Lock responses & calculate'}</button>}
           {(latest.status === 'PENDING_HUNTER' || latest.status === 'HUNTER_FINALIZING') && (
-            <div className="hunter-callout"><span aria-hidden="true">➶</span><div><strong>Hunter follow-up required</strong><p>Deadline {latest.hunterDeadlineAt ? gameTime(latest.hunterDeadlineAt) : 'pending'} ({game?.timezone ?? 'UTC'}).</p></div><button className="primary-button" type="button" onClick={() => void run('FINALIZE_HUNTER', latest.id, { skipHunter: latest.hunterDeadlineAt ? new Date(latest.hunterDeadlineAt) <= new Date() : false })}>Finalize Hunter</button></div>
+            <div className="hunter-callout"><span aria-hidden="true">➶</span><div><strong>Hunter follow-up required</strong><p>Deadline {latest.hunterDeadlineAt ? gameTime(latest.hunterDeadlineAt) : 'pending'} ({game?.timezone ?? 'UTC'}).</p></div><button className="primary-button" type="button" onClick={() => void run('FINALIZE_HUNTER', latest.id, { skipHunter: latest.hunterDeadlineAt ? new Date(latest.hunterDeadlineAt) <= new Date() : false })}>Finalize Hunter</button>{latest.status === 'PENDING_HUNTER' && !latest.hunterShotSaved && latest.hunterDeadlineAt && new Date(latest.hunterDeadlineAt) > new Date() && <button className="secondary-button" type="button" onClick={() => { if (window.confirm('End the Hunter’s turn now? The Hunter will not get to shoot, and this can’t be undone.')) void run('FINALIZE_HUNTER', latest.id, { skipHunter: true, endHunterEarly: true }); }}>End Hunter’s turn now</button>}</div>
           )}
 
           {latest.proposal && authoritativeOutcome && (

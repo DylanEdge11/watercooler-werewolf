@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { attentionEventCount, CONSOLE_TABS, latestAttentionEventAt, type ConsoleTabId } from '../../lib/game/console-guidance';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { attentionEventCount, CONSOLE_TABS, latestAttentionEventAt, noticeFadeMs, type ConsoleTabId, type TabCount } from '../../lib/game/console-guidance';
 import { useOperations } from './operations-context';
 
 export interface TabBadge {
@@ -77,31 +77,82 @@ export function ConsolePanel({ id, active, children }: { id: ConsoleTabId; activ
   );
 }
 
+/** What the last action on the page itself (not on the operations controls) said, and how to clear it. */
+export interface PageNotices {
+  error: string;
+  message: string;
+  clearMessage: () => void;
+  clearAll: () => void;
+}
+
+/** Removes a confirmation once it has been on screen long enough to read. `clear` must be stable. */
+function useFade(text: string, clear: () => void) {
+  useEffect(() => {
+    if (!text) return;
+    const timer = window.setTimeout(clear, noticeFadeMs(text));
+    return () => window.clearTimeout(timer);
+  }, [text, clear]);
+}
+
 /**
- * The tab bar and a line saying what the open tab is for. It flags the Run game
- * tab while a result is waiting on the moderator, and the Safety & records tab
+ * What the moderator's last action did, pinned under the tab bar so it is in view wherever the page is scrolled:
+ * Setup is longer than a screen, and the button that was pressed is usually far from the top. A confirmation fades
+ * after a few seconds; an error stays until it is dismissed or the next action. Each message is one element with
+ * its own alert or status role, so screen readers announce it once.
+ */
+function ConsoleBanner({ page }: { page: PageNotices }) {
+  const ops = useOperations();
+  useFade(page.message, page.clearMessage);
+  useFade(ops.message, ops.clearMessage);
+  const errors = [page.error, ops.error].filter(Boolean);
+  // An error replaces any confirmation still showing from an earlier action, so the two never read as one result.
+  const messages = errors.length ? [] : [page.message, ops.message].filter(Boolean);
+  if (!errors.length && !messages.length) return null;
+  return (
+    <div className="console-banner">
+      <div className="console-banner-body">
+        {errors.map((text) => <p key={`error-${text}`} className="notice error" role="alert">{text}</p>)}
+        {messages.map((text) => <p key={`message-${text}`} className="notice success" role="status">{text}</p>)}
+      </div>
+      <button className="text-button" type="button" aria-label="Dismiss message" onClick={() => { page.clearAll(); ops.clearNotices(); }}>Dismiss</button>
+    </div>
+  );
+}
+
+/**
+ * The tab bar, the banner for the last action's result, and a line saying what the open tab is for. It flags the
+ * Run game tab while a result is waiting on the moderator, and the Safety & records tab
  * while the event log holds a problem the moderator has not looked at yet, so
  * nothing urgent hides behind a tab. Opening Safety & records clears the number;
- * a problem logged after that brings it back.
+ * a problem logged after that brings it back. Setup and People carry a number
+ * for people waiting on the moderator (sign-ups, moderator applications), which
+ * stays until they are dealt with.
  */
-export function ConsoleNavigation({ active, onSelect, runAttention }: { active: ConsoleTabId; onSelect: (id: ConsoleTabId) => void; runAttention: boolean }) {
-  const { operations, clearNotices } = useOperations();
+export function ConsoleNavigation({ active, onSelect, runAttention, waiting = {}, notices }: { active: ConsoleTabId; onSelect: (id: ConsoleTabId) => void; runAttention: boolean; waiting?: { setup?: TabCount; people?: TabCount }; notices: PageNotices }) {
+  const ops = useOperations();
+  const { operations } = ops;
   const events = operations?.events ?? [];
   const [seenThrough, setSeenThrough] = useState<string | null>(null);
   const unseenProblems = attentionEventCount(events, seenThrough);
   const badges: Partial<Record<ConsoleTabId, TabBadge>> = {};
   if (runAttention && active !== 'run') badges.run = { description: 'A result or follow-up is waiting for you' };
+  if (waiting.setup && active !== 'setup') badges.setup = { count: waiting.setup.count, description: waiting.setup.description };
+  if (waiting.people && active !== 'people') badges.people = { count: waiting.people.count, description: waiting.people.description };
   if (unseenProblems > 0 && active !== 'safety') badges.safety = { count: unseenProblems, description: `${unseenProblems} new ${unseenProblems === 1 ? 'problem needs' : 'problems need'} your attention in the event log` };
 
   function select(id: ConsoleTabId) {
-    clearNotices();
+    // What the last operations action said stays with the tab the moderator was on, not the next one.
+    ops.clearNotices();
     // Arriving on the log, or leaving it, counts as having seen what it holds.
     if (active === 'safety' || id === 'safety') setSeenThrough(latestAttentionEventAt(events));
     onSelect(id);
   }
 
   return <>
-    <ConsoleTabBar active={active} onSelect={select} badges={badges} />
+    <div className="console-sticky">
+      <ConsoleTabBar active={active} onSelect={select} badges={badges} />
+      <ConsoleBanner page={notices} />
+    </div>
     <p className="console-tab-blurb">{CONSOLE_TABS.find((tab) => tab.id === active)?.blurb}</p>
   </>;
 }

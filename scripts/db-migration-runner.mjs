@@ -14,6 +14,8 @@ export const MIGRATION_FILES = [
   '0009_elimination_schedule.sql',
   '0010_moderator_messages.sql',
   '0011_auto_open_next_phase.sql',
+  '0012_sign_ups_and_moderator_applications.sql',
+  '0013_event_log_and_sign_in_indexes.sql',
 ];
 
 export function splitMigrationStatements(sql) {

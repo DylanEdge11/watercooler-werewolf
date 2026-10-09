@@ -20,3 +20,6 @@ export async function lookupClaimSeat(code: string): Promise<ClaimSeat | null> {
 }
 
 export const INVALID_CLAIM_LINK = 'This private seat link is not valid.';
+
+/** An old invitation to a game that has ended can no longer be used to claim its seat. */
+export const CLAIM_GAME_ENDED = 'This game has ended, so its seats can no longer be claimed.';
