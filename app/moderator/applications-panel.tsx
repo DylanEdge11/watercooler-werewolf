@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { parseJsonResponse, requestJson } from '@/lib/http/client';
 import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '@/lib/http/poll-interval';
 import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
@@ -33,15 +34,6 @@ interface DecisionResult {
   setupUrl?: string;
   email?: 'SENT' | 'SKIPPED' | 'UNAVAILABLE' | 'FAILED';
   emailReason?: string;
-}
-
-class PanelError extends Error {}
-
-async function post<T>(url: string, body: unknown): Promise<T> {
-  const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  const data = await response.json().catch(() => ({})) as T & { error?: string };
-  if (!response.ok) throw new PanelError(data.error ?? 'Request failed.');
-  return data;
 }
 
 /** What to tell the owner about the email to the applicant. */
@@ -84,8 +76,7 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
     const id = ++request.current;
     const response = await conditionalGet(`/api/games/${gameId}/applications`, etag.current);
     if (!response) return;
-    const body = await response.json() as ApplicationsData & { error?: string };
-    if (!response.ok) throw new PanelError(body.error ?? 'Unable to load the applications.');
+    const body = await parseJsonResponse<ApplicationsData>(response, 'Unable to load the applications.');
     if (id !== request.current) return;
     etag.current = responseEtag(response);
     setData(body);
@@ -113,7 +104,7 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
   }
 
   const control = (action: 'OPEN' | 'CLOSE') => run(async () => {
-    const next = await post<ApplicationsData>(`/api/games/${gameId}/applications`, { action });
+    const next = await requestJson<ApplicationsData>(`/api/games/${gameId}/applications`, { body: { action } });
     etag.current = null;
     // A refresh that started before this change must not overwrite it when it lands.
     request.current += 1;
@@ -124,7 +115,7 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
   }, 'Unable to update applications.');
 
   const replaceLink = () => run(async () => {
-    await post(`/api/games/${gameId}/signups`, { action: 'ROTATE_LINK' });
+    await requestJson(`/api/games/${gameId}/signups`, { body: { action: 'ROTATE_LINK' } });
     etag.current = null;
     request.current += 1;
     onChanged();
@@ -134,7 +125,7 @@ export default function ApplicationsPanel({ gameId, isOwner, canOpen, active, re
   }, 'Unable to replace the link.');
 
   const decide = (row: ApplicationRow, decision: 'APPROVE' | 'DECLINE' | 'RECONSIDER') => run(async () => {
-    const result = await post<DecisionResult>(`/api/games/${gameId}/applications/${row.id}`, { decision });
+    const result = await requestJson<DecisionResult>(`/api/games/${gameId}/applications/${row.id}`, { body: { decision } });
     etag.current = null;
     request.current += 1;
     setIssued(null);

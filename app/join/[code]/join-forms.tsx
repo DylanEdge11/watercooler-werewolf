@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { JOIN_COPY } from '@/lib/game/join-copy';
+import { sendJson } from '@/lib/http/client';
 import { withRetryAfter } from '@/lib/http/retry-after';
 import type { PublicJoinPage } from '@/lib/join/lookup';
 import BrandMark from '../../brand-mark';
@@ -30,12 +31,9 @@ export default function JoinForms({ code, page, lookupError }: { code: string; p
     setBusy(kind);
     const form = new FormData(event.currentTarget);
     try {
-      const response = await fetch(`/api/join/${encodeURIComponent(code)}/${kind === 'signup' ? 'signup' : 'apply'}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ displayName: form.get('displayName'), email: form.get('email'), note: form.get('note') ?? undefined, website: form.get('website') }),
+      const { response, data } = await sendJson(`/api/join/${encodeURIComponent(code)}/${kind === 'signup' ? 'signup' : 'apply'}`, {
+        body: { displayName: form.get('displayName'), email: form.get('email'), note: form.get('note') ?? undefined, website: form.get('website') },
       });
-      const data = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
         setErrors((current) => ({ ...current, [kind]: withRetryAfter(data.error ?? JOIN_COPY.botFailure, response) }));
       } else {

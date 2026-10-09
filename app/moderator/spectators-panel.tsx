@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { requestJson } from '@/lib/http/client';
 import CopyButton from './copy-button';
 
 interface Spectator {
@@ -28,9 +29,7 @@ export default function SpectatorsPanel({ gameId, gameStatus }: { gameId: string
   const canAdd = ['ACTIVE', 'FINAL_SHOWDOWN'].includes(gameStatus);
 
   const load = useCallback(async () => {
-    const response = await fetch(`/api/games/${gameId}/spectators`);
-    const data = await response.json() as { spectators?: Spectator[]; error?: string };
-    if (!response.ok) throw new Error(data.error ?? 'Unable to load spectators.');
+    const data = await requestJson<{ spectators?: Spectator[] }>(`/api/games/${gameId}/spectators`, { fallback: 'Unable to load spectators.' });
     setSpectators(data.spectators ?? []);
   }, [gameId]);
 
@@ -50,13 +49,11 @@ export default function SpectatorsPanel({ gameId, gameStatus }: { gameId: string
     setNewLink(null);
     setBusy(true);
     try {
-      const response = await fetch(`/api/games/${gameId}/spectators`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ displayName: data.get('displayName'), email: data.get('email') }),
+      const result = await requestJson<{ spectator?: Spectator; spectateUrl?: string }>(`/api/games/${gameId}/spectators`, {
+        body: { displayName: data.get('displayName'), email: data.get('email') },
+        fallback: 'Unable to add the spectator.',
       });
-      const result = await response.json() as { spectator?: Spectator; spectateUrl?: string; error?: string };
-      if (!response.ok || !result.spectator || !result.spectateUrl) throw new Error(result.error ?? 'Unable to add the spectator.');
+      if (!result.spectator || !result.spectateUrl) throw new Error('Unable to add the spectator.');
       setNewLink({ displayName: result.spectator.displayName, url: result.spectateUrl });
       form.reset();
       await load();
@@ -75,13 +72,10 @@ export default function SpectatorsPanel({ gameId, gameStatus }: { gameId: string
     setNotice('');
     setBusy(true);
     try {
-      const response = await fetch(`/api/games/${gameId}/spectators/${resetting.id}/reset-pin`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ newPin: data.get('newPin'), reason: data.get('reason') }),
+      await requestJson(`/api/games/${gameId}/spectators/${resetting.id}/reset-pin`, {
+        body: { newPin: data.get('newPin'), reason: data.get('reason') },
+        fallback: 'Unable to reset the PIN.',
       });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error ?? 'Unable to reset the PIN.');
       setNotice(`${resetting.displayName}’s PIN was replaced. They are signed out everywhere and unlocked. Tell them the new PIN privately.`);
       setResetting(null);
       await load();
@@ -97,9 +91,7 @@ export default function SpectatorsPanel({ gameId, gameStatus }: { gameId: string
     setError('');
     setBusy(true);
     try {
-      const response = await fetch(`/api/games/${gameId}/spectators/${spectator.id}`, { method: 'DELETE' });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error ?? 'Unable to remove the spectator.');
+      await requestJson(`/api/games/${gameId}/spectators/${spectator.id}`, { method: 'DELETE', fallback: 'Unable to remove the spectator.' });
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to remove the spectator.');

@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
 import { useGameEnded } from './use-game-ended';
+import { parseJsonResponse, requestJson } from '@/lib/http/client';
 import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
 import { RELAXED_POLL_MS } from '@/lib/http/poll-interval';
 import type { FeedbackSummary } from '@/lib/game/feedback';
@@ -58,16 +59,10 @@ export interface Moderator {
 /** How often a poll also reloads the lists that rarely change. */
 const SLOW_REFRESH_MS = 60_000;
 
-async function parse<T>(response: Response): Promise<T> {
-  const data = await response.json() as T & { error?: string };
-  if (!response.ok) throw new Error(data.error ?? 'Request failed.');
-  return data;
-}
-
 /** A conditional GET (lib/http/conditional-get.ts): null when nothing changed since `etag`. */
 async function parseIfChanged<T>(url: string, etag: string | null): Promise<{ data: T; etag: string | null } | null> {
   const response = await conditionalGet(url, etag);
-  return response ? { data: await parse<T>(response), etag: responseEtag(response) } : null;
+  return response ? { data: await parseJsonResponse<T>(response), etag: responseEtag(response) } : null;
 }
 
 export interface OperationsValue {
@@ -172,9 +167,9 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
       parseIfChanged<{ rooms: Room[]; recentMessages: RoomMessage[] }>(roomsUrl, etags.current.get(roomsUrl) ?? null),
       full
         ? Promise.all([
-            fetch(`/api/games/${gameId}/moderators`).then(parse<{ moderators: Moderator[] }>),
-            fetch(`/api/games/${gameId}/announcements`).then(parse<{ announcements: AnnouncementRecord[] }>),
-            fetch(`/api/games/${gameId}/feedback`).then(parse<{ feedback: FeedbackSummary }>),
+            requestJson<{ moderators: Moderator[] }>(`/api/games/${gameId}/moderators`),
+            requestJson<{ announcements: AnnouncementRecord[] }>(`/api/games/${gameId}/announcements`),
+            requestJson<{ feedback: FeedbackSummary }>(`/api/games/${gameId}/feedback`),
           ])
         : Promise.resolve(null),
     ]);
@@ -222,8 +217,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
   }, [refreshInternal, refreshToken, ended]);
 
   async function post(path: string, body: Record<string, unknown>) {
-    const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    await parse(response);
+    await requestJson(path, { body });
   }
 
   async function announce(event: FormEvent<HTMLFormElement>) {
@@ -232,8 +226,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     const form = event.currentTarget;
     const data = new FormData(form);
     try {
-      const response = await fetch(`/api/games/${gameId}/announcements`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: data.get('title'), body: data.get('body') }) });
-      const created = await parse<{ announcement: AnnouncementRecord }>(response);
+      const created = await requestJson<{ announcement: AnnouncementRecord }>(`/api/games/${gameId}/announcements`, { body: { title: data.get('title'), body: data.get('body') } });
       form.reset();
       setLatestAnnouncementId(created.announcement.id);
       setMessage('Announcement published in the app. Its email and chat copy are ready below.');
@@ -249,11 +242,9 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     const form = event.currentTarget;
     const data = new FormData(form);
     try {
-      const result = await parse<{ recoveryCodes: string[] }>(await fetch(`/api/games/${gameId}/moderators`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: data.get('email'), password: data.get('password') }),
-      }));
+      const result = await requestJson<{ recoveryCodes: string[] }>(`/api/games/${gameId}/moderators`, {
+        body: { email: data.get('email'), password: data.get('password') },
+      });
       setRecoveryCodes(result.recoveryCodes);
       form.reset();
       setMessage('Co-moderator access added.');
@@ -268,7 +259,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     setError('');
     setBusyAction('moderator');
     try {
-      await parse(await fetch(`/api/games/${gameId}/moderators/${moderator.id}`, { method: 'DELETE' }));
+      await requestJson(`/api/games/${gameId}/moderators/${moderator.id}`, { method: 'DELETE' });
       setMessage(`${moderator.email} was removed from this game.`);
       await refresh();
     } catch (caught) {
@@ -283,11 +274,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     setError('');
     setBusyAction('moderator');
     try {
-      await parse(await fetch(`/api/games/${gameId}/moderators/${moderator.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ role: 'OWNER' }),
-      }));
+      await requestJson(`/api/games/${gameId}/moderators/${moderator.id}`, { method: 'PATCH', body: { role: 'OWNER' } });
       setMessage(`${moderator.email} now owns this game. You are a co-moderator.`);
       await refresh();
       onGameChanged?.();
@@ -353,11 +340,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
 
   async function purgeRetention() {
     try {
-      const result = await parse<{ purged: number }>(await fetch(`/api/games/${gameId}/rooms`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'PURGE_RETENTION' }),
-      }));
+      const result = await requestJson<{ purged: number }>(`/api/games/${gameId}/rooms`, { body: { action: 'PURGE_RETENTION' } });
       setMessage(`${result.purged} expired message${result.purged === 1 ? '' : 's'} purged.`);
       await refresh();
     } catch (caught) {
@@ -426,11 +409,9 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
     setError('');
     setBusyAction('restore');
     try {
-      const result = await parse<{ inviteRows?: Array<{ displayName: string; email: string; claimUrl: string; inviteCode: string }>; restoredSeatCount: number }>(await fetch(`/api/games/${gameId}/operations`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'RESTORE_BACKUP', backupId: restoreBackupId, confirmed: true, confirmationName }),
-      }));
+      const result = await requestJson<{ inviteRows?: Array<{ displayName: string; email: string; claimUrl: string; inviteCode: string }>; restoredSeatCount: number }>(`/api/games/${gameId}/operations`, {
+        body: { action: 'RESTORE_BACKUP', backupId: restoreBackupId, confirmed: true, confirmationName },
+      });
       const rows = result.inviteRows ?? [];
       setRestoreInviteCsv(rows.length ? createInviteExport(rows) : '');
       setMessage(`Backup restored to setup with ${result.restoredSeatCount} fresh private seat links. Download the invite CSV now; codes are not shown again.`);
@@ -456,11 +437,7 @@ export function OperationsProvider({ gameId, refreshToken = 0, onGameChanged, ch
   async function reconcileDeadlines() {
     setError('');
     try {
-      const result = await parse<{ lockedPhaseIds: string[] }>(await fetch(`/api/games/${gameId}/operations`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'RECONCILE_DEADLINES' }),
-      }));
+      const result = await requestJson<{ lockedPhaseIds: string[] }>(`/api/games/${gameId}/operations`, { body: { action: 'RECONCILE_DEADLINES' } });
       setMessage(result.lockedPhaseIds.length ? `${result.lockedPhaseIds.length} deadline${result.lockedPhaseIds.length === 1 ? '' : 's'} locked.` : 'No due deadlines found.');
       await refresh();
       onGameChanged?.();

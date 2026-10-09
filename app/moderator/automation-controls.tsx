@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { requestJson } from '@/lib/http/client';
 
 export interface AutomationGameState {
   status: string;
@@ -44,13 +45,7 @@ export default function AutomationControls({ gameId, game, nextStep, formatTime,
     setBusy(true);
     setError('');
     try {
-      const response = await fetch(`/api/games/${gameId}/automation`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(data.error ?? 'Unable to update automation.');
+      await requestJson(`/api/games/${gameId}/automation`, { body, fallback: 'Unable to update automation.' });
       await onChanged();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to update automation.');

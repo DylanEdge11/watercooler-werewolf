@@ -12,6 +12,7 @@ import RoleMedallion from './role-medallion';
 import DeathCurtainCall from './death-curtain-call';
 import BrandMark from './brand-mark';
 import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
+import { requestJson } from '@/lib/http/client';
 import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
 import { pollInterval } from '@/lib/http/poll-interval';
 import { plainError } from '@/lib/http/plain-error';
@@ -408,16 +409,10 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
     }
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/phases/${data.phase.id}/actions`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ actionKind: data.permission.actionKind, targetIds: selected }),
+      const result = await requestJson<{ version?: number }>(`/api/phases/${data.phase.id}/actions`, {
+        body: { actionKind: data.permission.actionKind, targetIds: selected },
+        fallback: 'Unable to submit your action.',
       });
-      const result = await response.json() as { error?: string; errors?: string[]; version?: number };
-      if (!response.ok) {
-        setError(result.error ?? result.errors?.join(' ') ?? 'Unable to submit your action.');
-        return;
-      }
       selectionDirty.current = false;
       setMessage(`Response saved as revision ${result.version}. You can change it until the phase locks.`);
       await refresh();
@@ -477,16 +472,7 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
     setEmailError('');
     setSavingEmail(true);
     try {
-      const response = await fetch('/api/player/email', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-      });
-      const result = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) {
-        setEmailError(result.error ?? 'Unable to save your email choice.');
-        return;
-      }
+      await requestJson('/api/player/email', { body: { enabled }, fallback: 'Unable to save your email choice.' });
       setData((current) => current ? { ...current, emailNotifications: { available: true, enabled } } : current);
     } catch (caught) {
       setEmailError(plainError(caught, 'Unable to save your email choice.'));
@@ -509,16 +495,10 @@ export default function PlayerDashboard({ previewData, previewStats, previewMode
     }
     setSendingFeedback(true);
     try {
-      const response = await fetch(`/api/games/${data?.game.id}/feedback`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ rating: Number(formData.get('rating')), comment: formData.get('comment') }),
+      await requestJson(`/api/games/${data?.game.id}/feedback`, {
+        body: { rating: Number(formData.get('rating')), comment: formData.get('comment') },
+        fallback: 'Unable to save feedback.',
       });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) {
-        setFeedbackError(result.error ?? 'Unable to save feedback.');
-        return;
-      }
       form.reset();
       setFeedbackMessage('Thanks — your feedback went privately to the moderators.');
     } catch (caught) {

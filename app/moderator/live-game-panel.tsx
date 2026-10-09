@@ -12,6 +12,7 @@ import type { EliminationSchedule } from '@/lib/game/elimination-schedule';
 import CopyButton from './copy-button';
 import { LATE_JOIN_LAST_PHASE_SEQUENCE } from '@/lib/game/roster-edit';
 import { formatZonedDateTimeLocal, nextScheduledClose, type ScheduleDefinition } from '@/lib/game/scheduling';
+import { requestJson } from '@/lib/http/client';
 import { pollWhileVisible } from '@/lib/http/poll-while-visible';
 import { useGameEnded } from './use-game-ended';
 import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
@@ -157,13 +158,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged, onAttenti
 
   async function mutate(payload: Record<string, unknown>) {
     setError('');
-    const response = await fetch(`/api/games/${gameId}/phases`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await response.json() as { error?: string };
-    if (!response.ok) throw new Error(data.error ?? 'Unable to update the phase.');
+    await requestJson(`/api/games/${gameId}/phases`, { body: payload, fallback: 'Unable to update the phase.' });
     await refresh();
     const action = typeof payload.action === 'string' ? payload.action : undefined;
     if (shouldRefreshOperations(action)) onChanged?.(action);

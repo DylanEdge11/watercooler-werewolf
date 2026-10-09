@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { MODERATOR_SETUP_COPY } from '@/lib/game/join-copy';
+import { sendJson } from '@/lib/http/client';
 import { withRetryAfter } from '@/lib/http/retry-after';
 
 export default function SetupForm({ code, link, lookupError }: { code: string; link: { displayName: string; gameName: string } | null; lookupError: string }) {
@@ -20,12 +21,7 @@ export default function SetupForm({ code, link, lookupError }: { code: string; l
     setError('');
     setBusy(true);
     try {
-      const response = await fetch(`/api/moderators/join/${encodeURIComponent(code)}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ password: form.get('password') }),
-      });
-      const data = await response.json().catch(() => ({})) as { error?: string; recoveryCodes?: string[] };
+      const { response, data } = await sendJson<{ recoveryCodes?: string[] }>(`/api/moderators/join/${encodeURIComponent(code)}`, { body: { password: form.get('password') } });
       if (!response.ok) {
         setError(withRetryAfter(data.error ?? 'Unable to set up your sign-in.', response));
         setBusy(false);

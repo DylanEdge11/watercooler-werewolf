@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { requestJson } from '@/lib/http/client';
 import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
 import { useOperations } from './operations-context';
 import { useGameEnded } from './use-game-ended';
@@ -119,9 +120,7 @@ export default function RoomHistory({
     setLoadingEarlier(true);
     setError('');
     try {
-      const response = await fetch(`${url}?before=${encodeURIComponent(earlierCursor)}`);
-      const data = await response.json() as HistoryPage;
-      if (!response.ok) throw new Error(data.error ?? 'Unable to load earlier messages.');
+      const data = await requestJson<HistoryPage>(`${url}?before=${encodeURIComponent(earlierCursor)}`, { fallback: 'Unable to load earlier messages.' });
       earlierLoaded.current = true;
       setEarlier((current) => mergeMessages(data.messages, current));
       setEarlierCursor(data.earlierCursor);
@@ -139,13 +138,7 @@ export default function RoomHistory({
     setSending(true);
     setError('');
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ body }),
-      });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error ?? 'Unable to send this message.');
+      await requestJson(url, { body: { body }, fallback: 'Unable to send this message.' });
       form.reset();
       await load(true);
       onPosted();

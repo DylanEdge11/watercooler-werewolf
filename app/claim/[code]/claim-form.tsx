@@ -4,6 +4,7 @@
 
 import { useState, type FormEvent } from 'react';
 import type { ClaimSeat } from '@/lib/auth/claim';
+import { sendJson } from '@/lib/http/client';
 import { withRetryAfter } from '@/lib/http/retry-after';
 import BrandMark from '../../brand-mark';
 
@@ -20,12 +21,7 @@ export default function ClaimForm({ code, seat, lookupError }: { code: string; s
     setBusy(true);
     const form = new FormData(event.currentTarget);
     try {
-      const response = await fetch(`/api/seats/claim/${encodeURIComponent(code)}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pin: form.get('pin') }),
-      });
-      const data = await response.json().catch(() => ({})) as { error?: string };
+      const { response, data } = await sendJson(`/api/seats/claim/${encodeURIComponent(code)}`, { body: { pin: form.get('pin') } });
       if (!response.ok) {
         setError(withRetryAfter(data.error ?? 'Unable to claim this seat.', response));
         setBusy(false);
