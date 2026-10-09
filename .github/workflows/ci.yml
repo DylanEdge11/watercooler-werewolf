@@ -29,7 +29,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run lint
-      - run: npx tsc --noEmit --incremental false
+      - run: npm run typecheck
       - run: npm run build
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=moderate

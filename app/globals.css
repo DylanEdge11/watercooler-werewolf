@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import './reset.css';
 
 :root {
   --ink: #17231f;

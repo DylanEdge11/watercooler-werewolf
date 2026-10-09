@@ -10,7 +10,7 @@ You are the developer on this repository. The owner is the product manager and r
 
 ## Tech stack
 
-- `Next.js` 16 App Router, `React` 19, `TypeScript`, `Tailwind CSS` 4.
+- `Next.js` 16 App Router, `React` 19, `TypeScript`, plain CSS in `app/` (no CSS framework).
 - `Turso` / `libSQL` database through `@libsql/client`; schema in `drizzle-orm`, migrations generated with `drizzle-kit`.
 - Hosted on `Vercel`. Node 24 (`.nvmrc`).
 - Tests: `Vitest` for unit and integration tests, `Playwright` for API and browser suites.
