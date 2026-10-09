@@ -48,7 +48,7 @@ const HELP_ROWS = [
   ['The sign-up link says sign-ups are closed', 'The moderator has closed sign-ups, or paused them while roles are randomized. Ask them if you would still like to play.'],
   ['Moderator: Randomize is disabled', 'The roster needs at least 6 players, every seat must be claimed, and any edited role counts must be saved. Remove anyone who has decided not to play.'],
   ['Moderator: an applicant’s setup link doesn’t work', 'The link works once and lasts 7 days. On the People tab under Moderator applications, open approved and select Send a new link beside their name.'],
-  ['Moderator: I can’t add or remove a player', 'The roster locks once roles are randomized. Select Save composition to discard the preview and unlock it. After release, the roster is final, but you can add someone as a spectator.'],
+  ['Moderator: I can’t add or remove a player', 'The roster locks once roles are randomized. Select Save composition to discard the preview and unlock it. After release the roster is final, except in an emergency: during the first Day or Night, use Add a late Villager in Run the live game. You can also add someone as a spectator.'],
   ['Moderator: Hunter cannot be finalized', 'Wait for the Hunter to submit or for their window to expire, then try again.'],
   ['Moderator: an action shows an error', 'Refresh first. Another moderator may have completed it already.'],
   ['Moderator: I forgot my password', 'On the moderator sign-in page select “Forgot password? Use a recovery code”, then enter your email, one unused recovery code, and a new password of 12 or more characters. The code is used up and your other moderator sessions are signed out. There is no email reset: without a recovery code, ask the site operator.'],

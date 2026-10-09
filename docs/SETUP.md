@@ -139,7 +139,7 @@ Gmail sends at most about 500 messages a day and always shows the Gmail address 
 
 ## Set up Production
 
-1. Create a separate database, such as `watercooler-werewolf-production`, and its own token. Keep it close to the Vercel functions: check **Project Settings → Functions**. When last measured, functions ran in `iad1` (Washington, D.C.) and the Preview database was in AWS `us-east-2` (Ohio), about 10 ms per round trip; if Production's database is also in `us-east-2`, `cle1` (Cleveland) is closer.
+1. Create a separate database, such as `watercooler-werewolf-production`, and its own token.
 2. Add `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `SITE_ORIGIN`, `WATERCOOLER_OWNER_EMAIL`, and optionally `CRON_SECRET` and the [invite email](#invite-email) variables to the `production` environment only.
 3. Run `npm run db:migrate`, then `npm run owner:bootstrap` once, against the Production database. Each script prints its target and asks you to type the Production host name before it changes anything. Store the recovery codes.
 4. Confirm `main` is the Vercel Production Branch. Production deploys are built from `main`; never promote a Preview deployment, because Preview uses a different database.
