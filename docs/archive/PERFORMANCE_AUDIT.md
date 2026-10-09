@@ -1,5 +1,7 @@
 # Performance corrections from the 2026-09-25 audit: record
 
+> **Archived October 9, 2026.** The measuring commands now live in [Testing](../TESTING.md#measure-size-and-speed). The two open items below (Web Push and the function region) are carried in [Technical reference](../TECHNICAL.md#polling-and-read-performance) and [Setup](../SETUP.md#set-up-production).
+
 This file began as the worklist for the performance audit of 2026-09-25. All ten tasks were done in `version-1.4`, one pull request each. The table compares the audit's measured baseline with the result. The task sections below are kept as the record of what each change was for. Their file and line references were exact on 2026-09-25 and have moved since, so check the code rather than the line numbers.
 
 Where the finished work differs from a task as written, the pull request explains why:

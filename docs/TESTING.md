@@ -17,9 +17,13 @@ The `Verify` workflow in `.github/workflows/ci.yml` runs only the fast gates, an
 
 A candidate is ready for release when `npm run verify:full` has passed on its exact commit and the [hosted Preview run](#hosted-preview-runbook) has passed against its Preview deployment. Earlier results do not carry over to a new commit.
 
+**When a release adds a migration,** also check that Production's current code works against the new schema: put the new migration (`drizzle/`, `drizzle/meta/_journal.json`, `scripts/db-migration-runner.mjs`, `db/readiness.ts`) into a worktree of `main` and run `main`'s own `npm test` there. Do this by hand once, before the release.
+
 ## Unit tests
 
-`npm test` runs Vitest over `lib/**/*.test.ts`: the game engine, action rules, scheduling, balance, CSV import, auth, rate limits, migrations, backup and restore, and race conditions in the API routes, using an in-memory libSQL database. Village stats are covered by `lib/game/game-stats.test.ts` (the counting rules, including timezones) and `lib/api-stats.test.ts` (the routes: open ballots excluded, privacy, access, reset, chat counts). Player email is covered by `lib/api-email-notifications.test.ts` (recipients, once-only reminders, privacy of the wording, failures, the AI story with a mocked SDK) and the unit tests in `lib/notify/`; none of them send mail or call Claude. Player sign-ups are covered by `lib/game/signups.test.ts` (the rules and wording limits) and `lib/api-signups.test.ts` (open, close, and replace the link; the public form's neutral replies, limits, hidden field, and rate limits; accepting into the roster, role counts, races, and claiming an accepted seat). Moderator applications are covered by `lib/game/moderator-applications.test.ts` and `lib/api-moderator-applications.test.ts` (applying, the owner's decisions, the one-time setup link: single use, seven-day expiry, two uses at once, an account that appeared meanwhile). Both mock only the email sender. `lib/api-signups-upgrade.test.ts` is the proof that existing games are untouched: it writes games with the schema as it stood at migration 0011, applies 0012 over them as Production will, and checks every row, the console's view, claiming, adding, removing, replacing the roster, and restoring a backup made before the migration. As a one-off check before a release, put the new migration (`drizzle/`, `drizzle/meta/_journal.json`, `scripts/db-migration-runner.mjs`, `db/readiness.ts`) into a worktree of `main` and run `main`'s own `npm test` there: Production's current code must pass against the new schema.
+`npm test` runs Vitest over `lib/**/*.test.ts` with an in-memory libSQL database. Tests sit next to the code they cover: the game engine and action rules, scheduling, balance, CSV import, auth and rate limits, migrations, backup and restore, Village stats, player email, sign-ups, moderator applications, and race conditions in the API routes. The `lib/api-*.test.ts` files call the real routes. Nothing sends mail or calls Claude: the email sender and the Anthropic SDK are mocked.
+
+`lib/api-signups-upgrade.test.ts` shows the pattern for a migration: write games with the schema as it stood before it, apply the new migration, and check every row, the console's view, and a restore of a backup made before it.
 
 ## Rehearse a game
 
@@ -114,13 +118,16 @@ Afterwards, check `vercel inspect <preview-url> --logs` for runtime errors. Logs
 
 ## Regenerate the guide media
 
-The `/guide` screenshots and walkthrough video come from a fictional local game. After a visible UI change, run:
+The `/guide` screenshots and walkthrough video come from a fictional local game. Regenerate them once per release candidate rather than in every pull request: each regeneration adds about 10 MB of binaries to the repository's history. After a visible UI change, run:
 
 ```sh
 CAPTURE_GUIDE_MEDIA=1 node scripts/run-playwright.mjs --project=chromium --retries=0 e2e/readiness/guide-media.spec.ts
 ```
 
-The recording (about three minutes) follows the moderator opening sign-ups, a visitor signing up from the public link and the moderator accepting them, an imported list added on top of the people already accepted, the narrator claiming a seat, the roles, a Day and a Night with the Seer, Bodyguard, and pack acting, Player choices, a helper applying to co-moderate and the owner approving them, and the console's tabs, so it shows what the guide's moderator section describes; when the console changes, update the scenes in `e2e/readiness/guide-media.spec.ts` too, and check that the guide's text and captions still match. This writes the screenshots to `public/guide/` as WebP (quality 82, about a quarter of a PNG's size, so there is no separate shrinking step) and a raw recording to `work/guide-walkthrough-raw.webm`. With `CAPTURE_GUIDE_MEDIA=1`, the runner gives the local server placeholder email settings (an `.invalid` host), so **Email invites** appears switched on. The recording only hovers it, and nothing can be sent. Encode the published files with a full ffmpeg build (Playwright's bundled ffmpeg can't write MP4; `pip install imageio-ffmpeg` provides a portable one). The paper grain is expensive to encode, so these settings are tuned for it:
+- **The recording** (about three minutes) is scripted in `e2e/readiness/guide-media.spec.ts`. It follows the moderator opening sign-ups, a visitor signing up from the public link and the moderator accepting them, an imported list added on top of the people already accepted, the narrator claiming a seat, the roles, a Day and a Night with the Seer, Bodyguard, and pack acting, Player choices, a helper applying to co-moderate and the owner approving them, and the console's tabs. When the console changes, update the scenes in that spec too, and check that the guide's text and captions still match.
+- **Output.** The screenshots go to `public/guide/` as WebP (quality 82, about a quarter of a PNG's size, so there is no separate shrinking step), and a raw recording goes to `work/guide-walkthrough-raw.webm`.
+- **Email settings.** With `CAPTURE_GUIDE_MEDIA=1`, the runner gives the local server placeholder email settings (an `.invalid` host), so **Email invites** appears switched on. The recording only hovers it, and nothing can be sent.
+- **Encoding.** Encode the published files with a full ffmpeg build (Playwright's bundled ffmpeg can't write MP4; `pip install imageio-ffmpeg` provides a portable one, and on Windows `winget install Gyan.FFmpeg` installs one). The paper grain is expensive to encode, so these settings are tuned for it:
 
 ```sh
 ffmpeg -y -i work/guide-walkthrough-raw.webm -c:v libx264 -preset slow -crf 30 -pix_fmt yuv420p -movflags +faststart -an public/guide/walkthrough.mp4
@@ -128,8 +135,32 @@ ffmpeg -y -i work/guide-walkthrough-raw.webm -c:v libvpx-vp9 -b:v 0 -crf 44 -row
 ffmpeg -y -ss 4 -i public/guide/walkthrough.mp4 -frames:v 1 -q:v 3 public/guide/walkthrough-poster.jpg
 ```
 
-On Windows, `winget install Gyan.FFmpeg` installs a full build.
-
 `public/og.png` (the link-preview card) is a static image; redraw it if the emblem or title styling changes, and save it as a 256-colour PNG under 300 KB (`sharp` does it: `.png({ palette: true, quality: 90, effort: 10 })`).
 
-Regenerate the media once per release candidate rather than in every pull request: each regeneration adds about 10 MB of binaries to the repository’s history.
+## Measure size and speed
+
+After a change that could affect page weight or function size, build and compare with an earlier run. For request speed under load, use the stress project in [Local Playwright suites](#local-playwright-suites).
+
+Traced function bundle size (run after `npm run build`):
+
+```sh
+node -e '
+const fs=require("fs"),path=require("path");
+const dir=".next/server/app/api/player";
+const j=JSON.parse(fs.readFileSync(dir+"/route.js.nft.json","utf8"));
+let total=0,n=0,big=[];
+for(const f of j.files){const abs=path.resolve(dir,f);try{const s=fs.statSync(abs);if(s.isFile()){total+=s.size;n++;if(s.size>300000)big.push([s.size,f])}}catch{}}
+console.log("traced files",n,"total MB",(total/1048576).toFixed(1));
+big.sort((a,b)=>b[0]-a[0]).forEach(([s,f])=>console.log((s/1048576).toFixed(1)+"MB",f.replace(/.*node_modules\//,"")));'
+```
+
+Font preloads and page weight:
+
+```sh
+for p in index landing-page moderator guide player-login; do
+  printf "%s raw=%s gz=%s fontPreloads=%s\n" $p $(stat -c%s .next/server/app/$p.html) $(gzip -c .next/server/app/$p.html | wc -c) $(grep -o 'as="font"' .next/server/app/$p.html | wc -l)
+done
+find .next/static/media -name '*.woff2' -exec ls -la {} \; | awk '{s+=$5;n++} END {print n" woff2 files, total "s/1024" KB"}'
+```
+
+Database round trips per request: wrap `LibsqlDatabase` in `db/libsql.ts` with a counter in a local script, or temporarily log `statement.sql` in `LibsqlPreparedStatement.statement()` while testing, and remove the logging before committing. `lib/player/dashboard-data.test.ts` already pins the statement count for a player refresh.

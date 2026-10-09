@@ -15,6 +15,8 @@ Dated records kept for history. **None of these are current instructions.** Link
 | [PLAYWRIGHT_READINESS_REPORT.md](PLAYWRIGHT_READINESS_REPORT.md) | Sept 18 local browser-suite results. |
 | [PLAYWRIGHT_HOSTED_QA_REPORT.md](PLAYWRIGHT_HOSTED_QA_REPORT.md) | Sept 19 hosted Preview results. |
 | [VERCEL_PREVIEW_QA_ASSESSMENT.md](VERCEL_PREVIEW_QA_ASSESSMENT.md) | Assessment of the hosted Preview QA. |
+| [AUDIT_2026-09-26.md](AUDIT_2026-09-26.md) | Sept 26 codebase audit of version 1.4 (findings D1–D21, E1–E9, R1–R11, Doc1–Doc10) with the owner's decisions and the status of every fix. All closed or deferred. |
+| [PERFORMANCE_AUDIT.md](PERFORMANCE_AUDIT.md) | Sept 25 performance audit: the ten tasks, done in 1.4, with before-and-after numbers. |
 | [DOCUMENTATION_REVIEW_2026-09-20.md](DOCUMENTATION_REVIEW_2026-09-20.md) | Sept 20 documentation audit. |
 | [ROLE_PAGE_VISUAL_REVIEW_2026-09-21.md](ROLE_PAGE_VISUAL_REVIEW_2026-09-21.md) | Sept 21 visual review of role pages, with screenshots in `images/`. |
 | [FULL_GAME_TEST_HANDOFF.md](FULL_GAME_TEST_HANDOFF.md) | Handoff for one manual six-player Preview game. |

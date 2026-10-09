@@ -41,15 +41,13 @@ docs/           setup, operations, testing, and technical reference
 - **Moderator**: the person running a game; runs the phases and publishes each result, or lets automation publish it.
 - **Private result**: anything only one player may see, such as their role or a night action outcome.
 
-## Commands and validation
+## Commands and testing
 
-- `npm test`: `Vitest` unit and integration tests (`lib/**/*.test.ts`).
+- `npm test`: `Vitest` unit and integration tests (`lib/**/*.test.ts`). While iterating, run only the relevant file with `npx vitest run <path>`.
 - `npm run verify`: the fast gates (tests, lint, types, build, dependency audit). Run it before every push.
 - `npm run verify:full`: `npm run verify` plus the 20-player API and browser suites. Run it once per release candidate.
 
-## Testing
-
-Run only the relevant `*.test.ts` file with `npx vitest run <path>` while iterating, then `npm run verify` before each push. Suites and the hosted Preview runbook are in `docs/TESTING.md`.
+The suites and the hosted Preview runbook are in `docs/TESTING.md`.
 
 ## Workflow
 
@@ -58,7 +56,7 @@ Run only the relevant `*.test.ts` file with `npx vitest run <path>` while iterat
 3. Release the version branch to `main` through one release pull request. `Vercel` builds a Preview for every pushed branch and deploys Production from `main`.
 4. Follow the three user-invoked skills in `.claude/skills/`: `/werewolf-dev` (one change, through to a PR and Preview), `/werewolf-uat` (certify the version branch), and `/werewolf-prod` (release it). Each stops at its handoff. `/project-audit` is a separate, report-only review of the repository, run when the owner asks.
 5. Commit `/project-audit` reports (`docs/AUDIT_<date>.md`, plus moving the previous audit into `docs/archive/`) directly to the version branch; this is the one exception to the pull-request rule. *Commit report files only, never code, and never to `main`.*
-6. Run checks locally with `npm run verify` / `npm run verify:full`. `GitHub` Actions minutes are limited (2,000/month, spending limit $0), so CI runs only the fast gates, only on pull requests into `main`. Batch commits and push once a change is ready. *Ask before adding jobs or triggers to `.github/workflows` or starting the workflow by hand.*
+6. Run the checks locally (see Commands and testing). `GitHub` Actions minutes are limited (2,000/month, spending limit $0), so CI runs only the fast gates, only on pull requests into `main`. Batch commits and push once a change is ready. *Ask before adding jobs or triggers to `.github/workflows` or starting the workflow by hand.*
 
 Changes reach `main` only through pull requests. *Never base work on `main`, never push to `main`, never use `vercel deploy --prod`, and never promote a Preview deployment.*
 
@@ -90,7 +88,9 @@ The skills use the `Vercel` MCP tools (deployments, logs) and the `GitHub` MCP t
 
 - `docs/SETUP.md`: install, deploy, release, schema changes, cloud-session setup.
 - `docs/OPERATIONS.md`: moderator controls and recovery.
-- `docs/TESTING.md`: CI gates, rehearsals, `Playwright`, the hosted Preview runbook, regenerating guide media.
+- `docs/TESTING.md`: CI gates, rehearsals, `Playwright`, the hosted Preview runbook, regenerating guide media, measuring size and speed.
 - `docs/TECHNICAL.md`: architecture and rules as implemented.
 - `app/guide/page.tsx`: the public player and moderator guide. Update it when a visible workflow changes.
-- `docs/archive/`: historical records only. *Do not follow them as instructions.*
+- `docs/archive/`: historical records only. *Do not follow them as instructions.* Move a finished audit or report there once its findings are closed.
+
+Keep the docs short enough for a new developer to read. Give each fact one home and link to it from the other docs instead of copying it. Describe how the code works now, without change history ("previously", "now"), lists of test files, or one-off measurements.

@@ -31,12 +31,7 @@ Hotfix exception: only when the owner says Production is broken and can't wait f
 
 ## 4. Build
 
-Follow the code conventions in `CLAUDE.md`. The ones most often missed:
-
-- Put game rules in `lib/game/` with unit tests; keep route handlers in `app/api/` thin.
-- In mutating routes, call `assertSameOrigin`, then a `lib/auth/` helper, then check state. Re-check state inside the write and return 409 when zero rows change.
-- When a response gains a field, check it against `FORBIDDEN_PLAYER_KEYS` in `e2e/readiness/browser-fixture.ts`, because it lists what must stay private. *A player must never receive another player's role or private result.*
-- Keep changes to `db/schema.ts` additive; step 8 covers the migration.
+Follow the code conventions in `CLAUDE.md`, especially the ones most often missed: game rules in `lib/game/` with thin routes, the origin → authorization → state check order, a 409 when a write changes zero rows, the `FORBIDDEN_PLAYER_KEYS` check on every new response field, and additive `db/schema.ts` changes (step 8 covers the migration).
 
 Keep the diff to files the request needs. List unrelated problems you spot under "Noticed, not fixed" in the handoff.
 
