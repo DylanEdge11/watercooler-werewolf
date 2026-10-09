@@ -1,17 +1,14 @@
-import { getDb } from '../../../../../db';
-import { changes } from '../../../../../db/results';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameOwner } from '../../../../../lib/auth/authorization';
-import { setupLinkExpired, canTakeApplications } from '../../../../../lib/game/moderator-applications';
-import { readSmtpSettings } from '../../../../../lib/email/settings';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
-import { assertSameOrigin } from '../../../../../lib/http/security';
-import { joinLink, newJoinCode } from '../../../../../lib/roster/signup-store';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { changes } from '@/db/results';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameOwner } from '@/lib/auth/authorization';
+import { setupLinkExpired, canTakeApplications } from '@/lib/game/moderator-applications';
+import { readSmtpSettings } from '@/lib/email/settings';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { assertSameOrigin } from '@/lib/http/security';
+import { joinLink, newJoinCode } from '@/lib/roster/signup-store';
+import type { RouteContext } from '@/lib/http/route-context';
 
 interface ApplicationRow {
   id: string;

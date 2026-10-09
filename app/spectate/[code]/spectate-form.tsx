@@ -3,8 +3,8 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- use a reliable full-page transition after signing in. */
 
 import { useState, type FormEvent } from 'react';
-import type { SpectatorLink } from '../../../lib/auth/spectator-link';
-import { withRetryAfter } from '../../../lib/http/retry-after';
+import type { SpectatorLink } from '@/lib/auth/spectator-link';
+import { withRetryAfter } from '@/lib/http/retry-after';
 import BrandMark from '../../brand-mark';
 
 export default function SpectateForm({ code, spectator, lookupError }: { code: string; spectator: SpectatorLink | null; lookupError: string }) {

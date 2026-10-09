@@ -1,12 +1,12 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { IDLE_AFTER_MS, pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
 import { useGameEnded } from './use-game-ended';
-import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
-import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
-import type { FeedbackSummary } from '../../lib/game/feedback';
-import { createInviteExport } from '../../lib/roster/csv';
+import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
+import { RELAXED_POLL_MS } from '@/lib/http/poll-interval';
+import type { FeedbackSummary } from '@/lib/game/feedback';
+import { createInviteExport } from '@/lib/roster/csv';
 import type { AnnouncementRecord } from './communications';
 
 export interface Operations {

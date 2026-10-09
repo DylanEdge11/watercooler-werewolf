@@ -1,12 +1,9 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { assertSameOrigin } from '../../../../../lib/http/security';
-import { routeError } from '../../../../../lib/http/errors';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { assertSameOrigin } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import type { RouteContext } from '@/lib/http/route-context';
 
 export async function GET(_request: Request, context: RouteContext) {
   try {

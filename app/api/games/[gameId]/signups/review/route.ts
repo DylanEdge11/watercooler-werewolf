@@ -1,15 +1,12 @@
-import { getDb } from '../../../../../../db';
-import { changes } from '../../../../../../db/results';
-import { ensureDatabase } from '../../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../../lib/auth/authorization';
-import { canReviewSignups, MAX_OPEN_SIGNUPS } from '../../../../../../lib/game/signups';
-import { HttpError, routeError } from '../../../../../../lib/http/errors';
-import { assertSameOrigin } from '../../../../../../lib/http/security';
-import { acceptSignups } from '../../../../../../lib/roster/accept-signups';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { changes } from '@/db/results';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { canReviewSignups, MAX_OPEN_SIGNUPS } from '@/lib/game/signups';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { assertSameOrigin } from '@/lib/http/security';
+import { acceptSignups } from '@/lib/roster/accept-signups';
+import type { RouteContext } from '@/lib/http/route-context';
 
 const DECISIONS = ['ACCEPT', 'DECLINE', 'RESTORE'] as const;
 type Decision = (typeof DECISIONS)[number];

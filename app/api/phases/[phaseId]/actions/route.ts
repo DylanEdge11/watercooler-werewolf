@@ -1,23 +1,20 @@
-import { getDb } from '../../../../../db';
-import { changes } from '../../../../../db/results';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { getCurrentPlayer } from '../../../../../lib/auth/session';
-import { afterlifePermission, permissionForRole, validateActionTargets } from '../../../../../lib/game/actions';
-import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type PlayerState, type RoleKey } from '../../../../../lib/game/types';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { routeError } from '../../../../../lib/http/errors';
-import { checkRateLimitRow, rateLimitStatements, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
-import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
+import { getDb } from '@/db';
+import { changes } from '@/db/results';
+import { ensureDatabase } from '@/db/migrate';
+import { getCurrentPlayer } from '@/lib/auth/session';
+import { afterlifePermission, permissionForRole, validateActionTargets } from '@/lib/game/actions';
+import { canonicalRoleKey, type ActionKind, type PhaseKind, type PhaseResolution, type PlayerState, type RoleKey } from '@/lib/game/types';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { checkRateLimitRow, rateLimitStatements, requestRateLimitKey } from '@/lib/http/rate-limit';
+import { loadCurrentLoverPair } from '@/lib/game/relationships';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /** Saved actions per player per phase: 30 every 10 minutes, enough for many revisions. */
 const ACTION_RATE_LIMIT = 30;
 const ACTION_RATE_WINDOW_MS = 10 * 60_000;
 
-interface RouteContext {
-  params: Promise<{ phaseId: string }>;
-}
-
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext<{ phaseId: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();

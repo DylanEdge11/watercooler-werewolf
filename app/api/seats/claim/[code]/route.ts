@@ -1,21 +1,18 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { preparePlayerSession } from '../../../../../lib/auth/session';
-import { CLAIM_GAME_ENDED, INVALID_CLAIM_LINK, lookupClaimSeat } from '../../../../../lib/auth/claim';
-import { ENDED_GAME_STATUSES, isEndedGameStatus } from '../../../../../lib/auth/login-matches';
-import { pinFailureKey } from '../../../../../lib/auth/pin-lockout';
-import { changes } from '../../../../../db/results';
-import { townHallJoinStatement } from '../../../../../lib/chat/rooms';
-import { hashSecret, sha256 } from '../../../../../lib/auth/crypto';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { routeError } from '../../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { preparePlayerSession } from '@/lib/auth/session';
+import { CLAIM_GAME_ENDED, INVALID_CLAIM_LINK, lookupClaimSeat } from '@/lib/auth/claim';
+import { ENDED_GAME_STATUSES, isEndedGameStatus } from '@/lib/auth/login-matches';
+import { pinFailureKey } from '@/lib/auth/pin-lockout';
+import { changes } from '@/db/results';
+import { townHallJoinStatement } from '@/lib/chat/rooms';
+import { hashSecret, sha256 } from '@/lib/auth/crypto';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import type { RouteContext } from '@/lib/http/route-context';
 
-interface RouteContext {
-  params: Promise<{ code: string }>;
-}
-
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(_request: Request, context: RouteContext<{ code: string }>) {
   try {
     await ensureDatabase();
     const { code } = await context.params;
@@ -27,7 +24,7 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 }
 
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext<{ code: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { attentionEventCount, CONSOLE_TABS, latestAttentionEventAt, noticeFadeMs, type ConsoleTabId, type TabCount } from '../../lib/game/console-guidance';
+import { attentionEventCount, CONSOLE_TABS, latestAttentionEventAt, noticeFadeMs, type ConsoleTabId, type TabCount } from '@/lib/game/console-guidance';
 import { useOperations } from './operations-context';
 
 export interface TabBadge {

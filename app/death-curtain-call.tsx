@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import RoleMedallion from './role-medallion';
 import type { RoleKey } from './player-dashboard';
-import { eliminationCause, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
+import { eliminationCause, phaseName, readableRole, type PublicTimelineEvent } from '@/lib/game/timeline-view';
 
 /**
  * The elimination "curtain call". Curtains close, a spotlight comes up, and

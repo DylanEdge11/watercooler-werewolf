@@ -1,19 +1,16 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { ensureGameRoomsExist } from '../../../../../lib/chat/rooms';
-import { roomMessageAuthorName, type RoomMessageAuthor } from '../../../../../lib/chat/room-messages';
-import { changes } from '../../../../../db/results';
-import { assertSameOrigin } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { ensureGameRoomsExist } from '@/lib/chat/rooms';
+import { roomMessageAuthorName, type RoomMessageAuthor } from '@/lib/chat/room-messages';
+import { changes } from '@/db/results';
+import { assertSameOrigin } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /** Every table that holds room messages; removal and retention purges cover all of them. */
 const MESSAGE_TABLES = ['chat_messages', 'spectator_messages', 'moderator_messages'] as const;
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
 
 export async function GET(request: Request, context: RouteContext) {
   try {

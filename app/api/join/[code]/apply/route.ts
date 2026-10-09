@@ -1,24 +1,21 @@
-import { getDb } from '../../../../../db';
-import { changes } from '../../../../../db/results';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { JOIN_COPY } from '../../../../../lib/game/join-copy';
-import { MAX_OPEN_APPLICATIONS, parseApplicationNote } from '../../../../../lib/game/moderator-applications';
-import { honeypotFilled, parsePerson } from '../../../../../lib/game/signups';
-import { HttpError, jsonError, routeError } from '../../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
-import { assertSameOrigin } from '../../../../../lib/http/security';
-import { lookupJoinPage } from '../../../../../lib/join/lookup';
-
-interface RouteContext {
-  params: Promise<{ code: string }>;
-}
+import { getDb } from '@/db';
+import { changes } from '@/db/results';
+import { ensureDatabase } from '@/db/migrate';
+import { JOIN_COPY } from '@/lib/game/join-copy';
+import { MAX_OPEN_APPLICATIONS, parseApplicationNote } from '@/lib/game/moderator-applications';
+import { honeypotFilled, parsePerson } from '@/lib/game/signups';
+import { HttpError, jsonError, routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import { assertSameOrigin } from '@/lib/http/security';
+import { lookupJoinPage } from '@/lib/join/lookup';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /**
  * A visitor asks to co-moderate. As with player sign-ups, the reply is the same whether or not
  * the email already applied (or already moderates this game), and nothing is emailed to the
  * address until the owner approves the application.
  */
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext<{ code: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();

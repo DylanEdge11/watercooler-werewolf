@@ -1,14 +1,14 @@
-import { getDb } from '../../../../db';
-import { ensureDatabase } from '../../../../db/migrate';
-import { sha256, verifySecret } from '../../../../lib/auth/crypto';
-import { createPlayerSession } from '../../../../lib/auth/session';
-import { isEndedGameStatus, lockedSeatHiddenByEndedGame, withoutEndedGames, type SignInChoice } from '../../../../lib/auth/login-matches';
-import { clearPinFailures, isPinLocked, PIN_LOCKED_MESSAGE, pinFailureCounts, recordPinFailure, SIGN_IN_NOT_ACCEPTED_MESSAGE } from '../../../../lib/auth/pin-lockout';
-import { INVALID_SPECTATOR_LINK, SPECTATOR_LOCKED_MESSAGE, spectatorLockoutId, startSpectatorSession } from '../../../../lib/auth/spectator-link';
-import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
-import { routeError } from '../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
-import { isSingleEmailAddress, MAX_EMAIL_LENGTH } from '../../../../lib/roster/email-address';
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { sha256, verifySecret } from '@/lib/auth/crypto';
+import { createPlayerSession } from '@/lib/auth/session';
+import { isEndedGameStatus, lockedSeatHiddenByEndedGame, withoutEndedGames, type SignInChoice } from '@/lib/auth/login-matches';
+import { clearPinFailures, isPinLocked, PIN_LOCKED_MESSAGE, pinFailureCounts, recordPinFailure, SIGN_IN_NOT_ACCEPTED_MESSAGE } from '@/lib/auth/pin-lockout';
+import { INVALID_SPECTATOR_LINK, SPECTATOR_LOCKED_MESSAGE, spectatorLockoutId, startSpectatorSession } from '@/lib/auth/spectator-link';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import { isSingleEmailAddress, MAX_EMAIL_LENGTH } from '@/lib/roster/email-address';
 
 /** A seat, or a spectator who has already opened their link and chosen a PIN. */
 interface LoginCandidate {

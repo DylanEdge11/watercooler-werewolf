@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ROLE_CATALOG } from '../../../lib/game/catalog';
-import { ROLE_KEYS, type RoleKey } from '../../../lib/game/types';
+import { ROLE_CATALOG } from '@/lib/game/catalog';
+import { ROLE_KEYS, type RoleKey } from '@/lib/game/types';
 import PlayerDashboard from '../../player-dashboard';
 import DeathCurtainCall from '../../death-curtain-call';
 import BrandMark from '../../brand-mark';

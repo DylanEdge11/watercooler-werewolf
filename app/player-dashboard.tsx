@@ -11,16 +11,16 @@ import { useBallotVotes, VoteLedger } from './ballot-votes';
 import RoleMedallion from './role-medallion';
 import DeathCurtainCall from './death-curtain-call';
 import BrandMark from './brand-mark';
-import { IDLE_AFTER_MS, pollWhileVisible } from '../lib/http/poll-while-visible';
-import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
-import { pollInterval } from '../lib/http/poll-interval';
-import { plainError } from '../lib/http/plain-error';
-import { phaseCardCaption, phaseIsClosed } from '../lib/player/phase-card';
-import { CONCEALED_ACTION_HINT, ROLE_VISIBILITY_COOKIE, concealedPermission, roleVisibilityCookieValue } from '../lib/player/role-visibility';
-import { currentCycle, describeTimelineEvent, phaseName, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
-import type { GameStats } from '../lib/game/game-stats';
+import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
+import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
+import { pollInterval } from '@/lib/http/poll-interval';
+import { plainError } from '@/lib/http/plain-error';
+import { phaseCardCaption, phaseIsClosed } from '@/lib/player/phase-card';
+import { CONCEALED_ACTION_HINT, ROLE_VISIBILITY_COOKIE, concealedPermission, roleVisibilityCookieValue } from '@/lib/player/role-visibility';
+import { currentCycle, describeTimelineEvent, phaseName, readableRole, type PublicTimelineEvent } from '@/lib/game/timeline-view';
+import type { GameStats } from '@/lib/game/game-stats';
 
-import type { ActionKind, RoleKey } from '../lib/game/types';
+import type { ActionKind, RoleKey } from '@/lib/game/types';
 
 export type { ActionKind, RoleKey };
 

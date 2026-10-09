@@ -1,21 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { nudgeMessage } from '../../lib/game/moderator-copy';
-import { runHint, runNeedsAttention } from '../../lib/game/console-guidance';
-import { phaseName } from '../../lib/game/timeline-view';
-import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
+import { nudgeMessage } from '@/lib/game/moderator-copy';
+import { runHint, runNeedsAttention } from '@/lib/game/console-guidance';
+import { phaseName } from '@/lib/game/timeline-view';
+import { shouldRefreshOperations } from '@/lib/game/operations-refresh';
 import AutomationControls, { type NextAutomaticStep } from './automation-controls';
 import EliminationSchedulePanel from './elimination-schedule-panel';
 import LateVillagerForm from './late-villager-form';
-import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
+import type { EliminationSchedule } from '@/lib/game/elimination-schedule';
 import CopyButton from './copy-button';
-import { LATE_JOIN_LAST_PHASE_SEQUENCE } from '../../lib/game/roster-edit';
-import { formatZonedDateTimeLocal, nextScheduledClose, type ScheduleDefinition } from '../../lib/game/scheduling';
-import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { LATE_JOIN_LAST_PHASE_SEQUENCE } from '@/lib/game/roster-edit';
+import { formatZonedDateTimeLocal, nextScheduledClose, type ScheduleDefinition } from '@/lib/game/scheduling';
+import { pollWhileVisible } from '@/lib/http/poll-while-visible';
 import { useGameEnded } from './use-game-ended';
-import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
-import { pollInterval } from '../../lib/http/poll-interval';
+import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
+import { pollInterval } from '@/lib/http/poll-interval';
 
 interface Outcome {
   tally: Array<{ playerId: string; votes: number }>;

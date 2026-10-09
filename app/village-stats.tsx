@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
-import { IDLE_AFTER_MS, pollWhileVisible } from '../lib/http/poll-while-visible';
-import { pollInterval } from '../lib/http/poll-interval';
-import type { BallotStats, GameStats } from '../lib/game/game-stats';
-import { eliminationCause, readableRole } from '../lib/game/timeline-view';
+import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
+import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
+import { pollInterval } from '@/lib/http/poll-interval';
+import type { BallotStats, GameStats } from '@/lib/game/game-stats';
+import { eliminationCause, readableRole } from '@/lib/game/timeline-view';
 import { BarList, ColumnChart, DataTable, Section, StepChart, VoteMatrix, plural, type ColumnDatum, type StepPoint } from './village-stats-charts';
 
 const FINISHED_GAME_STATUSES = new Set(['COMPLETED', 'STOPPED', 'CANCELLED']);

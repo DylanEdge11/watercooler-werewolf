@@ -2,8 +2,8 @@
 
 import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { withRetryAfter } from '../../lib/http/retry-after';
-import type { SignInChoice } from '../../lib/auth/login-matches';
+import { withRetryAfter } from '@/lib/http/retry-after';
+import type { SignInChoice } from '@/lib/auth/login-matches';
 import SignInChoices from '../sign-in-choices';
 
 interface SignInCardProps {

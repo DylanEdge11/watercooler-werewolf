@@ -1,6 +1,6 @@
-import { hasModeratorAccount } from '../../../../lib/auth/moderators';
-import { ensureDatabase } from '../../../../db/migrate';
-import { routeError } from '../../../../lib/http/errors';
+import { hasModeratorAccount } from '@/lib/auth/moderators';
+import { ensureDatabase } from '@/db/migrate';
+import { routeError } from '@/lib/http/errors';
 
 /**
  * Also the test server's health check: 200 once the database is migrated, 503 before.

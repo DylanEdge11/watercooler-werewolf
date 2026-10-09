@@ -1,9 +1,9 @@
 import { cookies } from 'next/headers';
 import PlayerDashboard, { type DashboardData } from '../player-dashboard';
-import { getCurrentPlayer, getCurrentSpectator } from '../../lib/auth/session';
-import { advanceGameSafely } from '../../lib/game/automation-sweep';
-import { loadDashboard, loadSpectatorDashboard } from '../../lib/player/dashboard-data';
-import { parseRoleVisibility, ROLE_VISIBILITY_COOKIE } from '../../lib/player/role-visibility';
+import { getCurrentPlayer, getCurrentSpectator } from '@/lib/auth/session';
+import { advanceGameSafely } from '@/lib/game/automation-sweep';
+import { loadDashboard, loadSpectatorDashboard } from '@/lib/player/dashboard-data';
+import { parseRoleVisibility, ROLE_VISIBILITY_COOKIE } from '@/lib/player/role-visibility';
 
 // Player email is sent after the response, within this function's time limit: a result story, then up to 80 emails.
 export const maxDuration = 60;

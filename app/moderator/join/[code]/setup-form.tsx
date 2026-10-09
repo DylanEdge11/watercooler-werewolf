@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { MODERATOR_SETUP_COPY } from '../../../../lib/game/join-copy';
-import { withRetryAfter } from '../../../../lib/http/retry-after';
+import { MODERATOR_SETUP_COPY } from '@/lib/game/join-copy';
+import { withRetryAfter } from '@/lib/http/retry-after';
 
 export default function SetupForm({ code, link, lookupError }: { code: string; link: { displayName: string; gameName: string } | null; lookupError: string }) {
   const [error, setError] = useState(lookupError);

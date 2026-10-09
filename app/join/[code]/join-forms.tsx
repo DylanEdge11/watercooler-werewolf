@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { JOIN_COPY } from '../../../lib/game/join-copy';
-import { withRetryAfter } from '../../../lib/http/retry-after';
-import type { PublicJoinPage } from '../../../lib/join/lookup';
+import { JOIN_COPY } from '@/lib/game/join-copy';
+import { withRetryAfter } from '@/lib/http/retry-after';
+import type { PublicJoinPage } from '@/lib/join/lookup';
 import BrandMark from '../../brand-mark';
 
 type Kind = 'signup' | 'apply';

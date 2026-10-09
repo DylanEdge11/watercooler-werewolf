@@ -1,28 +1,25 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { parseEliminationSchedule } from '../../../../../lib/game/elimination-schedule';
-import { validateDeadlineExtension, validateFinalShowdownEntry } from '../../../../../lib/game/phase-policy';
-import { automaticStepDueAt } from '../../../../../lib/game/automation';
-import { advanceGameSafely } from '../../../../../lib/game/automation-sweep';
-import { outstandingResponders } from '../../../../../lib/game/outstanding';
-import { applyEliminationOverride } from '../../../../../lib/game/engine';
-import { changes, loadActions, overrideIdsFromJson } from '../../../../../lib/game/phase-store';
-import { openPhase } from '../../../../../lib/game/phase-open';
-import { runPhaseAction } from '../../../../../lib/game/phase-transitions';
-import { loadCurrentLoverPair } from '../../../../../lib/game/relationships';
-import { parseCloseSchedule, parseScheduledDate } from '../../../../../lib/game/scheduling';
-import { canonicalRoleKey, type PhaseKind, type PhaseResolution, type PlayerState } from '../../../../../lib/game/types';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { parseEliminationSchedule } from '@/lib/game/elimination-schedule';
+import { validateDeadlineExtension, validateFinalShowdownEntry } from '@/lib/game/phase-policy';
+import { automaticStepDueAt } from '@/lib/game/automation';
+import { advanceGameSafely } from '@/lib/game/automation-sweep';
+import { outstandingResponders } from '@/lib/game/outstanding';
+import { applyEliminationOverride } from '@/lib/game/engine';
+import { changes, loadActions, overrideIdsFromJson } from '@/lib/game/phase-store';
+import { openPhase } from '@/lib/game/phase-open';
+import { runPhaseAction } from '@/lib/game/phase-transitions';
+import { loadCurrentLoverPair } from '@/lib/game/relationships';
+import { parseCloseSchedule, parseScheduledDate } from '@/lib/game/scheduling';
+import { canonicalRoleKey, type PhaseKind, type PhaseResolution, type PlayerState } from '@/lib/game/types';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import type { RouteContext } from '@/lib/http/route-context';
 
 // Player email is sent after the response, within this function's time limit: a result story, then up to 80 emails.
 export const maxDuration = 60;
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
 
 interface PhaseRow {
   id: string;

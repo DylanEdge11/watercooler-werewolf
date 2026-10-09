@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { isEndedGameStatus } from '../../lib/auth/login-matches';
+import { isEndedGameStatus } from '@/lib/auth/login-matches';
 
 /**
  * Whether the game has ended (completed, stopped, or cancelled), for a poll's `stopWhen`.

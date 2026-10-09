@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
-import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
-import { IDLE_AFTER_MS, pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
+import { RELAXED_POLL_MS } from '@/lib/http/poll-interval';
+import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
 import { useGameEnded } from './use-game-ended';
-import { rosterCountsNote } from '../../lib/game/console-guidance';
-import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
-import { MAX_SIGNUP_NOTE_LENGTH } from '../../lib/game/signups';
-import type { RoleComposition } from '../../lib/game/types';
+import { rosterCountsNote } from '@/lib/game/console-guidance';
+import { MAX_PLAYERS, MIN_PLAYERS } from '@/lib/game/player-count';
+import { MAX_SIGNUP_NOTE_LENGTH } from '@/lib/game/signups';
+import type { RoleComposition } from '@/lib/game/types';
 import CopyButton from './copy-button';
 import { useOperations } from './operations-context';
 

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import type { PublicTimelineEvent } from '../lib/game/timeline-view';
+import type { PublicTimelineEvent } from '@/lib/game/timeline-view';
 
 export type BallotVotes = NonNullable<PublicTimelineEvent['payload']['votes']>;
 

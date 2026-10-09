@@ -3,8 +3,8 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- use a reliable full-page transition after seat claim. */
 
 import { useState, type FormEvent } from 'react';
-import type { ClaimSeat } from '../../../lib/auth/claim';
-import { withRetryAfter } from '../../../lib/http/retry-after';
+import type { ClaimSeat } from '@/lib/auth/claim';
+import { withRetryAfter } from '@/lib/http/retry-after';
 import BrandMark from '../../brand-mark';
 
 export default function ClaimForm({ code, seat, lookupError }: { code: string; seat: ClaimSeat | null; lookupError: string }) {

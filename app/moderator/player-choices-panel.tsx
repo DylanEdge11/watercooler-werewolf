@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { describeChoiceCounts, groupPhaseChoices, type PhaseChoices, type PlayerChoice } from '../../lib/game/moderator-choices';
-import { phaseName } from '../../lib/game/timeline-view';
-import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
-import { IDLE_AFTER_MS, pollWhileVisible } from '../../lib/http/poll-while-visible';
-import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
+import { describeChoiceCounts, groupPhaseChoices, type PhaseChoices, type PlayerChoice } from '@/lib/game/moderator-choices';
+import { phaseName } from '@/lib/game/timeline-view';
+import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
+import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
+import { RELAXED_POLL_MS } from '@/lib/http/poll-interval';
 
 function ChoiceRows({ choices }: { choices: PlayerChoice[] }) {
   return <>

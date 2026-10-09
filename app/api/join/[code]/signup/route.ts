@@ -1,16 +1,13 @@
-import { getDb } from '../../../../../db';
-import { changes } from '../../../../../db/results';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { JOIN_COPY } from '../../../../../lib/game/join-copy';
-import { honeypotFilled, MAX_OPEN_SIGNUPS, parsePerson } from '../../../../../lib/game/signups';
-import { HttpError, jsonError, routeError } from '../../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
-import { assertSameOrigin } from '../../../../../lib/http/security';
-import { lookupJoinPage } from '../../../../../lib/join/lookup';
-
-interface RouteContext {
-  params: Promise<{ code: string }>;
-}
+import { getDb } from '@/db';
+import { changes } from '@/db/results';
+import { ensureDatabase } from '@/db/migrate';
+import { JOIN_COPY } from '@/lib/game/join-copy';
+import { honeypotFilled, MAX_OPEN_SIGNUPS, parsePerson } from '@/lib/game/signups';
+import { HttpError, jsonError, routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import { assertSameOrigin } from '@/lib/http/security';
+import { lookupJoinPage } from '@/lib/join/lookup';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /**
  * A visitor asks to play. The reply is the same whether or not the email was already on the list
@@ -18,7 +15,7 @@ interface RouteContext {
  * to the address (a stranger can't use this to mail someone else). The person gets their private
  * seat link only once a moderator accepts them and sends invitations.
  */
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext<{ code: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();

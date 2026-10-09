@@ -1,5 +1,5 @@
-import { ensureDatabase } from '../../../db/migrate';
-import { INVALID_CLAIM_LINK, lookupClaimSeat, type ClaimSeat } from '../../../lib/auth/claim';
+import { ensureDatabase } from '@/db/migrate';
+import { INVALID_CLAIM_LINK, lookupClaimSeat, type ClaimSeat } from '@/lib/auth/claim';
 import ClaimForm from './claim-form';
 
 export default async function ClaimPage({ params }: { params: Promise<{ code: string }> }) {

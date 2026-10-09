@@ -1,21 +1,18 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator, requireGameOwner } from '../../../../../lib/auth/authorization';
-import { createBackupRecord, restoreGameBackup } from '../../../../../lib/backup/snapshot';
-import { canCancelSetup, canResetGame, canRestoreGame, canStopGame } from '../../../../../lib/game/lifecycle';
-import { reconcileDuePhases } from '../../../../../lib/game/scheduling';
-import { hashSecret, randomToken, sha256 } from '../../../../../lib/auth/crypto';
-import { PIN_LOCKOUT_ATTEMPTS, pinFailureKey } from '../../../../../lib/auth/pin-lockout';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { restoreConfirmation } from '../../../../../lib/backup/restore';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
-import { endSpectatorsStatements } from '../../../../../lib/roster/spectators';
-import { changes } from '../../../../../db/results';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator, requireGameOwner } from '@/lib/auth/authorization';
+import { createBackupRecord, restoreGameBackup } from '@/lib/backup/snapshot';
+import { canCancelSetup, canResetGame, canRestoreGame, canStopGame } from '@/lib/game/lifecycle';
+import { reconcileDuePhases } from '@/lib/game/scheduling';
+import { hashSecret, randomToken, sha256 } from '@/lib/auth/crypto';
+import { PIN_LOCKOUT_ATTEMPTS, pinFailureKey } from '@/lib/auth/pin-lockout';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { restoreConfirmation } from '@/lib/backup/restore';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { endSpectatorsStatements } from '@/lib/roster/spectators';
+import { changes } from '@/db/results';
+import type { RouteContext } from '@/lib/http/route-context';
 
 interface OperationalEventRow {
   id: string;

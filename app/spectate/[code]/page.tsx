@@ -1,5 +1,5 @@
-import { ensureDatabase } from '../../../db/migrate';
-import { INVALID_SPECTATOR_LINK, lookupSpectatorLink, type SpectatorLink } from '../../../lib/auth/spectator-link';
+import { ensureDatabase } from '@/db/migrate';
+import { INVALID_SPECTATOR_LINK, lookupSpectatorLink, type SpectatorLink } from '@/lib/auth/spectator-link';
 import SpectateForm from './spectate-form';
 
 export default async function SpectatePage({ params }: { params: Promise<{ code: string }> }) {

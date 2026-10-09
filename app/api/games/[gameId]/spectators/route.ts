@@ -1,19 +1,16 @@
-import { getDb } from '../../../../../db';
-import { changes } from '../../../../../db/results';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
-import { isPinLocked, pinFailureCounts } from '../../../../../lib/auth/pin-lockout';
-import { spectatorLockoutId } from '../../../../../lib/auth/spectator-link';
-import { canAddSpectator, SPECTATOR_JOIN_STATUSES } from '../../../../../lib/game/spectators';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { routeError } from '../../../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
-import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { changes } from '@/db/results';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { randomToken, sha256 } from '@/lib/auth/crypto';
+import { isPinLocked, pinFailureCounts } from '@/lib/auth/pin-lockout';
+import { spectatorLockoutId } from '@/lib/auth/spectator-link';
+import { canAddSpectator, SPECTATOR_JOIN_STATUSES } from '@/lib/game/spectators';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { isSingleEmailAddress } from '@/lib/roster/email-address';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /** The game's spectators, for the moderator console, with whether each is locked out by wrong PINs. */
 export async function GET(request: Request, context: RouteContext) {

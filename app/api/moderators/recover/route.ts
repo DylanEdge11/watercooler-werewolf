@@ -1,9 +1,9 @@
-import { ensureDatabase } from '../../../../db/migrate';
-import { redeemModeratorRecoveryCode } from '../../../../lib/auth/moderators';
-import { createModeratorSession } from '../../../../lib/auth/session';
-import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
-import { routeError } from '../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
+import { ensureDatabase } from '@/db/migrate';
+import { redeemModeratorRecoveryCode } from '@/lib/auth/moderators';
+import { createModeratorSession } from '@/lib/auth/session';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
 
 export async function POST(request: Request) {
   try {

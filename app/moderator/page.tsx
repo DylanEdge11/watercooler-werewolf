@@ -13,19 +13,19 @@ import PlayerChoicesPanel from './player-choices-panel';
 import SignupsPanel, { type AcceptedSignups } from './signups-panel';
 import SpectatorsPanel from './spectators-panel';
 import StatsPanel from './stats-panel';
-import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
-import { defaultConsoleTab, isConsoleTabId, launchChecklist, resolveConsoleTab, rosterCountsNote, setupHint, waitingBadges, type ConsoleTabId, type SetupStepKey, type TabChoice } from '../../lib/game/console-guidance';
-import { ROLE_CATALOG } from '../../lib/game/catalog';
-import { ROLE_KEYS, type RoleKey } from '../../lib/game/types';
-import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
-import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
+import { shouldRefreshOperations } from '@/lib/game/operations-refresh';
+import { defaultConsoleTab, isConsoleTabId, launchChecklist, resolveConsoleTab, rosterCountsNote, setupHint, waitingBadges, type ConsoleTabId, type SetupStepKey, type TabChoice } from '@/lib/game/console-guidance';
+import { ROLE_CATALOG } from '@/lib/game/catalog';
+import { ROLE_KEYS, type RoleKey } from '@/lib/game/types';
+import type { EliminationSchedule } from '@/lib/game/elimination-schedule';
+import { MAX_PLAYERS, MIN_PLAYERS } from '@/lib/game/player-count';
 import BrandHeader from './brand-header';
-import { IDLE_AFTER_MS, pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
 import { useGameEnded } from './use-game-ended';
-import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
-import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
-import { COULD_NOT_REACH, plainError } from '../../lib/http/plain-error';
-import { createInviteExport } from '../../lib/roster/csv';
+import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
+import { RELAXED_POLL_MS } from '@/lib/http/poll-interval';
+import { COULD_NOT_REACH, plainError } from '@/lib/http/plain-error';
+import { createInviteExport } from '@/lib/roster/csv';
 
 const sampleRoster = [
   'display_name,email',

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef } from 'react';
-import type { SignInChoice } from '../lib/auth/login-matches';
+import type { SignInChoice } from '@/lib/auth/login-matches';
 
 interface SignInChoicesProps {
   choices: SignInChoice[];

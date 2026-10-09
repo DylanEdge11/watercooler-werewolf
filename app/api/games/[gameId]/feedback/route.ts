@@ -1,15 +1,12 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { getCurrentModerator, getCurrentPlayer } from '../../../../../lib/auth/session';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { summarizeFeedback, validatePilotFeedback, type FeedbackEntry } from '../../../../../lib/game/feedback';
-import { assertSameOrigin } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { getCurrentModerator, getCurrentPlayer } from '@/lib/auth/session';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { summarizeFeedback, validatePilotFeedback, type FeedbackEntry } from '@/lib/game/feedback';
+import { assertSameOrigin } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /** Moderators read every rating and comment for their game. Entries never say which player sent them. */
 export async function GET(_request: Request, context: RouteContext) {

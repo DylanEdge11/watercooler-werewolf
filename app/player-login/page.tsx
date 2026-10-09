@@ -3,8 +3,8 @@
 import { useRef, useState, type FormEvent } from 'react';
 import BrandMark from '../brand-mark';
 import SignInChoices from '../sign-in-choices';
-import { withRetryAfter } from '../../lib/http/retry-after';
-import type { SignInChoice } from '../../lib/auth/login-matches';
+import { withRetryAfter } from '@/lib/http/retry-after';
+import type { SignInChoice } from '@/lib/auth/login-matches';
 
 export default function PlayerLoginPage() {
   const [error, setError] = useState('');

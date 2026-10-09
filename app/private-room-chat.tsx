@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { LatestRoomRequest } from '../lib/chat/latest-room-request';
-import { IDLE_AFTER_MS, pollWhileVisible } from '../lib/http/poll-while-visible';
-import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
-import { plainError } from '../lib/http/plain-error';
-import { RELAXED_POLL_MS, URGENT_POLL_MS } from '../lib/http/poll-interval';
-import { ROOM_NAMES } from '../lib/chat/room-names';
+import { LatestRoomRequest } from '@/lib/chat/latest-room-request';
+import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
+import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
+import { plainError } from '@/lib/http/plain-error';
+import { RELAXED_POLL_MS, URGENT_POLL_MS } from '@/lib/http/poll-interval';
+import { ROOM_NAMES } from '@/lib/chat/room-names';
 
 /** A room with a message in the last two minutes counts as in use. */
 const CHAT_ACTIVE_MS = 2 * 60_000;

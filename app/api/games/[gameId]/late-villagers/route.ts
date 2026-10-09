@@ -1,17 +1,14 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
-import { MAX_PLAYERS } from '../../../../../lib/game/player-count';
-import { canAddLateVillager, LATE_JOIN_LAST_PHASE_SEQUENCE } from '../../../../../lib/game/roster-edit';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
-import { changes } from '../../../../../db/results';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { randomToken, sha256 } from '@/lib/auth/crypto';
+import { MAX_PLAYERS } from '@/lib/game/player-count';
+import { canAddLateVillager, LATE_JOIN_LAST_PHASE_SEQUENCE } from '@/lib/game/roster-edit';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { isSingleEmailAddress } from '@/lib/roster/email-address';
+import { changes } from '@/db/results';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /**
  * Adds one late joiner to a running game, during the first Day or Night only.

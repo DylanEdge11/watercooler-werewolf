@@ -1,18 +1,15 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { getCurrentPlayer, getCurrentSpectator, type PlayerIdentity, type SpectatorIdentity } from '../../../../../lib/auth/session';
-import { normalizeChatBody } from '../../../../../lib/chat/rooms';
-import { loadRoomMessages } from '../../../../../lib/chat/room-messages';
-import { spectatorAuthorName } from '../../../../../lib/game/spectators';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
-import { changes } from '../../../../../db/results';
-
-interface RouteContext {
-  params: Promise<{ roomId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { getCurrentPlayer, getCurrentSpectator, type PlayerIdentity, type SpectatorIdentity } from '@/lib/auth/session';
+import { normalizeChatBody } from '@/lib/chat/rooms';
+import { loadRoomMessages } from '@/lib/chat/room-messages';
+import { spectatorAuthorName } from '@/lib/game/spectators';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { changes } from '@/db/results';
+import type { RouteContext } from '@/lib/http/route-context';
 
 interface RoomAccess {
   id: string;
@@ -57,7 +54,7 @@ async function requireRoomAccess(roomId: string): Promise<RoomViewer> {
   return { kind: 'SPECTATOR', identity: spectator, room };
 }
 
-export async function GET(request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext<{ roomId: string }>) {
   try {
     await ensureDatabase();
     const { roomId } = await context.params;
@@ -74,7 +71,7 @@ export async function GET(request: Request, context: RouteContext) {
   }
 }
 
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext<{ roomId: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();

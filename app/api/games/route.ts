@@ -1,17 +1,17 @@
-import { getDb } from '../../../db';
-import { ensureDatabase } from '../../../db/migrate';
-import { requireModerator } from '../../../lib/auth/authorization';
-import { hasModeratorAccount } from '../../../lib/auth/moderators';
-import { getCurrentModerator } from '../../../lib/auth/session';
-import { loadAssignmentsView, loadRosterView } from '../../../lib/game/setup-view';
-import { DEFAULT_NEW_GAME_AUTOMATION, resolveAutomationSettings, type PublicationMode } from '../../../lib/game/automation';
-import { parseEliminationSchedule, resolveEliminationSchedule, serializeEliminationSchedule } from '../../../lib/game/elimination-schedule';
-import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettingsInput } from '../../../lib/game/game-settings';
-import { validateGameSetup, type GameSetupInput } from '../../../lib/game/game-setup';
-import { formatZonedDateTimeLocal } from '../../../lib/game/scheduling';
-import { assertSameOrigin } from '../../../lib/http/security';
-import { routeError } from '../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../lib/http/etag';
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireModerator } from '@/lib/auth/authorization';
+import { hasModeratorAccount } from '@/lib/auth/moderators';
+import { getCurrentModerator } from '@/lib/auth/session';
+import { loadAssignmentsView, loadRosterView } from '@/lib/game/setup-view';
+import { DEFAULT_NEW_GAME_AUTOMATION, resolveAutomationSettings, type PublicationMode } from '@/lib/game/automation';
+import { parseEliminationSchedule, resolveEliminationSchedule, serializeEliminationSchedule } from '@/lib/game/elimination-schedule';
+import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettingsInput } from '@/lib/game/game-settings';
+import { validateGameSetup, type GameSetupInput } from '@/lib/game/game-setup';
+import { formatZonedDateTimeLocal } from '@/lib/game/scheduling';
+import { assertSameOrigin } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
 
 interface CreateGameBody extends GameSettingsInput, GameSetupInput {
   publicationMode?: unknown;

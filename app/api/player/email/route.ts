@@ -1,10 +1,10 @@
-import { ensureDatabase } from '../../../../db/migrate';
-import { getCurrentPlayer } from '../../../../lib/auth/session';
-import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
-import { routeError } from '../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
-import { emailNotificationsAvailable } from '../../../../lib/notify/config';
-import { saveEmailPreference } from '../../../../lib/notify/preferences';
+import { ensureDatabase } from '@/db/migrate';
+import { getCurrentPlayer } from '@/lib/auth/session';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import { emailNotificationsAvailable } from '@/lib/notify/config';
+import { saveEmailPreference } from '@/lib/notify/preferences';
 
 /** A player turns their own game email on or off. It is off until they choose. */
 export async function POST(request: Request) {

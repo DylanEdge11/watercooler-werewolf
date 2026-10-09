@@ -1,17 +1,14 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
-import { canAddSeat } from '../../../../../lib/game/roster-edit';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { routeError } from '../../../../../lib/http/errors';
-import { applySeatChange, loadEditableRoster } from '../../../../../lib/roster/edit-roster';
-import { markSignupAcceptedStatement } from '../../../../../lib/roster/signup-store';
-import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { randomToken, sha256 } from '@/lib/auth/crypto';
+import { canAddSeat } from '@/lib/game/roster-edit';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { applySeatChange, loadEditableRoster } from '@/lib/roster/edit-roster';
+import { markSignupAcceptedStatement } from '@/lib/roster/signup-store';
+import { isSingleEmailAddress } from '@/lib/roster/email-address';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /** Adds one player to a roster that has not been randomized yet. */
 export async function POST(request: Request, context: RouteContext) {

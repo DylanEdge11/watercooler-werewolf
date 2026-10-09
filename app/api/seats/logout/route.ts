@@ -1,6 +1,6 @@
-import { clearPlayerSession, clearSpectatorSession } from '../../../../lib/auth/session';
-import { assertSameOrigin } from '../../../../lib/http/security';
-import { routeError } from '../../../../lib/http/errors';
+import { clearPlayerSession, clearSpectatorSession } from '@/lib/auth/session';
+import { assertSameOrigin } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
 
 export async function POST(request: Request) {
   try {

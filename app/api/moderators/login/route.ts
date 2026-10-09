@@ -1,11 +1,11 @@
-import { authenticateModerator } from '../../../../lib/auth/moderators';
-import { getDb } from '../../../../db';
-import { ensureDatabase } from '../../../../db/migrate';
-import { purgeExpiredRows } from '../../../../lib/maintenance';
-import { createModeratorSession } from '../../../../lib/auth/session';
-import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
-import { routeError } from '../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
+import { authenticateModerator } from '@/lib/auth/moderators';
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { purgeExpiredRows } from '@/lib/maintenance';
+import { createModeratorSession } from '@/lib/auth/session';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
 
 export async function POST(request: Request) {
   try {

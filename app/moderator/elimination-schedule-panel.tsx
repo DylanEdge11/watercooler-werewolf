@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { scheduleProgress, type EliminationSchedule, type LatestRegularPhase } from '../../lib/game/elimination-schedule';
-import { phaseName } from '../../lib/game/timeline-view';
+import { scheduleProgress, type EliminationSchedule, type LatestRegularPhase } from '@/lib/game/elimination-schedule';
+import { phaseName } from '@/lib/game/timeline-view';
 import EliminationScheduleFields, { ScheduleList } from './elimination-schedule-fields';
 
 interface EliminationSchedulePanelProps {

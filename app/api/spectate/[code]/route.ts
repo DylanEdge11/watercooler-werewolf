@@ -1,19 +1,16 @@
-import { getDb } from '../../../../db';
-import { changes } from '../../../../db/results';
-import { ensureDatabase } from '../../../../db/migrate';
-import { hashSecret, sha256, verifySecret } from '../../../../lib/auth/crypto';
-import { clearPinFailures, isPinLocked, pinFailureCounts, recordPinFailure } from '../../../../lib/auth/pin-lockout';
-import { prepareSpectatorSession } from '../../../../lib/auth/session';
-import { INVALID_SPECTATOR_LINK, lookupSpectatorLink, SPECTATOR_LOCKED_MESSAGE, spectatorLockoutId } from '../../../../lib/auth/spectator-link';
-import { assertSameOrigin, jsonError } from '../../../../lib/http/security';
-import { routeError } from '../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
+import { getDb } from '@/db';
+import { changes } from '@/db/results';
+import { ensureDatabase } from '@/db/migrate';
+import { hashSecret, sha256, verifySecret } from '@/lib/auth/crypto';
+import { clearPinFailures, isPinLocked, pinFailureCounts, recordPinFailure } from '@/lib/auth/pin-lockout';
+import { prepareSpectatorSession } from '@/lib/auth/session';
+import { INVALID_SPECTATOR_LINK, lookupSpectatorLink, SPECTATOR_LOCKED_MESSAGE, spectatorLockoutId } from '@/lib/auth/spectator-link';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import type { RouteContext } from '@/lib/http/route-context';
 
-interface RouteContext {
-  params: Promise<{ code: string }>;
-}
-
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(_request: Request, context: RouteContext<{ code: string }>) {
   try {
     await ensureDatabase();
     const { code } = await context.params;
@@ -31,7 +28,7 @@ export async function GET(_request: Request, context: RouteContext) {
  * in from the home page with their email (POST /api/seats/login); the wrong-PIN
  * count is shared, and only a moderator's PIN reset clears a lockout.
  */
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext<{ code: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();
