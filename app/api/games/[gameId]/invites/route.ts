@@ -1,22 +1,20 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
-import { isReservedTestAddress, readSmtpSettings } from '../../../../../lib/email/settings';
-import { openMailer } from '../../../../../lib/email/smtp';
-import { MAX_PLAYERS } from '../../../../../lib/game/player-count';
-import { enforceRateLimit } from '../../../../../lib/http/rate-limit';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { routeError } from '../../../../../lib/http/errors';
-import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
-import { inviteMessage } from '../../../../../lib/roster/invite-message';
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { randomToken, sha256 } from '@/lib/auth/crypto';
+import { isReservedTestAddress, readSmtpSettings } from '@/lib/email/settings';
+import { openMailer } from '@/lib/email/smtp';
+import { MAX_PLAYERS } from '@/lib/game/player-count';
+import { enforceRateLimit } from '@/lib/http/rate-limit';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { isSingleEmailAddress } from '@/lib/roster/email-address';
+import { inviteMessage } from '@/lib/roster/invite-message';
+import { changes } from '@/db/results';
+import type { RouteContext } from '@/lib/http/route-context';
 
 // Up to 80 invitations over three SMTP connections.
 export const maxDuration = 60;
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
 
 interface InviteResult {
   seatId: string;
@@ -134,7 +132,7 @@ export async function POST(request: Request, context: RouteContext) {
           ),
         )
         : [];
-      const ready = invites.filter((_, index) => Number(rotated[index]?.meta?.changes ?? 0) === 1);
+      const ready = invites.filter((_, index) => changes(rotated[index]) === 1);
       if (invites.length && !ready.length) {
         return jsonError('The roster changed while invitations were being prepared. Refresh and try again.', 409);
       }

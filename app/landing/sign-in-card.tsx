@@ -2,8 +2,9 @@
 
 import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { withRetryAfter } from '../../lib/http/retry-after';
-import type { SignInChoice } from '../../lib/auth/login-matches';
+import { sendJson } from '@/lib/http/client';
+import { withRetryAfter } from '@/lib/http/retry-after';
+import type { SignInChoice } from '@/lib/auth/login-matches';
 import SignInChoices from '../sign-in-choices';
 
 interface SignInCardProps {
@@ -46,12 +47,7 @@ export default function SignInCard({ className = '', kicker, night }: SignInCard
     setError('');
     setBusy(true);
     try {
-      const response = await fetch('/api/seats/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...credentials.current, ...(choiceId ? { choiceId } : {}) }),
-      });
-      const data = await response.json().catch(() => ({})) as { error?: string; choices?: SignInChoice[] };
+      const { response, data } = await sendJson<{ choices?: SignInChoice[] }>('/api/seats/login', { body: { ...credentials.current, ...(choiceId ? { choiceId } : {}) } });
       if (response.status === 409 && Array.isArray(data.choices) && data.choices.length > 1) {
         setChoices(data.choices);
         setBusy(false);

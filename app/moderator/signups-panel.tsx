@@ -1,14 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
-import { RELAXED_POLL_MS } from '../../lib/http/poll-interval';
-import { IDLE_AFTER_MS, pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { parseJsonResponse, requestJson } from '@/lib/http/client';
+import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
+import { RELAXED_POLL_MS } from '@/lib/http/poll-interval';
+import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
 import { useGameEnded } from './use-game-ended';
-import { rosterCountsNote } from '../../lib/game/console-guidance';
-import { MAX_PLAYERS, MIN_PLAYERS } from '../../lib/game/player-count';
-import { MAX_SIGNUP_NOTE_LENGTH } from '../../lib/game/signups';
-import type { RoleComposition } from '../../lib/game/types';
+import { rosterCountsNote } from '@/lib/game/console-guidance';
+import { MAX_PLAYERS, MIN_PLAYERS } from '@/lib/game/player-count';
+import { MAX_SIGNUP_NOTE_LENGTH } from '@/lib/game/signups';
+import type { RoleComposition } from '@/lib/game/types';
 import CopyButton from './copy-button';
 import { useOperations } from './operations-context';
 
@@ -37,15 +38,6 @@ export interface AcceptedSignups {
   resetToPreset: boolean;
   playerCount: number;
   invites: Array<{ displayName: string; email: string; claimUrl: string; inviteCode: string }>;
-}
-
-class PanelError extends Error {}
-
-async function post<T>(url: string, body: unknown): Promise<T> {
-  const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  const data = await response.json().catch(() => ({})) as T & { error?: string };
-  if (!response.ok) throw new PanelError(data.error ?? 'Request failed.');
-  return data;
 }
 
 const STATE_LABEL = { NOT_OPEN: 'Not open', OPEN: 'Open', CLOSED: 'Closed' } as const;
@@ -80,8 +72,7 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
     const id = ++request.current;
     const response = await conditionalGet(`/api/games/${gameId}/signups`, etag.current);
     if (!response) return;
-    const body = await response.json() as SignupsData & { error?: string };
-    if (!response.ok) throw new PanelError(body.error ?? 'Unable to load the sign-ups.');
+    const body = await parseJsonResponse<SignupsData>(response, 'Unable to load the sign-ups.');
     if (id !== request.current) return;
     etag.current = responseEtag(response);
     setData(body);
@@ -110,7 +101,7 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
   }
 
   async function manage(action: 'OPEN' | 'CLOSE' | 'ROTATE_LINK' | 'SET_NOTE', note?: string) {
-    const next = await run(() => post<SignupsData>(`/api/games/${gameId}/signups`, { action, note }), 'Unable to update sign-ups.');
+    const next = await run(() => requestJson<SignupsData>(`/api/games/${gameId}/signups`, { body: { action, note } }), 'Unable to update sign-ups.');
     if (!next) return;
     etag.current = null;
     // A refresh that started before this change must not overwrite it when it lands.
@@ -126,7 +117,7 @@ export default function SignupsPanel({ gameId, gameStatus, active, refreshKey, o
 
   async function decide(decision: 'ACCEPT' | 'DECLINE' | 'RESTORE', ids: string[]) {
     if (!ids.length) return;
-    const result = await run(() => post<AcceptedSignups & { changed?: number }>(`/api/games/${gameId}/signups/review`, { decision, signupIds: ids }), 'Unable to update the sign-ups.');
+    const result = await run(() => requestJson<AcceptedSignups & { changed?: number }>(`/api/games/${gameId}/signups/review`, { body: { decision, signupIds: ids } }), 'Unable to update the sign-ups.');
     if (!result) return;
     etag.current = null;
     request.current += 1;

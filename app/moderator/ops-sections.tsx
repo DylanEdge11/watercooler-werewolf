@@ -1,6 +1,6 @@
 'use client';
 
-import { ROOM_NAMES } from '../../lib/chat/room-names';
+import { ROOM_NAMES } from '@/lib/chat/room-names';
 import { AnnouncementCopies, FeedbackBlock } from './communications';
 import { useOperations, type OperationalEvent } from './operations-context';
 import RoomHistory from './room-history';

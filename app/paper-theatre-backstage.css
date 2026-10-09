@@ -224,7 +224,7 @@
 }
 
 /* Index cards and slips inside a page. */
-.backstage :is(.balance-bar, .phase-status-row, .schedule-note, .ops-block, .resolution-columns > div, .health-grid > div, .assignment-grid > div, .room-health-list > div) {
+.backstage :is(.balance-bar, .phase-status-row, .ops-block, .resolution-columns > div, .health-grid > div, .assignment-grid > div, .room-health-list > div) {
   background: var(--bs-card);
   border: 1px solid var(--bs-rule);
   border-radius: 2px;

@@ -79,7 +79,7 @@ function toRunResult(result: LibsqlResult): RunResult {
   };
 }
 
-export class LibsqlPreparedStatement implements PreparedStatement {
+class LibsqlPreparedStatement implements PreparedStatement {
   private values: LibsqlStatement['args'] = [];
 
   constructor(

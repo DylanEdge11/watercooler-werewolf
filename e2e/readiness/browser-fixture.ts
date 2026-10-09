@@ -743,15 +743,6 @@ export class BrowserGame {
   async dispose(): Promise<void> { await Promise.all(this.players.map((player) => player.context.close().catch(() => undefined))); }
 }
 
-export function roleName(role: RoleKey): string { return ROLE_NAMES[role]; }
-export function actionForRole(role: RoleKey, phaseKind: PhaseKind): ActionKind | null {
-  if (phaseKind === 'DAY' || phaseKind === 'FINAL_BALLOT') return 'DAY_VOTE';
-  if (role === 'WEREWOLF') return 'WOLF_VOTE';
-  if (role === 'SEER') return 'INVESTIGATE';
-  if (role === 'BODYGUARD') return 'PROTECT';
-  return null;
-}
-
 export function verifyExpectedRoleComposition(players: BrowserPlayerAccount[], expected: RoleComposition): void {
   const counts = Object.fromEntries(Object.keys(expected).map((key) => [key, 0])) as RoleComposition;
   for (const player of players) counts[player.role] += 1;

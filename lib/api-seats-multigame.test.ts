@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { keysOf } from './test-support/keys-of';
 import { createClient, type Client } from '@libsql/client';
 import { LibsqlDatabase, type LibsqlClient } from '../db/libsql';
 import { loadMigrations, runMigrations } from '../scripts/db-migration-runner.mjs';
@@ -81,17 +82,6 @@ async function lock(bucketOwner: string) {
 async function failureBuckets(): Promise<string[]> {
   const rows = await client.execute("SELECT bucket_key FROM rate_limit_buckets WHERE bucket_key LIKE 'pin-failures:%' ORDER BY bucket_key");
   return rows.rows.map((row) => String(row.bucket_key));
-}
-
-function keysOf(value: unknown, found: string[] = []): string[] {
-  if (Array.isArray(value)) value.forEach((entry) => keysOf(entry, found));
-  else if (value && typeof value === 'object') {
-    for (const [key, child] of Object.entries(value)) {
-      found.push(key);
-      keysOf(child, found);
-    }
-  }
-  return found;
 }
 
 beforeEach(async () => {

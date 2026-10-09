@@ -1,16 +1,14 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { resolveAutomationSettings, type PublicationMode } from '../../../../../lib/game/automation';
-import { parseEliminationSchedule, resolveEliminationSchedule, serializeEliminationSchedule } from '../../../../../lib/game/elimination-schedule';
-import { resolveGameSettings, type GameSettingsInput } from '../../../../../lib/game/game-settings';
-import { validateGameSetup, type GameSetupInput } from '../../../../../lib/game/game-setup';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { resolveAutomationSettings, type PublicationMode } from '@/lib/game/automation';
+import { parseEliminationSchedule, resolveEliminationSchedule, serializeEliminationSchedule } from '@/lib/game/elimination-schedule';
+import { resolveGameSettings, type GameSettingsInput } from '@/lib/game/game-settings';
+import { validateGameSetup, type GameSetupInput } from '@/lib/game/game-setup';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { changes } from '@/db/results';
+import type { RouteContext } from '@/lib/http/route-context';
 
 interface UpdateScheduleBody extends GameSettingsInput, GameSetupInput {
   publicationMode?: unknown;
@@ -28,10 +26,6 @@ interface SetupGameRow {
   dayDivisor: number;
   nightDivisor: number;
   eliminationScheduleJson: string | null;
-}
-
-function changes(result: unknown): number {
-  return Number((result as { meta?: { changes?: number } } | null)?.meta?.changes ?? 0);
 }
 
 export async function PATCH(request: Request, context: RouteContext) {

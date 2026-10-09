@@ -1,16 +1,13 @@
-import { ensureDatabase } from '../../../../../db/migrate';
-import { getCurrentPlayer, getCurrentSpectator } from '../../../../../lib/auth/session';
-import { routeError } from '../../../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
-import { jsonError } from '../../../../../lib/http/security';
-import { loadBallotVotes } from '../../../../../lib/player/dashboard-data';
-
-interface RouteContext {
-  params: Promise<{ phaseId: string }>;
-}
+import { ensureDatabase } from '@/db/migrate';
+import { getCurrentPlayer, getCurrentSpectator } from '@/lib/auth/session';
+import { routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { jsonError } from '@/lib/http/security';
+import { loadBallotVotes } from '@/lib/player/dashboard-data';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /** Who voted for whom in one published Day or Final ballot of the player's (or spectator's) own game. */
-export async function GET(request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext<{ phaseId: string }>) {
   try {
     await ensureDatabase();
     const identity = (await getCurrentPlayer()) ?? (await getCurrentSpectator());

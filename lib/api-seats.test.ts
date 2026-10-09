@@ -1,18 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
+import { providerDatabase, type TestDatabase } from './test-support/provider-database';
 import { readFileSync } from 'node:fs';
 import { defaultComposition } from './game/balance';
 import { sha256 } from './auth/crypto';
-
-interface TestStatement {
-  readonly sql: string;
-  getArgs(): SQLInputValue[];
-}
-
-interface TestDatabase {
-  prepare(sql: string): TestStatement;
-  batch(statements: TestStatement[]): Promise<unknown>;
-}
 
 const shared = vi.hoisted(() => ({ db: null as TestDatabase | null }));
 
@@ -28,34 +19,6 @@ import { POST as seatsPost } from '../app/api/games/[gameId]/seats/route';
 import { DELETE as seatDelete } from '../app/api/games/[gameId]/seats/[seatId]/route';
 
 let sqlite: DatabaseSync;
-
-class ProviderStatement {
-  private args: SQLInputValue[] = [];
-
-  constructor(readonly sql: string) {}
-
-  bind(...args: SQLInputValue[]): this {
-    this.args = args;
-    return this;
-  }
-
-  getArgs(): SQLInputValue[] {
-    return this.args;
-  }
-
-  async first<T = Record<string, unknown>>(): Promise<T | null> {
-    return (sqlite.prepare(this.sql).get(...this.args) as T | undefined) ?? null;
-  }
-
-  async all<T = Record<string, unknown>>(): Promise<{ results: T[] }> {
-    return { results: sqlite.prepare(this.sql).all(...this.args) as T[] };
-  }
-
-  async run(): Promise<{ meta: { changes: number } }> {
-    const result = sqlite.prepare(this.sql).run(...this.args);
-    return { meta: { changes: Number(result.changes) } };
-  }
-}
 
 function request(method: string, body?: Record<string, unknown>): Request {
   return new Request('http://localhost:3000/api/test', {
@@ -77,31 +40,6 @@ function removeSeat(seatId: string): Promise<Response> {
   return seatDelete(request('DELETE'), { params: Promise.resolve({ gameId: 'game', seatId }) });
 }
 
-function providerCompatible(): TestDatabase {
-  return {
-    prepare: (sql) => new ProviderStatement(sql),
-    batch: async (statements) => {
-      sqlite.exec('BEGIN');
-      try {
-        const results: Array<{ meta: { changes: number } } | { results: unknown[] }> = [];
-        for (const statement of statements) {
-          if (/^\s*SELECT\b/u.test(statement.sql)) {
-            results.push({ results: sqlite.prepare(statement.sql).all(...statement.getArgs()) });
-          } else {
-            const result = sqlite.prepare(statement.sql).run(...statement.getArgs());
-            results.push({ meta: { changes: Number(result.changes) } });
-          }
-        }
-        sqlite.exec('COMMIT');
-        return results;
-      } catch (error) {
-        sqlite.exec('ROLLBACK');
-        throw error;
-      }
-    },
-  };
-}
-
 function seedSetupGame(playerCount = 20, invited = 2): void {
   for (const file of ['0000_dashing_smiling_tiger.sql', '0001_bodyguard_and_lifecycle.sql', '0002_pilot_hardening.sql', '0003_reviewed_outcome.sql', '0012_sign_ups_and_moderator_applications.sql']) {
     sqlite.exec(readFileSync(new URL('../drizzle/' + file, import.meta.url), 'utf8'));
@@ -121,7 +59,7 @@ function resetSetupGame(playerCount: number, invited: number): void {
   sqlite.close();
   sqlite = new DatabaseSync(':memory:');
   seedSetupGame(playerCount, invited);
-  shared.db = providerCompatible();
+  shared.db = providerDatabase(sqlite);
 }
 
 function roleCounts(): Record<string, number> {
@@ -144,7 +82,7 @@ function events(type: string): Array<{ payloadJson: string; moderatorId: string 
 beforeEach(() => {
   sqlite = new DatabaseSync(':memory:');
   seedSetupGame();
-  shared.db = providerCompatible();
+  shared.db = providerDatabase(sqlite);
 });
 
 afterEach(() => sqlite.close());

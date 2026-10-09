@@ -4,6 +4,7 @@ import { randomToken } from '../auth/crypto';
 import { backupComposition, backupGameFromRecord, backupSeats, validateBackupForRestore } from './restore';
 import { HttpError } from '../http/errors';
 import { endSpectatorsStatements } from '../roster/spectators';
+import { changes } from '../../db/results';
 
 export interface GameBackup {
   schemaVersion: 2;
@@ -336,8 +337,8 @@ export async function restoreGameBackup(
       .bind(now, gameId, now, moderatorId),
   );
   const result = await db.batch(statements);
-  if (Number((result[0] as { meta?: { changes?: number } })?.meta?.changes ?? 0) !== 1
-    || Number((result[result.length - 1] as { meta?: { changes?: number } })?.meta?.changes ?? 0) !== 1) {
+  if (changes(result[0]) !== 1
+    || changes(result[result.length - 1]) !== 1) {
     throw new Error('The game changed while the backup was being restored. Refresh and try again.');
   }
   return {

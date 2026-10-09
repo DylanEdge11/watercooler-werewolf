@@ -1,17 +1,14 @@
-import { ensureDatabase } from '../../../../../db/migrate';
-import { lookupSetupLink, redeemSetupLink } from '../../../../../lib/auth/moderator-setup';
-import { createModeratorSession } from '../../../../../lib/auth/session';
-import { MODERATOR_SETUP_COPY } from '../../../../../lib/game/join-copy';
-import { HttpError, jsonError, routeError } from '../../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
-import { assertSameOrigin } from '../../../../../lib/http/security';
-
-interface RouteContext {
-  params: Promise<{ code: string }>;
-}
+import { ensureDatabase } from '@/db/migrate';
+import { lookupSetupLink, redeemSetupLink } from '@/lib/auth/moderator-setup';
+import { createModeratorSession } from '@/lib/auth/session';
+import { MODERATOR_SETUP_COPY } from '@/lib/game/join-copy';
+import { HttpError, jsonError, routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import { assertSameOrigin } from '@/lib/http/security';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /** Who a setup link is for, so the page can greet them. 404 for an unknown, used, or expired link. */
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(_request: Request, context: RouteContext<{ code: string }>) {
   try {
     await ensureDatabase();
     const { code } = await context.params;
@@ -27,7 +24,7 @@ export async function GET(_request: Request, context: RouteContext) {
  * Chooses the approved applicant's password. This creates their moderator account, makes them a
  * co-moderator of the game, and signs them in; the response carries their recovery codes once.
  */
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext<{ code: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();

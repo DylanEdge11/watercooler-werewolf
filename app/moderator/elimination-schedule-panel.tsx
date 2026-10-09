@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { scheduleProgress, type EliminationSchedule, type LatestRegularPhase } from '../../lib/game/elimination-schedule';
-import { phaseName } from '../../lib/game/timeline-view';
+import { requestJson } from '@/lib/http/client';
+import { scheduleProgress, type EliminationSchedule, type LatestRegularPhase } from '@/lib/game/elimination-schedule';
+import { phaseName } from '@/lib/game/timeline-view';
 import EliminationScheduleFields, { ScheduleList } from './elimination-schedule-fields';
 
 interface EliminationSchedulePanelProps {
@@ -33,13 +34,11 @@ export default function EliminationSchedulePanel({ gameId, status, schedule, lat
     setError('');
     setMessage('');
     try {
-      const response = await fetch(`/api/games/${gameId}/elimination-schedule`, {
+      await requestJson(`/api/games/${gameId}/elimination-schedule`, {
         method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ eliminationSchedule: form.get('eliminationSchedule') || null }),
+        body: { eliminationSchedule: form.get('eliminationSchedule') || null },
+        fallback: 'Unable to update the elimination schedule.',
       });
-      const data = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(data.error ?? 'Unable to update the elimination schedule.');
       setMessage(`Saved. The change applies from ${nextName}.`);
       await onChanged();
     } catch (caught) {

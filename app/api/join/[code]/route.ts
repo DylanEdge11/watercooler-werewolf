@@ -1,14 +1,11 @@
-import { ensureDatabase } from '../../../../db/migrate';
-import { JOIN_COPY } from '../../../../lib/game/join-copy';
-import { routeError, jsonError } from '../../../../lib/http/errors';
-import { lookupJoinPage, toPublicJoinPage } from '../../../../lib/join/lookup';
-
-interface RouteContext {
-  params: Promise<{ code: string }>;
-}
+import { ensureDatabase } from '@/db/migrate';
+import { JOIN_COPY } from '@/lib/game/join-copy';
+import { routeError, jsonError } from '@/lib/http/errors';
+import { lookupJoinPage, toPublicJoinPage } from '@/lib/join/lookup';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /** What the public page shows for a sign-up link, or 404 when the code matches no game. */
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(_request: Request, context: RouteContext<{ code: string }>) {
   try {
     await ensureDatabase();
     const { code } = await context.params;

@@ -17,7 +17,7 @@ export interface AutomationState {
  * One indexed read: the game's automation settings and its current unpublished
  * phase. When nothing is due, this is the sweep's only query on a poll.
  */
-export async function loadAutomationState(gameId: string): Promise<AutomationState | null> {
+async function loadAutomationState(gameId: string): Promise<AutomationState | null> {
   const row = await getDb()
     .prepare(
       `SELECT g.status AS gameStatus, g.publication_mode AS publicationMode, g.review_window_minutes AS reviewWindowMinutes,
@@ -159,7 +159,7 @@ export async function advanceGameSafely(gameId: string, now = new Date()): Promi
  * would otherwise log a warning on each poll. One id per game, phase, and
  * UTC hour keeps it to a single warning an hour.
  */
-export function automationWarningId(gameId: string, phaseId: string | null, now: Date): string {
+function automationWarningId(gameId: string, phaseId: string | null, now: Date): string {
   return `automation-${gameId}-${phaseId ?? 'none'}-${now.toISOString().slice(0, 13)}`;
 }
 

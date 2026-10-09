@@ -18,9 +18,9 @@ export interface EliminationStage {
 export type EliminationSchedule = EliminationStage[];
 
 export const MAX_SCHEDULE_STAGES = 12;
-export const MAX_STAGE_DAYS = 365;
+const MAX_STAGE_DAYS = 365;
 /** A phase always leaves at least one player alive, so more can never apply. */
-export const MAX_STAGE_ELIMINATIONS = MAX_PLAYERS - 1;
+const MAX_STAGE_ELIMINATIONS = MAX_PLAYERS - 1;
 
 function readWholeNumber(value: unknown): number | null {
   const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;

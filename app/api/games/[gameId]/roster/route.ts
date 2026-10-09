@@ -1,20 +1,18 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { randomToken, sha256 } from '../../../../../lib/auth/crypto';
-import { defaultComposition } from '../../../../../lib/game/balance';
-import { ROLE_CATALOG } from '../../../../../lib/game/catalog';
-import { ROLE_KEYS } from '../../../../../lib/game/types';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
-import { createInviteExport, parseRosterCsv } from '../../../../../lib/roster/csv';
-import { loadRosterView } from '../../../../../lib/game/setup-view';
-import { appendToRoster } from '../../../../../lib/roster/append-roster';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { randomToken, sha256 } from '@/lib/auth/crypto';
+import { defaultComposition } from '@/lib/game/balance';
+import { ROLE_CATALOG } from '@/lib/game/catalog';
+import { ROLE_KEYS } from '@/lib/game/types';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { createInviteExport, parseRosterCsv } from '@/lib/roster/csv';
+import { loadRosterView } from '@/lib/game/setup-view';
+import { appendToRoster } from '@/lib/roster/append-roster';
+import { changes } from '@/db/results';
+import type { RouteContext } from '@/lib/http/route-context';
 
 export async function GET(request: Request, context: RouteContext) {
   try {
@@ -191,7 +189,7 @@ export async function POST(request: Request, context: RouteContext) {
         .bind(now, gameId, nextRevision),
     );
     const result = await db.batch(statements);
-    if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
+    if (changes(result[0]) !== 1) {
       return jsonError('The game changed while the roster was being replaced. Refresh and try again.', 409);
     }
 

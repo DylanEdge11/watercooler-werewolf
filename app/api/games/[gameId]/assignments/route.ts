@@ -1,21 +1,19 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { validateComposition, scoreComposition } from '../../../../../lib/game/balance';
-import { MAX_PLAYERS, MIN_PLAYERS } from '../../../../../lib/game/player-count';
-import { createAssignmentPreview, fingerprintComposition, fingerprintRoster } from '../../../../../lib/game/assignment';
-import { ROLE_CATALOG } from '../../../../../lib/game/catalog';
-import { createSecureRandomRolls } from '../../../../../lib/game/random';
-import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from '../../../../../lib/game/types';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
-import { roomSyncStatements } from '../../../../../lib/chat/rooms';
-import { loadAssignmentsView, loadComposition } from '../../../../../lib/game/setup-view';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { validateComposition, scoreComposition } from '@/lib/game/balance';
+import { MAX_PLAYERS, MIN_PLAYERS } from '@/lib/game/player-count';
+import { createAssignmentPreview, fingerprintComposition, fingerprintRoster } from '@/lib/game/assignment';
+import { ROLE_CATALOG } from '@/lib/game/catalog';
+import { createSecureRandomRolls } from '@/lib/game/random';
+import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from '@/lib/game/types';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { roomSyncStatements } from '@/lib/chat/rooms';
+import { loadAssignmentsView, loadComposition } from '@/lib/game/setup-view';
+import { changes } from '@/db/results';
+import type { RouteContext } from '@/lib/http/route-context';
 
 interface AssignmentRow {
   seatId: string;
@@ -25,10 +23,6 @@ interface AssignmentRow {
 interface GameSetupRow {
   status: string;
   setupRevision: number;
-}
-
-function changes(result: unknown): number {
-  return Number((result as { meta?: { changes?: number } } | null)?.meta?.changes ?? 0);
 }
 
 const SETUP_STATUSES = "'DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'";

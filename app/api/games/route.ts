@@ -1,17 +1,17 @@
-import { getDb } from '../../../db';
-import { ensureDatabase } from '../../../db/migrate';
-import { requireModerator } from '../../../lib/auth/authorization';
-import { hasModeratorAccount } from '../../../lib/auth/moderators';
-import { getCurrentModerator } from '../../../lib/auth/session';
-import { loadAssignmentsView, loadRosterView } from '../../../lib/game/setup-view';
-import { DEFAULT_NEW_GAME_AUTOMATION, resolveAutomationSettings, type PublicationMode } from '../../../lib/game/automation';
-import { parseEliminationSchedule, resolveEliminationSchedule, serializeEliminationSchedule } from '../../../lib/game/elimination-schedule';
-import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettingsInput } from '../../../lib/game/game-settings';
-import { validateGameSetup, type GameSetupInput } from '../../../lib/game/game-setup';
-import { formatZonedDateTimeLocal } from '../../../lib/game/scheduling';
-import { assertSameOrigin } from '../../../lib/http/security';
-import { routeError } from '../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../lib/http/etag';
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireModerator } from '@/lib/auth/authorization';
+import { hasModeratorAccount } from '@/lib/auth/moderators';
+import { getCurrentModerator } from '@/lib/auth/session';
+import { loadAssignmentsView, loadRosterView, type GameSummary } from '@/lib/game/setup-view';
+import { DEFAULT_NEW_GAME_AUTOMATION, resolveAutomationSettings, type PublicationMode } from '@/lib/game/automation';
+import { parseEliminationSchedule, resolveEliminationSchedule, serializeEliminationSchedule } from '@/lib/game/elimination-schedule';
+import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettingsInput } from '@/lib/game/game-settings';
+import { validateGameSetup, type GameSetupInput } from '@/lib/game/game-setup';
+import { formatZonedDateTimeLocal } from '@/lib/game/scheduling';
+import { assertSameOrigin } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
 
 interface CreateGameBody extends GameSettingsInput, GameSetupInput {
   publicationMode?: unknown;
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
       ok: true,
       needsBootstrap: false,
       selected: selectedGame && roster && assignments ? { gameId: selectedGame.id, roster, assignments } : null,
-      games: games.results.map((game) => ({
+      games: games.results.map((game): GameSummary => ({
         id: game.id,
         name: game.name,
         status: game.status,
@@ -89,7 +89,7 @@ export async function GET(request: Request) {
         startDate: game.startDate,
         endDate: game.endDate,
         activeWeekdays: JSON.parse(game.activeWeekdaysJson) as number[],
-        schedule: JSON.parse(game.scheduleJson) as Record<string, string>,
+        schedule: JSON.parse(game.scheduleJson) as GameSummary['schedule'],
         finalCutoffAt: game.finalCutoffAt,
         finalCutoffLocal: formatZonedDateTimeLocal(new Date(game.finalCutoffAt), game.timezone),
         hunterWindowMinutes: Number(game.hunterWindowMinutes),

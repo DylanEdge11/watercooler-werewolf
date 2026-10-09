@@ -1,14 +1,11 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { resolveAutoOpenNextPhase, resolveAutomationSettings, type PublicationMode } from '../../../../../lib/game/automation';
-import { changes } from '../../../../../lib/game/phase-store';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { resolveAutoOpenNextPhase, resolveAutomationSettings, type PublicationMode } from '@/lib/game/automation';
+import { changes } from '@/lib/game/phase-store';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import type { RouteContext } from '@/lib/http/route-context';
 
 // Automation settings and pause can change at any point until the game is over.
 const EDITABLE = "('DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW', 'ACTIVE', 'FINAL_SHOWDOWN')";

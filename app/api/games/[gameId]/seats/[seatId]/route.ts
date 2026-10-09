@@ -1,22 +1,19 @@
-import { getDb } from '../../../../../../db';
-import { ensureDatabase } from '../../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../../lib/auth/authorization';
-import { randomToken, sha256 } from '../../../../../../lib/auth/crypto';
-import { canRemoveSeat } from '../../../../../../lib/game/roster-edit';
-import { assertSameOrigin, jsonError } from '../../../../../../lib/http/security';
-import { routeError } from '../../../../../../lib/http/errors';
-import { applySeatChange, loadEditableRoster } from '../../../../../../lib/roster/edit-roster';
-
-interface RouteContext {
-  params: Promise<{ gameId: string; seatId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { randomToken, sha256 } from '@/lib/auth/crypto';
+import { canRemoveSeat } from '@/lib/game/roster-edit';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { applySeatChange, loadEditableRoster } from '@/lib/roster/edit-roster';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /**
  * Removes one player who has not claimed their seat, before roles are
  * randomized. Their invitation link stops working. The seat is archived, not
  * deleted, so audit history that names it stays intact.
  */
-export async function DELETE(request: Request, context: RouteContext) {
+export async function DELETE(request: Request, context: RouteContext<{ gameId: string; seatId: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();

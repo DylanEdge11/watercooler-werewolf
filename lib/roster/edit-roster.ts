@@ -1,11 +1,12 @@
-import { getDb, type PreparedStatement, type RunResult } from '../../db';
+import { getDb, type PreparedStatement } from '../../db';
 import type { SqlValue } from '../../db/contracts';
 import { ROLE_CATALOG } from '../game/catalog';
 import { adjustCompositionForRosterChange, canEditRoster } from '../game/roster-edit';
 import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from '../game/types';
 import { HttpError } from '../http/errors';
+import { changes } from '../../db/results';
 
-export class RosterEditError extends HttpError {
+class RosterEditError extends HttpError {
   constructor(message: string, status: number) {
     super(status, message);
   }
@@ -118,7 +119,7 @@ export async function applySeatChange(options: {
     ),
   ];
   const result = await db.batch(statements);
-  if (Number((result[0] as RunResult | undefined)?.meta?.changes ?? 0) !== 1) {
+  if (changes(result[0]) !== 1) {
     throw new RosterEditError('The roster changed while you were editing it. Refresh and try again.', 409);
   }
   return { composition, resetToPreset, playerCount };

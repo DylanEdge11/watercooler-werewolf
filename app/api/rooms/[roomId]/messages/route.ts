@@ -1,17 +1,15 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { getCurrentPlayer, getCurrentSpectator, type PlayerIdentity, type SpectatorIdentity } from '../../../../../lib/auth/session';
-import { normalizeChatBody } from '../../../../../lib/chat/rooms';
-import { loadRoomMessages } from '../../../../../lib/chat/room-messages';
-import { spectatorAuthorName } from '../../../../../lib/game/spectators';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../../lib/http/rate-limit';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
-
-interface RouteContext {
-  params: Promise<{ roomId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { getCurrentPlayer, getCurrentSpectator, type PlayerIdentity, type SpectatorIdentity } from '@/lib/auth/session';
+import { normalizeChatBody } from '@/lib/chat/rooms';
+import { loadRoomMessages } from '@/lib/chat/room-messages';
+import { spectatorAuthorName } from '@/lib/game/spectators';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { changes } from '@/db/results';
+import type { RouteContext } from '@/lib/http/route-context';
 
 interface RoomAccess {
   id: string;
@@ -56,7 +54,7 @@ async function requireRoomAccess(roomId: string): Promise<RoomViewer> {
   return { kind: 'SPECTATOR', identity: spectator, room };
 }
 
-export async function GET(request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext<{ roomId: string }>) {
   try {
     await ensureDatabase();
     const { roomId } = await context.params;
@@ -73,7 +71,7 @@ export async function GET(request: Request, context: RouteContext) {
   }
 }
 
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext<{ roomId: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();
@@ -110,7 +108,7 @@ export async function POST(request: Request, context: RouteContext) {
           )
           .bind(crypto.randomUUID(), room.gameId, JSON.stringify({ roomId, messageId: id, spectatorId: authorId }), now, id, roomId, authorId),
       ]);
-      if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
+      if (changes(result[0]) !== 1) {
         return jsonError('The Afterlife or your spectator access changed before the message could be saved. Refresh and try again.', 409);
       }
       return Response.json({ ok: true, message: { id, body: message, authorName: spectatorAuthorName(viewer.identity.displayName), createdAt: now } }, { status: 201 });
@@ -161,7 +159,7 @@ export async function POST(request: Request, context: RouteContext) {
           identity.seatId,
         ),
     ]);
-    if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
+    if (changes(result[0]) !== 1) {
       return jsonError('The room or your write access changed before the message could be saved. Refresh and try again.', 409);
     }
     return Response.json({ ok: true, message: { id, body: message, authorName: identity.displayName, createdAt: now } }, { status: 201 });

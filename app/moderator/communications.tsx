@@ -1,7 +1,7 @@
 'use client';
 
-import { announcementChatCopy, announcementEmailCopy } from '../../lib/game/moderator-copy';
-import type { FeedbackSummary } from '../../lib/game/feedback';
+import { announcementChatCopy, announcementEmailCopy } from '@/lib/game/moderator-copy';
+import type { FeedbackSummary } from '@/lib/game/feedback';
 import CopyButton from './copy-button';
 
 export interface AnnouncementRecord {

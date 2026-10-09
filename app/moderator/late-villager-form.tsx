@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { requestJson } from '@/lib/http/client';
 import CopyButton from './copy-button';
 
 /**
@@ -21,13 +22,11 @@ export default function LateVillagerForm({ gameId, onAdded }: { gameId: string; 
     setNewLink(null);
     setBusy(true);
     try {
-      const response = await fetch(`/api/games/${gameId}/late-villagers`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ displayName: data.get('displayName'), email: data.get('email') }),
+      const result = await requestJson<{ seat?: { displayName: string }; claimUrl?: string }>(`/api/games/${gameId}/late-villagers`, {
+        body: { displayName: data.get('displayName'), email: data.get('email') },
+        fallback: 'Unable to add the late Villager.',
       });
-      const result = await response.json() as { seat?: { displayName: string }; claimUrl?: string; error?: string };
-      if (!response.ok || !result.seat || !result.claimUrl) throw new Error(result.error ?? 'Unable to add the late Villager.');
+      if (!result.seat || !result.claimUrl) throw new Error('Unable to add the late Villager.');
       setNewLink({ displayName: result.seat.displayName, url: result.claimUrl });
       form.reset();
       onAdded?.();

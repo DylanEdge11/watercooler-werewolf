@@ -1,6 +1,6 @@
-import { clearModeratorSession } from '../../../../lib/auth/session';
-import { routeError } from '../../../../lib/http/errors';
-import { assertSameOrigin } from '../../../../lib/http/security';
+import { clearModeratorSession } from '@/lib/auth/session';
+import { routeError } from '@/lib/http/errors';
+import { assertSameOrigin } from '@/lib/http/security';
 
 export async function POST(request: Request) {
   try {

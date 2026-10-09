@@ -2,15 +2,13 @@ import { defaultComposition, validateComposition } from './balance';
 import { MAX_PLAYERS, MIN_PLAYERS } from './player-count';
 import { ROLE_KEYS, type RoleComposition } from './types';
 
+export type RosterEditDecision = { allowed: true } | { allowed: false; error: string };
+
 /**
  * Seats can be added or removed one at a time only before roles are
  * randomized. Once a preview exists, saving the role counts again discards it
  * and returns the game to REGISTRATION, which reopens the roster.
  */
-export const ROSTER_EDIT_STATUSES = ['DRAFT', 'REGISTRATION'] as const;
-
-export type RosterEditDecision = { allowed: true } | { allowed: false; error: string };
-
 export function canEditRoster(status: string, rolesReleased: boolean): RosterEditDecision {
   if (rolesReleased || !['DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'].includes(status)) {
     return { allowed: false, error: 'Players can only be added or removed before roles are randomized.' };

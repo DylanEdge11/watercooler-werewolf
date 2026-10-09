@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { keysOf } from './test-support/keys-of';
 import { createClient, type Client } from '@libsql/client';
 import { LibsqlDatabase, type LibsqlClient } from '../db/libsql';
 import { loadMigrations, runMigrations } from '../scripts/db-migration-runner.mjs';
@@ -78,17 +79,6 @@ async function playerStats(): Promise<{ status: number; stats: GameStats; raw: s
   const raw = await response.text();
   const body = raw ? JSON.parse(raw) as { stats: GameStats } : { stats: undefined as unknown as GameStats };
   return { status: response.status, stats: body.stats, raw };
-}
-
-function keysOf(value: unknown, keys = new Set<string>()): Set<string> {
-  if (Array.isArray(value)) value.forEach((item) => keysOf(item, keys));
-  else if (value && typeof value === 'object') {
-    for (const [key, child] of Object.entries(value)) {
-      keys.add(key);
-      keysOf(child, keys);
-    }
-  }
-  return keys;
 }
 
 const exec = (sql: string, args: Array<string | number | null> = []) => client.execute({ sql, args });

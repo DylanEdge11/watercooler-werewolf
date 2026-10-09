@@ -1,15 +1,6 @@
 import { getDb } from '../../db';
 import { randomToken } from '../auth/crypto';
 
-/** A player's email switch. Off until they turn it on. */
-export async function loadEmailPreference(seatId: string): Promise<{ enabled: boolean }> {
-  const row = await getDb()
-    .prepare('SELECT enabled FROM email_preferences WHERE seat_id = ?')
-    .bind(seatId)
-    .first<{ enabled: number }>();
-  return { enabled: Boolean(row?.enabled) };
-}
-
 /**
  * Turns a seat's game email on or off. The first time creates the unsubscribe
  * token that every email carries; it never changes afterward, so an old email's

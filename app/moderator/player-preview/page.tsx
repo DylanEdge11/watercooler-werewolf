@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getCurrentModerator } from '../../../lib/auth/session';
+import { getCurrentModerator } from '@/lib/auth/session';
 import PlayerViewStudio from './player-view-studio';
 
 export const dynamic = 'force-dynamic';

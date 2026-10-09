@@ -1,19 +1,16 @@
-import { getDb } from '../../../../../../db';
-import { ensureDatabase } from '../../../../../../db/migrate';
-import { changes } from '../../../../../../db/results';
-import { requireGameOwner } from '../../../../../../lib/auth/authorization';
-import { removeCoModeratorStatements, transferOwnershipStatements } from '../../../../../../lib/auth/game-moderators';
-import { assertSameOrigin } from '../../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../../lib/http/errors';
-
-interface RouteContext {
-  params: Promise<{ gameId: string; moderatorId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { changes } from '@/db/results';
+import { requireGameOwner } from '@/lib/auth/authorization';
+import { removeCoModeratorStatements, transferOwnershipStatements } from '@/lib/auth/game-moderators';
+import { assertSameOrigin } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import type { RouteContext } from '@/lib/http/route-context';
 
 const STALE = 'That moderator is no longer a co-moderator of this game. Refresh and try again.';
 
 /** The owner removes a co-moderator from this game. */
-export async function DELETE(request: Request, context: RouteContext) {
+export async function DELETE(request: Request, context: RouteContext<{ gameId: string; moderatorId: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();
@@ -30,7 +27,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 }
 
 /** The owner makes a co-moderator the owner (`{ role: 'OWNER' }`) and stays on as a co-moderator. */
-export async function PATCH(request: Request, context: RouteContext) {
+export async function PATCH(request: Request, context: RouteContext<{ gameId: string; moderatorId: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();

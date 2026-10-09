@@ -1,18 +1,15 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
 import {
   parseEliminationSchedule,
   resolveEliminationSchedule,
   serializeEliminationSchedule,
-} from '../../../../../lib/game/elimination-schedule';
-import { changes } from '../../../../../lib/game/phase-store';
-import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+} from '@/lib/game/elimination-schedule';
+import { changes } from '@/lib/game/phase-store';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import type { RouteContext } from '@/lib/http/route-context';
 
 // Unlike the divisors, the schedule stays editable while the game runs, until it is over.
 const EDITABLE = "('DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW', 'ACTIVE', 'FINAL_SHOWDOWN')";

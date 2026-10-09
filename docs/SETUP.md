@@ -25,7 +25,7 @@ Local development (`npm run dev` with a `file:` database) is the only mode where
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `TURSO_DATABASE_URL` | Yes | libSQL URL. Use `file:./work/watercooler.db` locally; deployed functions refuse `file:` URLs and reach Turso over HTTP with the libSQL web client, so they don't ship the native SQLite binary. |
+| `TURSO_DATABASE_URL` | Yes | libSQL URL. Use `file:./work/watercooler.db` locally; deployed functions refuse `file:` URLs ([why](TECHNICAL.md#stack-and-data-access)). |
 | `TURSO_AUTH_TOKEN` | Remote only | Token scoped to that one database. |
 | `SITE_ORIGIN` | Recommended | Exact origin players use, such as `https://watercooler-werewolf.vercel.app`, with no path. Browser writes from any other origin are rejected. If unset, each request's own origin is used, which still blocks other sites; set it in Production so writes through any other hostname are refused. Claim links always use the address the moderator is on. |
 | `WATERCOOLER_OWNER_EMAIL` | For bootstrap | Email for the first moderator account. |
@@ -38,27 +38,24 @@ Set variables separately for `preview` and `production` in Vercel. Never prefix 
 
 ## Player email
 
-Players can opt in, from their dashboard, to emails about the game. It uses the same SMTP settings as [invite email](#invite-email), plus `SITE_ORIGIN` for the links in each message (on Vercel, the deployment's own address is used when `SITE_ORIGIN` is unset). Until both are set, players see no email switch.
+Players can opt in, from their dashboard, to emails about the game: a phase opening, a half-hour warning, and a themed recap of each result. What each email is and who gets it is in [Operations](OPERATIONS.md#player-email). All three are off until a player turns them on.
 
-Three emails, all off until a player turns them on:
+Player email uses the same SMTP settings as [invite email](#invite-email), plus `SITE_ORIGIN` for the links in each message (on Vercel, the deployment's own address is used when `SITE_ORIGIN` is unset). Until both are set, players see no email switch. The half-hour warning is most reliable with the [scheduler](#scheduler) set up.
 
-- **Phase opened**, when the moderator opens a Day, Night, or final ballot, to opted-in players who have something to do. On a Night that means only players with a Night action.
-- **Closes soon**, half an hour before the deadline, to the same players if they have not saved a move. Phases of an hour or less get none. It goes out on the next scheduler call or page visit after the half-hour mark, so set up the [scheduler](#scheduler) to make it reliable.
-- **Result published**, to every opted-in player, including those who were eliminated: a short story about the result, written from the same public facts the Timeline shows. Private results (a Seer's vision, protections, who holds a Night role) never reach the story or the email.
-
-**The story.** With `ANTHROPIC_API_KEY` set, Claude writes the story: one request per result, shared by every recipient, from public facts only (names, revealed roles, how each elimination happened). The key is an API key from [console.anthropic.com](https://console.anthropic.com) with billing on; it is separate from a Claude.ai subscription. Player display names are sent to Anthropic when a story is written, so leave the key unset for a customer who does not want that. If the key is missing, the model declines or fails, or its answer names the wrong people or contains a link, the built-in themed story is used instead, and the Operations event log records which one went out.
+**The story.** The recap is a short story about the result, written from the same public facts the Timeline shows. Private results (a Seer's vision, protections, who holds a Night role) never reach the story or the email. With `ANTHROPIC_API_KEY` set, Claude writes it: one request per result, shared by every recipient, from public facts only (names, revealed roles, how each elimination happened). The key is an API key from [console.anthropic.com](https://console.anthropic.com) with billing on; it is separate from a Claude.ai subscription. Player display names are sent to Anthropic when a story is written, so leave the key unset for a customer who does not want that. If the key is missing, the model declines or fails, or its answer names the wrong people or contains a link, the built-in themed story is used instead, and the Operations event log records which one went out.
 
 Every email has an unsubscribe link and the standard `List-Unsubscribe` headers. Opening the link shows a page with a button; only the button turns email off, because mail scanners open every link. A failed send never fails a game action. The moderator's Operations event log shows one line per batch and flags failures.
 
 ## Run locally
 
-```powershell
+Requires Node.js 24.x. The commands are the same in PowerShell and bash:
+
+```sh
 npm ci
-$env:SITE_ORIGIN = 'http://localhost:3000'
-$env:TURSO_DATABASE_URL = 'file:./work/watercooler.db'
-$env:WATERCOOLER_OWNER_EMAIL = 'owner@example.test'
+mkdir work                       # the local database lives here
+cp .env.example .env.local       # fictional local values: SITE_ORIGIN, TURSO_DATABASE_URL, WATERCOOLER_OWNER_EMAIL
 npm run db:migrate
-npm run owner:bootstrap
+npm run owner:bootstrap          # prompts for a password and prints recovery codes once
 npm run dev
 ```
 

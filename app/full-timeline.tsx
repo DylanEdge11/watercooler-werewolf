@@ -1,4 +1,4 @@
-import { describeTimelineEvent, eliminationCause, readableRole, type PublicTimelineEvent } from '../lib/game/timeline-view';
+import { describeTimelineEvent, eliminationCause, readableRole, type PublicTimelineEvent } from '@/lib/game/timeline-view';
 import { VoteLedger, type BallotVotesState } from './ballot-votes';
 
 interface FullTimelineProps {

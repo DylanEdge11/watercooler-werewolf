@@ -1,16 +1,13 @@
-import { getDb } from '../../../../../db';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator, requireGameOwner } from '../../../../../lib/auth/authorization';
-import { createModeratorAccount } from '../../../../../lib/auth/moderators';
-import { assertSameOrigin } from '../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { changes } from '../../../../../db/results';
-import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator, requireGameOwner } from '@/lib/auth/authorization';
+import { createModeratorAccount } from '@/lib/auth/moderators';
+import { assertSameOrigin } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { changes } from '@/db/results';
+import { isSingleEmailAddress } from '@/lib/roster/email-address';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import type { RouteContext } from '@/lib/http/route-context';
 
 export async function GET(request: Request, context: RouteContext) {
   try {

@@ -10,7 +10,7 @@ import {
   type EliminationSchedule,
   type LatestRegularPhase,
   type ScheduleRowState,
-} from '../../lib/game/elimination-schedule';
+} from '@/lib/game/elimination-schedule';
 
 interface DraftStage {
   day: string;

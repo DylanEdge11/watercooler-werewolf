@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { attentionEventCount, CONSOLE_TABS, latestAttentionEventAt, noticeFadeMs, type ConsoleTabId, type TabCount } from '../../lib/game/console-guidance';
+import { attentionEventCount, CONSOLE_TABS, latestAttentionEventAt, noticeFadeMs, type ConsoleTabId, type TabCount } from '@/lib/game/console-guidance';
 import { useOperations } from './operations-context';
 
 export interface TabBadge {
@@ -11,14 +11,14 @@ export interface TabBadge {
   description: string;
 }
 
-export const consoleTabButtonId = (id: ConsoleTabId) => `console-tab-${id}`;
-export const consolePanelId = (id: ConsoleTabId) => `console-panel-${id}`;
+const consoleTabButtonId = (id: ConsoleTabId) => `console-tab-${id}`;
+const consolePanelId = (id: ConsoleTabId) => `console-panel-${id}`;
 
 /**
  * The console's sections as tabs. Arrow keys, Home, and End move between them.
  * A badge marks a tab that needs the moderator even while another is open.
  */
-export function ConsoleTabBar({ active, onSelect, badges }: { active: ConsoleTabId; onSelect: (id: ConsoleTabId) => void; badges: Partial<Record<ConsoleTabId, TabBadge>> }) {
+function ConsoleTabBar({ active, onSelect, badges }: { active: ConsoleTabId; onSelect: (id: ConsoleTabId) => void; badges: Partial<Record<ConsoleTabId, TabBadge>> }) {
   const buttons = useRef(new Map<ConsoleTabId, HTMLButtonElement>());
 
   function move(event: KeyboardEvent<HTMLButtonElement>, index: number) {

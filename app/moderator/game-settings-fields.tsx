@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { DEFAULT_NEW_GAME_AUTOMATION, type AutomationSettings } from '../../lib/game/automation';
-import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
-import { DEFAULT_GAME_SETTINGS, heavySlotWarning, slotTable, type GameSettings } from '../../lib/game/game-settings';
+import { DEFAULT_NEW_GAME_AUTOMATION, type AutomationSettings } from '@/lib/game/automation';
+import type { EliminationSchedule } from '@/lib/game/elimination-schedule';
+import { DEFAULT_GAME_SETTINGS, heavySlotWarning, slotTable, type GameSettings } from '@/lib/game/game-settings';
 import EliminationScheduleFields from './elimination-schedule-fields';
 
 interface GameSettingsFieldsProps {

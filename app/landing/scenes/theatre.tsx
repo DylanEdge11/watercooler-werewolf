@@ -141,8 +141,6 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
     setClosed((c) => !c);
   }
 
-
-
   return (
     <div
       ref={rootRef}
@@ -163,11 +161,11 @@ export default function TheatreScene({ night }: TheatreSceneProps) {
       </header>
 
       <div className={styles.stageWrap}>
-      <div ref={stageRef} className={styles.theatre}>
-        {showStage && <TheatreStage night={night} wolves={wolves} talk={talk} closed={closed} speak={speak} pullCord={pullCord} />}
-      </div>
+        <div ref={stageRef} className={styles.theatre}>
+          {showStage && <TheatreStage night={night} wolves={wolves} talk={talk} closed={closed} speak={speak} pullCord={pullCord} />}
+        </div>
 
-      <div className={styles.audience} aria-hidden="true">{showStage && <Audience />}</div>
+        <div className={styles.audience} aria-hidden="true">{showStage && <Audience />}</div>
       </div>
 
       <div className={styles.ticket}>

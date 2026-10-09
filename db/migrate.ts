@@ -1,8 +1,6 @@
 import { getDb } from './index';
 import { verifyDatabaseReady } from './readiness';
 
-export { MIGRATION_VERSIONS, verifyDatabaseReady } from './readiness';
-
 let readiness: Promise<void> | undefined;
 
 /**

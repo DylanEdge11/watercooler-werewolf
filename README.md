@@ -15,26 +15,13 @@ A browser-based Werewolf game for offices and other busy groups. Six to eighty p
 | Understand the code | [Technical reference](docs/TECHNICAL.md) |
 | Read old reports and migration records | [Archive](docs/archive/README.md) |
 
-## Quick start (local)
+## Run it locally
 
-Requires Node.js 24.x.
-
-```powershell
-npm ci
-$env:SITE_ORIGIN = 'http://localhost:3000'
-$env:TURSO_DATABASE_URL = 'file:./work/watercooler.db'
-$env:WATERCOOLER_OWNER_EMAIL = 'owner@example.test'
-npm run db:migrate
-npm run owner:bootstrap   # prompts for a password and prints recovery codes once
-npm run dev
-```
-
-Then open `http://localhost:3000`. See [Setup](docs/SETUP.md) for Preview and Production.
+Requires Node.js 24.x: `npm ci`, create `work/` and `.env.local`, `npm run db:migrate`, `npm run owner:bootstrap`, `npm run dev`. The exact commands are in [Setup → Run locally](docs/SETUP.md#run-locally). Deploying to Preview and Production is in the same document.
 
 ## Before a real game
 
 - Use the exact site address your organizer gives you. Preview and Production are separate sites with separate data.
-- The app emails invitations when SMTP is set up ([SETUP](docs/SETUP.md#invite-email)). Players can also opt in to emails for a phase opening, a half-hour warning, and a themed recap of each result ([SETUP](docs/SETUP.md#player-email)). Announcements are copied and sent by the moderator.
-- A moderator can add players by importing a list, by opening a public sign-up link and accepting who joins, or both. People can also apply to help moderate a game; the game owner approves. Nobody is emailed until a moderator accepts or approves them, and each game's sign-ups and applications start switched off.
-- Phases open only when the moderator opens them, unless the moderator ticks “Open the next Day or Night automatically” for an automatic-results game. The first Day and the final showdown are always opened by the moderator. By default the moderator also locks and publishes each result; a game switched to automatic results locks at its deadline and publishes after a review window unless the moderator steps in.
+- Email, public sign-up, and moderator applications are all optional, and each game's sign-ups and applications start switched off. Nobody is emailed until a moderator accepts or approves them ([invite email](docs/SETUP.md#invite-email), [player email](docs/SETUP.md#player-email), [sign-ups](docs/OPERATIONS.md#roster-and-sign-ups)).
+- Phases open and results publish only when the moderator does it, unless the moderator switches a game to automatic results ([how that works](docs/OPERATIONS.md#deadlines-and-automatic-results)). The first Day and the final showdown are always opened by the moderator.
 - Keep invite files, role assignments, private rooms, and backups private.

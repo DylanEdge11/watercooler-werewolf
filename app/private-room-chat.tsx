@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { LatestRoomRequest } from '../lib/chat/latest-room-request';
-import { IDLE_AFTER_MS, pollWhileVisible } from '../lib/http/poll-while-visible';
-import { conditionalGet, responseEtag } from '../lib/http/conditional-get';
-import { plainError } from '../lib/http/plain-error';
-import { RELAXED_POLL_MS, URGENT_POLL_MS } from '../lib/http/poll-interval';
-import { ROOM_NAMES } from '../lib/chat/room-names';
+import { LatestRoomRequest } from '@/lib/chat/latest-room-request';
+import { IDLE_AFTER_MS, pollWhileVisible } from '@/lib/http/poll-while-visible';
+import { requestJson } from '@/lib/http/client';
+import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
+import { plainError } from '@/lib/http/plain-error';
+import { RELAXED_POLL_MS, URGENT_POLL_MS } from '@/lib/http/poll-interval';
+import { ROOM_NAMES } from '@/lib/chat/room-names';
 
 /** A room with a message in the last two minutes counts as in use. */
 const CHAT_ACTIVE_MS = 2 * 60_000;
@@ -170,16 +171,7 @@ export default function RoomChat({ rooms, previewMode = false, sectionId, spotli
     if (sending) return;
     setSending(true);
     try {
-      const response = await fetch(`/api/rooms/${room.id}/messages`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ body: data.get('body') }),
-      });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) {
-        setError(result.error ?? 'Unable to send this message.');
-        return;
-      }
+      await requestJson(`/api/rooms/${room.id}/messages`, { body: { body: data.get('body') }, fallback: 'Unable to send this message.' });
       form.reset();
       await load();
     } catch (caught) {

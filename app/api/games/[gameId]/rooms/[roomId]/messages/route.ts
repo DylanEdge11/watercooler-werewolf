@@ -1,23 +1,21 @@
-import { getDb } from '../../../../../../../db';
-import { ensureDatabase } from '../../../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../../../lib/auth/authorization';
-import { normalizeChatBody } from '../../../../../../../lib/chat/rooms';
-import { loadRoomMessages } from '../../../../../../../lib/chat/room-messages';
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { normalizeChatBody } from '@/lib/chat/rooms';
+import { loadRoomMessages } from '@/lib/chat/room-messages';
 import {
   MODERATOR_AUTHOR_NAME,
   ROOM_HISTORY_PAGE_SIZE,
   encodeRoomHistoryCursor,
   moderatorPostBlockedReason,
   parseRoomHistoryCursor,
-} from '../../../../../../../lib/game/moderator-chat';
-import { assertSameOrigin, jsonError } from '../../../../../../../lib/http/security';
-import { HttpError, routeError } from '../../../../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../../../../lib/http/rate-limit';
-import { respondJsonWithEtag } from '../../../../../../../lib/http/etag';
-
-interface RouteContext {
-  params: Promise<{ gameId: string; roomId: string }>;
-}
+} from '@/lib/game/moderator-chat';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { changes } from '@/db/results';
+import type { RouteContext } from '@/lib/http/route-context';
 
 interface ModeratorRoom {
   id: string;
@@ -40,7 +38,7 @@ async function loadRoom(gameId: string, roomId: string): Promise<ModeratorRoom> 
 }
 
 /** A room's full history for the game's moderators, one page at a time: the newest page, or the page before `?before=`. */
-export async function GET(request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext<{ gameId: string; roomId: string }>) {
   try {
     await ensureDatabase();
     const { gameId, roomId } = await context.params;
@@ -61,7 +59,7 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 /** A moderator posts in any of the game's rooms, shown to its members as "Moderator". */
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext<{ gameId: string; roomId: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();
@@ -95,7 +93,7 @@ export async function POST(request: Request, context: RouteContext) {
         )
         .bind(crypto.randomUUID(), gameId, moderator.id, JSON.stringify({ roomId, messageId: id }), now, id, roomId),
     ]);
-    if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
+    if (changes(result[0]) !== 1) {
       return jsonError('The room or the game changed before the message could be saved. Refresh and try again.', 409);
     }
     return Response.json(

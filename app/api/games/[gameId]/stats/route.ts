@@ -1,13 +1,10 @@
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { routeError } from '../../../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
-import { jsonError } from '../../../../../lib/http/security';
-import { loadGameStats } from '../../../../../lib/player/game-stats-data';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { jsonError } from '@/lib/http/security';
+import { loadGameStats } from '@/lib/player/game-stats-data';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /** The same Village stats players see, for a moderator of this game. */
 export async function GET(request: Request, context: RouteContext) {

@@ -1,9 +1,9 @@
-import { ensureDatabase } from '../../../db/migrate';
-import { getCurrentPlayer, getCurrentSpectator } from '../../../lib/auth/session';
-import { routeError } from '../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../lib/http/etag';
-import { jsonError } from '../../../lib/http/security';
-import { loadGameStats } from '../../../lib/player/game-stats-data';
+import { ensureDatabase } from '@/db/migrate';
+import { getCurrentPlayer, getCurrentSpectator } from '@/lib/auth/session';
+import { routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { jsonError } from '@/lib/http/security';
+import { loadGameStats } from '@/lib/player/game-stats-data';
 
 /**
  * The Village stats of the signed-in player's (or spectator's) own game. Everything in it is

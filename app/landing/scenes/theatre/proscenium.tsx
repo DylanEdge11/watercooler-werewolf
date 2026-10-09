@@ -3,7 +3,7 @@ import { box, circ, makeCutter, type Pt } from './cut';
 
 /*
  * The cut-card proscenium arch, drawn in a 1000 x 800 box. The stage opening
- * is x 150..850, y 180..640 (see BOX in theatre.tsx). Every piece is its own
+ * is x 150..850, y 180..640 (the `.box` rule in theatre.module.css). Every piece is its own
  * card cut with a jittered edge and a shadow (`theatre-sh`) so the gold sits
  * on the cream which sits on the red, like a real Pollock's sheet.
  */

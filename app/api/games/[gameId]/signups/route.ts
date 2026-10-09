@@ -1,16 +1,13 @@
-import { getDb } from '../../../../../db';
-import { changes } from '../../../../../db/results';
-import { ensureDatabase } from '../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../lib/auth/authorization';
-import { canOpenSignups, parseSignupNote } from '../../../../../lib/game/signups';
-import { HttpError, routeError } from '../../../../../lib/http/errors';
-import { respondJsonWithEtag } from '../../../../../lib/http/etag';
-import { assertSameOrigin } from '../../../../../lib/http/security';
-import { loadSignupsView, newJoinCode } from '../../../../../lib/roster/signup-store';
-
-interface RouteContext {
-  params: Promise<{ gameId: string }>;
-}
+import { getDb } from '@/db';
+import { changes } from '@/db/results';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { canOpenSignups, parseSignupNote } from '@/lib/game/signups';
+import { HttpError, routeError } from '@/lib/http/errors';
+import { respondJsonWithEtag } from '@/lib/http/etag';
+import { assertSameOrigin } from '@/lib/http/security';
+import { loadSignupsView, newJoinCode } from '@/lib/roster/signup-store';
+import type { RouteContext } from '@/lib/http/route-context';
 
 const SETUP_STATUSES = "('DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW')";
 

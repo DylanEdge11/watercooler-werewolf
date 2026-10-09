@@ -1,16 +1,13 @@
-import { getDb } from '../../../../../../../db';
-import { changes } from '../../../../../../../db/results';
-import { ensureDatabase } from '../../../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../../../lib/auth/authorization';
-import { hashSecret } from '../../../../../../../lib/auth/crypto';
-import { pinFailureKey } from '../../../../../../../lib/auth/pin-lockout';
-import { spectatorLockoutId } from '../../../../../../../lib/auth/spectator-link';
-import { assertSameOrigin, jsonError } from '../../../../../../../lib/http/security';
-import { routeError } from '../../../../../../../lib/http/errors';
-
-interface RouteContext {
-  params: Promise<{ gameId: string; spectatorId: string }>;
-}
+import { getDb } from '@/db';
+import { changes } from '@/db/results';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { hashSecret } from '@/lib/auth/crypto';
+import { pinFailureKey } from '@/lib/auth/pin-lockout';
+import { spectatorLockoutId } from '@/lib/auth/spectator-link';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /**
  * Gives a spectator who has chosen a PIN a new one, chosen by the moderator: for
@@ -20,7 +17,7 @@ interface RouteContext {
  * The reason and the moderator go in the Operations log; the PIN is never stored
  * or logged in the clear.
  */
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext<{ gameId: string; spectatorId: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import { ensureDatabase } from '../../../db/migrate';
-import { JOIN_COPY } from '../../../lib/game/join-copy';
-import { lookupJoinPage, toPublicJoinPage, type PublicJoinPage } from '../../../lib/join/lookup';
+import { ensureDatabase } from '@/db/migrate';
+import { JOIN_COPY } from '@/lib/game/join-copy';
+import { lookupJoinPage, toPublicJoinPage, type PublicJoinPage } from '@/lib/join/lookup';
 import JoinForms from './join-forms';
 
 export const metadata: Metadata = { title: 'Join a game · Watercooler Werewolf', robots: { index: false } };

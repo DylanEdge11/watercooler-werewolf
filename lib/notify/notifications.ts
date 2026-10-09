@@ -8,6 +8,7 @@ import { CLOSING_SOON_MINUTES, emailNotificationsAvailable, MIN_PHASE_MINUTES_FO
 import { deliver, type Recipient } from './deliver';
 import { closingSoonMessage, phaseOpenedMessage, phaseName, resultPublishedMessage } from './messages';
 import { storyInputFromPublishedEvent, writeStory, type StoryWriter } from './story';
+import { changes } from '../../db/results';
 
 /*
  * Player email. Three events send it: a phase opens, a phase is about to close, and a
@@ -127,7 +128,7 @@ export async function notifyClosingSoon(gameId: string, phaseId: string): Promis
       .prepare("UPDATE phases SET closing_reminder_at = ? WHERE id = ? AND game_id = ? AND status = 'OPEN' AND closing_reminder_at IS NULL")
       .bind(new Date().toISOString(), phaseId, gameId)
       .run();
-    if (Number(claimed.meta.changes) !== 1) return false;
+    if (changes(claimed) !== 1) return false;
     const recipients = await playersWhoMustAct(gameId, context.phase);
     await deliver({
       gameId,

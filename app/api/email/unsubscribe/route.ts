@@ -1,8 +1,8 @@
-import { ensureDatabase } from '../../../../db/migrate';
-import { jsonError } from '../../../../lib/http/security';
-import { routeError } from '../../../../lib/http/errors';
-import { enforceRateLimit, requestRateLimitKey } from '../../../../lib/http/rate-limit';
-import { unsubscribeByToken } from '../../../../lib/notify/preferences';
+import { ensureDatabase } from '@/db/migrate';
+import { jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { enforceRateLimit, requestRateLimitKey } from '@/lib/http/rate-limit';
+import { unsubscribeByToken } from '@/lib/notify/preferences';
 
 /**
  * Turns off one seat's game email from the link in an email. Unlike other writes it does

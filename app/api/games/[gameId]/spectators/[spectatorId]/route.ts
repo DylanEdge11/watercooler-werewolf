@@ -1,19 +1,16 @@
-import { getDb } from '../../../../../../db';
-import { changes } from '../../../../../../db/results';
-import { ensureDatabase } from '../../../../../../db/migrate';
-import { requireGameModerator } from '../../../../../../lib/auth/authorization';
-import { assertSameOrigin, jsonError } from '../../../../../../lib/http/security';
-import { routeError } from '../../../../../../lib/http/errors';
-
-interface RouteContext {
-  params: Promise<{ gameId: string; spectatorId: string }>;
-}
+import { getDb } from '@/db';
+import { changes } from '@/db/results';
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameModerator } from '@/lib/auth/authorization';
+import { assertSameOrigin, jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import type { RouteContext } from '@/lib/http/route-context';
 
 /**
  * Removes a spectator. Their link and any signed-in device stop working at
  * once. The row is archived, not deleted, so their Afterlife messages keep an author.
  */
-export async function DELETE(request: Request, context: RouteContext) {
+export async function DELETE(request: Request, context: RouteContext<{ gameId: string; spectatorId: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();

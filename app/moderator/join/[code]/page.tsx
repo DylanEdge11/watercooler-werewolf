@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import { ensureDatabase } from '../../../../db/migrate';
-import { lookupSetupLink, type SetupLink } from '../../../../lib/auth/moderator-setup';
-import { MODERATOR_SETUP_COPY } from '../../../../lib/game/join-copy';
+import { ensureDatabase } from '@/db/migrate';
+import { lookupSetupLink, type SetupLink } from '@/lib/auth/moderator-setup';
+import { MODERATOR_SETUP_COPY } from '@/lib/game/join-copy';
 import BrandHeader from '../../brand-header';
 import SetupForm from './setup-form';
 

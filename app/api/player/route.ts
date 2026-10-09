@@ -1,10 +1,10 @@
-import { ensureDatabase } from '../../../db/migrate';
-import { getCurrentPlayer, getCurrentSpectator } from '../../../lib/auth/session';
-import { advanceGameSafely } from '../../../lib/game/automation-sweep';
-import { jsonError } from '../../../lib/http/security';
-import { routeError } from '../../../lib/http/errors';
-import { loadDashboard, loadSpectatorDashboard, type NotificationCursor } from '../../../lib/player/dashboard-data';
-import { respondJsonWithEtag } from '../../../lib/http/etag';
+import { ensureDatabase } from '@/db/migrate';
+import { getCurrentPlayer, getCurrentSpectator } from '@/lib/auth/session';
+import { advanceGameSafely } from '@/lib/game/automation-sweep';
+import { jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
+import { loadDashboard, loadSpectatorDashboard, type NotificationCursor } from '@/lib/player/dashboard-data';
+import { respondJsonWithEtag } from '@/lib/http/etag';
 
 // Player email is sent after the response, within this function's time limit: a result story, then up to 80 emails.
 export const maxDuration = 60;

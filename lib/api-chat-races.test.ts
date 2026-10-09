@@ -1,20 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
+import { providerDatabase, type TestDatabase, type ReadGate } from './test-support/provider-database';
 import { readFileSync } from 'node:fs';
-
-interface TestStatement {
-  readonly sql: string;
-  getArgs(): SQLInputValue[];
-}
-
-interface TestDatabase {
-  prepare(sql: string): TestStatement;
-  batch(statements: TestStatement[]): Promise<unknown>;
-}
 
 const shared = vi.hoisted(() => ({
   db: null as TestDatabase | null,
-  gate: null as null | ((sql: string, kind: 'first' | 'all') => Promise<void>),
+  gate: null as ReadGate | null,
 }));
 
 vi.mock('../db', () => ({ getDb: () => shared.db }));
@@ -33,38 +24,6 @@ vi.mock('../lib/http/rate-limit', () => ({
 import { POST as messagePost } from '../app/api/rooms/[roomId]/messages/route';
 
 let sqlite: DatabaseSync;
-
-class ProviderStatement {
-  private args: SQLInputValue[] = [];
-
-  constructor(readonly sql: string) {}
-
-  bind(...args: SQLInputValue[]): this {
-    this.args = args;
-    return this;
-  }
-
-  getArgs(): SQLInputValue[] {
-    return this.args;
-  }
-
-  async first<T = Record<string, unknown>>(): Promise<T | null> {
-    const row = sqlite.prepare(this.sql).get(...this.args) as T | undefined;
-    await shared.gate?.(this.sql, 'first');
-    return row ?? null;
-  }
-
-  async all<T = Record<string, unknown>>(): Promise<{ results: T[] }> {
-    const results = sqlite.prepare(this.sql).all(...this.args) as T[];
-    await shared.gate?.(this.sql, 'all');
-    return { results };
-  }
-
-  async run(): Promise<{ meta: { changes: number } }> {
-    const result = sqlite.prepare(this.sql).run(...this.args);
-    return { meta: { changes: Number(result.changes) } };
-  }
-}
 
 function request(body: Record<string, unknown>): Request {
   return new Request('http://localhost:3000/api/test', {
@@ -92,31 +51,6 @@ function gateRoomRead() {
   return { reached, release };
 }
 
-function providerCompatible(): TestDatabase {
-  return {
-    prepare: (sql) => new ProviderStatement(sql),
-    batch: async (statements) => {
-      sqlite.exec('BEGIN');
-      try {
-        const results: Array<{ meta: { changes: number } } | { results: unknown[] }> = [];
-        for (const statement of statements) {
-          if (/^\s*SELECT\b/u.test(statement.sql)) {
-            results.push({ results: sqlite.prepare(statement.sql).all(...statement.getArgs()) });
-          } else {
-            const result = sqlite.prepare(statement.sql).run(...statement.getArgs());
-            results.push({ meta: { changes: Number(result.changes) } });
-          }
-        }
-        sqlite.exec('COMMIT');
-        return results;
-      } catch (error) {
-        sqlite.exec('ROLLBACK');
-        throw error;
-      }
-    },
-  };
-}
-
 beforeEach(() => {
   sqlite = new DatabaseSync(':memory:');
   for (const file of ['0000_dashing_smiling_tiger.sql', '0001_bodyguard_and_lifecycle.sql', '0002_pilot_hardening.sql', '0003_reviewed_outcome.sql', '0004_operator_bootstrap.sql']) {
@@ -130,7 +64,7 @@ beforeEach(() => {
   sqlite.exec("INSERT INTO chat_rooms (id,game_id,type,status,created_at) VALUES ('wolf-room','game','WEREWOLF','OPEN','2026-01-01');");
   sqlite.exec("INSERT INTO chat_room_members (room_id,seat_id,access,granted_at) VALUES ('wolf-room','wolf','WRITE','2026-01-01');");
   shared.gate = null;
-  shared.db = providerCompatible();
+  shared.db = providerDatabase(sqlite, shared);
 });
 
 afterEach(() => sqlite.close());

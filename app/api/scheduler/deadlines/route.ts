@@ -1,12 +1,12 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { getDb } from '../../../../db';
-import { ensureDatabase } from '../../../../db/migrate';
-import { sweepAutomation } from '../../../../lib/game/automation-sweep';
-import { sweepDuePhases } from '../../../../lib/game/scheduling';
-import { purgeExpiredRows } from '../../../../lib/maintenance';
-import { sweepClosingReminders } from '../../../../lib/notify/notifications';
-import { jsonError } from '../../../../lib/http/security';
-import { routeError } from '../../../../lib/http/errors';
+import { getDb } from '@/db';
+import { ensureDatabase } from '@/db/migrate';
+import { sweepAutomation } from '@/lib/game/automation-sweep';
+import { sweepDuePhases } from '@/lib/game/scheduling';
+import { purgeExpiredRows } from '@/lib/maintenance';
+import { sweepClosingReminders } from '@/lib/notify/notifications';
+import { jsonError } from '@/lib/http/security';
+import { routeError } from '@/lib/http/errors';
 
 // Player email is sent after the response, within this function's time limit: a result story, then up to 80 emails.
 export const maxDuration = 60;

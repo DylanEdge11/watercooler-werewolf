@@ -147,138 +147,138 @@ export default function TheatreStage({ night, wolves, talk, closed, speak, pullC
   return (
     <>
       <Defs />
-          <div className={styles.box}>
-            <div className={`${styles.L} ${styles.clothDay}`} style={{ '--d': '0s' } as Vars}><DayBackcloth /></div>
-            <div className={`${styles.L} ${styles.clothNight}`}><NightBackcloth /></div>
+      <div className={styles.box}>
+        <div className={`${styles.L} ${styles.clothDay}`} style={{ '--d': '0s' } as Vars}><DayBackcloth /></div>
+        <div className={`${styles.L} ${styles.clothNight}`}><NightBackcloth /></div>
 
-            <div className={`${styles.L} ${styles.fly}`}  aria-hidden="true">
-              {HANGERS.map((h) => (
-                <div
-                  key={h.key}
-                  className={styles.hang}
-                  data-when={h.when}
-                  style={{ '--x': h.x, '--len': `${h.len}cqh`, '--size': `${h.size}cqw`, '--hd-n': `${h.delay[0]}s`, '--hd-d': `${h.delay[1]}s`, '--sd': `${h.sd}s` } as Vars}
-                >
-                  <div className={styles.swing}>
-                    <span className={styles.string} />
-                    <div className={styles.obj}>{h.node}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className={`${styles.L} ${styles.forest} ${styles.forestL}`}><ForestFlat side="l" /></div>
-            <div className={`${styles.L} ${styles.forest} ${styles.forestR}`}><ForestFlat side="r" /></div>
-            <div className={`${styles.L} ${styles.cut}`} style={{ '--d': '0.1s', '--sh': 3 } as Vars}><CottageRow /></div>
-            <div className={styles.L} style={{ '--d': '0.2s' } as Vars}><StageFloor /></div>
-            <div className={`${styles.L} ${styles.cut}`} style={{ '--d': '0.3s', '--sh': 4 } as Vars}><Well /></div>
-            <div className={styles.moonbeam} aria-hidden="true" />
-            <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayL}`} style={{ '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="l" /></div>
-            <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayR}`} style={{ '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="r" /></div>
-            <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightL}`} style={{ '--sh': 6 } as Vars}><NightWing side="l" /></div>
-            <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightR}`} style={{ '--sh': 6 } as Vars}><NightWing side="r" /></div>
-
-            <div className={`${styles.L} ${styles.cast}`}>
-              {PUPPETS.map((p, i) => {
-                const wolfIndex = wolves.indexOf(p.id);
-                const isWolf = night && wolfIndex !== -1;
-                const scared = night && !isWolf;
-                const pool = isWolf ? p.wolf : scared ? p.scared : p.day;
-                const align = p.x < 25 ? 'l' : p.x > 75 ? 'r' : 'c';
-                return (
-                  <div
-                    key={p.id}
-                    className={styles.slot}
-                    data-wolf={isWolf}
-                    data-scared={scared}
-                    style={{
-                      '--x': `${p.x}%`,
-                      '--bd': `${2.8 + (i % 3) * 0.45}s`,
-                      '--bl': `${-i * 0.7}s`,
-                      '--fd': `${1.0 + Math.max(0, wolfIndex) * 0.5}s`,
-                      '--fdd': `${0.1 + Math.max(0, wolfIndex) * 0.25}s`,
-                      '--gd': `${1.7 + i * 0.09}s`,
-                    } as Vars}
-                  >
-                    <div className={styles.bob}>
-                      <div className={styles.jump} data-jump={jumpOf(p.id)}>
-                        <div className={styles.shake}>
-                          <div className={styles.hop}>
-                            <span className={styles.rod} aria-hidden="true" />
-                            <button
-                              type="button"
-                              className={styles.card}
-                              aria-label={`${sentence(p.name)} stick puppet${isWolf ? ', revealed as a werewolf' : ''}. Press to hear a line.`}
-                              onClick={() => speak(p.id, pool)}
-                            >
-                              <span className={styles.spinner}>
-                                <span className={styles.face}>
-                                  <svg viewBox="0 0 100 170" aria-hidden="true" focusable="false"><g filter="url(#theatre-card)"><p.Art wolf={false} /></g></svg>
-                                </span>
-                                <span className={`${styles.face} ${styles.back}`}>
-                                  <svg viewBox="0 0 100 170" aria-hidden="true" focusable="false"><g filter="url(#theatre-card)"><p.Art wolf /></g></svg>
-                                </span>
-                              </span>
-                            </button>
-                            <span className={styles.gasp} aria-hidden="true">!</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {talk?.id === p.id && <p className={styles.bubble} data-align={align} aria-hidden="true">{talk.line}</p>}
-                  </div>
-                );
-              })}
-
-              <div className={styles.leaper} data-on={night} inert={!night}>
-                <div className={styles.leapX}>
-                  <div className={styles.leapY}>
-                    <div className={styles.jump} data-jump={jumpOf('leaper')}>
-                      <span className={`${styles.rod} ${styles.rodLong}`} aria-hidden="true" />
-                      <button type="button" className={styles.leapCard} aria-label="A werewolf in a tie, perched on the well. Press to hear a line." onClick={() => speak('leaper', LEAPER_LINES)}>
-                        <LeaperArt />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                {talk?.id === 'leaper' && <p className={styles.bubble} data-align="below" aria-hidden="true">{talk.line}</p>}
+        <div className={`${styles.L} ${styles.fly}`} aria-hidden="true">
+          {HANGERS.map((h) => (
+            <div
+              key={h.key}
+              className={styles.hang}
+              data-when={h.when}
+              style={{ '--x': h.x, '--len': `${h.len}cqh`, '--size': `${h.size}cqw`, '--hd-n': `${h.delay[0]}s`, '--hd-d': `${h.delay[1]}s`, '--sd': `${h.sd}s` } as Vars}
+            >
+              <div className={styles.swing}>
+                <span className={styles.string} />
+                <div className={styles.obj}>{h.node}</div>
               </div>
             </div>
+          ))}
+        </div>
 
-            <div className={styles.particles} aria-hidden="true">
-              {DUST.map((m, i) => (
-                <span key={`d${i}`} className={styles.dust} style={{ '--x': `${m.x}%`, '--y': `${m.y}%`, '--s': `${m.s}px`, '--du': `${m.d}s`, '--dl': `${m.l}s`, '--r': `${m.r}deg` } as Vars} />
-              ))}
-              {FIREFLIES.map((f, i) => (
-                <span key={`f${i}`} className={styles.firefly} style={{ '--x': `${f.x}%`, '--y': `${f.y}%`, '--du': `${f.d}s`, '--dl': `${f.l}s`, '--fx': `${f.dx}cqw`, '--fy': `${f.dy}cqh` } as Vars} />
-              ))}
-            </div>
-            <div className={styles.haze} aria-hidden="true" />
+        <div className={`${styles.L} ${styles.forest} ${styles.forestL}`}><ForestFlat side="l" /></div>
+        <div className={`${styles.L} ${styles.forest} ${styles.forestR}`}><ForestFlat side="r" /></div>
+        <div className={`${styles.L} ${styles.cut}`} style={{ '--d': '0.1s', '--sh': 3 } as Vars}><CottageRow /></div>
+        <div className={styles.L} style={{ '--d': '0.2s' } as Vars}><StageFloor /></div>
+        <div className={`${styles.L} ${styles.cut}`} style={{ '--d': '0.3s', '--sh': 4 } as Vars}><Well /></div>
+        <div className={styles.moonbeam} aria-hidden="true" />
+        <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayL}`} style={{ '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="l" /></div>
+        <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingDayR}`} style={{ '--d': '0.4s', '--sh': 6 } as Vars}><DayWing side="r" /></div>
+        <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightL}`} style={{ '--sh': 6 } as Vars}><NightWing side="l" /></div>
+        <div className={`${styles.L} ${styles.cut} ${styles.wing} ${styles.wingNightR}`} style={{ '--sh': 6 } as Vars}><NightWing side="r" /></div>
 
-            <div className={`${styles.curtain} ${styles.curtainL}`} aria-hidden="true"><CurtainCloth side="l" /></div>
-            <div className={`${styles.curtain} ${styles.curtainR}`} aria-hidden="true"><CurtainCloth side="r" /></div>
-            <div className={styles.interval} aria-hidden="true">
-              <span className={styles.intervalStrings} />
-              <p>Scheduled maintenance</p>
-              <span className={styles.intervalHand}>Currently in a change window</span>
-              <small>{PRESENTER}</small>
+        <div className={`${styles.L} ${styles.cast}`}>
+          {PUPPETS.map((p, i) => {
+            const wolfIndex = wolves.indexOf(p.id);
+            const isWolf = night && wolfIndex !== -1;
+            const scared = night && !isWolf;
+            const pool = isWolf ? p.wolf : scared ? p.scared : p.day;
+            const align = p.x < 25 ? 'l' : p.x > 75 ? 'r' : 'c';
+            return (
+              <div
+                key={p.id}
+                className={styles.slot}
+                data-wolf={isWolf}
+                data-scared={scared}
+                style={{
+                  '--x': `${p.x}%`,
+                  '--bd': `${2.8 + (i % 3) * 0.45}s`,
+                  '--bl': `${-i * 0.7}s`,
+                  '--fd': `${1.0 + Math.max(0, wolfIndex) * 0.5}s`,
+                  '--fdd': `${0.1 + Math.max(0, wolfIndex) * 0.25}s`,
+                  '--gd': `${1.7 + i * 0.09}s`,
+                } as Vars}
+              >
+                <div className={styles.bob}>
+                  <div className={styles.jump} data-jump={jumpOf(p.id)}>
+                    <div className={styles.shake}>
+                      <div className={styles.hop}>
+                        <span className={styles.rod} aria-hidden="true" />
+                        <button
+                          type="button"
+                          className={styles.card}
+                          aria-label={`${sentence(p.name)} stick puppet${isWolf ? ', revealed as a werewolf' : ''}. Press to hear a line.`}
+                          onClick={() => speak(p.id, pool)}
+                        >
+                          <span className={styles.spinner}>
+                            <span className={styles.face}>
+                              <svg viewBox="0 0 100 170" aria-hidden="true" focusable="false"><g filter="url(#theatre-card)"><p.Art wolf={false} /></g></svg>
+                            </span>
+                            <span className={`${styles.face} ${styles.back}`}>
+                              <svg viewBox="0 0 100 170" aria-hidden="true" focusable="false"><g filter="url(#theatre-card)"><p.Art wolf /></g></svg>
+                            </span>
+                          </span>
+                        </button>
+                        <span className={styles.gasp} aria-hidden="true">!</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {talk?.id === p.id && <p className={styles.bubble} data-align={align} aria-hidden="true">{talk.line}</p>}
+              </div>
+            );
+          })}
+
+          <div className={styles.leaper} data-on={night} inert={!night}>
+            <div className={styles.leapX}>
+              <div className={styles.leapY}>
+                <div className={styles.jump} data-jump={jumpOf('leaper')}>
+                  <span className={`${styles.rod} ${styles.rodLong}`} aria-hidden="true" />
+                  <button type="button" className={styles.leapCard} aria-label="A werewolf in a tie, perched on the well. Press to hear a line." onClick={() => speak('leaper', LEAPER_LINES)}>
+                    <LeaperArt />
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className={styles.valance} aria-hidden="true"><Valance /></div>
-            {closed && (
-              <button type="button" className={styles.reopen} onClick={pullCord} aria-label="End the change window: reopen the curtain" />
-            )}
-            <button
-              type="button"
-              className={styles.tassel}
-              onClick={pullCord}
-              aria-pressed={closed}
-              aria-label={closed ? 'End the change window: reopen the curtain' : 'Close the curtain for scheduled maintenance'}
-            >
-              <Tassel />
-            </button>
+            {talk?.id === 'leaper' && <p className={styles.bubble} data-align="below" aria-hidden="true">{talk.line}</p>}
           </div>
-          <div className={`${styles.sheet} ${styles.frame}`}><Proscenium /></div>
-          <div className={`${styles.sheet} ${styles.lamps}`}><Footlights /></div>
+        </div>
+
+        <div className={styles.particles} aria-hidden="true">
+          {DUST.map((m, i) => (
+            <span key={`d${i}`} className={styles.dust} style={{ '--x': `${m.x}%`, '--y': `${m.y}%`, '--s': `${m.s}px`, '--du': `${m.d}s`, '--dl': `${m.l}s`, '--r': `${m.r}deg` } as Vars} />
+          ))}
+          {FIREFLIES.map((f, i) => (
+            <span key={`f${i}`} className={styles.firefly} style={{ '--x': `${f.x}%`, '--y': `${f.y}%`, '--du': `${f.d}s`, '--dl': `${f.l}s`, '--fx': `${f.dx}cqw`, '--fy': `${f.dy}cqh` } as Vars} />
+          ))}
+        </div>
+        <div className={styles.haze} aria-hidden="true" />
+
+        <div className={`${styles.curtain} ${styles.curtainL}`} aria-hidden="true"><CurtainCloth side="l" /></div>
+        <div className={`${styles.curtain} ${styles.curtainR}`} aria-hidden="true"><CurtainCloth side="r" /></div>
+        <div className={styles.interval} aria-hidden="true">
+          <span className={styles.intervalStrings} />
+          <p>Scheduled maintenance</p>
+          <span className={styles.intervalHand}>Currently in a change window</span>
+          <small>{PRESENTER}</small>
+        </div>
+        <div className={styles.valance} aria-hidden="true"><Valance /></div>
+        {closed && (
+          <button type="button" className={styles.reopen} onClick={pullCord} aria-label="End the change window: reopen the curtain" />
+        )}
+        <button
+          type="button"
+          className={styles.tassel}
+          onClick={pullCord}
+          aria-pressed={closed}
+          aria-label={closed ? 'End the change window: reopen the curtain' : 'Close the curtain for scheduled maintenance'}
+        >
+          <Tassel />
+        </button>
+      </div>
+      <div className={`${styles.sheet} ${styles.frame}`}><Proscenium /></div>
+      <div className={`${styles.sheet} ${styles.lamps}`}><Footlights /></div>
     </>
   );
 }

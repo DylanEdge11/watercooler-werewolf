@@ -3,8 +3,9 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- use a reliable full-page transition after signing in. */
 
 import { useState, type FormEvent } from 'react';
-import type { SpectatorLink } from '../../../lib/auth/spectator-link';
-import { withRetryAfter } from '../../../lib/http/retry-after';
+import type { SpectatorLink } from '@/lib/auth/spectator-link';
+import { sendJson } from '@/lib/http/client';
+import { withRetryAfter } from '@/lib/http/retry-after';
 import BrandMark from '../../brand-mark';
 
 export default function SpectateForm({ code, spectator, lookupError }: { code: string; spectator: SpectatorLink | null; lookupError: string }) {
@@ -20,12 +21,7 @@ export default function SpectateForm({ code, spectator, lookupError }: { code: s
     setBusy(true);
     const form = new FormData(event.currentTarget);
     try {
-      const response = await fetch(`/api/spectate/${encodeURIComponent(code)}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pin: form.get('pin') }),
-      });
-      const data = await response.json().catch(() => ({})) as { error?: string };
+      const { response, data } = await sendJson(`/api/spectate/${encodeURIComponent(code)}`, { body: { pin: form.get('pin') } });
       if (!response.ok) {
         setError(withRetryAfter(data.error ?? 'Unable to open this link.', response));
         setBusy(false);

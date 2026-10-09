@@ -1,6 +1,7 @@
 import type { Database } from '../../db/contracts';
 import { hashSecret, randomToken } from './crypto';
 import { isSingleEmailAddress } from '../roster/email-address';
+import { changes } from '../../db/results';
 
 export interface CreatedModerator {
   id: string;
@@ -52,7 +53,7 @@ export async function bootstrapPrimaryModerator(db: Database, email: string, pas
       db.prepare('INSERT INTO app_bootstrap (id, created_at) VALUES (1, ?)').bind(prepared.values[4]),
       db.prepare(INSERT_MODERATOR_SQL).bind(...prepared.values),
     ]);
-    if (Number(results[0]?.meta?.changes ?? 0) !== 1 || Number(results[1]?.meta?.changes ?? 0) !== 1) {
+    if (changes(results[0]) !== 1 || changes(results[1]) !== 1) {
       throw new Error('The primary moderator bootstrap did not complete.');
     }
   } catch (error) {

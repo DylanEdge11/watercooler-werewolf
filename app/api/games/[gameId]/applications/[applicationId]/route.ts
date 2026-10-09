@@ -1,12 +1,9 @@
-import { ensureDatabase } from '../../../../../../db/migrate';
-import { requireGameOwner } from '../../../../../../lib/auth/authorization';
-import { decideApplication } from '../../../../../../lib/auth/application-approval';
-import { routeError } from '../../../../../../lib/http/errors';
-import { assertSameOrigin } from '../../../../../../lib/http/security';
-
-interface RouteContext {
-  params: Promise<{ gameId: string; applicationId: string }>;
-}
+import { ensureDatabase } from '@/db/migrate';
+import { requireGameOwner } from '@/lib/auth/authorization';
+import { decideApplication } from '@/lib/auth/application-approval';
+import { routeError } from '@/lib/http/errors';
+import { assertSameOrigin } from '@/lib/http/security';
+import type { RouteContext } from '@/lib/http/route-context';
 
 const DECISIONS = ['APPROVE', 'DECLINE', 'RECONSIDER'] as const;
 
@@ -15,7 +12,7 @@ const DECISIONS = ['APPROVE', 'DECLINE', 'RECONSIDER'] as const;
  * account issues a one-time setup link (emailed when the site can send email, and returned once
  * so the owner can pass it on); approving one who already has an account adds them at once.
  */
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext<{ gameId: string; applicationId: string }>) {
   try {
     assertSameOrigin(request);
     await ensureDatabase();

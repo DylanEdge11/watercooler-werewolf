@@ -1,9 +1,9 @@
-import type { PublicTimelineEvent } from '../../../lib/game/timeline-view';
-import { permissionForRole } from '../../../lib/game/actions';
-import { ROLE_CATALOG } from '../../../lib/game/catalog';
+import type { PublicTimelineEvent } from '@/lib/game/timeline-view';
+import { permissionForRole } from '@/lib/game/actions';
+import { ROLE_CATALOG } from '@/lib/game/catalog';
 import type { DashboardData } from '../../player-dashboard';
-import { buildGameStats, type GameStats, type StatsInput, type StatsPublishedPhase } from '../../../lib/game/game-stats';
-import type { RoleKey } from '../../../lib/game/types';
+import { buildGameStats, type GameStats, type StatsInput, type StatsPublishedPhase } from '@/lib/game/game-stats';
+import type { RoleKey } from '@/lib/game/types';
 
 export const PREVIEW_SCENARIOS = [
   { id: 'day-ballot', label: 'Day ballot' },

@@ -1,21 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { nudgeMessage } from '../../lib/game/moderator-copy';
-import { runHint, runNeedsAttention } from '../../lib/game/console-guidance';
-import { phaseName } from '../../lib/game/timeline-view';
-import { shouldRefreshOperations } from '../../lib/game/operations-refresh';
+import { nudgeMessage } from '@/lib/game/moderator-copy';
+import { runHint, runNeedsAttention } from '@/lib/game/console-guidance';
+import { phaseName } from '@/lib/game/timeline-view';
+import { shouldRefreshOperations } from '@/lib/game/operations-refresh';
 import AutomationControls, { type NextAutomaticStep } from './automation-controls';
 import EliminationSchedulePanel from './elimination-schedule-panel';
 import LateVillagerForm from './late-villager-form';
-import type { EliminationSchedule } from '../../lib/game/elimination-schedule';
+import type { EliminationSchedule } from '@/lib/game/elimination-schedule';
 import CopyButton from './copy-button';
-import { LATE_JOIN_LAST_PHASE_SEQUENCE } from '../../lib/game/roster-edit';
-import { formatZonedDateTimeLocal, nextScheduledClose, type ScheduleDefinition } from '../../lib/game/scheduling';
-import { pollWhileVisible } from '../../lib/http/poll-while-visible';
+import { LATE_JOIN_LAST_PHASE_SEQUENCE } from '@/lib/game/roster-edit';
+import { formatZonedDateTimeLocal, nextScheduledClose, type ScheduleDefinition } from '@/lib/game/scheduling';
+import { requestJson } from '@/lib/http/client';
+import { pollWhileVisible } from '@/lib/http/poll-while-visible';
 import { useGameEnded } from './use-game-ended';
-import { conditionalGet, responseEtag } from '../../lib/http/conditional-get';
-import { pollInterval } from '../../lib/http/poll-interval';
+import { conditionalGet, responseEtag } from '@/lib/http/conditional-get';
+import { pollInterval } from '@/lib/http/poll-interval';
 
 interface Outcome {
   tally: Array<{ playerId: string; votes: number }>;
@@ -157,13 +158,7 @@ export default function LiveGamePanel({ gameId, gameStatus, onChanged, onAttenti
 
   async function mutate(payload: Record<string, unknown>) {
     setError('');
-    const response = await fetch(`/api/games/${gameId}/phases`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await response.json() as { error?: string };
-    if (!response.ok) throw new Error(data.error ?? 'Unable to update the phase.');
+    await requestJson(`/api/games/${gameId}/phases`, { body: payload, fallback: 'Unable to update the phase.' });
     await refresh();
     const action = typeof payload.action === 'string' ? payload.action : undefined;
     if (shouldRefreshOperations(action)) onChanged?.(action);

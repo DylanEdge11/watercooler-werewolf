@@ -1,33 +1,20 @@
 import { ensureDatabase } from '../../db/migrate';
 import { getDb } from '../../db';
-import type { Database } from '../../db/contracts';
 import { hashSecret, verifySecret } from './crypto';
-import { bootstrapPrimaryModerator, hasModeratorAccountInDatabase as hasModeratorAccountInDatabaseCore, INSERT_MODERATOR_SQL, normalizeModeratorEmail, prepareModeratorAccount, type CreatedModerator } from './bootstrap';
+import { hasModeratorAccountInDatabase, INSERT_MODERATOR_SQL, normalizeModeratorEmail, prepareModeratorAccount, type CreatedModerator } from './bootstrap';
 import { isSingleEmailAddress, MAX_EMAIL_LENGTH } from '../roster/email-address';
+import { changes } from '../../db/results';
 
 export async function hasModeratorAccount(): Promise<boolean> {
   await ensureDatabase();
-  return hasModeratorAccountInDatabaseCore(getDb());
-}
-
-export async function hasModeratorAccountInDatabase(db: Database): Promise<boolean> {
-  return hasModeratorAccountInDatabaseCore(db);
-}
-
-export async function createPrimaryModerator(email: string, password: string): Promise<CreatedModerator> {
-  await ensureDatabase();
-  return bootstrapPrimaryModerator(getDb(), email, password);
-}
-
-export async function createModeratorAccount(email: string, password: string): Promise<CreatedModerator> {
-  await ensureDatabase();
-  return createModeratorAccountInDatabase(getDb(), email, password);
+  return hasModeratorAccountInDatabase(getDb());
 }
 
 /** Create a co-moderator account without changing the primary bootstrap marker. */
-export async function createModeratorAccountInDatabase(db: Database, email: string, password: string): Promise<CreatedModerator> {
+export async function createModeratorAccount(email: string, password: string): Promise<CreatedModerator> {
+  await ensureDatabase();
   const prepared = await prepareModeratorAccount(email, password);
-  await db.prepare(INSERT_MODERATOR_SQL).bind(...prepared.values).run();
+  await getDb().prepare(INSERT_MODERATOR_SQL).bind(...prepared.values).run();
   return prepared.account;
 }
 
@@ -122,6 +109,6 @@ export async function redeemModeratorRecoveryCode(
       )
       .bind(account.id, account.id, now, JSON.stringify(remaining)),
   ]);
-  if (Number((updated[0] as { meta?: { changes?: number } })?.meta?.changes ?? 0) !== 1) return null;
+  if (changes(updated[0]) !== 1) return null;
   return { id: account.id, email: account.email };
 }

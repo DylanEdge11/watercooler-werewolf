@@ -1,17 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
+import { providerDatabase, type TestDatabase } from './test-support/provider-database';
 import { readFileSync } from 'node:fs';
 import { MIGRATION_FILES } from '../scripts/db-migration-runner.mjs';
-
-interface TestStatement {
-  readonly sql: string;
-  getArgs(): SQLInputValue[];
-}
-
-interface TestDatabase {
-  prepare(sql: string): TestStatement;
-  batch(statements: TestStatement[]): Promise<unknown>;
-}
 
 const shared = vi.hoisted(() => ({
   db: null as TestDatabase | null,
@@ -51,56 +42,6 @@ import { ensureGameRooms } from './chat/rooms';
 
 let sqlite: DatabaseSync;
 
-class ProviderStatement {
-  private args: SQLInputValue[] = [];
-
-  constructor(readonly sql: string) {}
-
-  bind(...args: SQLInputValue[]): this {
-    this.args = args;
-    return this;
-  }
-
-  getArgs(): SQLInputValue[] {
-    return this.args;
-  }
-
-  async first<T = Record<string, unknown>>(): Promise<T | null> {
-    return (sqlite.prepare(this.sql).get(...this.args) as T | undefined) ?? null;
-  }
-
-  async all<T = Record<string, unknown>>(): Promise<{ results: T[] }> {
-    return { results: sqlite.prepare(this.sql).all(...this.args) as T[] };
-  }
-
-  async run(): Promise<{ meta: { changes: number } }> {
-    const result = sqlite.prepare(this.sql).run(...this.args);
-    return { meta: { changes: Number(result.changes) } };
-  }
-}
-
-function providerCompatible(): TestDatabase {
-  return {
-    prepare: (sql) => new ProviderStatement(sql),
-    batch: async (statements) => {
-      sqlite.exec('BEGIN');
-      try {
-        const results = statements.map((statement) => {
-          // A read batch, as the player dashboard sends, answers with rows.
-          if (/^\s*SELECT\b/u.test(statement.sql)) return { results: sqlite.prepare(statement.sql).all(...statement.getArgs()) };
-          const result = sqlite.prepare(statement.sql).run(...statement.getArgs());
-          return { meta: { changes: Number(result.changes) } };
-        });
-        sqlite.exec('COMMIT');
-        return results;
-      } catch (error) {
-        sqlite.exec('ROLLBACK');
-        throw error;
-      }
-    },
-  };
-}
-
 function request(body: Record<string, unknown>, path = '/api/test'): Request {
   return new Request(`http://localhost:3000${path}`, {
     method: 'POST',
@@ -131,7 +72,7 @@ beforeEach(() => {
   for (const file of MIGRATION_FILES) {
     sqlite.exec(readFileSync(new URL('../drizzle/' + file, import.meta.url), 'utf8'));
   }
-  shared.db = providerCompatible();
+  shared.db = providerDatabase(sqlite);
   shared.currentPlayer = null;
   sqlite.exec(`INSERT INTO moderator_accounts (id,email,password_hash,recovery_codes_json,created_at,updated_at) VALUES ('mod','review@pilot.test','fake','[]','2026-01-01','2026-01-01');
     INSERT INTO games (id,name,status,timezone,start_date,end_date,active_weekdays_json,schedule_json,final_cutoff_at,created_by_moderator_id,created_at,updated_at)
