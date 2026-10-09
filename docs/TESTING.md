@@ -21,7 +21,7 @@ A candidate is ready for release when `npm run verify:full` has passed on its ex
 
 ## Unit tests
 
-`npm test` runs Vitest over `lib/**/*.test.ts` with an in-memory libSQL database. Tests sit next to the code they cover: the game engine and action rules, scheduling, balance, CSV import, auth and rate limits, migrations, backup and restore, Village stats, player email, sign-ups, moderator applications, and race conditions in the API routes. The `lib/api-*.test.ts` files call the real routes. Nothing sends mail or calls Claude: the email sender and the Anthropic SDK are mocked.
+`npm test` runs Vitest over `lib/**/*.test.ts` with an in-memory libSQL database. Tests sit next to the code they cover: the game engine and action rules, scheduling, balance, CSV import, auth and rate limits, migrations, backup and restore, Village stats, player email, sign-ups, moderator applications, and race conditions in the API routes. The `lib/api-*.test.ts` files call the real routes. Nothing sends mail or calls Claude: the email sender and the Anthropic SDK are mocked. Shared helpers live in `lib/test-support/`: `providerDatabase` is a fake database for the few tests that pause a route between two reads to commit a competing write, and `keysOf` lists every key in a response for the forbidden-player-keys check.
 
 `lib/api-signups-upgrade.test.ts` shows the pattern for a migration: write games with the schema as it stood before it, apply the new migration, and check every row, the console's view, and a restore of a backup made before it.
 

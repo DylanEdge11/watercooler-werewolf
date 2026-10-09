@@ -71,6 +71,7 @@ Changes reach `main` only through pull requests. *Never base work on `main`, nev
 - Every mutating route calls `assertSameOrigin`, then an authorization helper from `lib/auth/`, then validates state.
 - Check every new player-facing response field against `FORBIDDEN_PLAYER_KEYS` in `e2e/readiness/browser-fixture.ts`, which lists fields that must not reach a player. *A player must never receive another player's role or private results.*
 - Put game rules in `lib/game/` with unit tests there; routes stay thin.
+- In `app/`, import `lib/` and `db/` modules with the `@/` shortcut, and send browser requests through `lib/http/client.ts` instead of a hand-written `fetch`.
 - For schema changes, edit `db/schema.ts`, run `npm run db:generate`, then add the new migration to both `scripts/db-migration-runner.mjs` and `db/readiness.ts`. Every API route fails until the target database is migrated, so keep migrations additive. See `docs/SETUP.md#schema-changes`.
 
 ## MCP tools

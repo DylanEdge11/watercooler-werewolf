@@ -2,7 +2,9 @@ import { getDb } from '../../db';
 import { readSmtpSettings } from '../email/settings';
 import { loadSignupSummary } from '../roster/signup-store';
 import { HttpError } from '../http/errors';
+import type { PublicationMode } from './automation';
 import { scoreComposition } from './balance';
+import type { EliminationSchedule } from './elimination-schedule';
 import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from './types';
 
 /**
@@ -11,6 +13,52 @@ import { canonicalRoleKey, ROLE_KEYS, type RoleComposition, type RoleKey } from 
  * these on their own; GET /api/games includes both for the selected game, so
  * the console needs one request instead of three.
  */
+
+/** One game in the moderator's list, as GET /api/games sends it. */
+export interface GameSummary {
+  id: string;
+  name: string;
+  status: string;
+  timezone: string;
+  startDate: string;
+  endDate: string;
+  activeWeekdays: number[];
+  schedule: { dayCloses?: string; nightCloses?: string };
+  finalCutoffAt: string;
+  /** The final cutoff as a datetime-local value in the game's timezone. */
+  finalCutoffLocal: string;
+  hunterWindowMinutes: number;
+  dayDivisor: number;
+  nightDivisor: number;
+  eliminationSchedule: EliminationSchedule | null;
+  publicationMode: PublicationMode;
+  reviewWindowMinutes: number;
+  automationPaused: boolean;
+  moderatorRole: string;
+}
+
+/** A seat as the console's roster shows it. */
+export interface RosterSeatView {
+  id: string;
+  displayName: string;
+  email: string;
+  status: string;
+  claimedAt: string | null;
+  invitationEmailedAt: string | null;
+}
+
+/** An assignment batch with its decoded assignments; `releasedAt` is null until the roles are released. */
+export interface AssignmentBatchView {
+  id: string;
+  revision: number;
+  setupRevision: number;
+  rosterFingerprint: string;
+  compositionFingerprint: string;
+  randomEvidenceHash: string;
+  releasedAt: string | null;
+  createdAt: string;
+  assignments: Array<{ seatId: string; role: RoleKey }>;
+}
 
 export async function loadComposition(gameId: string): Promise<RoleComposition> {
   const rows = await getDb()
@@ -40,23 +88,25 @@ export async function loadRosterView(gameId: string) {
          ORDER BY display_name COLLATE NOCASE`,
       )
       .bind(gameId)
-      .all(),
+      .all<RosterSeatView>(),
     db
       .prepare(
         `SELECT role_key AS roleKey, count, power_snapshot AS powerSnapshot
          FROM game_role_counts WHERE game_id = ? ORDER BY role_key`,
       )
       .bind(gameId)
-      .all(),
+      .all<{ roleKey: string; count: number; powerSnapshot: number }>(),
     loadSignupSummary(gameId),
   ]);
   return {
     emailConfigured: readSmtpSettings() !== null,
     signups,
     roster: roster.results,
-    composition: composition.results.map((row) => ({ ...row, roleKey: canonicalRoleKey(String(row.roleKey)) })),
+    composition: composition.results.map((row) => ({ ...row, roleKey: canonicalRoleKey(row.roleKey) })),
   };
 }
+
+export type RosterView = Awaited<ReturnType<typeof loadRosterView>>;
 
 interface AssignmentRow {
   seatId: string;
@@ -78,7 +128,7 @@ export async function loadAssignmentsView(gameId: string) {
          ORDER BY display_name COLLATE NOCASE`,
       )
       .bind(gameId)
-      .all(),
+      .all<{ id: string; displayName: string; status: string }>(),
     db
       .prepare(
         `SELECT id, revision, setup_revision AS setupRevision,
@@ -88,7 +138,7 @@ export async function loadAssignmentsView(gameId: string) {
          FROM assignment_batches WHERE game_id = ? ORDER BY revision DESC`,
       )
       .bind(gameId)
-      .all(),
+      .all<Omit<AssignmentBatchView, 'assignments'> & { assignmentsJson: string }>(),
   ]);
   if (!game) throw new HttpError(404, 'Game not found.');
   return {
@@ -96,13 +146,21 @@ export async function loadAssignmentsView(gameId: string) {
     composition,
     balance: scoreComposition(composition),
     roster: roster.results,
-    batches: batches.results.map((batch) => ({
+    batches: batches.results.map(({ assignmentsJson, ...batch }): AssignmentBatchView => ({
       ...batch,
-      assignments: (JSON.parse(String(batch.assignmentsJson)) as AssignmentRow[]).map((assignment) => ({
+      assignments: (JSON.parse(assignmentsJson) as AssignmentRow[]).map((assignment) => ({
         ...assignment,
         role: canonicalRoleKey(assignment.role),
       })),
-      assignmentsJson: undefined,
     })),
   };
+}
+
+export type AssignmentsView = Awaited<ReturnType<typeof loadAssignmentsView>>;
+
+/** The selected game's setup, as GET /api/games sends it beside the games list. */
+export interface SelectedGameSetup {
+  gameId: string;
+  roster: RosterView;
+  assignments: AssignmentsView;
 }
