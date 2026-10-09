@@ -11,7 +11,6 @@
   --tile: #fbf4e2;
   --groove: rgba(90, 60, 30, 0.22);
   --bulb: #f1d79a;
-  --bulb-on: #ffe7a6;
   --bulb-glow: rgba(255, 196, 92, 0.55);
   --edge: rgba(255, 250, 236, 0.55);
   --shade: rgba(58, 38, 18, 0.38);
@@ -29,7 +28,6 @@
   --tile: #efe9f6;
   --groove: rgba(40, 26, 80, 0.25);
   --bulb: #ffd57c;
-  --bulb-on: #fff1c4;
   --bulb-glow: rgba(255, 205, 110, 0.95);
   --edge: rgba(176, 186, 255, 0.28);
   --shade: rgba(6, 6, 32, 0.62);
