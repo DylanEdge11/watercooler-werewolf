@@ -6,7 +6,7 @@ import { box, circ, makeCutter, pineTiers, ridge, type Pt } from './cut';
  * below with a 5% bleed so parallax never shows an edge.
  */
 
-export const BLEED_VIEWBOX = '-35 -23 770 506';
+const BLEED_VIEWBOX = '-35 -23 770 506';
 
 const C = makeCutter(2207);
 const S = makeCutter(3301);

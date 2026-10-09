@@ -130,7 +130,7 @@ export async function POST(request: Request, context: RouteContext) {
         .prepare("UPDATE chat_rooms SET status = ? WHERE id = ? AND game_id = ? AND status != 'PURGED'")
         .bind(body.status, body.roomId, gameId)
         .run();
-      if (Number(result.meta.changes ?? 0) === 0) throw new Error('Room not found or purged.');
+      if (changes(result) === 0) throw new Error('Room not found or purged.');
       return Response.json({ ok: true });
     }
     if (body.action === 'PURGE_RETENTION') {

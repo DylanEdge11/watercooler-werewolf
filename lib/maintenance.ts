@@ -1,4 +1,5 @@
 import type { Database } from '../db/contracts';
+import { changes } from '../db/results';
 
 /** Rate-limit windows are at most an hour, so a bucket untouched for a day is stale. */
 const STALE_BUCKET_MS = 24 * 60 * 60_000;
@@ -24,6 +25,6 @@ export async function purgeExpiredRows(db: Database, now = new Date()): Promise<
     // (severity, created_at) instead of scanning every game's events on each scheduler call.
     db.prepare("DELETE FROM operational_events WHERE severity = 'WARNING' AND source = 'DEADLINE_MONITOR' AND created_at < ?").bind(lateAttemptsBefore),
   ]);
-  const count = (index: number) => Number((results[index] as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0);
+  const count = (index: number) => changes(results[index]);
   return { moderatorSessions: count(0), seatSessions: count(1), spectatorSessions: count(2), rateLimitBuckets: count(3), lateAttemptEvents: count(4) };
 }

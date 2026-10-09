@@ -3,7 +3,7 @@ import { Caveat, Fraunces, IM_Fell_English, Special_Elite } from 'next/font/goog
 // Fraunces sets every heading and the wordmark, so it is the only family
 // preloaded. Its SOFT, WONK, and optical-size axes and its italic are part of
 // the look (the wordmark, headings, and landing marquee), so they stay.
-export const displayFont = Fraunces({
+const displayFont = Fraunces({
   subsets: ['latin'],
   style: ['normal', 'italic'],
   axes: ['SOFT', 'WONK', 'opsz'],
@@ -12,12 +12,12 @@ export const displayFont = Fraunces({
 
 // The other three are small labels and decorative lines, never the largest
 // text on a page. Without a preload each downloads only on a page that uses it.
-export const typewriterFont = Special_Elite({ subsets: ['latin'], weight: '400', variable: '--ll-font-type', preload: false });
+const typewriterFont = Special_Elite({ subsets: ['latin'], weight: '400', variable: '--ll-font-type', preload: false });
 
-export const handFont = Caveat({ subsets: ['latin'], variable: '--ll-font-hand', preload: false });
+const handFont = Caveat({ subsets: ['latin'], variable: '--ll-font-hand', preload: false });
 
 // Italic is used by the landing marquee's pitch line.
-export const storyFont = IM_Fell_English({
+const storyFont = IM_Fell_English({
   subsets: ['latin'],
   weight: '400',
   style: ['normal', 'italic'],

@@ -2,9 +2,9 @@ import { calculateEliminationSlots } from './balance';
 import { MAX_PLAYERS } from './player-count';
 
 /** A new game gives an eliminated Hunter eight hours to shoot. */
-export const DEFAULT_HUNTER_WINDOW_MINUTES = 480;
+const DEFAULT_HUNTER_WINDOW_MINUTES = 480;
 /** One elimination slot per 30 living players, for Days and Nights alike. */
-export const DEFAULT_DIVISOR = 30;
+const DEFAULT_DIVISOR = 30;
 
 const MIN_HUNTER_WINDOW_MINUTES = 15;
 const MAX_HUNTER_WINDOW_MINUTES = 7 * 24 * 60;
@@ -89,7 +89,7 @@ export function slotTable(divisor: number, maxPlayers = MAX_PLAYERS): SlotTableR
 }
 
 /** More eliminations than this in one phase gets a warning in the form (the default of 30 never does). */
-export const HEAVY_SLOT_THRESHOLD = 3;
+const HEAVY_SLOT_THRESHOLD = 3;
 
 /** The first slot-table row that eliminates more than the threshold in one phase, if any. */
 export function heavySlotWarning(rows: SlotTableRow[]): SlotTableRow | null {

@@ -118,7 +118,7 @@ Afterwards, check `vercel inspect <preview-url> --logs` for runtime errors. Logs
 
 ## Regenerate the guide media
 
-The `/guide` screenshots and walkthrough video come from a fictional local game. Regenerate them once per release candidate rather than in every pull request: each regeneration adds about 10 MB of binaries to the repository's history. After a visible UI change, run:
+The `/guide` screenshots and walkthrough video come from a fictional local game. Regenerate them once per release candidate rather than in every pull request: each regeneration adds about 7 MB of binaries to the repository's history. After a visible UI change, run:
 
 ```sh
 CAPTURE_GUIDE_MEDIA=1 node scripts/run-playwright.mjs --project=chromium --retries=0 e2e/readiness/guide-media.spec.ts
@@ -131,7 +131,6 @@ CAPTURE_GUIDE_MEDIA=1 node scripts/run-playwright.mjs --project=chromium --retri
 
 ```sh
 ffmpeg -y -i work/guide-walkthrough-raw.webm -c:v libx264 -preset slow -crf 30 -pix_fmt yuv420p -movflags +faststart -an public/guide/walkthrough.mp4
-ffmpeg -y -i work/guide-walkthrough-raw.webm -c:v libvpx-vp9 -b:v 0 -crf 44 -row-mt 1 -an public/guide/walkthrough.webm
 ffmpeg -y -ss 4 -i public/guide/walkthrough.mp4 -frames:v 1 -q:v 3 public/guide/walkthrough-poster.jpg
 ```
 

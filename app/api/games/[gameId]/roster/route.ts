@@ -11,6 +11,7 @@ import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 import { createInviteExport, parseRosterCsv } from '../../../../../lib/roster/csv';
 import { loadRosterView } from '../../../../../lib/game/setup-view';
 import { appendToRoster } from '../../../../../lib/roster/append-roster';
+import { changes } from '../../../../../db/results';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -191,7 +192,7 @@ export async function POST(request: Request, context: RouteContext) {
         .bind(now, gameId, nextRevision),
     );
     const result = await db.batch(statements);
-    if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
+    if (changes(result[0]) !== 1) {
       return jsonError('The game changed while the roster was being replaced. Refresh and try again.', 409);
     }
 

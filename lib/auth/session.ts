@@ -5,7 +5,7 @@ import { randomToken, sha256 } from './crypto';
 
 const MODERATOR_COOKIE = 'ww_mod_session';
 const PLAYER_COOKIE = 'ww_player_session';
-export const SPECTATOR_COOKIE = 'ww_spectator_session';
+const SPECTATOR_COOKIE = 'ww_spectator_session';
 const SESSION_DAYS = 7;
 
 export interface ModeratorIdentity {

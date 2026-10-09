@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
  * NODE_EXTRA_CA_CERTS; Chromium is told to trust that one CA by its public-key
  * fingerprint. Certificate verification stays on for everything else.
  */
-export const CLOUD_PROXY_CA_PATH = '/root/.ccr/agent-proxy-ca.crt';
+const CLOUD_PROXY_CA_PATH = '/root/.ccr/agent-proxy-ca.crt';
 
 /** Base64 SHA-256 of a certificate's SubjectPublicKeyInfo, as Chromium expects. */
 export function spkiFingerprint(certificatePem: string): string {

@@ -2,7 +2,7 @@ import { getDb, type PreparedStatement } from '../../db';
 import type { Database } from '../../db/contracts';
 import type { PrivateRoomType } from './policy';
 
-export { allowedRoomTypes, normalizeChatBody } from './policy';
+export { normalizeChatBody } from './policy';
 
 const ROOM_TYPES: PrivateRoomType[] = ['WEREWOLF', 'MASON', 'DEAD', 'TOWN_HALL'];
 /** A game with fewer rooms than this is missing some and gets them repaired. */

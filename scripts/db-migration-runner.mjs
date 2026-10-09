@@ -22,13 +22,13 @@ export function splitMigrationStatements(sql) {
   return sql.split('--> statement-breakpoint').map((statement) => statement.trim()).filter(Boolean);
 }
 
-export function extractCreatedTableNames(sql) {
+function extractCreatedTableNames(sql) {
   return splitMigrationStatements(sql)
     .map((statement) => statement.match(/^CREATE TABLE(?: IF NOT EXISTS)?\s+[`"]?([\w]+)[`"]?/iu)?.[1])
     .filter(Boolean);
 }
 
-export function makeCreateStatementIdempotent(statement) {
+function makeCreateStatementIdempotent(statement) {
   return statement
     .replace(/^CREATE TABLE\s+(?!IF NOT EXISTS)/iu, 'CREATE TABLE IF NOT EXISTS ')
     .replace(/^CREATE UNIQUE INDEX\s+(?!IF NOT EXISTS)/iu, 'CREATE UNIQUE INDEX IF NOT EXISTS ')

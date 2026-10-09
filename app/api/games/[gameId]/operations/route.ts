@@ -11,6 +11,7 @@ import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { restoreConfirmation } from '../../../../../lib/backup/restore';
 import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 import { endSpectatorsStatements } from '../../../../../lib/roster/spectators';
+import { changes } from '../../../../../db/results';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -33,10 +34,6 @@ function storySource(detailsJson: string | null): 'AI' | 'TEMPLATE' | null {
   } catch {
     return null;
   }
-}
-
-function changes(result: unknown): number {
-  return Number((result as { meta?: { changes?: number } } | null)?.meta?.changes ?? 0);
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -247,7 +244,7 @@ export async function POST(request: Request, context: RouteContext) {
           )
           .bind(crypto.randomUUID(), gameId, JSON.stringify({ moderatorId: moderator.id, reason }), now, gameId, now, moderator.id, reason),
       ]);
-      if (Number((result[0] as { meta?: { changes?: number } })?.meta?.changes ?? 0) !== 1) {
+      if (changes(result[0]) !== 1) {
         return jsonError('The game changed before it could be stopped. Refresh and review its current state.', 409);
       }
       return Response.json({ ok: true, status: 'STOPPED', stoppedAt: now });
@@ -398,7 +395,7 @@ export async function POST(request: Request, context: RouteContext) {
           )
           .bind(crypto.randomUUID(), gameId, JSON.stringify({ seatId: seat.id, reason, moderatorId: moderator.id }), now, seat.id, gameId, nextVersion, now),
       ]);
-      if (Number((resetResult[0] as { meta?: { changes?: number } })?.meta?.changes ?? 0) !== 1) {
+      if (changes(resetResult[0]) !== 1) {
         return jsonError('The player seat changed before its PIN could be reset. Refresh and try again.', 409);
       }
       return Response.json({ ok: true, seatId: seat.id, sessionVersion: nextVersion });

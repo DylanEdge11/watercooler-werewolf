@@ -14,6 +14,7 @@ import { assertSameOrigin, jsonError } from '../../../../../../../lib/http/secur
 import { HttpError, routeError } from '../../../../../../../lib/http/errors';
 import { enforceRateLimit, requestRateLimitKey } from '../../../../../../../lib/http/rate-limit';
 import { respondJsonWithEtag } from '../../../../../../../lib/http/etag';
+import { changes } from '../../../../../../../db/results';
 
 interface RouteContext {
   params: Promise<{ gameId: string; roomId: string }>;
@@ -95,7 +96,7 @@ export async function POST(request: Request, context: RouteContext) {
         )
         .bind(crypto.randomUUID(), gameId, moderator.id, JSON.stringify({ roomId, messageId: id }), now, id, roomId),
     ]);
-    if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
+    if (changes(result[0]) !== 1) {
       return jsonError('The room or the game changed before the message could be saved. Refresh and try again.', 409);
     }
     return Response.json(

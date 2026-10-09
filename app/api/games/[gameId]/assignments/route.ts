@@ -12,6 +12,7 @@ import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { respondJsonWithEtag } from '../../../../../lib/http/etag';
 import { roomSyncStatements } from '../../../../../lib/chat/rooms';
 import { loadAssignmentsView, loadComposition } from '../../../../../lib/game/setup-view';
+import { changes } from '../../../../../db/results';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -25,10 +26,6 @@ interface AssignmentRow {
 interface GameSetupRow {
   status: string;
   setupRevision: number;
-}
-
-function changes(result: unknown): number {
-  return Number((result as { meta?: { changes?: number } } | null)?.meta?.changes ?? 0);
 }
 
 const SETUP_STATUSES = "'DRAFT', 'REGISTRATION', 'ASSIGNMENT_PREVIEW'";

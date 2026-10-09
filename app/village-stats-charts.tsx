@@ -14,7 +14,7 @@ export function plural(count: number, one: string, many = `${one}s`): string {
 }
 
 /** A round axis maximum at or above the value: 4, 5, 10, 20, 50, 100, and so on. */
-export function niceMax(value: number): number {
+function niceMax(value: number): number {
   if (value <= 4) return 4;
   const magnitude = 10 ** Math.floor(Math.log10(value));
   for (const step of [1, 2, 5, 10]) {

@@ -10,6 +10,7 @@ import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { routeError } from '../../../../../lib/http/errors';
 import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
 import { inviteMessage } from '../../../../../lib/roster/invite-message';
+import { changes } from '../../../../../db/results';
 
 // Up to 80 invitations over three SMTP connections.
 export const maxDuration = 60;
@@ -134,7 +135,7 @@ export async function POST(request: Request, context: RouteContext) {
           ),
         )
         : [];
-      const ready = invites.filter((_, index) => Number(rotated[index]?.meta?.changes ?? 0) === 1);
+      const ready = invites.filter((_, index) => changes(rotated[index]) === 1);
       if (invites.length && !ready.length) {
         return jsonError('The roster changed while invitations were being prepared. Refresh and try again.', 409);
       }

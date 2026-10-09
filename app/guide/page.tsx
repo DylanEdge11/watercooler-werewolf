@@ -96,7 +96,6 @@ export default function GuidePage() {
         <section className="guide-video" aria-labelledby="video-title">
           <h2 id="video-title" className="sr-only">Walkthrough video</h2>
           <video controls preload="metadata" playsInline poster="/guide/walkthrough-poster.jpg">
-            <source src="/guide/walkthrough.webm" type="video/webm" />
             <source src="/guide/walkthrough.mp4" type="video/mp4" />
             Your browser cannot play this video.
           </video>

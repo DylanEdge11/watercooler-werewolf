@@ -257,8 +257,6 @@ textarea { line-height: 1.55; resize: vertical; }
 .schedule-current .schedule-state { background: var(--mint-strong); color: #fff; }
 .schedule-upcoming .schedule-state { border: 1px solid #d9ddd8; }
 .schedule-lock-note { margin: 18px 0 0; }
-.schedule-note { align-items: center; background: #edf2ed; border-radius: 10px; display: flex; font-size: 10px; justify-content: space-between; padding: 12px 14px; }
-.schedule-note span { color: var(--muted); }
 .game-bar { align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 12px 18px; justify-content: space-between; margin-bottom: 18px; padding: 12px 16px; }
 .game-bar .game-selector-label { flex: 1 1 260px; }
 .game-bar.bare { background: none; border: 0; box-shadow: none; padding: 0; }
@@ -338,7 +336,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .advanced-settings-grid { grid-template-columns: 1fr; }
   .schedule-stage { grid-template-columns: 1fr 1fr; }
   .setup-grid .wide { grid-column: auto; }
-  .schedule-note { align-items: flex-start; display: grid; gap: 5px; }
   .console-title { align-items: flex-start; display: grid; gap: 10px; }
   /* A long game name must not push the tabs below the first screen. */
   .console-title h1 { font-size: 26px; line-height: 1.15; overflow-wrap: anywhere; }
@@ -372,8 +369,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .timeline-entry[open] .timeline-summary-hint { color: var(--coral); }
 .timeline-trigger { align-items: flex-start; background: transparent; border: 0; color: inherit; cursor: pointer; display: flex; gap: 8px; justify-content: space-between; padding: 0; text-align: left; width: 100%; }
 .timeline-trigger:hover .timeline-summary-copy strong { color: var(--mint-strong); }
-.timeline-detail { background: #f4f7f3; border: 1px solid #dce8df; border-radius: 9px; margin: 9px 0 3px; padding: 10px; }
-.timeline-detail > small { color: var(--muted); display: block; font-size: 8px; line-height: 1.5; margin-top: 8px; }
 .vote-ledger { display: grid; gap: 5px; }
 .vote-ledger-row { align-items: baseline; display: grid; font-size: 9px; gap: 6px; grid-template-columns: minmax(70px, 1fr) auto minmax(70px, 1fr); }
 .vote-ledger-row strong { font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -499,7 +494,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .health-grid small { color: #8d9791; font-size: 8px; }
 .ops-inline-note { align-items: center; color: var(--muted); display: flex; font-size: 9px; gap: 10px; justify-content: space-between; margin: -7px 0 14px; }
 .ops-inline-note .secondary-button { padding: 7px 10px; }
-.operations-columns { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 .ops-block { background: #f8f7f2; border: 1px solid #e2e3dc; border-radius: 12px; display: grid; gap: 10px; padding: 15px; }
 .event-log ul { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .event-log li { display: grid; font-size: 11px; gap: 2px; line-height: 1.4; }
@@ -584,7 +578,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .health-grid { grid-template-columns: repeat(3, 1fr); }
   .health-grid > div { padding: 8px; }
   .health-grid strong { font-size: 16px; }
-  .operations-columns, .room-health-list { grid-template-columns: 1fr; }
+  .room-health-list { grid-template-columns: 1fr; }
   .moderation-line { grid-template-columns: 1fr auto; }
   .moderation-line p { grid-column: 1 / -1; }
   .backup-row { align-items: flex-start; display: grid; gap: 12px; }

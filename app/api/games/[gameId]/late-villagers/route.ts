@@ -7,6 +7,7 @@ import { canAddLateVillager, LATE_JOIN_LAST_PHASE_SEQUENCE } from '../../../../.
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
 import { isSingleEmailAddress } from '../../../../../lib/roster/email-address';
+import { changes } from '../../../../../db/results';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -98,7 +99,7 @@ export async function POST(request: Request, context: RouteContext) {
         )
         .bind(crypto.randomUUID(), gameId, moderator.id, JSON.stringify({ seatId, role: 'VILLAGER' }), now, seatId, gameId),
     ]);
-    if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
+    if (changes(result[0]) !== 1) {
       return jsonError('The game changed before the player could be added. Refresh and try again.', 409);
     }
     return Response.json({

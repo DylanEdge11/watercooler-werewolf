@@ -51,5 +51,4 @@ function createRawClient(url: string): LibsqlClient {
   return createWebClient({ url, authToken }) as unknown as LibsqlClient;
 }
 
-export { LibsqlDatabase } from './libsql';
 export type { Database, PreparedStatement, QueryResult, RunResult } from './contracts';

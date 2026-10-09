@@ -7,6 +7,7 @@ import { resolveGameSettings, type GameSettingsInput } from '../../../../../lib/
 import { validateGameSetup, type GameSetupInput } from '../../../../../lib/game/game-setup';
 import { assertSameOrigin, jsonError } from '../../../../../lib/http/security';
 import { HttpError, routeError } from '../../../../../lib/http/errors';
+import { changes } from '../../../../../db/results';
 
 interface RouteContext {
   params: Promise<{ gameId: string }>;
@@ -28,10 +29,6 @@ interface SetupGameRow {
   dayDivisor: number;
   nightDivisor: number;
   eliminationScheduleJson: string | null;
-}
-
-function changes(result: unknown): number {
-  return Number((result as { meta?: { changes?: number } } | null)?.meta?.changes ?? 0);
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
